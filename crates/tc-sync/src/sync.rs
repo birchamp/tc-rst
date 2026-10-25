@@ -41,6 +41,10 @@ pub struct SyncReport {
     /// Commits on Door43 made by another tool that changed the project's files (§9.2 N4,
     /// `rulings/2026-10-22-H18.md` B): the project kept its own text, and each is said once.
     pub other_tools: Vec<OtherToolCommit>,
+    /// Door43's branch was gone (its owner deleted it) and this sync pushed the project's copy
+    /// as the branch again (owner ruling, `rulings/2026-10-24-H5.md`): "The project was missing
+    /// from Door43, so tC4 put your copy back. Ask your teammates to sync."
+    pub recreated: bool,
 }
 
 /// One commit made on Door43 by another tool (§9.2 N4): "Titus was changed on Door43 by jdoe
@@ -101,6 +105,7 @@ pub async fn sync(
         session: session.cloned(),
         target: None,
         fetched: None,
+        branch_gone: false,
         packs: Vec::new(),
         merged: None,
         report: SyncReport {
@@ -114,6 +119,7 @@ pub async fn sync(
             other_tools: Vec::new(),
             received_by: Default::default(),
             new_conflicts: Vec::new(),
+            recreated: false,
         },
         conflicts_before: project
             .snapshot()
@@ -157,6 +163,8 @@ struct Run<'a> {
     target: Option<Target>,
     /// The commit the last fetch found on Door43.
     fetched: Option<git2::Oid>,
+    /// The last fetch found the branch deleted on Door43: the push makes it again.
+    branch_gone: bool,
     packs: Vec<ReceivedPack>,
     /// The merge's answer: the take-in and the commit come back together.
     merged: Option<Result<CheckpointReport, String>>,
@@ -258,6 +266,13 @@ impl Run<'_> {
         if let Mode::ReadOnly(_) = facts.mode {
             return refuse(SyncRefusal::ReadOnly);
         }
+        // tC4's order: signed in, online, then the repository (syncOperation.ts:580-584).
+        let Some(session) = self.session.clone() else {
+            return refuse(SyncRefusal::NotSignedIn);
+        };
+        if !self.client.internet().is_on() {
+            return refuse(SyncRefusal::Offline);
+        }
         let Some(git_dir) = facts.git_dir else {
             return SyncEvent::GateRefused(GateRefusal::Block(SyncBlock::NotShared));
         };
@@ -266,12 +281,6 @@ impl Run<'_> {
         };
         let Some(repo) = repo_of(self.client, &url) else {
             return SyncEvent::GateRefused(GateRefusal::Block(SyncBlock::NotShared));
-        };
-        if !self.client.internet().is_on() {
-            return refuse(SyncRefusal::Offline);
-        }
-        let Some(session) = self.session.clone() else {
-            return refuse(SyncRefusal::NotSignedIn);
         };
         let empty = match self.client.repo(&repo, Some(&session)).await {
             Ok(info) if !info.can_push => {
@@ -305,42 +314,41 @@ impl Run<'_> {
             let repo = open(&target.git_dir)?;
             let tracking = format!("refs/remotes/origin/{}", target.branch);
             // A fetch does not prune: Door43's list says whether the branch is there. A
-            // missing one is a first push only for an empty repository this project never
-            // fetched from; else its owner deleted it (gap-tc4-straggler-sync-safety, 3b).
+            // missing one is a first push for an empty repository this project never fetched
+            // from; else its owner deleted it, and the push recreates it from this copy, as
+            // tC4 does (gap-tc4-straggler-sync-safety 3b; owner ruling 2026-10-24).
             let advertised = tc_door43::git::ls_remote(&http, &repo, &target.remote)
                 .map_err(|e| refusal_of(&e))?;
             let name = format!("refs/heads/{}", target.branch);
             if !advertised.iter().any(|(n, _)| *n == name) {
                 let fetched_before = repo.refname_to_id(&tracking).is_ok();
-                return Ok(if target.empty && !fetched_before {
-                    None
-                } else {
-                    Some(None)
-                });
+                return Ok(Err(!target.empty || fetched_before));
             }
             let refspec = format!("+{name}:{tracking}");
             tc_door43::git::fetch(&http, &repo, &target.remote, &[refspec.as_str()])
                 .map_err(|e| refusal_of(&e))?;
-            let Ok(remote) = repo.refname_to_id(&tracking) else {
-                return Ok(Some(None));
-            };
+            let remote = repo
+                .refname_to_id(&tracking)
+                .map_err(|e| SyncRefusal::Io { reason: e.to_string() })?;
             let new = match repo.head().ok().and_then(|h| h.target()) {
                 Some(head) => {
                     head != remote && !repo.graph_descendant_of(head, remote).unwrap_or(false)
                 }
                 None => true,
             };
-            Ok(Some(Some((remote, new))))
+            Ok(Ok((remote, new)))
         })
         .await;
         match fetched {
-            Ok(Ok(Some(Some((remote, new))))) => {
+            Ok(Ok(Ok((remote, new)))) => {
                 self.fetched = Some(remote);
                 SyncEvent::Fetched(if new { Remote::New } else { Remote::NothingNew })
             }
-            Ok(Ok(Some(None))) => SyncEvent::Fetched(Remote::BranchMissing),
-            Ok(Ok(None)) => {
+            Ok(Ok(Err(deleted))) => {
                 self.fetched = None;
+                // Each round reads Door43 afresh: a teammate who made the branch again
+                // while this round raced is not reported as this copy put back.
+                self.branch_gone = deleted;
                 SyncEvent::Fetched(Remote::NothingNew)
             }
             Ok(Err(refusal)) => SyncEvent::FetchFailed(refusal),
@@ -459,7 +467,11 @@ impl Run<'_> {
         })
         .await;
         match pushed {
-            Ok(Ok(_)) | Ok(Err(Pushed::Nothing)) => SyncEvent::Pushed,
+            Ok(Ok(_)) | Ok(Err(Pushed::Nothing)) => {
+                // Said only once the push made the branch again (tC4 reports it after the push).
+                self.report.recreated = self.branch_gone;
+                SyncEvent::Pushed
+            }
             Ok(Err(Pushed::Raced)) => SyncEvent::PushRaced,
             Ok(Err(Pushed::Failed(refusal))) => SyncEvent::PushFailed(refusal),
             Err(e) => SyncEvent::PushFailed(SyncRefusal::Io {

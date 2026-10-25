@@ -78,9 +78,6 @@ pub enum Remote {
     NothingNew,
     /// Commits this project does not hold.
     New,
-    /// The repository has history but not the branch this project syncs: its owner deleted
-    /// it. Nothing is pushed, so no new branch replaces the team's (§9.1, X step 5).
-    BranchMissing,
 }
 
 /// What the last action answered.
@@ -113,7 +110,7 @@ pub enum SyncEvent {
         reason: String,
     },
     Pushed,
-    /// Door43's branch moved since the fetch (`NotFastForward`, `RefMoved`).
+    /// Door43's branch moved since the fetch (`RefMoved`).
     PushRaced,
     PushFailed(SyncRefusal),
     WaitOver,
@@ -185,17 +182,6 @@ pub fn next(state: &SyncState, event: &SyncEvent) -> (SyncState, Vec<SyncAction>
         S::Fetch(at) => match event {
             E::Fetched(Remote::NothingNew) => (S::Push(*at), vec![SyncAction::Push]),
             E::Fetched(Remote::New) => (S::Intake(*at), vec![SyncAction::ReadRemote]),
-            E::Fetched(Remote::BranchMissing) => match at.received {
-                Received::Nothing => end(Ended::Failed(SyncFailure::Blocked(
-                    SyncBlock::BranchMissing,
-                ))),
-                Received::Integrated => fail(
-                    Received::Integrated,
-                    SyncRefusal::Io {
-                        reason: "Door43's branch was deleted during the sync".into(),
-                    },
-                ),
-            },
             E::FetchFailed(refusal) => fail(at.received, refusal.clone()),
             other => unexpected(at.received, other),
         },
@@ -395,7 +381,6 @@ mod tests {
             },
             SyncEvent::Fetched(Remote::NothingNew),
             SyncEvent::Fetched(Remote::New),
-            SyncEvent::Fetched(Remote::BranchMissing),
             SyncEvent::FetchFailed(refusal.clone()),
             SyncEvent::RemoteRead,
             SyncEvent::RemoteBlocked(SyncBlock::ProjectMismatch),

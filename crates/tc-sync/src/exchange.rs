@@ -43,6 +43,10 @@ pub enum ExchangeError {
     /// folder, the project is read-only, …): nothing was exported.
     #[error("the latest work could not be committed: {0}")]
     NotCommitted(String),
+    /// The intake failed after some of the file's packs were folded: what was received stays
+    /// in the project, so the person is never told nothing changed (PLAN Q8).
+    #[error("the file was taken in only partly, and what was received was kept: {0}")]
+    PartlyReceived(String),
     #[error("{0}")]
     Io(String),
     #[error(transparent)]
@@ -337,7 +341,18 @@ pub async fn receive(
     let held = project.snapshot();
     let before: std::collections::BTreeSet<ConflictId> =
         held.fold().conflicts().map(|c| c.id).collect();
-    let report = project.receive_packs(from.to_owned(), packs).await?;
+    let report = match project.receive_packs(from.to_owned(), packs).await {
+        Ok(report) => report,
+        Err(e) => {
+            let fold = project.snapshot();
+            let some_held = changes.iter().any(|(_, id)| fold.fold().change(id).is_some());
+            return Err(if some_held {
+                ExchangeError::PartlyReceived(e.to_string())
+            } else {
+                e.into()
+            });
+        }
+    };
     if let Some(why) = report.skipped.filter(|why| {
         matches!(
             why,
@@ -557,6 +572,11 @@ pub fn receive_new(
     let written = (|| -> Result<(), ExchangeError> {
         for (entry, bytes) in &zip.files {
             let rel = entry.strip_prefix(ROOT).unwrap_or(entry);
+            // The file's own `.git/` and `.tc/` never shape the new project: a hand-made zip
+            // could connect it to a stranger's repository (join filters the same, Q10).
+            if rel.starts_with(".git/") || rel.starts_with(".tc/") {
+                continue;
+            }
             let full = staging.join(rel);
             let (Some(dir), Some(file)) =
                 (full.parent(), full.file_name().and_then(|n| n.to_str()))

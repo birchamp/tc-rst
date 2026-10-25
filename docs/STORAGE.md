@@ -3729,7 +3729,11 @@ S3  Fetch:
     Errors: ErrorCode::Auth or HTTP 401 → `sync.auth-failed`; 404 → `sync.remote-missing`;
     a network error → `sync.unreachable`. Nothing local has changed. Fetch sends credentials,
     so private repositories work.
-    R = refs/remotes/origin/{b}, or None for an empty repository.
+    R = refs/remotes/origin/{b}, or None for an empty repository. Door43's advertised refs
+    (`ls_remote`) say whether b is there: a repository with history but no b had it deleted
+    by its owner, and S8 pushes this copy as b again, as tC4 does, with the report's
+    `recreated` for the notice "The project was missing from Door43, so tC4 put your copy
+    back. Ask your teammates to sync." (owner ruling, `rulings/2026-10-24-H5.md`).
 S4  If R is None, R == HEAD, or repo.graph_descendant_of(HEAD, R) is Ok(true): go to S8.
     An error from graph_descendant_of (a shallow history) counts as "not a descendant".
 S5  Intake of R (§9.2), on the worker. It reads the object database only.
@@ -3964,8 +3968,8 @@ Refusals: the name exists; offline; auth failed; create rejected (with Door43's 
 3. Write the working tree from R's tree with `atomic_write` (no checkout, so no line-ending
    conversion can touch a byte), except foreign entries and paths that collide (§3.3), which
    stay in the object database and the tree only; set the branch to R, `index.read_tree`.
-4. Mint the Local device, fold, record edits made on Door43 since the last app commit (§11.2),
-   materialize, validate.
+4. Mint the Local device, fold, materialize, validate (the §11.2 walk is dropped: H18 B lists
+   another tool's commits instead, §9.2 N4).
 5. Rename the staging folder into `<projects>/` (§6.4 N1, N2).
 
 A project can also be joined from an exchange file (§10.2), which is smaller than a full clone.
@@ -3974,6 +3978,12 @@ A project can also be joined from an exchange file (§10.2), which is smaller th
 The project ids must match (N2); the first merge commit joins two unrelated histories.
 
 ### 9.7 Exchange report
+
+As built (unit X): `tc_sync::SyncReport { ended, received, confirmed, raced, received_by,
+new_conflicts, other_tools, recreated }` and `tc_sync::exchange::ReceiveReport { intake,
+received_by, new_conflicts, damaged, hand_edited }`; the refusals are tc-api's `SyncFailure`
+(`Blocked(SyncBlock)`, `BeforeIntake(SyncRefusal)`, `AfterIntake(SyncRefusal)`). The sketch
+below is the design's first shape.
 
 ```rust
 pub struct ExchangeReport {

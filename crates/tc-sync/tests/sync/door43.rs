@@ -528,11 +528,11 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     b.close().unwrap();
 }
 
-/// gap-tc4-straggler-sync-safety state 3b: Door43's branch was deleted by its owner. The sync
-/// pushes nothing, so no branch made from this computer replaces the team's, and the person
-/// is told to ask the owner to restore it.
+/// gap-tc4-straggler-sync-safety state 3b, owner ruling 2026-10-24 ("recreate it"): Door43's
+/// branch was deleted by its owner. The sync pushes this copy as the branch again, as tC4
+/// does, and the report says so, so the person can tell the team to sync.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_state() {
+async fn a_sync_against_a_repository_with_no_main_branch_recreates_it_and_says_so() {
     let door43 = door43("titus-gone").await;
     let dir = tempfile::tempdir().unwrap();
     let ana = computer(dir.path(), "ana");
@@ -547,18 +547,16 @@ async fn a_sync_against_a_repository_with_no_main_branch_refuses_and_names_the_s
         .unwrap();
     save(&a, 1, 1, "Paul, a servant of God");
     let report = sync(&a, &door43).await;
-    assert_eq!(
-        report.ended,
-        Ended::Failed(tc_api::refusal::SyncFailure::Blocked(
-            tc_api::refusal::SyncBlock::BranchMissing
-        )),
-        "{report:?}"
-    );
-    assert_eq!(
-        branch_on_door43(&door43, "titus-gone"),
-        None,
-        "nothing pushed"
-    );
+    synced(&report);
+    assert!(report.recreated, "{report:?}");
+    let local = git2::Repository::open(a.facts().git_dir.unwrap())
+        .unwrap()
+        .head()
+        .unwrap()
+        .target()
+        .unwrap();
+    assert_eq!(branch_on_door43(&door43, "titus-gone"), Some(local));
+    assert!(!sync(&a, &door43).await.recreated, "said once");
     a.close().unwrap();
 }
 
