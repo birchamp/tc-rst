@@ -5,7 +5,7 @@
 //! any write point of the hold loses nothing and asks again.
 
 use crate::common::*;
-use crate::crash::{Outcome, kill_everywhere_full};
+use crate::crash::{Outcome, kill_everywhere_between, kill_everywhere_full};
 use proptest::prelude::*;
 use std::path::{Path, PathBuf};
 use tc_journal::fold::{ConflictKind, DerivedFile, Notice};
@@ -425,15 +425,238 @@ fn crash_at_every_write_point_of_the_hold_loses_nothing() {
     assert!(points > 4, "{points} kill points");
 }
 
-/// An *Import* killed at any write point imports the copy once or not at all: the verse is the
-/// file's after the import, never twice a version, and the copy is kept until the entry ends.
+/// INV-A-KEPT-COPY-OUTLIVES-ITS-MANIFEST: a held book's `kept` entry lives in
+/// `.tc/materialized.json`. When that file is lost or cannot be read, the next open lists the
+/// copy again (no base), with *Import*, whether the file still holds the changed bytes or
+/// *Not now* wrote it over.
 #[test]
-fn crash_at_every_write_point_of_an_import_imports_once() {
+fn a_kept_copy_is_listed_again_after_the_manifest_is_lost() {
+    for (not_now_first, corrupt) in [(false, false), (true, false), (true, true)] {
+        let (rig, folder, written) = saved_and_closed();
+        let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+        rig.fs.put(&usfm_path(&folder), &edited, None);
+        let handle = open(&rig, &folder);
+        if not_now_first {
+            handle.not_now(USFM).wait().unwrap();
+            handle.wait_idle();
+        }
+        let kept = handle.kept_copies();
+        assert_eq!(kept.len(), 1);
+        handle.close().unwrap();
+        let manifest = folder.join(".tc/materialized.json");
+        if corrupt {
+            // A `kept` value an older build cannot read fails the whole manifest.
+            let text = String::from_utf8(rig.fs.peek(&manifest).unwrap()).unwrap();
+            assert!(text.contains("\"changed\""), "{text}");
+            let newer = text.replace("\"changed\"", "\"aNewerWhy\"");
+            rig.fs.put(&manifest, newer.as_bytes(), None);
+        } else {
+            rig.fs.delete(&manifest).unwrap();
+        }
+
+        let handle = open(&rig, &folder);
+        let listed = handle.kept_copies();
+        assert_eq!(
+            listed.len(),
+            1,
+            "{listed:?} (not now first: {not_now_first}, corrupt: {corrupt})"
+        );
+        assert_eq!(listed[0].path, USFM);
+        assert_copy(&rig, &folder, &listed[0], &edited);
+        let report = handle.import_kept(&listed[0].copy).wait().unwrap();
+        handle.wait_idle();
+        assert_eq!(report.imported + report.to_review, 1, "{report:?}");
+        let shown = words(&handle, 1, 2).as_deref() == Some("in hope of eternal life");
+        assert!(
+            shown || conflicts(&handle) == 1,
+            "the file's 1:2 is neither shown nor to review: {report:?}"
+        );
+        assert!(handle.kept_copies().is_empty());
+        handle.close().unwrap();
+        assert_valid_burrito(&rig.fs, &folder);
+    }
+}
+
+/// A file held against HEAD (`.tc/` knew nothing of it) is compared at *Import* with no
+/// base, not with the HEAD of the time of the Import: a verse the translator saved and
+/// committed after the hold keeps the translator's text (to review at most), never the file's
+/// older words with no question.
+#[test]
+fn import_of_a_head_based_copy_never_replaces_newer_text() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 2, "in hope").unwrap();
+    save_verse(&handle, 1, 3, "which God promised").unwrap();
+    leave(&handle);
+    let first = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(first.commit.is_some(), "{first:?}");
+    handle.close().unwrap();
+    let written = rig.fs.peek(&usfm_path(&folder)).unwrap();
+    rig.fs.put(
+        &usfm_path(&folder),
+        &set_verse(
+            &set_verse(&written, 1, 2, "in hope of eternal life"),
+            1,
+            3,
+            "which God promised long ago",
+        ),
+        None,
+    );
+    rig.fs
+        .delete(&folder.join(".tc/materialized.json"))
+        .unwrap();
+    let handle = open(&rig, &folder);
+    let books = handle.waiting_books();
+    assert_eq!(books.len(), 1, "{books:?}");
+    assert!(
+        matches!(books[0].kept.base, KeptBase::Head(Some(_))),
+        "{books:?}"
+    );
+    save_verse(&handle, 1, 3, "which God, who never lies, promised").unwrap();
+    let second = handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    assert!(second.commit.is_some(), "HEAD moves: {second:?}");
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(handle.waiting_books(), books, "still waits");
+    let report = handle.import_kept(&books[0].kept.copy).wait().unwrap();
+    handle.wait_idle();
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("which God, who never lies, promised"),
+        "{report:?}"
+    );
+    assert!(
+        report.to_review >= 1,
+        "the file's 1:3 is to review: {report:?}"
+    );
+    handle.close().unwrap();
+}
+
+/// A copy whose entry ended by *Import* stays unlisted at a reopen that has the manifest; only
+/// an open that lost the manifest lists unnamed copies again.
+#[test]
+fn an_imported_copy_is_not_listed_again_at_a_normal_reopen() {
     let (rig, folder, written) = saved_and_closed();
     let edited = set_verse(&written, 1, 2, "in hope of eternal life");
     rig.fs.put(&usfm_path(&folder), &edited, None);
     let handle = open(&rig, &folder);
+    let copy = handle.kept_copies()[0].copy.clone();
+    handle.import_kept(&copy).wait().unwrap();
+    handle.wait_idle();
+    assert!(handle.kept_copies().is_empty());
+    handle.close().unwrap();
+    assert_eq!(
+        rig.fs.peek(&folder.join(&copy)),
+        Some(edited),
+        "the copy stays in .tc/external"
+    );
+
+    let handle = open(&rig, &folder);
+    assert!(
+        handle.kept_copies().is_empty(),
+        "{:?}",
+        handle.kept_copies()
+    );
+    assert!(waiting(&handle).is_empty());
+    handle.close().unwrap();
+}
+
+/// The hold and its *Not now* killed at any write point, and then `.tc/materialized.json`
+/// lost: the changed bytes are listed once, in a copy that holds them, whether the file still
+/// holds them or *Not now* wrote it from the project (the copy is then all that tells).
+#[test]
+fn crash_at_every_write_point_of_the_hold_then_a_lost_manifest_still_lists_the_copy() {
+    let (rig, folder, written) = saved_and_closed();
+    let base = rig.fs.crash(false);
+    drop(rig);
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    let path = usfm_path(&folder);
+    let manifest = folder.join(".tc/materialized.json");
+    let setup = |fs: &FaultFs, _: &ProjectHandle| fs.put(&path, &edited, None);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.focus().wait();
+        handle.wait_idle();
+        let _ = handle.not_now(USFM).wait();
+        handle.wait_idle();
+        Outcome::NotSaved
+    };
+    let between = |fs: &FaultFs| {
+        let _ = fs.delete(&manifest);
+    };
+    let written_over = std::cell::Cell::new(0u64);
+    let points = kill_everywhere_between(
+        &base,
+        &folder,
+        &setup,
+        &action,
+        &between,
+        &|handle, fs, _| {
+            handle.wait_idle();
+            assert_eq!(words(handle, 1, 2).as_deref(), Some("in hope"));
+            let listed: Vec<Kept> = handle
+                .kept_copies()
+                .into_iter()
+                .filter(|k| k.md5 == Md5::of(&edited).to_hex())
+                .collect();
+            assert_eq!(
+                listed.len(),
+                1,
+                "the changed bytes are listed once: {:?}",
+                handle.kept_copies()
+            );
+            assert_eq!(listed[0].path, USFM);
+            assert_eq!(
+                fs.peek(&folder.join(&listed[0].copy)),
+                Some(edited.clone()),
+                "the copy holds the bytes found"
+            );
+            if fs.peek(&path) != Some(edited.clone()) {
+                written_over.set(written_over.get() + 1);
+            }
+        },
+    );
+    assert!(points > 4, "{points} kill points");
+    assert!(written_over.get() > 0, "Not now never wrote the file over");
+}
+
+/// The base heads a live `placed:` entry names are in its path's heads file.
+fn assert_bases_kept(fs: &FaultFs, folder: &Path, handle: &ProjectHandle) {
+    let heads = fs
+        .peek(&folder.join(".tc/heads/ingredients%2FTIT.usfm.bin"))
+        .and_then(|b| tc_store::manifest::HeadsFile::parse(&b));
+    for kept in handle.kept_copies() {
+        if let KeptBase::Placed(md5) = &kept.base {
+            assert!(
+                heads.as_ref().is_some_and(|h| h.get(md5).is_some()),
+                "a live entry's base heads left the heads file: {kept:?}"
+            );
+        }
+    }
+}
+
+/// An *Import* killed at any write point imports the copy once or not at all: a verse only the
+/// file changed is the file's after the import, never twice a version; a verse changed on both
+/// sides keeps the project's text and is one conflict (a kill can land between the import's two
+/// batches); the copy is kept, with its base, until the entry ends.
+#[test]
+fn crash_at_every_write_point_of_an_import_imports_once() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(
+        &set_verse(&written, 1, 2, "in hope of eternal life"),
+        1,
+        1,
+        "Paul, a servant of God",
+    );
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
     assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    save_verse(&handle, 1, 1, "Paul, a slave of God").unwrap();
     handle.close().unwrap();
     let base = rig.fs.crash(false);
     drop(rig);
@@ -443,8 +666,24 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
         handle.wait_idle();
         Outcome::NotSaved
     };
+    let versions = |handle: &ProjectHandle, v: u16, text: &str| {
+        handle
+            .snapshot()
+            .fold()
+            .history(&verse(1, v))
+            .into_iter()
+            .filter(|id| {
+                handle.snapshot().fold().body(id).is_some_and(|b| {
+                    matches!(&b.record, tc_journal::Record::Verse {
+                        value: tc_journal::record::VerseValue::Text { words, .. }, ..
+                    } if words == text)
+                })
+            })
+            .count()
+    };
     let points = kill_everywhere_full(&base, &folder, &|_, _| {}, &action, &|handle, fs, _| {
         handle.wait_idle();
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, a slave of God"));
         let imported = words(handle, 1, 2).as_deref() == Some("in hope of eternal life");
         if !imported {
             assert_eq!(words(handle, 1, 2).as_deref(), Some("in hope"));
@@ -457,6 +696,7 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
                 Some(kept.md5.clone())
             );
         }
+        assert_bases_kept(fs, &folder, handle);
         // An import run again adds nothing the first run wrote.
         if let Some(book) = handle.waiting_books().first() {
             handle.import_kept(&book.kept.copy).wait().unwrap();
@@ -466,23 +706,59 @@ fn crash_at_every_write_point_of_an_import_imports_once() {
                 Some("in hope of eternal life")
             );
         }
-        assert_eq!(conflicts(handle), 0);
-        let versions = handle
-            .snapshot()
-            .fold()
-            .history(&verse(1, 2))
-            .into_iter()
-            .filter(|id| {
-                handle.snapshot().fold().body(id).is_some_and(|b| {
-                    matches!(&b.record, tc_journal::Record::Verse {
-                        value: tc_journal::record::VerseValue::Text { words, .. }, ..
-                    } if words == "in hope of eternal life")
-                })
-            })
-            .count();
-        assert_eq!(versions, 1, "imported once");
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, a slave of God"));
+        assert_eq!(conflicts(handle), 1, "one conflict for 1:1");
+        assert_eq!(
+            versions(handle, 2, "in hope of eternal life"),
+            1,
+            "imported once"
+        );
+        assert_eq!(
+            versions(handle, 1, "Paul, a servant of God"),
+            1,
+            "to review once"
+        );
     });
     assert!(points > 4, "{points} kill points");
+}
+
+/// *Not now* killed at any write point: the project keeps its text, and the changed bytes are
+/// listed once, in a copy that holds them, whether the file still holds them (it waits) or was
+/// written from the project.
+#[test]
+fn crash_at_every_write_point_of_not_now_loses_nothing() {
+    let (rig, folder, written) = saved_and_closed();
+    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
+    rig.fs.put(&usfm_path(&folder), &edited, None);
+    let handle = open(&rig, &folder);
+    assert_eq!(waiting(&handle), vec![USFM.to_owned()]);
+    handle.close().unwrap();
+    let base = rig.fs.crash(false);
+    drop(rig);
+    let path = usfm_path(&folder);
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.not_now(USFM).wait();
+        handle.wait_idle();
+        Outcome::NotSaved
+    };
+    let points = kill_everywhere_full(&base, &folder, &|_, _| {}, &action, &|handle, fs, _| {
+        handle.wait_idle();
+        assert_eq!(words(handle, 1, 2).as_deref(), Some("in hope"));
+        let listed: Vec<Kept> = handle
+            .kept_copies()
+            .into_iter()
+            .filter(|k| k.md5 == Md5::of(&edited).to_hex())
+            .collect();
+        assert_eq!(listed.len(), 1, "{:?}", handle.kept_copies());
+        assert_eq!(fs.peek(&folder.join(&listed[0].copy)), Some(edited.clone()));
+        if fs.peek(&path) == Some(edited.clone()) {
+            assert_eq!(waiting(handle), vec![USFM.to_owned()], "asked again");
+        } else {
+            assert!(waiting(handle).is_empty());
+        }
+        assert_bases_kept(fs, &folder, handle);
+    });
+    assert!(points > 2, "{points} kill points");
 }
 
 // ---------------------------------------------------------------------------------------

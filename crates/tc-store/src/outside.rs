@@ -135,10 +135,22 @@ impl Writer {
     /// person started from, so the edit conflicts with it and replaces nothing). A file HEAD
     /// does not have was made since: every record is new. No usable HEAD: unknown.
     pub(crate) fn head_base(&self, rel: &str) -> PlanBase {
+        match self.git.as_ref().map(|git| git.head()) {
+            Some(Ok(Some(head))) => self.base_at(rel, head),
+            _ => PlanBase::Unknown,
+        }
+    }
+
+    /// [`Writer::head_base`] as of `commit`, the HEAD a held file was found against.
+    pub(crate) fn head_base_at(&self, rel: &str, commit: tc_journal::GitOid) -> PlanBase {
+        match self.git.as_ref().map(|git| git.commit_head(commit)) {
+            Some(Ok(head)) => self.base_at(rel, head),
+            _ => PlanBase::Unknown,
+        }
+    }
+
+    fn base_at(&self, rel: &str, head: crate::git::Head) -> PlanBase {
         let Some(git) = &self.git else {
-            return PlanBase::Unknown;
-        };
-        let Ok(Some(head)) = git.head() else {
             return PlanBase::Unknown;
         };
         if !head.app_commit {

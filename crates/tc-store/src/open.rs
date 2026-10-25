@@ -472,11 +472,12 @@ fn open_inner(
             "the project folder stopped being readable while it opened".into(),
         )));
     }
-    let mut manifest = vfs
+    let read_manifest = vfs
         .read(&folder.path(MANIFEST))
         .ok()
-        .and_then(|b| Manifest::parse(&b))
-        .unwrap_or_default();
+        .and_then(|b| Manifest::parse(&b));
+    let manifest_lost = read_manifest.is_none();
+    let mut manifest = read_manifest.unwrap_or_default();
     // An expected pack (§4.4) that is gone: missing, unless a valid pack replaces it (a
     // consolidation that stopped after Q4, before the manifest was written).
     let replaced: BTreeSet<tc_journal::PackName> = journal
@@ -672,6 +673,7 @@ fn open_inner(
             tracker,
             identity,
             &options.creation_pins,
+            manifest_lost,
         ) {
             Ok(paths) => unchecked = paths,
             Err(e) => {
@@ -768,6 +770,7 @@ fn repair_and_classify(
     tracker: &Tracker,
     identity: Identity,
     creation_pins: &[(PinGroup, PinGroupValue)],
+    manifest_lost: bool,
 ) -> Result<Vec<String>, StoreError> {
     // O7.
     project.finish_interrupted()?;
@@ -792,6 +795,10 @@ fn repair_and_classify(
     writer.collecting = false;
     let unchecked = classified?;
     record_found(project, writer)?;
+    if manifest_lost {
+        // The `kept` entries the lost manifest held (delta §2.3): their copies are told again.
+        writer.relist_unnamed_copies()?;
+    }
     tracker.phase(Phase::Writing, 1, 0);
     if writer.manifest_changed {
         writer.write_manifest()?;

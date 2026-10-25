@@ -619,6 +619,25 @@ impl Run {
         for notice in &notices {
             self.observe_notice(fs, notice);
         }
+        // A kept copy is told in the conflict review's notices, with Import and Dismiss.
+        let kept = self
+            .handle
+            .as_ref()
+            .map(ProjectHandle::kept_copies)
+            .unwrap_or_default();
+        for kept in kept {
+            let Some(bytes) = fs.peek(&self.path(&kept.copy)) else {
+                continue;
+            };
+            let seen = ObservedCopy {
+                source: kept.path,
+                copy: kept.copy,
+                bytes,
+            };
+            if !self.observed_copies.contains(&seen) {
+                self.observed_copies.push(seen);
+            }
+        }
     }
 
     fn observe_notice_events(
@@ -4209,4 +4228,39 @@ fn a_retired_put_of_an_earlier_write_before_a_power_cut() -> Vec<Step> {
 #[test]
 fn a_retired_put_of_an_earlier_write_before_a_power_cut_is_no_loss() {
     assert_kept(&a_retired_put_of_an_earlier_write_before_a_power_cut());
+}
+
+/// Found by the nightly model run 40085200557 (2026-10-24): a program puts an older book file
+/// back, the next checkpoint keeps and holds it, and `.tc/materialized.json` is lost before
+/// the next open. The copy in `.tc/external/` is listed again for the person (the notice is
+/// not lost with the manifest).
+fn a_kept_book_copy_after_a_lost_manifest() -> Vec<Step> {
+    vec![
+        act(Act::Save(3)),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        act(Act::Checkpoint),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(3)),
+        lock(Holdable::File(File::Usfm), false),
+        killed(Act::Save(1), 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Checkpoint, 0),
+        Step::LoseTc { heads: false },
+    ]
+}
+
+#[test]
+fn a_kept_book_copy_after_a_lost_manifest_is_listed_again() {
+    assert_kept(&a_kept_book_copy_after_a_lost_manifest());
 }

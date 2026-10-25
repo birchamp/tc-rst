@@ -14,9 +14,11 @@ use crate::atomic::{HeldRetry, Removed, SyncDir, atomic_remove_checked};
 use crate::classify::Next;
 use crate::error::StoreError;
 use crate::handle::Resolver;
+use crate::layout::EXTERNAL;
 use crate::ledger::{self, Event, HeldCause, Stat, State};
 use crate::materialize::is_text_path;
 use crate::outside::Examined;
+use crate::vfs::{EntryKind, is_not_found};
 use crate::writer::Writer;
 use serde::{Deserialize, Serialize};
 use tc_journal::fold::DerivedFile;
@@ -24,15 +26,17 @@ use tc_journal::outside::{Base as PlanBase, OutsideFile, OutsidePlan};
 use tc_journal::{BookId, Md5, RepoPath};
 
 /// What a kept copy was compared with: the version of the project the outside file was
-/// written from (delta §2.3). Written as `placed:<md5>`, `head` or `none`.
+/// written from (delta §2.3). Written as `placed:<md5>`, `head:<commit>`, `head` or `none`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum KeptBase {
     /// The placement the change was found against; its heads are in the path's heads file
     /// for as long as the entry lives.
     Placed(String),
-    /// What HEAD's packs hold (`.tc/` was lost, and HEAD is this app's).
-    Head,
+    /// What HEAD's packs held (`.tc/` was lost, and HEAD is this app's), as of the commit
+    /// that was HEAD when the file was found: HEAD moves with the person's later saves. With
+    /// no commit (an earlier build's entry) *Import* compares with no base.
+    Head(Option<tc_journal::GitOid>),
     /// No base: every difference with text on both sides is one to review.
     None,
 }
@@ -41,7 +45,8 @@ impl From<KeptBase> for String {
     fn from(base: KeptBase) -> Self {
         match base {
             KeptBase::Placed(md5) => format!("placed:{md5}"),
-            KeptBase::Head => "head".into(),
+            KeptBase::Head(Some(commit)) => format!("head:{}", commit.to_hex()),
+            KeptBase::Head(None) => "head".into(),
             KeptBase::None => "none".into(),
         }
     }
@@ -52,21 +57,31 @@ impl TryFrom<String> for KeptBase {
 
     fn try_from(text: String) -> Result<Self, Self::Error> {
         match text.as_str() {
-            "head" => Ok(Self::Head),
+            "head" => Ok(Self::Head(None)),
             "none" => Ok(Self::None),
-            _ => match text.strip_prefix("placed:") {
-                Some(md5) if Md5::parse(md5).is_some() => Ok(Self::Placed(md5.to_owned())),
-                _ => Err(format!("not a kept base: {text}")),
-            },
+            _ => {
+                if let Some(md5) = text.strip_prefix("placed:")
+                    && Md5::parse(md5).is_some()
+                {
+                    return Ok(Self::Placed(md5.to_owned()));
+                }
+                match text
+                    .strip_prefix("head:")
+                    .and_then(tc_journal::GitOid::parse)
+                {
+                    Some(commit) => Ok(Self::Head(Some(commit))),
+                    None => Err(format!("not a kept base: {text}")),
+                }
+            }
         }
     }
 }
 
 impl KeptBase {
-    fn of(base: &ledger::Base) -> Self {
+    fn of(base: &ledger::Base, head: Option<tc_journal::GitOid>) -> Self {
         match base {
             ledger::Base::Placed(md5) => Self::Placed(md5.clone()),
-            ledger::Base::Head => Self::Head,
+            ledger::Base::Head => Self::Head(head),
             ledger::Base::Unknown => Self::None,
         }
     }
@@ -74,7 +89,7 @@ impl KeptBase {
     fn ledger(&self) -> ledger::Base {
         match self {
             Self::Placed(md5) => ledger::Base::Placed(md5.clone()),
-            Self::Head => ledger::Base::Head,
+            Self::Head(_) => ledger::Base::Head,
             Self::None => ledger::Base::Unknown,
         }
     }
@@ -160,6 +175,21 @@ pub(crate) fn asks(rel: &str) -> bool {
     )
 }
 
+/// The book file or story a copy in `.tc/external/` was made of, from the name
+/// `copy_external` gives it: `<utc stamp>-<escaped path>`, with `-2`, `-3`, … after a second
+/// copy in the same second.
+fn source_of_copy(name: &str) -> Option<String> {
+    let (_stamp, escaped) = name.split_once('-')?;
+    let unescaped = |s: &str| s.replace("%2F", "/").replace("%25", "%");
+    let whole = unescaped(escaped);
+    if asks(&whole) {
+        return Some(whole);
+    }
+    let (stem, n) = escaped.rsplit_once('-')?;
+    let rel = unescaped(stem);
+    (n.parse::<u16>().is_ok() && asks(&rel)).then_some(rel)
+}
+
 impl Writer {
     /// Every live entry, and one for a held book file or story a manifest of an earlier build
     /// held with no entry (no base).
@@ -182,6 +212,56 @@ impl Writer {
         out
     }
 
+    /// At an open that found no manifest: every copy in `.tc/external/` of a book file or
+    /// story that no entry names is listed again with no base, since its entry may have been
+    /// in the lost manifest. An open that has the manifest never calls this, so a copy whose
+    /// entry ended by *Import* or *Dismiss* stays unlisted.
+    pub(crate) fn relist_unnamed_copies(&mut self) -> Result<(), StoreError> {
+        let dir = self.folder.path(EXTERNAL);
+        let mut names: Vec<String> = match self.vfs.read_dir(&dir) {
+            Ok(entries) => entries
+                .into_iter()
+                .filter(|e| e.kind == EntryKind::File)
+                .filter_map(|e| e.name.into_string().ok())
+                .collect(),
+            Err(e) if is_not_found(&e) => return Ok(()),
+            Err(e) => return Err(StoreError::io("list", &dir, e)),
+        };
+        names.sort();
+        let named = self.kept_entries();
+        for name in names {
+            let Some(rel) = source_of_copy(&name) else {
+                continue;
+            };
+            let copy = format!("{EXTERNAL}/{name}");
+            let path = self.folder.path(&copy);
+            let bytes = self
+                .vfs
+                .read(&path)
+                .map_err(|e| StoreError::io("read the kept copy", &path, e))?;
+            let md5 = Md5::of(&bytes).to_hex();
+            // A copy of bytes already listed for its file (a hold the open made again).
+            if named
+                .iter()
+                .chain(&self.manifest.kept)
+                .any(|k| k.copy == copy || (k.path == rel && k.md5 == md5))
+            {
+                continue;
+            }
+            self.manifest.kept.push(Kept {
+                path: rel,
+                copy,
+                md5,
+                size: bytes.len() as u64,
+                base: KeptBase::None,
+                why: KeptWhy::Changed,
+                unreadable: None,
+            });
+            self.manifest_changed = true;
+        }
+        Ok(())
+    }
+
     /// The bases the live entries of `rel` name: their heads stay in the path's heads file.
     pub(crate) fn kept_bases(&self, rel: &str) -> Vec<String> {
         self.manifest
@@ -190,7 +270,7 @@ impl Writer {
             .filter(|k| k.path == rel)
             .filter_map(|k| match &k.base {
                 KeptBase::Placed(md5) => Some(md5.clone()),
-                KeptBase::Head | KeptBase::None => None,
+                KeptBase::Head(_) | KeptBase::None => None,
             })
             .collect()
     }
@@ -244,7 +324,13 @@ impl Writer {
                 .rev()
                 .find(|k| k.path == rel)
                 .map_or(KeptBase::None, |k| k.base.clone()),
-            _ => KeptBase::of(&base),
+            _ => KeptBase::of(
+                &base,
+                self.git
+                    .as_ref()
+                    .and_then(|git| git.head().ok().flatten())
+                    .map(|head| head.commit),
+            ),
         };
         let copy = self.copy_external(rel, bytes)?;
         let md5 = Md5::of(bytes);
@@ -279,15 +365,24 @@ impl Writer {
             entry.nfc = is_text_path(rel)
                 .then(|| unicode_normalization::is_nfc(&String::from_utf8_lossy(bytes)));
         }
-        self.manifest.kept.push(Kept {
-            path: rel.to_owned(),
-            copy: copy.clone(),
-            md5: md5.to_hex(),
-            size: bytes.len() as u64,
-            base,
-            why: KeptWhy::Changed,
-            unreadable,
-        });
+        // The same bytes found again (a crash stopped the write that ended their hold) are
+        // the entry that lists them already, with its base.
+        if !self
+            .manifest
+            .kept
+            .iter()
+            .any(|k| k.path == rel && k.md5 == md5.to_hex())
+        {
+            self.manifest.kept.push(Kept {
+                path: rel.to_owned(),
+                copy: copy.clone(),
+                md5: md5.to_hex(),
+                size: bytes.len() as u64,
+                base,
+                why: KeptWhy::Changed,
+                unreadable,
+            });
+        }
         self.manifest_changed = true;
         self.write_manifest()?;
         // `metadata.json` lists the held bytes as they are in the folder (M6).
@@ -322,8 +417,8 @@ impl Writer {
                     .unwrap_or_default();
                 self.read_base(&entry.path, &entry.base.ledger(), &digests)
             }
-            KeptBase::Head => self.head_base(&entry.path),
-            KeptBase::None => PlanBase::Unknown,
+            KeptBase::Head(Some(commit)) => self.head_base_at(&entry.path, *commit),
+            KeptBase::Head(None) | KeptBase::None => PlanBase::Unknown,
         }
     }
 
@@ -403,7 +498,16 @@ impl Writer {
                     .to_owned(),
                 base: self.import_base(&entry, &file, &bytes),
             },
-            _ => match self.examine_copied(&entry.path, &bytes, &entry.base.ledger()) {
+            // A story's planner reads HEAD as it is now, which may hold the person's later
+            // saves: compared with it, the file's older words would come in unasked.
+            _ => match self.examine_copied(
+                &entry.path,
+                &bytes,
+                &match entry.base {
+                    KeptBase::Head(_) => ledger::Base::Unknown,
+                    ref base => base.ledger(),
+                },
+            ) {
                 Examined::Plan(plan, _) => {
                     self.forget_examined(&entry.path);
                     ImportWhat::Story { plan }
@@ -459,16 +563,16 @@ impl Writer {
     /// Ends `entry` in one manifest write; a held file that still holds its bytes is the
     /// app's own after it (the import holds what they show), so the next job writes it.
     fn end_import(&mut self, entry: &Kept, bytes: &[u8]) -> Result<(), StoreError> {
-        self.manifest.kept.retain(|k| k.copy != entry.copy);
-        self.manifest_changed = true;
         let holds_these = matches!(self.state_of(&entry.path),
             State::Held { held } if held.md5 == entry.md5);
-        let md5 = Md5::of(bytes);
         if holds_these {
-            self.accept(&entry.path, md5, bytes, None)?;
-        } else {
-            self.write_manifest()?;
+            // While the entry lives, the heads file keeps its base: a crash before the entry
+            // ends then leaves it with the base its Import compares with.
+            self.accept(&entry.path, Md5::of(bytes), bytes, None)?;
         }
+        self.manifest.kept.retain(|k| k.copy != entry.copy);
+        self.manifest_changed = true;
+        self.write_manifest()?;
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {
@@ -687,5 +791,42 @@ impl crate::project::Project {
                 )),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KeptBase, source_of_copy};
+
+    #[test]
+    fn a_head_base_keeps_its_commit_and_reads_an_earlier_builds_head() {
+        let commit = tc_journal::GitOid::parse("c354b8ae0a8a0e1e47b4c36d0b5e6e8a2c3f4d5e").unwrap();
+        let text = String::from(KeptBase::Head(Some(commit)));
+        assert_eq!(text, "head:c354b8ae0a8a0e1e47b4c36d0b5e6e8a2c3f4d5e");
+        assert_eq!(KeptBase::try_from(text), Ok(KeptBase::Head(Some(commit))));
+        assert_eq!(
+            KeptBase::try_from("head".to_owned()),
+            Ok(KeptBase::Head(None))
+        );
+        assert!(KeptBase::try_from("head:xyz".to_owned()).is_err());
+    }
+
+    #[test]
+    fn a_copys_name_gives_its_book_file_and_nothing_else() {
+        let tit = Some("ingredients/TIT.usfm".to_owned());
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm"),
+            tit
+        );
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm-3"),
+            tit
+        );
+        assert_eq!(source_of_copy("20261017T000000Z-metadata.json-2"), None);
+        assert_eq!(source_of_copy("20261017T000000Z-not-saved-x.tmp"), None);
+        assert_eq!(
+            source_of_copy("20261017T000000Z-ingredients%2FTIT.usfm-x"),
+            None
+        );
     }
 }
