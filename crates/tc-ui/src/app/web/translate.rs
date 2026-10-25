@@ -85,6 +85,52 @@ impl Actions {
         }
     }
 
+    /// A section draft whose save has not landed, for `chapter` of `book`, with no card open (a
+    /// reload restored it): its card opens over the same verses, so the draft is on the page
+    /// and Save can store it (FIX-HIDE2, INV-NEVER-HIDE-UNSAVED-TEXT).
+    pub fn reopen_unsaved_section(
+        &self,
+        book: tc_core::BookId,
+        chapter: u16,
+        chapter_keys: &[String],
+    ) {
+        let s = self.s();
+        if !matches!(s.editing.get_untracked(), Editing::None) {
+            return;
+        }
+        let Some(project) = s.project.get_untracked() else {
+            return;
+        };
+        let saves = self.runtime().saves();
+        for key in saves.unsaved_keys(tc_api::buffer::FieldKind::Section) {
+            if key.project != project.at.project || key.id != project.id {
+                continue;
+            }
+            // A save on its way lands or fails; only a draft that waits for the person opens.
+            if matches!(
+                saves.state(&key),
+                Some(crate::app::save::FieldSave::Saving { .. })
+            ) {
+                continue;
+            }
+            let Some((b, c, range)) =
+                crate::app::translate::parse_verse_place(key.field.place.as_str())
+            else {
+                continue;
+            };
+            if b != book || c != chapter {
+                continue;
+            }
+            let keys = crate::app::translate::section_keys_of(&range, chapter_keys);
+            if section_key(&project.at.project, &project.id, book, chapter, &keys).as_ref()
+                == Some(&key)
+            {
+                self.start_section(chapter, &keys);
+                return;
+            }
+        }
+    }
+
     /// The section card closes: after its Save stored the text, or after Cancel discarded it.
     pub fn close_section(&self) {
         self.s().editing.try_set(Editing::None);

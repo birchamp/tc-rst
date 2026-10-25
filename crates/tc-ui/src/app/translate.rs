@@ -322,6 +322,20 @@ pub fn section_place(book: BookId, chapter: u16, keys: &[String]) -> String {
     format!("{} {chapter}:{first}-{last}", book.code())
 }
 
+/// The verse keys of `chapter_keys` that a section place's range `first-last` covers, in
+/// order: the verses its card was opened over.
+pub fn section_keys_of(range: &str, chapter_keys: &[String]) -> Vec<String> {
+    let (first, last) = range.split_once('-').unwrap_or((range, range));
+    let (Some(first), Ok(last)) = (leading_num(first), last.parse::<u32>()) else {
+        return Vec::new();
+    };
+    chapter_keys
+        .iter()
+        .filter(|k| leading_num(k).is_some_and(|n| n >= first && n <= last))
+        .cloned()
+        .collect()
+}
+
 /// The buffer key of the section card over `keys` of the open project.
 pub fn section_key(
     project: &ProjectRef,

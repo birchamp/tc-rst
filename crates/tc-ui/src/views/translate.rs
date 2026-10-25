@@ -302,6 +302,25 @@ fn chapter_view(
                 .and_then(|v| v.chapters.iter().find(|c| c.chapter == chapter).cloned())
         })
     });
+    // A section draft a reload restored, with no card open: its card opens over the same
+    // verses, so the draft is on the page for Save (FIX-HIDE2).
+    {
+        let actions = SendWrapper::new(actions.clone());
+        let changes = runtime.saves().changes();
+        let editing = s.editing.clone();
+        Effect::new(move |_| {
+            changes.track();
+            editing.track();
+            let keys: Vec<String> = chapter_text.with(|c| {
+                c.as_ref().map_or_else(Vec::new, |c| {
+                    c.verses.iter().map(|v| v.key.as_str().to_owned()).collect()
+                })
+            });
+            if !keys.is_empty() {
+                actions.reopen_unsaved_section(book_id, chapter, &keys);
+            }
+        });
+    }
     let mode = {
         let unit = s.u.unit_mode.clone();
         Memo::new(move |_| {

@@ -106,6 +106,7 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | FIX-R | Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES | app | INT-4 | 2-3 d |
 | FIX-J | Finish the partial P1 journeys J3, J12 and J13 | app | INT-4 | 1-1.5 d |
 | FIX-HIDE | A held leave never hides a verse whose save failed | app | none | 0.5 d |
+| FIX-HIDE2 | A section draft restored after a reload is shown, ready for Save | app | FIX-HIDE | 0.5 d |
 | SWEEP | Sweep tC4 again (b86270f and release/4.0), then every week | integration | INT-4 | 0.5 d |
 | LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
 
