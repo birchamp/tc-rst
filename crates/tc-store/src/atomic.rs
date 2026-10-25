@@ -476,6 +476,10 @@ pub fn atomic_remove_checked(
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::disallowed_methods,
+        reason = "test code: scratch files and another program's handle, never a project"
+    )]
     use super::*;
     use crate::fault::{FaultFs, PowerLoss};
 

@@ -5,14 +5,12 @@
 //! `hoverHelp`, `focusHelp`, `loadHelpArticle` and `closeHelpArticle`. The decisions are in
 //! [`crate::app::understand`].
 
-use std::cell::Cell;
-
 use leptos::prelude::*;
 use tc_api::ApiError;
 use tc_api::helps::{Article, ArticleLink, ArticleView};
 use tc_api::home::{LastEditView, ProjectKind, ResumePlace};
-use tc_api::ids::{JobId, ProjectRef};
-use tc_api::jobs::{Get as JobsGet, JobOutcome, JobState};
+use tc_api::ids::ProjectRef;
+use tc_api::jobs::Progress;
 use tc_api::prefs::{DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetDraftUnit};
 use tc_api::refusal::Message;
 use tc_api::resources::GatewayPackage;
@@ -24,6 +22,8 @@ use super::app_ctx::{Actions, HomeBanner, OpenTarget};
 use super::js;
 use crate::app::client::CallError;
 use crate::app::feedback::HelpRequest;
+use crate::app::jobs::JobEnd;
+use crate::app::latest::Latest;
 use crate::app::shell::{CurrentProject, Editing, ProjectFlavor, View};
 use crate::app::understand::{HelpFocus, HelpsTab, Opening, UnitMode};
 use crate::i18n::t_dyn;
@@ -95,20 +95,9 @@ impl UnderstandState {
 
 thread_local! {
     /// Counts the opens asked for: only the newest may land (tC4's `openProjectSeqRef`).
-    static OPENS: Cell<u64> = const { Cell::new(0) };
+    static OPENS: Latest = const { Latest::new() };
     /// Counts the articles asked for (tC4's `articleSeqRef`).
-    static ARTICLES: Cell<u64> = const { Cell::new(0) };
-}
-
-fn next(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    counter.with(|c| {
-        c.set(c.get() + 1);
-        c.get()
-    })
-}
-
-fn current(counter: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
-    counter.with(Cell::get)
+    static ARTICLES: Latest = const { Latest::new() };
 }
 
 /// Where an open lands, when the person's action names it (the Resume card).
@@ -294,14 +283,14 @@ impl Actions {
         landing: Option<Landing>,
         after: After,
     ) {
-        let attempt = next(&OPENS);
+        let attempt = OPENS.with(Latest::begin);
         let s = self.s().clone();
         s.u.opening.try_set(Some(Opening::new(js::now_ms())));
         s.book_error.try_set(None);
         let this = self.clone();
         spawn_local(async move {
             if !this.runtime().saves().gate().await {
-                if current(&OPENS) == attempt {
+                if OPENS.with(|l| l.is_current(attempt)) {
                     this.s().u.opening.try_set(None);
                 }
                 return;
@@ -312,7 +301,23 @@ impl Actions {
                 unit,
             };
             let ended = match this.runtime().api().call(&request).await {
-                Ok(job) => this.follow_open(job, attempt).await,
+                Ok(job) => {
+                    let report = |progress: &Progress| {
+                        this.s().u.opening.try_update(|opening| {
+                            if let Some(opening) = opening {
+                                opening.report(progress);
+                            }
+                        });
+                    };
+                    match this
+                        .follow::<Open>(job, report, || OPENS.with(|l| l.is_current(attempt)))
+                        .await
+                    {
+                        JobEnd::Done(opened) => Some(Ok(*opened)),
+                        JobEnd::Failed(error) => Some(Err(error)),
+                        JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => None,
+                    }
+                }
                 Err(error) => Some(Err(match error {
                     CallError::Api(error) => error,
                     other => ApiError::BadRequest {
@@ -321,7 +326,7 @@ impl Actions {
                     },
                 })),
             };
-            if current(&OPENS) != attempt {
+            if !OPENS.with(|l| l.is_current(attempt)) {
                 return;
             }
             match ended {
@@ -344,52 +349,6 @@ impl Actions {
                 }
             }
         });
-    }
-
-    /// Follows the open job until it ends: its frames as they come, and `jobs/get` once a
-    /// second in case a frame was lost. Each report goes to the overlay. `None` for a job
-    /// cancelled or superseded.
-    async fn follow_open(
-        &self,
-        job: JobId,
-        attempt: u64,
-    ) -> Option<Result<OpenedProject, ApiError>> {
-        let mut waited = 0;
-        loop {
-            if current(&OPENS) != attempt {
-                return None;
-            }
-            let state = self
-                .s()
-                .server
-                .jobs
-                .with_untracked(|jobs| jobs.get(&job).map(|view| view.state.clone()));
-            match state {
-                Some(JobState::Done(JobOutcome::Opened(opened))) => return Some(Ok(*opened)),
-                Some(JobState::Done(_)) => return None,
-                Some(JobState::Failed(error)) => return Some(Err(error)),
-                Some(JobState::Cancelled) => return None,
-                Some(JobState::Running(progress)) => {
-                    self.s().u.opening.try_update(|opening| {
-                        if let Some(opening) = opening {
-                            opening.report(&progress);
-                        }
-                    });
-                }
-                Some(JobState::Queued | JobState::Cancelling) | None => {}
-            }
-            js::sleep(50).await;
-            waited += 50;
-            if waited >= 1000 {
-                waited = 0;
-                if let Ok(Some(view)) = self.runtime().api().call(&JobsGet { job }).await {
-                    self.s()
-                        .server
-                        .jobs
-                        .try_update(|jobs| crate::app::effects::merge_job(jobs, view));
-                }
-            }
-        }
     }
 
     /// The open's outcome: the project's screens, at the place the person returns to.
@@ -684,7 +643,7 @@ impl Actions {
             return;
         };
         let book = s.u.book.get_untracked();
-        let attempt = next(&ARTICLES);
+        let attempt = ARTICLES.with(Latest::begin);
         s.u.article
             .try_set(Some(ArticleState::Loading(link.clone())));
         let this = self.clone();
@@ -709,7 +668,7 @@ impl Actions {
                         .await
                 }
             };
-            if current(&ARTICLES) != attempt {
+            if !ARTICLES.with(|l| l.is_current(attempt)) {
                 return;
             }
             let state = match result {
@@ -762,7 +721,7 @@ impl Actions {
     }
 
     pub fn close_help_article(&self) {
-        next(&ARTICLES);
+        ARTICLES.with(Latest::begin);
         self.s().u.article.try_set(None);
     }
 }

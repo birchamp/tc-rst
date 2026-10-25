@@ -22,4 +22,4 @@ The stories come from the template (unfoldingWord® Open Bible Stories, © unfol
 CC BY-SA 4.0), the sample project (its Spanish text CC BY-SA 4.0, Equipo Ejemplo; see
 `../tc4/LICENSE-CONTENT.md`) and the en_obs v9 release (CC BY-SA 4.0, © unfoldingWord).
 The hand-written and generated cases were written for this file and are in the public
-domain. The file holds what tC4's code (GPL-2.0-or-later) computes, not the code.
+domain. The file holds what tC4's code (MIT) computes, not the code.

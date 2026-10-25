@@ -14,6 +14,7 @@ pub(crate) mod bridge;
 pub mod check;
 mod create;
 mod fix;
+mod jobs;
 pub(crate) mod js;
 mod panic;
 #[cfg(feature = "test-hooks")]

@@ -103,11 +103,9 @@
       {
         "file": "parity/app/journeys/source-texts.test.mjs",
         "tests": [
-          "Get source texts reads a package only after the internet question, and Not now reads nothing"
+          "Get source texts reads a package only after the internet question, and Not now reads nothing",
+          "j3_a_download_from_the_seeded_fake_installs_the_pinned_version"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "J4": {
@@ -179,11 +177,8 @@
       {
         "file": "parity/app/journeys/upgrades.test.mjs",
         "tests": [
-          "Check for updates asks the internet question first, and Not now sends nothing to Door43"
+          "j12_an_upgrade_through_the_screens_moves_the_pin_on_disk"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "J13": [
@@ -191,11 +186,8 @@
         "file": "parity/app/journeys/upgrades.test.mjs",
         "tests": [
           "Keep leaves the checking language as it was; Change moves the primary set to English",
-          "Change writes the new checking language, and Settings names it by its own name afterwards"
+          "j13_change_writes_the_primary_set_to_disk"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "J16": {
@@ -407,11 +399,9 @@
       {
         "file": "parity/app/journeys/source-texts.test.mjs",
         "tests": [
-          "Get source texts reads a package only after the internet question, and Not now reads nothing"
+          "Get source texts reads a package only after the internet question, and Not now reads nothing",
+          "j3_a_download_from_the_seeded_fake_installs_the_pinned_version"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "j04-check-book.spec.ts": {
@@ -480,11 +470,8 @@
       {
         "file": "parity/app/journeys/upgrades.test.mjs",
         "tests": [
-          "Check for updates asks the internet question first, and Not now sends nothing to Door43"
+          "j12_an_upgrade_through_the_screens_moves_the_pin_on_disk"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "j13-gateway-change.spec.ts": [
@@ -492,11 +479,8 @@
         "file": "parity/app/journeys/upgrades.test.mjs",
         "tests": [
           "Keep leaves the checking language as it was; Change moves the primary set to English",
-          "Change writes the new checking language, and Settings names it by its own name afterwards"
+          "j13_change_writes_the_primary_set_to_disk"
         ]
-      },
-      {
-        "pending": "FIX-J"
       }
     ],
     "j14-join-isolation.spec.ts": {

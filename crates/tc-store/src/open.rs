@@ -1570,6 +1570,7 @@ impl Project {
             }],
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())
@@ -1602,6 +1603,7 @@ impl Project {
                 .collect(),
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         };
         self.commit(plan)
             .map(|_| ())

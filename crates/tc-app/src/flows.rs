@@ -1,8 +1,9 @@
-//! The flows that run one at a time (AD31, A-31): sync, gateway change, share, sign-in and
-//! import each run one at a time across the app, as tC4's `syncing`, `gatewayBusy` and
-//! `signInFlight` flags make them. A USB export or receive runs one at a time per project, and
-//! never beside a sync of the same project, because STORAGE does not say that a receive and a
-//! sync of one project may run together.
+//! The flows that run one at a time (AD31, A-31): sync, gateway change, share and import each
+//! run one at a time across the app, as tC4's `syncing` and `gatewayBusy` flags make them.
+//! Sign-ins take turns in the account service instead (`crate::account`), as tC4's
+//! `signInFlight` makes them: a second one waits rather than answering `Busy`. A USB export
+//! or receive runs one at a time per project, and never beside a sync of the same project,
+//! because STORAGE does not say that a receive and a sync of one project may run together.
 //!
 //! A flow is entered with a [`FlowRequest`] and held by the [`FlowPass`] it returns. The pass
 //! frees the flow when it drops, so a job that holds it frees the flow when the job ends, also
@@ -20,7 +21,6 @@ pub enum FlowRequest {
     Sync(ProjectRef),
     GatewayChange,
     Share,
-    SignIn,
     Import,
     ExchangeExport(ProjectRef),
     ExchangeReceive(ProjectRef),
@@ -32,7 +32,6 @@ impl FlowRequest {
             Self::Sync(_) => Flow::Sync,
             Self::GatewayChange => Flow::GatewayChange,
             Self::Share => Flow::Share,
-            Self::SignIn => Flow::SignIn,
             Self::Import => Flow::Import,
             Self::ExchangeExport(_) => Flow::ExchangeExport,
             Self::ExchangeReceive(_) => Flow::ExchangeReceive,
@@ -41,21 +40,18 @@ impl FlowRequest {
 
     /// Whether the two cannot run together. Symmetric.
     ///
-    /// - Sync, gateway change, share, sign-in and import: one of each at a time across the
+    /// - Sync, gateway change, share and import: one of each at a time across the
     ///   app. Two syncs of different projects exclude each other, as in tC4.
     /// - USB export and receive: one exchange per project, whichever kind. Exchanges of
     ///   different projects run together.
     /// - A sync excludes an exchange of the same project, and runs beside one of another.
     /// - Nothing else excludes anything.
     pub fn excludes(&self, other: &FlowRequest) -> bool {
-        use FlowRequest::{
-            ExchangeExport, ExchangeReceive, GatewayChange, Import, Share, SignIn, Sync,
-        };
+        use FlowRequest::{ExchangeExport, ExchangeReceive, GatewayChange, Import, Share, Sync};
         match (self, other) {
             (Sync(_), Sync(_))
             | (GatewayChange, GatewayChange)
             | (Share, Share)
-            | (SignIn, SignIn)
             | (Import, Import) => true,
             (
                 ExchangeExport(a) | ExchangeReceive(a),

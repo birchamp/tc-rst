@@ -186,7 +186,7 @@ async fn a_story_project_has_no_book() {
 /// The existing light/heavy OBS pair on the real store as valid story Burritos.
 fn story_disk(project: &MemoryProject) -> FaultFs {
     let fs = FaultFs::new();
-    let backend = crate::store_world::backend_over(
+    let (backend, _backend_watch) = crate::store_world::backend_over(
         &fs,
         // A separate importing installation gives the measured writer the same initial
         // sequence width in both projects; record-count digits must not mask a scan.

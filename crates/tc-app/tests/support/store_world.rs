@@ -32,6 +32,8 @@ pub struct StoreWorld {
     pub fs: FaultFs,
     pub hooks: Arc<Hooks>,
     pub backend: Arc<StoreBackend>,
+    /// P5/INV-VALID-BURRITO: checks every state the backend wrote when the world is dropped.
+    pub watch: BurritoWatch,
     /// The sample Bible project (Titus and Jonah).
     pub bible: ProjectRef,
     /// The same project with two heads on Titus 1:1.
@@ -94,7 +96,8 @@ pub fn backend_over(
     app: &str,
     platform: FakePlatform,
     hooks: Arc<Hooks>,
-) -> StoreBackend {
+) -> (StoreBackend, BurritoWatch) {
+    let mut watch = watch_over(fs, hooks.clone());
     let backend = StoreBackend::start(
         StoreConfig {
             app_data: PathBuf::from(app),
@@ -111,7 +114,8 @@ pub fn backend_over(
     // The start removes staging folders a crash left (N1); a test that plants one plants it
     // after this.
     backend.store().wait_cleanup();
-    backend
+    watch.follow(&backend);
+    (backend, watch)
 }
 
 /// The files every world starts from, written once per test binary.
@@ -193,7 +197,8 @@ fn base() -> &'static Base {
         let records = sample_records(&sources, vrs.as_deref());
 
         let fs = FaultFs::new();
-        let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+        let (backend, _base_watch) =
+            backend_over(&fs, APP, FakePlatform::default(), Arc::default());
         for name in [
             "sample_burrito",
             "sample_burrito_teammates",
@@ -278,11 +283,12 @@ pub fn store_world_with(platform: FakePlatform) -> StoreWorld {
     let base = base();
     let fs = base.fs.copy();
     let hooks = Arc::new(Hooks::default());
-    let backend = Arc::new(backend_over(&fs, APP, platform, hooks.clone()));
+    let (backend, watch) = backend_over(&fs, APP, platform, hooks.clone());
     StoreWorld {
         fs,
         hooks,
-        backend,
+        backend: Arc::new(backend),
+        watch,
         bible: folder("sample_burrito"),
         conflicted: (folder("sample_burrito_teammates"), tit(1, 1)),
         other: folder("another_project"),
@@ -355,8 +361,15 @@ pub fn assert_valid_burrito(fs: &FaultFs, folder: &Path) {
 
 /// The same check over files read from anywhere (a real folder on disk).
 pub fn assert_valid_burrito_files(files: &BTreeMap<String, Vec<u8>>) {
+    let problems = burrito_problems_of(files);
+    assert!(problems.is_empty(), "not a valid burrito: {problems:#?}");
+}
+
+/// What `tc_burrito` finds wrong with a project's files as a Scripture Burrito (`.tc/` is the
+/// store's own and left out).
+pub fn burrito_problems_of(files: &BTreeMap<String, Vec<u8>>) -> Vec<String> {
     let Some(metadata) = files.get("metadata.json") else {
-        panic!("not a valid burrito: no metadata.json");
+        return vec!["no metadata.json".to_owned()];
     };
     let mut project = tc_burrito::MemProject::new();
     for (rel, bytes) in files {
@@ -364,11 +377,112 @@ pub fn assert_valid_burrito_files(files: &BTreeMap<String, Vec<u8>>) {
             project.insert(rel.clone(), bytes.clone());
         }
     }
-    let problems: Vec<String> = tc_burrito::validate_project(metadata, &project)
+    tc_burrito::validate_project(metadata, &project)
         .into_iter()
         .map(|p| format!("{p:?}"))
-        .collect();
-    assert!(problems.is_empty(), "not a valid burrito: {problems:#?}");
+        .collect()
+}
+
+/// A Burrito's own files: `metadata.json` and everything under `ingredients/`. The store's
+/// `.tc/` history, which can be large, is never read, so the probe costs what it checks.
+fn burrito_files(fs: &FaultFs, folder: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut out = files(fs, &folder.join("ingredients"))
+        .into_iter()
+        .map(|(rel, bytes)| (format!("ingredients/{rel}"), bytes))
+        .collect::<BTreeMap<_, _>>();
+    if let Some(metadata) = fs.peek(&folder.join("metadata.json")) {
+        out.insert("metadata.json".to_owned(), metadata);
+    }
+    out
+}
+
+/// P5/INV-VALID-BURRITO: the probe the store's writer runs after every job that wrote files,
+/// outside a write group (STORAGE §16.6, I7). Each problem names its folder.
+pub fn burrito_probe(fs: &FaultFs) -> impl Fn(&Path) -> Vec<String> + Send + Sync + 'static {
+    let fs = fs.clone();
+    move |folder: &Path| {
+        burrito_problems_of(&burrito_files(&fs, folder))
+            .into_iter()
+            .map(|p| format!("{} is not a valid Scripture Burrito: {p}", folder.display()))
+            .collect()
+    }
+}
+
+/// Has the writer of the store that `hooks` go to look at every state it leaves on `fs`, for a
+/// test that starts its store itself (a hold before the start, a counting filesystem, another
+/// platform); [`backend_over`] calls it for every other store.
+pub fn watch_over(fs: &FaultFs, hooks: Arc<Hooks>) -> BurritoWatch {
+    hooks.check_burrito(burrito_probe(fs));
+    BurritoWatch {
+        hooks,
+        fs: fs.clone(),
+        stopped: false,
+        open_projects: None,
+    }
+}
+
+/// P5/INV-VALID-BURRITO without the test asking: every project state a store's writer leaves
+/// is looked at as a Scripture Burrito, and the test fails when this watch is dropped if one
+/// was not valid. Keep it until the test ends.
+#[must_use = "keep the watch until the test ends: dropping it checks what the store wrote"]
+pub struct BurritoWatch {
+    hooks: Arc<Hooks>,
+    fs: FaultFs,
+    stopped: bool,
+    /// Waits until each project the store still has open has written all it was asked to,
+    /// and answers how many are open.
+    open_projects: Option<Box<dyn Fn() -> usize + Send + Sync>>,
+}
+
+impl BurritoWatch {
+    /// Has the watch wait for the projects `backend` opens before it reads what the writer saw.
+    pub fn follow(&mut self, backend: &StoreBackend) {
+        self.open_projects = Some(Box::new(backend.idle_waiter()));
+    }
+
+    /// The test leaves a folder that is not a valid Burrito on purpose (an outside edit, a
+    /// damaged or removed file), so the watch stops looking; `why` says which.
+    pub fn stop(&mut self, why: &str) {
+        assert!(!why.trim().is_empty(), "a stopped watch says why");
+        self.hooks.check_burrito(|_: &Path| Vec::new());
+        self.stopped = true;
+    }
+}
+
+impl Drop for BurritoWatch {
+    fn drop(&mut self) {
+        // A failing test, a filesystem killed on purpose, or a stopped watch says nothing more.
+        if std::thread::panicking() || self.fs.is_dead() || self.stopped {
+            return;
+        }
+        // The writer looks at the folder after each job. A project still open is waited on until
+        // it has written all it was asked to; one closing lets go of its lock only after its last
+        // job. So once every lock held belongs to an idle open project, every state the test's
+        // saves wrote was seen. A minute is a hang, never slowness.
+        let hung = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let open = self.open_projects.as_ref().map_or(0, |idle| idle());
+            if self.fs.locks_held() <= open {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < hung,
+                "hung: a project of this test's store was still closing a minute after the test"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let problems = self.hooks.burrito_problems();
+        if !problems.is_empty() {
+            let test = std::thread::current()
+                .name()
+                .unwrap_or("this test")
+                .to_owned();
+            panic!(
+                "P5/INV-VALID-BURRITO: after {test}, {}",
+                problems.join("; ")
+            );
+        }
+    }
 }
 
 /// The files under `.tc/pending/`, temporary files left out.
@@ -384,7 +498,7 @@ pub fn pending_files(fs: &FaultFs, folder: &Path) -> Vec<String> {
 /// the next write point).
 pub async fn pending_dir_flush(world: &StoreWorld, project: &ProjectRef, key: &RecordKey) -> u64 {
     let fs = world.fs.copy();
-    let backend = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
+    let (backend, _dry_run_watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let handle = backend.open(project, progress()).unwrap();
     handle.wait_idle();
     fs.clear_log();

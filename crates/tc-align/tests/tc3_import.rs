@@ -6,7 +6,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
-use tc_align::Alignment;
 
 use common::*;
 use serde_json::Value;
