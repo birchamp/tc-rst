@@ -25,6 +25,10 @@ use tc_journal::fold::DerivedFile;
 use tc_journal::outside::{Base as PlanBase, OutsideFile, OutsidePlan};
 use tc_journal::{BookId, Md5, RepoPath};
 
+/// After the name of a copy in `.tc/external/`: the empty file that says an *Import* took
+/// the copy in.
+pub(crate) const IMPORTED: &str = ".imported";
+
 /// What a kept copy was compared with: the version of the project the outside file was
 /// written from (delta §2.3). Written as `placed:<md5>`, `head:<commit>`, `head` or `none`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,9 +217,10 @@ impl Writer {
     }
 
     /// At an open that found no manifest: every copy in `.tc/external/` of a book file or
-    /// story that no entry names and that still brings something in is listed again with no
-    /// base, since its entry may have been in the lost manifest. An open that has the manifest never calls this, so a copy whose
-    /// entry ended by *Import* or *Dismiss* stays unlisted.
+    /// story that no entry names is listed again with no base, since its entry may have been
+    /// in the lost manifest. A copy an *Import* took in has a mark beside it (its name and
+    /// [`IMPORTED`]), so it is not one of them. An open that has the manifest never calls
+    /// this, so a copy whose entry ended by *Import* or *Dismiss* stays unlisted.
     pub(crate) fn relist_unnamed_copies(&mut self) -> Result<(), StoreError> {
         let dir = self.folder.path(EXTERNAL);
         let mut names: Vec<String> = match self.vfs.read_dir(&dir) {
@@ -228,11 +233,19 @@ impl Writer {
             Err(e) => return Err(StoreError::io("list", &dir, e)),
         };
         names.sort();
+        let marked: std::collections::BTreeSet<String> = names
+            .iter()
+            .filter(|n| n.ends_with(IMPORTED))
+            .cloned()
+            .collect();
         let named = self.kept_entries();
         for name in names {
             let Some(rel) = source_of_copy(&name) else {
                 continue;
             };
+            if marked.contains(&format!("{name}{IMPORTED}")) {
+                continue;
+            }
             let copy = format!("{EXTERNAL}/{name}");
             let path = self.folder.path(&copy);
             let bytes = self
@@ -248,9 +261,6 @@ impl Writer {
             {
                 continue;
             }
-            if !self.copy_brings_anything(&rel, &bytes) {
-                continue;
-            }
             self.manifest.kept.push(Kept {
                 path: rel,
                 copy,
@@ -263,24 +273,6 @@ impl Writer {
             self.manifest_changed = true;
         }
         Ok(())
-    }
-
-    /// Whether an *Import* of `bytes` with no base would change anything: a copy an earlier
-    /// *Import* took in (or whose every value History holds) brings nothing. The `reconciles`
-    /// header of an import's pending file would say so too, but a seal removes that file.
-    /// shortcut: a story copy is always listed again; it needs "Update a story" to be asked.
-    fn copy_brings_anything(&self, rel: &str, bytes: &[u8]) -> bool {
-        match DerivedFile::from_path(rel) {
-            Some(file @ DerivedFile::Usfm(book)) if self.fold.projects_file(&file) => {
-                let name = rel.rsplit('/').next().unwrap_or(rel);
-                self.fold
-                    .plan_update_book(book, bytes, name)
-                    .map_or(true, |plan| {
-                        !plan.changes.is_empty() || !plan.review.is_empty()
-                    })
-            }
-            _ => true,
-        }
     }
 
     /// Whether `.tc/external/` holds a copy of `rel` with the md5 `md5`.
@@ -636,12 +628,27 @@ impl Writer {
         self.manifest.kept.retain(|k| k.copy != entry.copy);
         self.manifest_changed = true;
         self.write_manifest()?;
+        self.mark_imported(&entry.copy);
         if let Some(file) =
             DerivedFile::from_path(&entry.path).filter(|f| self.fold.projects_file(f))
         {
             self.dirty.add_file(file);
         }
         self.finish_looking()
+    }
+
+    /// Marks an ended import's copy with an empty file beside it, so that an open that lost
+    /// the manifest does not list it again; the copy keeps its name and bytes. A mark that
+    /// cannot be written only lets that open list the copy again.
+    fn mark_imported(&self, copy: &str) {
+        let (dir, name) = self.folder.dir_and_name(copy);
+        let _ = crate::atomic::atomic_create(
+            &*self.vfs,
+            &dir,
+            &format!("{name}{IMPORTED}"),
+            b"",
+            SyncDir::Now,
+        );
     }
 
     /// *Not now* for a held book file or story: the file is written again from the project
