@@ -229,8 +229,10 @@ fn loss_outside_mass_delete_removes_nothing() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L42: an older copy of the file put back is kept and asked about, never a quiet return to
-/// the old words: its *Import* finds the old words in History and takes nothing in.
+/// L42, L140: an older copy of the file put back is kept and asked about, never a quiet return
+/// to the old words. Its *Import* makes the old words a version to review beside the person's
+/// latest text (§13.6 U3: a file that sets an older version back is a conflict); the latest
+/// text stays shown.
 #[test]
 fn loss_outside_revert_never_returns_to_the_old_words() {
     let (rig, folder) = titus();
@@ -247,13 +249,17 @@ fn loss_outside_revert_never_returns_to_the_old_words() {
 
     let handle = open(&rig, &folder);
     assert_eq!(copies_of(&handle, USFM).len(), 1);
-    assert_eq!(counts(&import_waiting(&handle)), vec![(0, 0)]);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(0, 1)]);
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("Paul, a slave of God"),
         "the text the person wrote last is the one shown"
     );
-    assert!(verse_conflicts(&handle).is_empty());
+    assert_eq!(
+        verse_conflicts(&handle).len(),
+        1,
+        "the old words are to review"
+    );
     assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(newer));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
