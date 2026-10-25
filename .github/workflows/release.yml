@@ -58,10 +58,19 @@ jobs:
         run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       # INV-A-RELEASE-HAS-NO-TEST-HOOKS: the shipped page is built without --test-hooks.
       - run: crates/tc-ui/build-app.sh --release --out release/ui
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # INV-EVERY-PINNED-FILE-IS-SHIPPED: the archives fetched.lock names but bundle/en lacks (the
+      # OBS pictures) are downloaded and checked against the lock, and bundle_store must skip
+      # nothing.
       - name: bundle
         run: |
           set -o pipefail
-          cargo run --locked --release -p tc-app --example bundle_store -- --from bundle/en --out release/bundle | tee bundle.txt
+          cp -R bundle/en "$RUNNER_TEMP/bundle-en"
+          node scripts/release/fetch-pinned.mjs "$RUNNER_TEMP/bundle-en"
+          cargo run --locked --release -p tc-app --example bundle_store -- --from "$RUNNER_TEMP/bundle-en" --out release/bundle | tee bundle.txt
+          tail -n 1 bundle.txt | grep -q ', 0 skipped,' || { grep '^skipped' bundle.txt; echo 'the bundle skipped a pin' >&2; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: release-common
