@@ -2734,6 +2734,17 @@ impl Example for Resolve {
     }
 }
 
+impl Example for tc_api::conflicts::Restore {
+    fn example() -> Self {
+        tc_api::conflicts::Restore {
+            at: scope(),
+            request: request(27),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            from: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+        }
+    }
+}
+
 impl Example for ResolveBulk {
     fn example() -> Self {
         ResolveBulk {
@@ -3118,6 +3129,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "check/decide",
             "conflicts/resolve",
             "conflicts/resolveBulk",
+            "conflicts/restore",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",

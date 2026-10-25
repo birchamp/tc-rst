@@ -1086,3 +1086,68 @@ async fn received_says_what_was_replaced() {
         ReviewPlace::Verse { .. }
     ));
 }
+
+/// Owner ruling H5: the older version of a record that settled on its newest stays in History,
+/// and *Restore this version* brings it back with no conflict to open.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_record_outside_a_conflict_restores_an_older_version_from_history() {
+    use tc_api::conflicts::{History, Restore};
+    use tc_journal::Record;
+    use tc_journal::keys::ToolId;
+    use tc_journal::record::CheckValue;
+
+    let (w, at) = synced_kinds(vec![TeammatesKind::Check]).await;
+    let app = &w.t.app;
+    let session = app.read(&at).unwrap();
+    let read = session.read();
+    let key = read
+        .decisions_of(ToolId::TranslationNotes, BookId::Titus)
+        .into_iter()
+        .find(|key| read.heads(key).len() > 1)
+        .expect("the check two teammates changed");
+    let comment = |record: Option<Record>| match record {
+        Some(Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        }) => d.comment,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        comment(read.projected(&key)).as_deref(),
+        Some("Comentario del compañero 2.")
+    );
+    let shown = tc_app::wire::token::shown(&read.mint(&key, None).unwrap()).unwrap();
+    drop(read);
+    drop(session);
+    let history: tc_api::conflicts::HistoryView = post(
+        app,
+        &History {
+            at: at.clone(),
+            record: record_ref(&key).unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    let older = history
+        .versions
+        .iter()
+        .find(|v| v.version.by == MadeBy::Person(teammate(1)))
+        .expect("Teammate 1's version is in History");
+    let _: tc_api::write::Ack = post(
+        app,
+        &Restore {
+            at: at.clone(),
+            request: rid(77),
+            shown,
+            from: older.version.change.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let read = app.read(&at).unwrap().read();
+    assert_eq!(
+        comment(read.projected(&key)).as_deref(),
+        Some("Comentario del compañero 1.")
+    );
+    assert_eq!(read.heads(&key).len(), 1);
+}

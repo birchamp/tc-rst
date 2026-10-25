@@ -318,6 +318,19 @@ impl StoreCommand {
         }
     }
 
+    /// *Restore this version* (#78, owner ruling H5): the value of the version `from` of the
+    /// record `shown` names, kept over every head the token shows.
+    pub fn restore(shown: EditToken, from: ChangeId) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::Restore {
+                shown: shown.0,
+                from,
+            },
+            listed,
+        )
+    }
+
     /// `SaveVerse` (STORAGE §5.1): the words over the verse the token shows.
     pub fn save_verse(shown: EditToken, words: String) -> Self {
         let listed = vec![(shown.key().clone(), shown.heads().to_vec())];

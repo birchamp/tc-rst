@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use serde_json::json;
 use tc_api::conflicts::{
     BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
-    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk,
+    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk, Restore,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
     VersionValue,
 };
@@ -699,6 +699,22 @@ impl Handle<Resolve> for App {
             .collect::<Result<Vec<_>, _>>()?;
         let command =
             choose(&session.read(), &req.conflict, review, &req.choice)?.requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => self.ack(&reply),
+            Err(error) => Err(self.not_written(error)),
+        }
+    }
+}
+
+impl Handle<Restore> for App {
+    /// *Restore this version* from a record's History, outside any conflict (owner ruling H5):
+    /// the old version's value over every head the screen's token shows, so a version the
+    /// screen did not show is never written over (it answers `LookAgain`).
+    async fn handle(&self, req: Restore) -> Result<Ack, ApiError> {
+        let session = self.writer(&req.at)?;
+        let handle = session.handle().clone();
+        let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
+        let command = StoreCommand::restore(shown, change_id(&req.from)?).requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => self.ack(&reply),
             Err(error) => Err(self.not_written(error)),
