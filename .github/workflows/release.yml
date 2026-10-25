@@ -71,6 +71,8 @@ jobs:
           node scripts/release/fetch-pinned.mjs "$RUNNER_TEMP/bundle-en"
           cargo run --locked --release -p tc-app --example bundle_store -- --from "$RUNNER_TEMP/bundle-en" --out release/bundle | tee bundle.txt
           tail -n 1 bundle.txt | grep -q ', 0 skipped,' || { grep '^skipped' bundle.txt; echo 'the bundle skipped a pin' >&2; exit 1; }
+      # Here, not in the gates' node step: it reads every crate's source through cargo metadata.
+      - run: node --test scripts/release/notices.test.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: release-common
