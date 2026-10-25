@@ -322,6 +322,42 @@ pub struct ReceiveReport {
     pub hand_edited: Vec<String>,
 }
 
+/// What an exchange file holds: the project's name as `metadata.json` states it (the first
+/// language listed) and its id. Nothing is written (§10.2 R1-R2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identified {
+    pub name: String,
+    pub id: tc_journal::ProjectId,
+}
+
+/// §10.2 R1-R2: reads the file's project before the person confirms the receive.
+pub fn identify(path: &Path) -> Result<Identified, ExchangeError> {
+    let zip = read_zip(path)?;
+    let json = |name: &str| {
+        zip.files
+            .get(name)
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+    };
+    let id = json(PROJECT_JSON)
+        .and_then(|v| {
+            v.get("projectId")?
+                .as_str()
+                .and_then(tc_journal::ProjectId::parse)
+        })
+        .ok_or_else(|| ExchangeError::Damaged("no project id".into()))?;
+    let name = json(METADATA)
+        .and_then(|v| {
+            v.pointer("/identification/name")?
+                .as_object()?
+                .values()
+                .next()?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
+    Ok(Identified { name, id })
+}
+
 /// §10.2: takes a teammate's exchange file into `project`. A file of another project, or of
 /// a newer format, is refused before anything is written.
 pub async fn receive(
@@ -345,7 +381,9 @@ pub async fn receive(
         Ok(report) => report,
         Err(e) => {
             let fold = project.snapshot();
-            let some_held = changes.iter().any(|(_, id)| fold.fold().change(id).is_some());
+            let some_held = changes
+                .iter()
+                .any(|(_, id)| fold.fold().change(id).is_some());
             return Err(if some_held {
                 ExchangeError::PartlyReceived(e.to_string())
             } else {

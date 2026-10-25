@@ -1196,8 +1196,9 @@ struct Closed {
 
 /// One open project through tc-store.
 struct StoreHandle {
-    /// `None` once `close` took it.
-    inner: RwLock<Option<tc_store::ProjectHandle>>,
+    /// `None` once `close` took it. An `Arc`, so the USB exchange (E2) can run tc-sync's
+    /// export and receive on the handle while the session stays open.
+    inner: RwLock<Option<Arc<tc_store::ProjectHandle>>>,
     closed: OnceLock<Closed>,
     /// Hands each submitted command's reply to the relay, in the order the actor takes the
     /// commands; `None` once closed.
@@ -1233,7 +1234,7 @@ impl StoreHandle {
             return Err("a thread could not be started".to_owned());
         }
         Ok(Arc::new(Self {
-            inner: RwLock::new(Some(handle)),
+            inner: RwLock::new(Some(Arc::new(handle))),
             closed: OnceLock::new(),
             relay: Mutex::new(Some(jobs)),
             origins,
@@ -1241,7 +1242,7 @@ impl StoreHandle {
         }))
     }
 
-    fn inner(&self) -> std::sync::RwLockReadGuard<'_, Option<tc_store::ProjectHandle>> {
+    fn inner(&self) -> std::sync::RwLockReadGuard<'_, Option<Arc<tc_store::ProjectHandle>>> {
         self.inner.read().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -1540,6 +1541,10 @@ impl ProjectHandle for StoreHandle {
         }
     }
 
+    fn store_handle(&self) -> Option<Arc<tc_store::ProjectHandle>> {
+        self.inner().clone()
+    }
+
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
         let taken = {
             let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
@@ -1556,6 +1561,15 @@ impl ProjectHandle for StoreHandle {
         let Some(handle) = taken else {
             // A second close.
             return Box::pin(async { Ok(()) });
+        };
+        // An exchange holds the handle only while its job runs, and the job holds the
+        // session: by the time the session closes, nothing else has it.
+        let Ok(handle) = Arc::try_unwrap(handle) else {
+            return Box::pin(async {
+                Err(StoreError::Other(
+                    "the project is still in use by an exchange".into(),
+                ))
+            });
         };
         // The relay waits for the replies already queued: the actor answers every command
         // queued before its close.
@@ -1576,7 +1590,8 @@ impl Drop for StoreHandle {
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
             .take();
-        if let Some(handle) = taken {
+        // A clone an exchange still holds closes the project when it drops instead.
+        if let Some(Ok(handle)) = taken.map(Arc::try_unwrap) {
             // tc-store's own drop stops the actor and waits for it; what was saved is in
             // pending files, and the next open seals it. Off this thread, which may be a
             // tokio worker.

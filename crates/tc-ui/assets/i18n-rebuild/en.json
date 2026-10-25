@@ -16,6 +16,8 @@
   "exchange.error.damaged": "This file is damaged. Ask for a new copy.",
   "exchange.error.newerFormat": "This file was saved by a newer translationCore (project format {format}). Update translationCore, then receive the file again. Nothing was changed.",
   "exchange.error.notWritten": "The file was not saved: {reason}",
+  "exchange.error.otherProject": "This file is for {name}, not for this project. Nothing was changed.",
+  "exchange.error.partlyReceived": "The file was taken in only partly: {reason}. What was received was kept.",
   "exchange.error.unreadable": "The file could not be read: {reason}",
   "exchange.error.verifyFailed": "The file on the drive could not be read back correctly, so it was deleted. Save it again, or use another drive.",
   "feedback.attachmentFailed": "translationCore could not gather these details ({reason}), so Send stays off. Close this window and open it again to try again.",

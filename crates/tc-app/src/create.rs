@@ -293,8 +293,14 @@ impl App {
         });
     }
 
-    fn upload_path(&self, id: &UploadId) -> PathBuf {
+    pub(crate) fn upload_path(&self, id: &UploadId) -> PathBuf {
         self.inner.config.app_data.join(UPLOADS).join(id.as_str())
+    }
+
+    /// An uploaded file is deleted once its row is answered. A file that is already gone, or
+    /// cannot be removed now, is emptied at the next start.
+    pub(crate) fn remove_upload(&self, id: &UploadId) {
+        let _ = std::fs::remove_file(self.upload_path(id));
     }
 
     /// What an uploaded file is, and its text when it is a book. The file is read and parsed on
@@ -314,8 +320,7 @@ impl App {
     }
 
     fn drop_upload(&self, file: &UsfmFile) {
-        // A file that is already gone, or cannot be removed now, is emptied at the next start.
-        let _ = std::fs::remove_file(self.upload_path(&file.upload));
+        self.remove_upload(&file.upload);
     }
 }
 

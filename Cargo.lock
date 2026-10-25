@@ -3348,6 +3348,7 @@ dependencies = [
  "tc-obs",
  "tc-resources",
  "tc-store",
+ "tc-sync",
  "tc-ui",
  "tc-usfm",
  "tc-versification",

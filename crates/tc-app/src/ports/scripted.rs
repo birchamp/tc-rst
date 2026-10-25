@@ -117,11 +117,15 @@ impl ScriptedExchangePort {
         *lock(&self.identify) = Some(outcome);
     }
 
-    /// The next receive of `project` waits until the returned handle is notified.
-    pub fn hold_receive(&self, project: ProjectRef) -> Arc<tokio::sync::Notify> {
-        let release = Arc::new(tokio::sync::Notify::new());
-        lock(&self.holds).insert(project, release.clone());
-        release
+    /// The next receive of `project` waits until [`Self::release_receive`].
+    pub fn hold_receive(&self, project: ProjectRef) {
+        lock(&self.holds).insert(project, Arc::new(tokio::sync::Notify::new()));
+    }
+
+    pub fn release_receive(&self, project: &ProjectRef) {
+        if let Some(release) = lock(&self.holds).remove(project) {
+            release.notify_one();
+        }
     }
 
     pub fn clear(&self) {
@@ -182,7 +186,7 @@ impl ExchangePort for ScriptedExchangePort {
         _file: ExchangeFile,
     ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let hold = lock(&self.holds).remove(&project);
+        let hold = lock(&self.holds).get(&project).cloned();
         let next = lock(&self.receives).remove(&project);
         Box::pin(async move {
             if let Some(release) = hold {

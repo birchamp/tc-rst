@@ -17,6 +17,7 @@ use crate::jobs::JobEnd;
 
 #[cfg(feature = "test-hooks")]
 pub mod scripted;
+pub mod usb;
 
 /// Sync, share and open from Door43. E1a adds the real sync and open; E1b adds share's push.
 pub trait SyncPort: Send + Sync {

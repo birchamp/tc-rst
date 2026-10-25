@@ -190,6 +190,12 @@ pub fn exchange() -> Vec<ExchangeRefusal> {
         ExchangeRefusal::Damaged,
         ExchangeRefusal::NewerFormat { format: 2 },
         ExchangeRefusal::VerifyFailed,
+        ExchangeRefusal::OtherProject {
+            name: "Tito".into(),
+        },
+        ExchangeRefusal::PartlyReceived {
+            reason: "disk full".into(),
+        },
         ExchangeRefusal::NotWritten {
             reason: s("the drive is full"),
         },

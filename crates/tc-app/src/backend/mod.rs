@@ -1234,4 +1234,10 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Closes the project and lets go of its lock.
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>;
+
+    /// tc-store's own handle, for the USB exchange (E2), which runs tc-sync's export and
+    /// receive on it. `None` for a backend that is not tc-store: the exchange is unavailable.
+    fn store_handle(&self) -> Option<Arc<tc_store::ProjectHandle>> {
+        None
+    }
 }

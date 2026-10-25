@@ -34,6 +34,7 @@ tc-obs = { path = "../tc-obs" }
 tc-resources = { path = "../tc-resources" }
 # The project store behind the storage seam (APP-DESIGN §4.2, unit C0).
 tc-store = { path = "../tc-store" }
+tc-sync = { path = "../tc-sync" }
 tc-usfm = { path = "../tc-usfm" }
 # The versifications New Bible offers (B2).
 tc-versification = { path = "../tc-versification" }

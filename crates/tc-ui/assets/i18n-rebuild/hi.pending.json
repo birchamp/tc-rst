@@ -16,6 +16,8 @@
   "exchange.error.damaged",
   "exchange.error.newerFormat",
   "exchange.error.notWritten",
+  "exchange.error.otherProject",
+  "exchange.error.partlyReceived",
   "exchange.error.unreadable",
   "exchange.error.verifyFailed",
   "feedback.attachmentFailed",

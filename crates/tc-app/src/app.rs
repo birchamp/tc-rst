@@ -108,7 +108,7 @@ impl AppDeps {
             files: FilesChoice::OnDisk,
             store: StoreChoice::OnDisk,
             sync: Arc::new(crate::ports::UnavailableSync),
-            exchange: Arc::new(crate::ports::UnavailableExchange),
+            exchange: Arc::new(crate::ports::usb::UsbExchange),
             import: Arc::new(crate::ports::UnavailableImport),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),

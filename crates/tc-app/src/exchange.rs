@@ -6,14 +6,18 @@
 use std::path::PathBuf;
 
 use tc_api::ApiError;
-use tc_api::exchange::{Export, Identify, IdentifyView, Receive, ReceivedView};
+#[cfg(feature = "test-hooks")]
+use tc_api::exchange::ReceivedView;
+use tc_api::exchange::{Export, Identify, IdentifyView, Receive};
 use tc_api::ids::JobId;
 use tc_api::jobs::{ExchangePhase, JobKind, Phase};
 
 use crate::app::App;
 use crate::dispatch::Handle;
 use crate::flows::FlowRequest;
-use crate::jobs::{JobEnd, JobSpec};
+#[cfg(feature = "test-hooks")]
+use crate::jobs::JobEnd;
+use crate::jobs::JobSpec;
 
 impl Handle<Identify> for App {
     async fn handle(&self, req: Identify) -> Result<IdentifyView, ApiError> {
