@@ -45,8 +45,8 @@ test('INV-LOCAL-PASS-MEANS-CI-PASS: the Windows VM runs the same commands', () =
     const step = steps.find(s => s.name === name);
     assert.ok(step, `gate drift: gates.ps1 step "${name}" is not a scripts/gates.sh step`);
     // These change how much a failure reports, not what passes.
-    const same = command.replace(' --keep-going', '').replace(' --no-fail-fast', '');
-    assert.equal(same, step.command, `gate drift: gates.ps1 step "${name}" runs "${command}" but scripts/gates.sh runs "${step.command}"`);
+    const report = (c) => c.replace(' --keep-going', '').replace(' --no-fail-fast', '');
+    assert.equal(report(command), report(step.command), `gate drift: gates.ps1 step "${name}" runs "${command}" but scripts/gates.sh runs "${step.command}"`);
   }
 });
 
