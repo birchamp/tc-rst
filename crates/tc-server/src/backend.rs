@@ -43,6 +43,14 @@ pub trait Backend: Send + Sync + 'static {
     ) -> impl Future<Output = Option<MediaFile>> + Send {
         async { None }
     }
+
+    /// The print document of a finished print export, for `GET /print/{job}` (§5.5): the page
+    /// the shell's `printToPDF` and a test's `page.pdf()` print. `job` is the URL segment as
+    /// the page gave it; the application answers `None` for an unknown or unfinished job and
+    /// for an export of another kind. A backend with no prints keeps this.
+    fn print_page(&self, _job: &str) -> impl Future<Output = Option<MediaFile>> + Send {
+        async { None }
+    }
 }
 
 /// A file the page fetches by URL, whole.

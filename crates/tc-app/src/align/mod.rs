@@ -16,6 +16,7 @@
 //! Nothing but the save writes the project. Opening a verse, a click and the rail only read.
 
 mod actor;
+pub(crate) mod export;
 pub(crate) mod index;
 mod open;
 mod save;

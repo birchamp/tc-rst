@@ -60,5 +60,6 @@ pub mod wire;
 
 pub use app::{Answer, App, AppDeps, CallFailure, FilesChoice, StartError, StoreChoice, Then};
 pub use dispatch::Handle;
+pub use export::{DownloadFiles, Downloads};
 pub use fixes::{UploadedFile, UploadedFiles};
 pub use seed::RESOURCES_FOLDER;

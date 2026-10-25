@@ -115,6 +115,33 @@ fn a_new_carried_file_is_recorded_stored_listed_and_committed() {
     handle.close().unwrap();
 }
 
+/// An export reads a carried file's bytes from its blob, read-only: the version the fold
+/// shows, and none for a blob this computer lacks.
+#[test]
+fn a_carried_files_bytes_read_from_its_blob() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    let bytes: Vec<u8> = (0..5000u32).map(|i| (i % 251) as u8).collect();
+    arrive(&rig, &handle, &folder, SONG, &bytes);
+    let Some(Record::CarriedFile {
+        value: CarriedValue::Present { oid, .. },
+        ..
+    }) = handle.snapshot().fold().projected(&song_key())
+    else {
+        panic!("the file is recorded")
+    };
+    let before = rig.fs.peek(&folder.join(SONG));
+    assert_eq!(handle.read_carried(oid).wait().unwrap(), Some(bytes));
+    assert_eq!(
+        rig.fs.peek(&folder.join(SONG)),
+        before,
+        "the read wrote nothing"
+    );
+    let absent = GitOid::parse("0123456789abcdef0123456789abcdef01234567").unwrap();
+    assert_eq!(handle.read_carried(absent).wait().unwrap(), None);
+    handle.close().unwrap();
+}
+
 /// L43: a carried file deleted outside the app comes back from its blob; a deletion is no
 /// removal, whether the app is open or closed.
 #[test]

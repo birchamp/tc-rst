@@ -3317,7 +3317,6 @@ dependencies = [
  "tc-api",
  "tc-check",
  "tc-core",
- "tc-export",
  "tc-helps",
  "thiserror 2.0.21",
  "unicode-normalization",
@@ -3328,6 +3327,7 @@ name = "tc-app"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "git2",
  "proptest",
  "ring",
  "serde",
@@ -3477,9 +3477,14 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "serde_json",
+ "tc-align",
+ "tc-api",
+ "tc-core",
  "tc-helps",
+ "tc-journal",
  "tc-obs",
  "tc-usfm",
+ "thiserror 2.0.21",
  "zip",
 ]
 

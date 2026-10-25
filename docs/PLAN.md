@@ -298,6 +298,36 @@ And this (unit B11):
 - A version dated more than a day after this computer's clock says the clock it was made on
   may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
 
+And these (unit D2):
+
+- Aligned USFM weaves a verse's alignment only when the verse needs no review and its words
+  match. Any other verse keeps its stored text and markup, and the export names it (at most
+  20, then the total). This is tC4's rule from e2bfd8c3 (#796), which v4.0.0-rc.2 also has
+  through #814 (7baa1257: `cc.exportSkipped` and the `export-skipped` callout). Both are newer
+  than the reference d310bf3, which leaves such an alignment out of the file without a word.
+- An aligned word inside a character span such as `\add` keeps the span in aligned USFM
+  (#420). tC4 4.0 moves the word out of the span, so the file loses its style; its v4.0.0
+  notes list this as a known limit (tC4 D89 point 11).
+- Plain USFM is the aligned book with its alignment markup taken out. tC4 exports the stored
+  book file byte for byte. The two differ only for a verse imported with inline `\zaln`
+  (#794) whose markup strips, which plain USFM writes without that markup. A verse whose
+  markup will not strip (an unclosed `\zaln-s`, a `\w` with another attribute) is written as
+  stored, as tC4 writes it, and named under the toast.
+- The PDF's print page is titled with the export's file name without `.pdf`, because the
+  shell names the saved PDF from the title (`tc4Shell.printPdf`). tC4's print document is
+  titled with the book's or the project's name. The printed heading is the same.
+- An export of a book or the stories with verses in conflict first asks, under the menu,
+  whether to review them, with Review and Export anyway (STORAGE §8.5). tC4 exports the
+  version shown without a word, so the person cannot know the file holds only one of two
+  versions. The question is inline, never modal.
+- A verse whose cards stand on a source word the pinned verse lacks keeps its stored text,
+  and the export names it. tC4 #816 (D107, newer than d310bf3) fits the cards to the pin and
+  weaves the rest, so a link leaves the file without a word to the person; the rebuild weaves
+  none of that verse until it is aligned again
+  (`the_export_weaves_no_link_to_a_source_word_the_pin_lacks`).
+- The file name's date is today's date in UTC. tC4 writes the local date. The two differ only
+  near midnight; the server has no time zone to read, so it waits until the app carries one.
+
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9
 give the same outcomes, and STORAGE §9.9 keeps saves flowing while a sync runs. tC4 can

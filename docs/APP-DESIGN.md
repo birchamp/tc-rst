@@ -625,7 +625,7 @@ pub enum Phase {
 ```
 
 `JobOutcome` is typed per kind: `Opened(OpenedSession)`, `Synced(SyncResultView)`,
-`ExportReady { download, file_name }`, `PlanReady { plan, consequences }`, `Created { project }`.
+`ExportReady(Exported { file: ExportedFile::{Download { download, file_name } | Print { file_name }}, facts })`, `PlanReady { plan, consequences }`, `Created { project }`.
 A final outcome stays readable through `jobs/get` for 10 minutes.
 
 *(B1b: `tc_app::wire::scope::change_scope` builds `ChangeParts` from a fold `Delta`. tc-journal
@@ -1818,7 +1818,8 @@ in Chromium against the real `tc4`, with the request filter of AD11
   file) is capped at 512 MiB. *(A-28)* Parsing happens on the server.
 - **Receive work from a file.** In the shell, `tc4Shell.chooseFile()` gives a path and the server
   reads the file in place. In a browser, an upload.
-- **Downloads.** An `Export` job ends with `ExportReady { download, file_name }`. The UI clicks an
+- **Downloads.** An `Export` job ends with `ExportReady(Exported { file: ExportedFile::{Download { download, file_name } | Print { file_name }}, facts })`; `facts` names the verses
+  an aligned export kept as stored (at most 20, with the total). For a `Download` the UI clicks an
   `<a download href="/download/<id>/<name>">`, as tC4's `deliverFile` does
   (`tC4:src/data/export/kernel.ts:38-57`). Electronite shows the save dialog and reports saved or
   cancelled through `onDownloadDone`, which drives "Saved {file}" (`tC4:src/views/ExportMenu.jsx:26-34`).
@@ -1828,10 +1829,15 @@ in Chromium against the real `tc4`, with the request filter of AD11
 - **USB export** is not a download. `tc4Shell.chooseFolder()` gives the destination; the job
   writes, then verifies from the device; "You can remove the stick" shows only after the verify
   (STORAGE:3010-3017).
-- **PDF.** `export/run { producer: Pdf }` makes print HTML with OBS pictures inlined as `data:`
-  URLs (`tC4:src/data/export/pdf.ts:76-87`) and returns `/print/<job>`. The UI calls
-  `tc4Shell.printPdf(url)`. The menu item exists only with the bridge, as in tC4
-  (`tC4:src/data/export/pdf.ts:120`). Tests use `page.pdf()` on the same URL (ARCH:108-112).
+- **PDF.** `export/run { producer: PrintHtml, print: { setup, title, words } }` makes print HTML
+  with OBS pictures inlined as `data:` URLs (`tC4:src/data/export/pdf.ts:76-87`) and ends with
+  `Print { file_name }`; `GET /print/<job>` serves that document once the job is done. Its
+  `<title>` is the file name without `.pdf`, since the shell names the saved PDF from it. The UI
+  calls `tc4Shell.printPdf("/print/<job>")`, which answers `{ok: true, file}` ("Saved {file}"),
+  or `{ok: false, reason}`: nothing for `cancelled`, the print-failed words for `failed` and
+  `refused`. The menu item exists only with the bridge, as in tC4
+  (`tC4:src/data/export/pdf.ts:120`). Tests use `page.pdf()` on the same URL (ARCH:108-112;
+  journey `j07-export`).
 
 ### 5.6 The internet switch and Door43 sign-in
 
@@ -3414,7 +3420,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | D1 Checkpoints and outside edits | leave triggers; the checkpoint at Home *(A-25)*, and its failure's banner on Home (`s.commit_error`; the gallery's `home-checkpoint` case, B2 D10); mode-switch checkpoints by Q-5's ruling *(A-11)*; "Checkpoint not saved" with Retry; materialize-blocked message; the last checkpoint outcome and the blocked paths in `OpenSession`, so a `Resync` restores both (§5.4); outside-edit toast with Undo and grouped rows; held-file actions as R7 allows; window focus check; quit flow (aligner links, then checkpoints) | S2, C2, C5 | R9's numbers and Q-5 (fallback: STORAGE's rule today); R17, R21 | J8; no commit when nothing changed; `save_latency_while_a_checkpoint_runs` within 25 ms, or Q-5's limit applies; a `Resync` after a failed checkpoint and after a blocked file shows both again | green |
-| D2 Exports | tc-export producers on A10's model: aligned and plain USFM, OBS Markdown, print HTML; export jobs; `/download`, `/print`; PDF through the shell; conflict warning; checkpoint first | S2, B8 | — | J7, J23 except the Burrito zip; every Burrito output validated | green |
+| D2 Exports | tc-export producers on A10's model: aligned and plain USFM, OBS Markdown, print HTML; export jobs; `/download`, `/print`; PDF through the shell; conflict warning; checkpoint first *(D2: built as the row says, on tc-api's one print model (tc-export's twin of `print_parts` is gone; the preview and the print HTML build their items with one function). One entry point, `tc_export::produce(producer, &ExportInput)`, answers the bytes and `ExportFacts`; tc-export reads and writes no file. Aligned USFM weaves a verse with `tc_align::usfm::weave_verse` only when `tc_align::needs_review` is false; a verse that needs review, holds inline `\zaln` or whose weave is refused keeps its stored bytes and is named (at most 20, then the total), and a record placing nothing keeps its bytes unnamed; nothing writes `x-ref` (#409). `export/preflight` counts the conflicts and verses in conflict of the book or the stories, and the menu asks STORAGE §8.5's question inline before it runs; `export/run` is a job that checkpoints first (`BeforeExport`, through the handle while D1 is not done), then produces, then registers the file in the downloads folder (`DownloadFiles`, which tc4 provides), and a print job keeps its document for `GET /print/{job}`. OBS Markdown zips every carried `content/` file, front and back matter included (tc-store `read_carried`, read-only). File names follow tC4's `exportFilename`: the book's code (`TIT-aligned-<date>.usfm`) or the project's name as Home shows it, with the date in UTC (a marked shortcut). With the shell's `onDownloadDone`, the menu says "Saved {filename}" for a completed download and tC4's `cc.exportInterrupted` for an interrupted one, and nothing for a cancel; without it, "Export ready". The PDF item shows only with `tc4Shell.printPdf` and gives it `/print/{job}`; the print page's `<title>` is the file name without `.pdf`. Declared differences (PLAN): the #796 export rule (tC4 e2bfd8c3, in v4.0.0-rc.2 through #814, both newer than d310bf3); the `\add` span kept around an aligned word (#420); plain USFM is the aligned book with its alignment taken out, where tC4 exports the stored file, so a verse imported with inline `\zaln` loses that markup; the print page's title; the conflicts question (STORAGE §8.5); the date in UTC. The toast has tC4's Dismiss only (the browser has the file already). A failed export says tC4's diagnosis, then the recovery sentence (`failureText`); a failed print says to set Pictures off only for stories (tC4 `pdf.ts`). Tests: tc-export `tests/usfm.rs` (five rules), `properties.rs` (an aligned export reads back to its records, and stripping it gives the plain export); tc-app `an_export_never_writes_the_project`, `every_export_validates`, `preflight_counts_open_conflicts`, op count `an_export_run_touches_one_book` on Psalms and ten times; tc-server the `/print` route; tc-ui host tests of the menu, the toast and the shell's print and download reports; journeys `j07-export` (J7, J23, #420), each hashing every project file but `.git/` before and after. Left open: the Burrito zip item stays off for E2; x-ref waits for tC4 (#409); the date is UTC.)* | S2, B8 | — | J7, J23 except the Burrito zip; every Burrito output validated | green |
 
 ### Phase 4: after X
 
