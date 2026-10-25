@@ -578,7 +578,11 @@ impl FakeDoor43 {
     /// is no such account.
     pub fn add_member(&self, org: &str, login: &str) -> bool {
         let mut state = self.shared.state();
-        if state.users.iter().any(|u| u.user.login.eq_ignore_ascii_case(org)) {
+        if state
+            .users
+            .iter()
+            .any(|u| u.user.login.eq_ignore_ascii_case(org))
+        {
             state.collaborators.push((org.to_owned(), login.to_owned()));
             return true;
         }

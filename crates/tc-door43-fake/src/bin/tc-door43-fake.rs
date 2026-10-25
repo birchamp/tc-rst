@@ -253,7 +253,9 @@ async fn branch(State(fake): Fake, body: axum::body::Bytes) -> Response {
         Err(error) => return bad(error.to_string()),
     };
     if let Some(sha) = &body.sha
-        && let Err(error) = fake.set_branch(&body.owner, &body.name, &body.branch, sha).await
+        && let Err(error) = fake
+            .set_branch(&body.owner, &body.name, &body.branch, sha)
+            .await
     {
         return bad(error.to_string());
     }
