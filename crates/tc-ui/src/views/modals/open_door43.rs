@@ -24,7 +24,7 @@ pub fn OpenFromDoor43() -> impl IntoView {
     let (Some(AppCtx { s, actions }), Some(runtime)) = (use_app(), use_runtime()) else {
         return ().into_any();
     };
-    let od = s.od.clone();
+    let od = s.open_door43_form();
     let list = runtime.cache().read(List {});
     // Every entry of the projects folder, for the name check: the cards', the unusable
     // folders' and the others'.
@@ -44,12 +44,8 @@ pub fn OpenFromDoor43() -> impl IntoView {
     });
     let account = s.server.account.clone();
     let host = Memo::new(move |_| account.with(|a| a.server.clone()));
-    let busy = {
-        let od = od.clone();
-        Signal::derive(move || od.with(|od| od.as_ref().is_some_and(OpenForm::busy)))
-    };
+    let busy = { Signal::derive(move || od.with(|od| od.as_ref().is_some_and(OpenForm::busy))) };
     let cant_open = {
-        let od = od.clone();
         Signal::derive(move || {
             let host = host.get();
             listing.with(|names| {
@@ -89,11 +85,10 @@ pub fn OpenFromDoor43() -> impl IntoView {
     };
 
     let children: ChildrenFn = {
-        let (actions, od) = (actions.clone(), od.clone());
+        let (actions, od) = (actions.clone(), od);
         Arc::new(move || {
-            let (actions, od) = (actions.clone(), od.clone());
+            let (actions, od) = (actions.clone(), od);
             let text = |get: fn(&OpenForm) -> String| -> Signal<String> {
-                let od = od.clone();
                 Signal::from(Memo::new(move |_| {
                     od.with(|od| od.as_ref().map(get).unwrap_or_default())
                 }))
@@ -101,7 +96,6 @@ pub fn OpenFromDoor43() -> impl IntoView {
             let repo = text(|od| od.repo.clone());
             let name = text(|od| od.name.clone());
             let repo_error: Signal<Option<String>> = {
-                let od = od.clone();
                 Signal::from(Memo::new(move |_| {
                     let host = host.get();
                     od.with(|od| od.as_ref().and_then(|od| od.repo_error(&host)))
@@ -109,7 +103,6 @@ pub fn OpenFromDoor43() -> impl IntoView {
                 }))
             };
             let name_error: Signal<Option<String>> = {
-                let od = od.clone();
                 Signal::from(Memo::new(move |_| {
                     listing.with(|names| {
                         od.with(|od| {
@@ -141,7 +134,6 @@ pub fn OpenFromDoor43() -> impl IntoView {
                 })
             };
             let refusal = {
-                let od = od.clone();
                 Memo::new(move |_| od.with(|od| od.as_ref().and_then(OpenForm::refusal).cloned()))
             };
             let below = {

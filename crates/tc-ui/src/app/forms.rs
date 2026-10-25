@@ -188,6 +188,13 @@ impl NewProjectForm {
     pub fn edited(&mut self) {
         self.request = None;
     }
+
+    /// Whether the answer to attempt `request` of a `kind` project is this form's: the form
+    /// still waits, and no later press made another attempt (an edit while it waits leaves
+    /// none). A form opened after a Cancel waits for nothing until its own press.
+    pub fn awaits(&self, kind: NewKind, request: RequestId) -> bool {
+        self.kind == kind && self.busy && self.request.is_none_or(|r| r == request)
+    }
 }
 
 /// The sentence under the language row after a choice (Q35).

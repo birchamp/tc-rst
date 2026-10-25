@@ -2559,7 +2559,12 @@ which opens M12 and runs `then` once signed in; A8 exercises it with the profile
 keeps from changing; `LinkKind::Repo` is `account/repoLink`. The forms are `ShareForm` (tC4's
 `sh`, its target and check steps; E1b adds the run's) and `OpenForm` (tC4's `od`), pure, in
 `tc_ui::app::{share, open_door43}`; the repository and project-name rules are `tc_api::door43`'s,
-which the server applies again.)* `View` is `Home | Read | Draft | Check |
+which the server applies again.)* *(UI-3b: each dialog holds its form in its `Dialog` variant,
+and the sign-in step holds the dialog it covers (`Dialog::SignIn { under }`), which shows again
+as the person left it after Sign in and after Cancel; a step over a step keeps the one dialog
+under both. Declared difference: tC4's Cancel is `closeModal`, which drops the covered form (an
+Open from Door43 address and name, or a New Bible typed while a sync asked for the sign-in);
+the rebuild gives it back, since the person typed it and meant to go on.)* `View` is `Home | Read | Draft | Check |
 Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-209`.
 
 ### 6.8 Panics and view errors

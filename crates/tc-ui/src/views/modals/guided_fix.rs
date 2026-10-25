@@ -67,9 +67,9 @@ struct Doing {
 }
 
 impl Doing {
-    fn of(fix: &ArcRwSignal<Option<Fix>>) -> Self {
+    fn of(fix: &Signal<Option<Fix>>) -> Self {
         let field = |read: fn(&crate::app::fix::FixScreen) -> Option<String>| {
-            let fix = fix.clone();
+            let fix = *fix;
             Signal::derive(move || {
                 fix.with(|f| match f {
                     Some(Fix::Ready(screen)) => read(screen),
@@ -78,7 +78,7 @@ impl Doing {
             })
         };
         let busy = {
-            let fix = fix.clone();
+            let fix = *fix;
             Signal::derive(move || {
                 fix.with(|f| match f {
                     Some(Fix::Ready(screen)) => screen.busy,
@@ -254,10 +254,9 @@ pub fn GuidedFix() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let fix = s.c.fix.clone();
+    let fix = s.fix_form();
     let book = s.u.book.clone();
     let title = {
-        let fix = fix.clone();
         Signal::derive(move || {
             let tool = fix.with(|f| f.as_ref().map(Fix::tool));
             let tool = tool
@@ -267,7 +266,6 @@ pub fn GuidedFix() -> impl IntoView {
         })
     };
     let subtitle = {
-        let fix = fix.clone();
         Signal::derive(move || {
             let book = book
                 .get()
@@ -305,7 +303,6 @@ pub fn GuidedFix() -> impl IntoView {
     // The options are drawn once per screen; what a way is doing changes inside them, so the
     // control the person pressed keeps the focus.
     let shown = {
-        let fix = fix.clone();
         Memo::new(move |_| {
             fix.with(|f| match f {
                 Some(Fix::Ready(screen)) => Shown::Ready(screen.id, screen.view.clone()),
