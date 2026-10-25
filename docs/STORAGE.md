@@ -78,8 +78,8 @@ Each invariant is proven by the tests named in §16.
 | Id | Invariant |
 |---|---|
 | I1 | **Convergence.** The fold output, the derived bytes and the conflict list are a pure function of the set of valid changes (and the derivation versions, §12). Any order, grouping or duplication of unions gives byte-identical results. |
-| I2 | **Conservation.** Every valid change is in exactly one of these states: (a) a head of a settled or merged record, projected and reachable from a screen (an alignment, decision or comment whose verse or check no longer exists is listed under *Detached*, §7.7); (b) a head shown as a candidate in a listed conflict; (c) an ancestor of a head, reachable in History, because a later change named it as a parent; (d) a head of a record of a removed book, held by the removal's author (§7.6), restored with the book; (e) part of a listed anomaly (an incomplete batch, a quarantined change, or a record of a book that no `BookPresence` change makes present); (f) a seed stub absorbed by the stub rules (§7.3), starting text no person wrote, listed in History. There is no seventh state. |
-| I3 | **No survival by time or identity.** Heads, merges and conflicts never read `at`, the device or the author. Only provisional choices read `at`: which head derived files show while a conflict is open, which side of a passage conflict they show (§7.3), the scope of a contested book, the fallback text of an incoherent verse, and the book kept by the last-book rule (§7). Display order reads it too. A wrong clock can change what is shown provisionally, never what is kept. |
+| I2 | **Conservation.** Every valid change is in exactly one of these states: (a) a head of a settled or merged record, projected and reachable from a screen (an alignment, decision or comment whose verse or check no longer exists is listed under *Detached*, §7.7); (b) a head shown as a candidate in a listed conflict; (c) an ancestor of a head, reachable in History, because a later change named it as a parent; (d) a head of a record of a removed book, held by the removal's author (§7.6), restored with the book; (e) part of a listed anomaly (an incomplete batch, a quarantined change, or a record of a book that no `BookPresence` change makes present); (f) a seed stub absorbed by the stub rules (§7.3), starting text no person wrote, listed in History; (g) a head that lost to the newest version of a record that is not verse or frame text (owner ruling H5, §8.1), listed in History, where *Restore this version* brings it back, or, for a carried file, kept as a file of its own beside it (§11.4). There is no eighth state. |
+| I3 | **No survival by time or identity, except the newest-wins rule.** Heads, merges and text conflicts never read `at`, the device or the author. Owner ruling H5: between concurrent heads of a record that is not verse or frame text, of a book's presence and of a path-case clash, the head with the largest (rank, at, id) wins (`ChangeMeta::order`, the order of the provisional head); a change that has another as an ancestor always replaces it, whatever the clocks say. The loser stays a head (I2 state g). Only provisional choices read `at`: which head derived files show while a conflict is open, which side of a passage conflict they show (§7.3), the scope of a contested book, the fallback text of an incoherent verse, and the book kept by the last-book rule (§7). Display order reads it too. A wrong clock can change what is shown provisionally and which version of a newest-wins record wins, never what is kept. |
 | I4 | **Observed parents.** The parents of a change are the heads the person's screen displayed (a `ShownToken`, §2.7), or the exact base an automated writer computed. They are never "the current heads at write time". |
 | I5 | **Total fold.** The fold never fails or panics. Defects become anomalies with a message for the person. |
 | I6 | **Atomic files.** Every file the app writes in a project goes through `atomic_write` (§5.0). No project file is written in place. |
@@ -3160,6 +3160,8 @@ outside it (tC4 D8, D18), and `recompose(decompose(x)) == x` for every book the 
 
 ### 7.6 Books
 
+*Owner ruling H5 (2026-10-24, `.audit/roadmap/rulings/2026-10-24-H5.md`), over the rest of this section:* a removal that is the newest of the book's presence heads and of the edits its remover had not seen removes the book, and those edits stay in History; a newer edit keeps the book with its edits; neither is a conflict. A removal that would leave a Bible project with no book loses to the others, with no conflict. Only *Restore the text* against *Start empty* stays a conflict, because one of them empties verse text.
+
 **Presence.** If any head of `BookPresence(b)` is `Present`, the book projects as present, with
 the scope of the `Present` head that has the largest `(at, id)`. A `Present` against a `Removed`
 is also a `BookPresence` conflict, and so are two `Present` heads with different values: a
@@ -3511,6 +3513,8 @@ sync, an upgrade plan or an export is O(1).
 
 ### 8.1 Kinds and grouping
 
+*Owner ruling H5 (2026-10-24):* only verse text and story frame text conflict, with the kinds that hold them (verse text and structure, passage, structure issue, frame, book header, chapter front, story base and reference), the book restore race (§7.6) and `Unknown`. Every other kind of this section settles on its newest head (I3) with no conflict listed (`AutoRule::Newest`); the older heads stay in History. A carried file keeps both versions (§11.4); in a path-case clash the newest keeps its name.
+
 | Kind | Raised when |
 |---|---|
 | `VerseText` | verse heads are all `Text` with the same `last`, and a unit is disputed |
@@ -3551,6 +3555,8 @@ screen with the editor beside every version; its save is a resolution. A merged 
 one value that stands for all heads, so an edit of it replaces all of them.
 
 ### 8.3 Choices
+
+*Owner ruling H5 (2026-10-24):* the choices below for kinds that now settle by the newest (§8.1) are no longer offered: *Restore this version* in History brings an older version back.
 
 Every choice is one `Resolve` batch whose changes name every current head as parents (§5.9).
 
@@ -3659,6 +3665,8 @@ everything else.
 - A resolution needs no ancestry condition, so every conflict can always be resolved (tC4 F12).
 
 ### 8.5 What the person sees (requirements on the UI)
+
+*Owner ruling H5 (2026-10-24):* the Received sheet says what a newer version replaced, for example "Juan's alignment of Titus 1:1 replaced yours. Your version is in History."
 
 - Nothing is modal and nothing blocks work (tC4 D53e). After a sync or a file import, a sheet
   says "Received 212 changes from Juan and Ana. 3 verses, 1 alignment and 2 checks were changed
@@ -4273,6 +4281,8 @@ or CRC fails is never compared (§10.2 R4). The device kind `ExchangeEdit` and
 
 ### 11.4 Carried files
 
+*Owner ruling H5 (2026-10-24):* two versions of a carried file are both kept, with no question. The newest keeps the file's name; each other version is placed beside it as `<stem>-<author>.<ext>` (the author's Door43 user name or display name, or the version's short id without one), with `-2`, `-3` while that name collides with a file the project holds; the fold gives out the names, so every computer gives the same ones. The shown token of a carried file names only its shown version, so an edit or a removal of it leaves the other.
+
 A carried file is any file the app does not derive and does not own, whose path obeys the
 grammar of §3.3: anything under `ingredients/` outside the derived table, `tc/` and the format's
 `derivedPaths`, and any file at the repository root other than `.gitignore`, `.gitattributes`
@@ -4370,6 +4380,8 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 ---
 
 ## 12. Format versioning
+
+*Owner ruling H5 (2026-10-24)* changed which concurrent heads conflict. Format 1.0 is not frozen (H9), so builds from before and after it are not compatible, and no team used the earlier ones.
 
 ### 12.1 What carries a version
 
@@ -5037,14 +5049,14 @@ and are covered by the projection tests.
 | `stale_tokens_never_supersede_unseen` | screens that hold tokens across exchanges | no head disappears unless the writing screen displayed it | the actor uses current heads instead of the token |
 | `incremental_equals_full` | every step of the generators above, including batches completed late and parents arriving after children | the incremental state equals a fold from scratch | an incremental update forgets a key, a chapter or a book |
 | `fold_never_panics` | arbitrary bytes as packs and pending files; well-formed but odd sets (unknown parents, parents on other keys, duplicate devices, incoherent spans, unknown kinds, giant batches) | no panic; every defect is an anomaly | any step can fail |
-| `no_survival_by_time_or_identity` | the same history with permuted `at` values and device ids | identical heads, merges and conflict sets; only the provisional choice may differ | a rule reads `at` or the device |
+| `heads_and_text_conflicts_read_no_clock` | the same history with permuted `at` values and device ids | identical heads, merges and text conflicts; only the provisional choice and the newest-wins settlement (H5) may differ | a rule reads `at` or the device |
 | `resolution_always_possible` | any fold state | resolving every conflict, with any choice, yields a state with no conflict on those keys | a resolution needs an ancestry condition |
 | `merge_units_sound` | records with criss-cross histories and random unit changes | an agreed unit's value equals the value written by every head that changed that unit relative to every base | the base choice lets one head override another |
 | `provisional_usfm_never_drops_words` | concurrent spans, splits, joins, renumbers that shift ranges across a chapter boundary, marker drags, *Start empty*, verse edits and paragraph breaks, in books with and without a `BookLayout` | per chapter, the multiset of words in the projected USFM equals the multiset of the chapter state built from the provisional side of every `Passage` conflict; every record whose projected value is `Text` has its words in the USFM exactly once; an incoherent covered verse shows its newest own text; every incoherence is listed | the coherence pass drops a verse, a passage is judged verse by verse, or the layout skips a record |
 | `every_head_reachable_from_a_screen` | the generators above, with carry-overs, renumbers, joins and removals concurrent with comments, alignments and decisions | every head of every record kind is placed on a screen (a verse, a run's aligner, a check, a settings page, History of a removed book), is a conflict candidate, or is listed under Detached or as an anomaly | an attached record is left on an identity no screen shows |
 | `mixed_minor_versions_converge` | the same change set folded by the current app and by a build of the previous minor, with changes that carry inert newer fields and causes. Until a previous minor is released, `tc-journal` emulates it: the team history written again with inert newer-minor fields on a third of its changes (an older device's edit of such a record drops them, as it would) | identical heads, conflict lists and derived bytes; emulated: every change on its own key, the same heads, every conflict of the plain history still listed (a passage group may grow, by its passage's records, when one of them differs in a newer field: such versions are not equal values, F6), an added conflict only where versions differ in a newer field, and no newer field in any derived file | an unknown field moves a change to another key |
 | `arbitrary_meta_never_blocks_commit` | arbitrary JSON as `ProjectMeta`, pin and scope values, from commands and from imported files | `build_metadata` succeeds, the document passes `tc_burrito::check`, a checkpoint commits, and every invalid value is listed as `InvalidForBurrito` | any value can make M2 or C3 fail |
-| `book_removal_hides_nothing_unseen` | removals concurrent with edits of every record kind of the book | every change the remover did not hold is projected or in a listed conflict | removal visibility ignores a record kind |
+| `a_newer_removal_removes_and_a_newer_edit_keeps` | removals concurrent with edits of every record kind of the book | the newest of the removal and the unseen edits decides; every change the remover did not hold stays in History; a Bible project always projects a book | removal visibility ignores a record kind |
 | `update_a_book_conserves` (to write: S3 step 9) (replaces `outside_edit_reconcile_conserves` and `every_kind_of_outside_edit_in_one_project_conserves`) | random files imported through §13.6, with and without a base: small edits, reverts to older values, verse deletions, more than 50 keys, line-ending and trailing-space rewrites, book files for absent books, aligned verses, empty verses on either side | no head lost; reverts and removals are conflicts; whitespace-only differences import nothing; a file for an absent book adds it; with no base every disagreement between two non-empty verses is a conflict and the empty-verse rule holds (§13.6 U3); no no-base change is provisional | a known-base import replaces a value it did not see, or a no-base import replaces a teammate's text |
 | `a_door43_edit_by_another_tool_is_reported_once` (to write: S3 step 9) (replaces `door43_ingest_deterministic`) | commits by other tools fetched by several devices in different orders | each such commit is reported once on each device, by commit id; the merge tree takes the fold's projection (§11.2) | the intake merges a file from such a commit, or reports it at every sync |
 | `exchange_idempotent_and_relayed` | exports and imports in random order, repeated, relayed A→B→C | importing twice equals importing once; a relay equals direct exchange | intake writes something that depends on the importer |
@@ -5162,7 +5174,7 @@ copy after any crash of the app's own write:
 `crash_materialize_ledger_tells_its_bytes_from_an_outside_edit`,
 `crash_materialize_with_a_carried_file_and_a_held_file`; a same-stat change kept and asked (a
 book) or copied and written again: `loss_bit_rot_not_recorded_as_edit`; the
-`<stem>-<Door43 user>.<ext>` name: `keep_both_gives_the_other_version_its_own_file`.
+`<stem>-<Door43 user>.<ext>` name: `loss_carried_file_two_versions_both_kept` and `a_kept_copy_never_takes_a_held_name` (tc-journal).
 
 ### 16.4 Journeys (P1, P2)
 
@@ -5379,7 +5391,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the read-back of a repack's index before it removes a loose object, and the 14 days | `repack_keeps_every_reachable_object`, `repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches`, `crash_r1_pack_written_loose_not_removed` |
 | G4's copy of the carried blobs (start a new repository empty) | `crash_g4_rebuild_keeps_carried_blobs` |
 | the choices of a conflict marked as incomplete history (offer only *Apply what was recovered*) | `an_incomplete_restore_race_offers_every_choice`, `release_batch_is_accepted_beside_the_other_choices` |
-| a target path of *Keep both* or a rename (any path) | `keep_both_to_a_path_the_app_writes_or_another_file_holds_is_refused`, `keep_both_gives_the_other_version_its_own_file` |
+| the path of a kept copy (H5: no choice, the fold gives it) | `a_kept_copy_never_takes_a_held_name`, `carried_keeps_both` |
 | a head's carried bytes written at their new place before the old place goes (remove first) | `an_old_carried_version_in_a_conflict_is_never_removed` (to write: S3 step 9), `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced` (to write: S3 step 9) |
 | the copy of a changed book file durable before the manifest names it (name it first) | `a_changed_book_file_is_kept_and_left_until_the_answer` (to write: S3 step 9), crash rows X1, X2 |
 | the look at the folder as a burrito after a job (§16.6) | `every_written_state_is_a_valid_burrito`, `the_states_after_outside_changes_are_valid_burritos` |
