@@ -4,7 +4,7 @@ title: One leave path, one network-call helper, one refusal text, Submit
 track: A
 lane: app
 milestone: M1
-state: verifying
+state: done
 owner: checks lane (Claude Code 2198ee19)
 branch: track-UI-3a
 worktree: .worktrees/track-UI-3a
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 1 d (steps 1-4 of UI-3, built)
-merged: none
+merged: 51e5edbc
 updated: 2026-10-24
-next: a merge batch run by the integration lane (after UI-1)
+next: none
 blocked_by: none
 ---
 
@@ -301,3 +301,4 @@ save_props` must pass unchanged.
 - 2026-10-24 18:45 EDT | checks lane (Claude Code 2198ee19) | verify | none | Races and protocol (second lens, one subagent, read only): Submit against the reply cache's rules (handler refusals and job handles cached, pre-start NeedsInternet not, RequestReused on a changed body), every NetEnd and JobEnd exit of Open from Door43 and Sync, presses while the question or sign-in step is up, late replies after a dialog closed, share's order with end_share, leave pressed twice, server restart. No blocker, no major. Minors: after a lost Sync reply a much later press replayed the old job (a stale "Synced" toast, new work unsynced); after a lost Open reply a refreshed Home list can turn Open off before the cached answer is fetched (inferred); two quick leaves run two checkpoints once D1 fills them in | review report in the session transcript
 - 2026-10-24 18:45 EDT | checks lane (Claude Code 2198ee19) | verify | none | Browser and parity (third lens, one subagent): built tc4 and both UI bundles; journeys shell, translate, section, understand, story, internet-consent, j11-sign-in, account-menu, source-texts, upgrades, guided-fix, sync-button, share-open: 102 pass, 0 fail, 0 skipped; scratch Playwright journeys dropped the replies of Sync and Open from Door43 (the same request went again, an edit or an answer took a new one), held Switch project behind a failing save and waited for a slow one. Words: only "bad request:" prefixes go and refusal placeholders are filled; nothing new to declare against tC4. No blocker, no major. Found outside the diff: after a held leave in Translate by verse, the typed verse is not on the page until Retry (reported to the orchestrator for its own card) | scratchpad j/lost.test.mjs, j/leave.test.mjs
 - 2026-10-24 18:45 EDT | checks lane (Claude Code 2198ee19) | fix | none | Sync starts a new attempt after a lost reply instead of resending the same request, so a much later press can never replay an old sync and show it as done (the races lens's first minor; a second sync of the same work is harmless). The other minors go to minors.tsv | cargo clippy -p tc-ui --target wasm32-unknown-unknown --features app
+- 2026-10-24 20:08 EDT | integration lane (Claude Code 3d07d5f8) | merge | 51e5edbc | merged into main in batch 3 (UI-3a 51e5edbc, REF1 1ad7e1f8, G4 578dd3f0, PROCESS-6 f0e0c399, shell.yml's cancel rule), gated by scripts/gates.sh --wait-ci batch-3 on the batch's last commit. In the batch ci.yml and app-e2e.yml keep main's jobs with UI-3a's cancel rule, and shell.yml takes it too. | scripts/gates.sh --wait-ci batch-3
