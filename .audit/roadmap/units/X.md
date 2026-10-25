@@ -4,7 +4,7 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: building
+state: done
 owner: S2 session (Claude Code add49644)
 branch: track-X
 worktree: /home/bot/tc-rst/.worktrees/track-X
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
-merged: none
+merged: 3ddc25b5
 updated: 2026-10-25
-next: integration batch after 2b (tip pushed); then the D1 fix shas and C7b's books and carried-files commits for one look each; E2 (USB in the app) after.
+next: none
 blocked_by: none
 later: [C7b from step 5]
 ---
@@ -491,3 +491,4 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - 2026-10-25 08:40 EDT | S2 session (Claude Code add49644) | verify | 6f436230+wt | lens parity (reviewer: Opus subagent, read-only, tC4 at d310bf3; no screen in this unit, so no Playwright): fix_first on one item, taken as a declared difference: the Door43 username reaches the team one sync late, because the name notice (consent, Q7) comes after the first confirmed sync and the name goes out with the next push; tC4 writes it inside the sync. Fixes taken: `recreated` only after a successful push (tC4 reports after the push), the gate's order is tC4's (signed in, online, then the repository), STORAGE §9.1 names the recreate ruling, §9.6 and §9.7 refreshed. Minor logged: a second share always creates. Same as tC4: offline, no write access, busy, never forced, nothing new, share's owner/branch/visibility. Declared: six retries (Q11), tc.branch (Q10), fetch-and-merge (C1), other tools kept (H18 B), carried files (H19 A), tC4 team repository blocked, private repositories (Q3), OBS (Q2), both verse texts kept (Q1, Q4). H5's replaced-list is a later field once C7b's fold says what newest-wins replaced | crates/tc-sync
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | fix | 57b606c5 | D1's loss lens found a store bug outside D1: a checkpoint retried after a materialization that failed past a book file's rename committed the last commit's blob for that file (the entry kept its old blob id), so Door43 and teammates read a stale book file until the book changed again; the entry's blob is now unknown whenever its bytes change (classify.rs set_state, with the scope digest); test a_retried_checkpoint_commits_the_book_file_as_saved fails on the old code at fail point 36 | crates/tc-store/src/classify.rs
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | note | 57b606c5 | main (batch 2b, c45091d1) merged; hand-over checks on the merged tree: board.py --check 0 errors, node .audit/tools tests 38 pass, cargo check --workspace --all-targets, wasm clippy tc-ui app, tc-sync 28 tests, tc-api golden 9, tc-store checkpoint 29. Pushed once to origin/track-X for E1a (SyncReport.recreated) and the next batch | .audit/roadmap/units/X.md
+- 2026-10-25 10:20 EDT | integration lane (Claude Code 3d07d5f8) | merge | 3ddc25b5 | merged into main in batch 5, gated by scripts/gates.sh --wait-ci batch-5. In the batch ci.yml's nightly sync-model-long run tees into the same nightly.log as model-long, so CHK-7's failure card covers it | scripts/gates.sh --wait-ci batch-5
