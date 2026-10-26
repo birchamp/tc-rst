@@ -25,13 +25,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use tc_burrito::{FileFacts, FileState, IngredientEntry, IngredientPath, ProjectFiles};
 use tc_journal::fold::{Blocked, DerivedFile, Notice};
 use tc_journal::{
-    BookId, DeviceId, FORMAT_MAJOR, FORMAT_MINOR, GitOid, Md5, PackName, Record, RecordKey,
-    RepoPath,
+    BookId, ChangeId, DeviceId, FORMAT_MAJOR, FORMAT_MINOR, GitOid, Md5, PackName, Record,
+    RecordKey, RepoPath,
 };
 use unicode_normalization::is_nfc;
 
 /// The new blobs past which a commit is a chain of commits (§9.5).
 pub(crate) const CHAIN_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Where the packs are, in every tree (§4.1).
+const PACKS: &str = "ingredients/tc/changes/";
 
 /// One entry of the tree being built.
 #[derive(Debug, Clone)]
@@ -459,7 +462,8 @@ impl Writer {
     /// push sends one link at a time and a dropped connection loses only the one in flight. A
     /// link takes a pack only while its packs fold to the same changes as `base`'s, so it keeps
     /// `base`'s derived files and they are the fold of its own packs; a pack that would change
-    /// them waits for the commit itself. A `base` without the app's trailers (another tool's
+    /// them waits for the commit itself. The new packs' changes are read from their blobs: the
+    /// fold does not know which pack holds a change this session sealed or took in. A `base` without the app's trailers (another tool's
     /// commit) gets no chain, since its derived files need not be the fold of its packs.
     /// Answers the last link written.
     fn write_chain(
@@ -493,16 +497,26 @@ impl Writer {
         else {
             return Ok(None);
         };
-        let pack_name = |path: &str| tc_journal::pack::PackPath::parse(path).map(|p| p.name);
-        let before: BTreeSet<PackName> = theirs.keys().filter_map(|p| pack_name(p)).collect();
-        let new_packs: Vec<(String, PackName, u64)> = built
-            .desired
-            .iter()
-            .filter(|(path, d)| new(path, d))
-            .filter_map(|(path, d)| Some((path.clone(), pack_name(path)?, d.size)))
-            .collect();
-        let links = plan_links(&new_packs, bound, |added| {
-            self.fold.completes_batch(&before, added)
+        let project = self.shared.facts().id;
+        let mut held: BTreeMap<String, (BTreeSet<ChangeId>, bool)> = BTreeMap::new();
+        let mut new_packs: Vec<(String, u64)> = Vec::new();
+        for (path, d) in &built.desired {
+            if !path.starts_with(PACKS) || !new(path, d) {
+                continue;
+            }
+            let Some(bytes) = git.read_blob(d.oid)? else {
+                return Ok(None);
+            };
+            let read = tc_journal::pack::read_pack(path, &bytes, project);
+            // A consolidated pack holds changes `base`'s packs hold too: none of them is
+            // missing from a link that leaves it out.
+            let consolidated = read.header.as_ref().is_none_or(|h| !h.replaces.is_empty());
+            let ids = read.entries.iter().map(|e| e.id()).collect();
+            held.insert(path.clone(), (ids, consolidated));
+            new_packs.push((path.clone(), d.size));
+        }
+        let links = plan_links(&new_packs, bound, |chosen| {
+            changes_fold(&self.fold, &held, chosen)
         });
         if links.is_empty() {
             return Ok(None);
@@ -1125,24 +1139,22 @@ fn trailers(device: DeviceId, frontier: &str) -> String {
 
 /// §9.5: the packs of each link before a large commit, each holding the packs of the one
 /// before and more, in path order, cut once a link adds `bound` bytes. A pack after which
-/// `completes` says the link's packs make a batch whole is left to the commit itself. A link
-/// whose new packs fall short of `bound` closes the chain.
+/// `changes` says the link's packs would fold to other changes than its base's is left to the
+/// commit itself. A link whose new packs fall short of `bound` closes the chain.
 fn plan_links(
-    packs: &[(String, PackName, u64)],
+    packs: &[(String, u64)],
     bound: u64,
-    completes: impl Fn(&BTreeSet<PackName>) -> bool,
+    changes: impl Fn(&BTreeSet<String>) -> bool,
 ) -> Vec<BTreeSet<String>> {
     let mut links = Vec::new();
-    let mut names: BTreeSet<PackName> = BTreeSet::new();
     let mut paths: BTreeSet<String> = BTreeSet::new();
     let mut added = 0u64;
-    for (path, name, size) in packs {
-        names.insert(*name);
-        if completes(&names) {
-            names.remove(name);
+    for (path, size) in packs {
+        paths.insert(path.clone());
+        if changes(&paths) {
+            paths.remove(path);
             continue;
         }
-        paths.insert(path.clone());
         added += size;
         if added >= bound {
             links.push(paths.clone());
@@ -1153,6 +1165,43 @@ fn plan_links(
         links.push(paths);
     }
     links
+}
+
+/// §9.5: whether a link that adds the new packs `chosen` to its base folds to other changes:
+/// some batch with a change in them is whole once they are added. A change counts as missing
+/// from the link only when a new pack left out holds it and none chosen does; every other
+/// change may be in the base, so doubt keeps the pack out of the link. A batch a release names
+/// counts as whole, since its released changes apply one by one.
+fn changes_fold(
+    fold: &tc_journal::fold::FoldState,
+    held: &BTreeMap<String, (BTreeSet<ChangeId>, bool)>,
+    chosen: &BTreeSet<String>,
+) -> bool {
+    let in_link: BTreeSet<&ChangeId> = held
+        .iter()
+        .filter(|(path, _)| chosen.contains(*path))
+        .flat_map(|(_, (ids, _))| ids)
+        .collect();
+    let missing: BTreeSet<&ChangeId> = held
+        .iter()
+        .filter(|(path, (_, consolidated))| !chosen.contains(*path) && !consolidated)
+        .flat_map(|(_, (ids, _))| ids)
+        .filter(|id| !in_link.contains(id))
+        .collect();
+    let mut looked: BTreeSet<ChangeId> = BTreeSet::new();
+    for id in &in_link {
+        if looked.contains(*id) {
+            continue;
+        }
+        let Some(batch) = fold.batch_of(id) else {
+            continue;
+        };
+        looked.extend(batch.members.iter().copied());
+        if batch.released || (batch.whole && !batch.members.iter().any(|m| missing.contains(m))) {
+            return true;
+        }
+    }
+    false
 }
 
 /// The path a `.conflict-<oid8>` or `.case-<oid8>` placement stands for, if `path` is one.

@@ -82,6 +82,8 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "shown_value",
             // T: the merge of one record's heads, as resolving its current heads does.
             "merged_at",
+            // PUSH-1: one change's batch, its members and two flags.
+            "batch_of",
         ],
     ),
     (

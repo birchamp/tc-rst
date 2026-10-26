@@ -1152,42 +1152,16 @@ impl FoldState {
         out
     }
 
-    /// §9.5: whether a tree whose packs are `before` and `added` folds to other changes than
-    /// one whose packs are `before`: some batch with a change that only `added` holds is whole
-    /// within them. A batch a release names counts as whole, since its released changes apply
-    /// one by one. A link of a large push's chain adds packs only when this is false, so it
-    /// keeps its parent's derived files and they are the fold of its own packs.
-    pub fn completes_batch(
-        &self,
-        before: &BTreeSet<crate::ids::PackName>,
-        added: &BTreeSet<crate::ids::PackName>,
-    ) -> bool {
-        let held_in = |c: ChangeIdx, set: &BTreeSet<crate::ids::PackName>| {
-            self.packs_of(c).iter().any(|p| set.contains(&p.name()))
-        };
-        let mut looked: BTreeSet<u32> = BTreeSet::new();
-        for i in 0..self.metas.len() {
-            let c = ChangeIdx(i as u32);
-            if !held_in(c, added) || held_in(c, before) {
-                continue;
-            }
-            let b = self.meta(c).batch;
-            if !looked.insert(b.0) {
-                continue;
-            }
-            if self.released.get(&self.batch(b).id).is_some() {
-                return true;
-            }
-            if self.is_complete(b)
-                && self
-                    .members(b)
-                    .iter()
-                    .all(|m| held_in(*m, before) || held_in(*m, added))
-            {
-                return true;
-            }
-        }
-        false
+    /// §9.5: the batch of change `id` as a link of a large push's chain needs it: its valid
+    /// changes, whether the fold applies it whole, and whether a release names it (then some
+    /// of its changes apply one by one). `None` for a change the fold does not hold.
+    pub fn batch_of(&self, id: &ChangeId) -> Option<super::BatchOf> {
+        let b = self.meta(self.change_idx(id)?).batch;
+        Some(super::BatchOf {
+            members: self.members(b).iter().map(|m| self.meta(*m).id).collect(),
+            whole: self.is_complete(b),
+            released: self.released.get(&self.batch(b).id).is_some(),
+        })
     }
 
     /// F1 for a fold from scratch: the tables [`FoldState::insert`] builds one change at a
