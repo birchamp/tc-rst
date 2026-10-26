@@ -4,7 +4,7 @@ title: A large push goes to Door43 as a chain of commits, so a poor link can fin
 track: A
 lane: storage
 milestone: M2
-state: verifying
+state: done
 owner: PUSH-1 lane (Claude Code e939c6d5)
 branch: track-PUSH-1
 worktree: .worktrees/track-PUSH-1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: true
 size: 2-3 d (basis: X's push and confirm, steps 4-5, about a day, plus the chain's tree builds)
-merged: none
+merged: 2e350b4d
 updated: 2026-10-26
-next: Ready for a batch: hand to the integration lane.
+next: none
 blocked_by: none
 ---
 
@@ -127,3 +127,4 @@ but it never reaches Door43 or the team, and nothing offers the exchange file in
 - 2026-10-26 17:24 EDT | PUSH-1 lane (Claude Code e939c6d5) | fix | none | races major: a deleted branch put back by the first links of a chain that then broke was never said; .tc/sync.json putBackUnsaid keeps the H5 notice for the next sync that gets through; a_branch_put_back_by_a_broken_chain_is_said_by_the_next_sync passes and fails without the fix. Also: the last push of a resumed chain counts toward the offer; APP-DESIGN declares the chain; four minors to minors.tsv | cargo test -p tc-sync --test sync -- a_branch_put_back sync_large_push a_large_push_that_keeps
 - 2026-10-26 19:20 EDT | PUSH-1 lane (Claude Code e939c6d5) | fix | a30d6f24 | gate: one save on the Psalms corpus wrote a link (checkpoint op-count test), since the fold holds no pack for changes sealed this session; the link check now reads each new pack's changes from its blob, and a pack whose path the base holds counts like a consolidated one (an independent read of the rework found that case). Also: batch_of listed in the op-count lint; E1a's tc-app to tc-sync edge and the fake's remove_repo allowed in tc-arch | cargo test -p tc-store --test store (413 pass); cargo test -p tc-sync --test sync (43 pass)
 - 2026-10-26 19:20 EDT | PUSH-1 lane (Claude Code e939c6d5) | gate | none | scripts/gates.sh --touched on 9054a761 (track-E1a2 20c3faeb and track-LOSS-1 merged): every step passed but one journey, align a_refused_verse_switch_keeps_the_open_verse_shown, which hung on 'seven words placed' under load and passed alone on the next tree; store and sync suites pass after the last fix | scratchpad gates2.log quoted here
+- 2026-10-26 19:20 EDT | integration lane (Claude Code 3d07d5f8) | merge | 2e350b4d | merged into main in batch 20, gated by scripts/gates.sh --wait-ci batch-20 | scripts/gates.sh --wait-ci batch-20
