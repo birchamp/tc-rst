@@ -1213,7 +1213,9 @@ async fn play_world(mut w: World, steps: Vec<Step>) {
         // A refused old edit can finish after the person corrected it. FR-32 still
         // waits for explicit Retry; this sends the correction with a fresh identity, or,
         // when the store already holds it (an earlier save stored it and its reply was
-        // lost), sends nothing and lets the field go as saved.
+        // lost), sends nothing and lets the field go as saved. A field restored after a
+        // reload no longer knows the stored text, so it may send it again; `check` then
+        // proves the store kept it once.
         let key = w.key();
         assert_eq!(
             buffer::read(&w.page.store, &key).unwrap().text,
@@ -1229,7 +1231,7 @@ async fn play_world(mut w: World, steps: Vec<Step>) {
                         && !old_requests.contains_key(&sent.request)
             )
         });
-        if stored {
+        if stored && !resent {
             assert!(
                 !commands.iter().any(|c| matches!(c, Command::Send { .. })),
                 "the stored correction is not sent again: {commands:?}"
