@@ -483,43 +483,24 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     let a = open(&ana, &folder_a);
     save(&a, 1, 1, "Paul, as Ana has it");
     save(&b, 1, 2, "in hope, as Juan has it");
-    let receive = format!("/{}/titus-race.git/git-receive-pack", seeded::USER);
-    let pushes = || {
-        door43
-            .fake
-            .requests()
-            .iter()
-            .filter(|r| r.method == "POST" && r.path == receive)
-            .count()
-    };
-    // The first sync pushed already: Ana's held push is the next one.
-    let before = pushes();
-    door43.fake.inject(tc_door43_fake::FaultRule::once(
-        "POST",
-        &receive,
-        tc_door43_fake::Fault::Hold,
-    ));
-    let ana_done = std::sync::atomic::AtomicBool::new(false);
+    // Ana's work is committed already and Door43 has something new for her (an edit of a
+    // file the app does not own), so the one commit her sync makes is its merge, after the
+    // fetch. It waits there while Juan pushes, so Ana's push loses the race. The store's hold
+    // stops a known step; the fake's Hold of the push hung under load.
+    a.checkpoint(tc_store::CheckpointReason::Other("before the sync".into()))
+        .await
+        .unwrap();
+    door43_commit(&door43, "titus-race", "README.md", Some(b"# Titus\n"));
+    let hooks = ana.store.hooks();
+    let point = tc_store::Point::BeforeHeadUpdate;
+    hooks.hold(point);
     let teammate = async {
-        // Ana's push is held: Juan's goes first.
-        while pushes() == before {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
+        held_at(hooks, point, 1).await;
         let report = sync(&b, &door43).await;
-        // The fake records a request before it holds it: a release that comes between is
-        // lost, so it is sent until Ana's sync ends.
-        while !ana_done.load(std::sync::atomic::Ordering::Acquire) {
-            door43.fake.release_held();
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
+        hooks.release(point);
         report
     };
-    let ana_sync = async {
-        let report = sync(&a, &door43).await;
-        ana_done.store(true, std::sync::atomic::Ordering::Release);
-        report
-    };
-    let (ana_report, juan_report) = tokio::join!(ana_sync, teammate);
+    let (ana_report, juan_report) = tokio::join!(sync(&a, &door43), teammate);
     synced(&juan_report);
     synced(&ana_report);
     assert!(ana_report.raced >= 1, "{ana_report:?}");
@@ -1180,6 +1161,697 @@ async fn a_sync_never_rewrites_or_deletes_moved_json() {
         );
     }
     a.close().unwrap();
+}
+
+/// An empty repository of the seeded user made as Door43 makes one that was migrated or made
+/// long ago: its default branch is `master`.
+async fn door43_with_master(name: &str, private: bool) -> Door43 {
+    let fake = FakeDoor43::start_seeded().await.unwrap();
+    fake.add_repo(tc_door43_fake::RepoSeed {
+        owner: seeded::USER.to_owned(),
+        name: name.to_owned(),
+        subject: String::new(),
+        language: String::new(),
+        topics: Vec::new(),
+        private,
+        commits: Vec::new(),
+    })
+    .await
+    .unwrap();
+    let switch = InternetSwitch::new();
+    switch.turn_on();
+    let client = Door43Client::new(fake.url().parse().unwrap(), switch).unwrap();
+    let credentials =
+        Credentials::new(seeded::USER, Password::new(seeded::PASSWORD.to_owned())).unwrap();
+    let session = client
+        .mint_token(
+            &credentials,
+            &"translationCore".parse().unwrap(),
+            &TokenScope::FOR_SHARING,
+        )
+        .await
+        .unwrap();
+    Door43 {
+        fake,
+        client,
+        session,
+    }
+}
+
+fn ref_on_door43(door43: &Door43, name: &str, refname: &str) -> Option<git2::Oid> {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    bare.refname_to_id(refname).ok()
+}
+
+/// Waits until the store's threads have stopped at `point` `n` times while it was held. A sync
+/// that never gets there fails the test instead of hanging it.
+async fn held_at(hooks: &tc_store::Hooks, point: tc_store::Point, n: u64) {
+    let start = std::time::Instant::now();
+    while hooks.reached(point) < n {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(60),
+            "the sync never stopped at {point:?}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
+/// Runs a store command that waits for its reply from inside a test's runtime.
+fn blocking<T>(f: impl FnOnce() -> T) -> T {
+    tokio::task::block_in_place(f)
+}
+
+/// L30 (sync-design §9.2): a repository whose default branch is `master` syncs on `master`.
+/// The branch is recorded at connect and at join, and neither side makes a `main`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_master_branch() {
+    let door43 = door43_with_master("titus-master", false).await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    let repo: tc_door43::RepoRef = format!("{}/titus-master", seeded::USER).parse().unwrap();
+    blocking(|| {
+        tokio::runtime::Handle::current().block_on(tc_sync::connect(
+            &a,
+            door43.client.server(),
+            &repo,
+            "master",
+        ))
+    })
+    .unwrap();
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        ref_on_door43(&door43, "titus-master", "refs/heads/master"),
+        head(&a)
+    );
+    assert_eq!(
+        ref_on_door43(&door43, "titus-master", "refs/heads/main"),
+        None
+    );
+    let juan = computer(dir.path(), "juan");
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(b.sync_file().await.unwrap().unwrap().branch, "master");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Juan has it"));
+    assert_eq!(
+        ref_on_door43(&door43, "titus-master", "refs/heads/main"),
+        None
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// L31 (sync-design §9.1): a private repository syncs and joins, because the fetch and the
+/// join send the account's token.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_private_repository() {
+    let door43 = door43_with_master("titus-private", true).await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    let repo: tc_door43::RepoRef = format!("{}/titus-private", seeded::USER).parse().unwrap();
+    blocking(|| {
+        tokio::runtime::Handle::current().block_on(tc_sync::connect(
+            &a,
+            door43.client.server(),
+            &repo,
+            "master",
+        ))
+    })
+    .unwrap();
+    synced(&sync(&a, &door43).await);
+    let juan = computer(dir.path(), "juan");
+    let anonymous = tc_sync::join(&juan.store, &door43.client, None, &repo, "Titus").await;
+    assert!(anonymous.is_err(), "a private repository is not public");
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+    save(&b, 1, 2, "in hope, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Juan has it"));
+    let fetches: Vec<_> = door43
+        .fake
+        .requests()
+        .into_iter()
+        .filter(|r| r.path.ends_with("/titus-private.git/git-upload-pack"))
+        .collect();
+    assert!(!fetches.is_empty());
+    assert!(
+        fetches
+            .iter()
+            .all(|r| r.authorization != tc_door43_fake::AuthSeen::None),
+        "{fetches:?}"
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// Puts a pre-receive hook in Door43's copy of `name` that refuses every push with `text`, as
+/// Gitea refuses a push to a protected branch.
+fn protect(door43: &Door43, name: &str, text: &str) {
+    let hook = door43
+        .fake
+        .git_dir(seeded::USER, name)
+        .join("hooks/pre-receive");
+    std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    std::fs::write(
+        &hook,
+        format!("#!/bin/sh\ncat >/dev/null\necho '{text}' >&2\nexit 1\n"),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+/// L20 (F11) and L34: Door43 takes the pack and then refuses the ref (a protected branch).
+/// The push returned no error, yet the sync fails with Door43's own words, nothing reads as
+/// on Door43, and the confirmed commit stays the last one Door43 really showed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_protected_branch_reported() {
+    let door43 = door43("titus-protected").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-protected");
+    synced(&sync(&a, &door43).await);
+    let confirmed = a.sync_file().await.unwrap().unwrap().confirmed;
+    let tip = on_door43_tip(&door43, "titus-protected");
+    let words_of_door43 = "Not allowed to push to protected branch main";
+    protect(&door43, "titus-protected", words_of_door43);
+    save(&a, 1, 1, "Paul, a servant of God");
+    let report = sync(&a, &door43).await;
+    match &report.ended {
+        Ended::Failed(
+            tc_api::refusal::SyncFailure::BeforeIntake(tc_api::refusal::SyncRefusal::RefRejected {
+                server_message,
+            })
+            | tc_api::refusal::SyncFailure::AfterIntake(tc_api::refusal::SyncRefusal::RefRejected {
+                server_message,
+            }),
+        ) => assert!(server_message.contains(words_of_door43), "{server_message}"),
+        other => panic!("a refused ref read as {other:?}"),
+    }
+    assert_eq!(report.confirmed, None, "{report:?}");
+    assert_eq!(on_door43_tip(&door43, "titus-protected"), tip);
+    assert_ne!(head(&a), Some(tip), "the new work is only here");
+    assert_eq!(
+        a.sync_file().await.unwrap().unwrap().confirmed,
+        confirmed,
+        "nothing newer reads as on Door43"
+    );
+    a.close().unwrap();
+}
+
+/// L23 (F14): the person saves while a sync runs (here, while its commit waits to move the
+/// branch). The saves are taken at once, the sync ends, and the next sync sends them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn loss_f14_edits_during_sync_kept() {
+    let door43 = door43("titus-during").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-during");
+    save(&a, 1, 1, "Paul, a servant of God");
+    let hooks = ana.store.hooks();
+    hooks.hold(tc_store::Point::BeforeHeadUpdate);
+    let editor = async {
+        held_at(hooks, tc_store::Point::BeforeHeadUpdate, 1).await;
+        // The saves run beside this thread, so a save that waits for the sync fails the test
+        // instead of hanging it.
+        blocking(|| {
+            std::thread::scope(|scope| {
+                let (done, saved) = std::sync::mpsc::channel();
+                let a = &a;
+                scope.spawn(move || {
+                    save(a, 1, 2, "saved while the sync ran");
+                    save(a, 1, 1, "Paul, changed while the sync ran");
+                    let _ = done.send(());
+                });
+                let in_time = saved.recv_timeout(std::time::Duration::from_secs(60));
+                hooks.release(tc_store::Point::BeforeHeadUpdate);
+                assert!(in_time.is_ok(), "a save waited for the sync");
+            });
+        });
+    };
+    let (report, ()) = tokio::join!(sync(&a, &door43), editor);
+    synced(&report);
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("saved while the sync ran"));
+    assert_eq!(
+        words(&a, 1, 1).as_deref(),
+        Some("Paul, changed while the sync ran")
+    );
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let repo: tc_door43::RepoRef = format!("{}/titus-during", seeded::USER).parse().unwrap();
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(words(&b, 1, 2).as_deref(), Some("saved while the sync ran"));
+    assert_eq!(
+        words(&b, 1, 1).as_deref(),
+        Some("Paul, changed while the sync ran")
+    );
+    b.close().unwrap();
+}
+
+/// L89 (§9.2 N1, N2): `project.json` deleted on Door43 is not another project: the sync
+/// goes on and its merge commit puts the file back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_project_json_deleted_on_door43_restored() {
+    let door43 = door43("titus-pj").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-pj");
+    synced(&sync(&a, &door43).await);
+    let ours = std::fs::read(folder.join("ingredients/tc/project.json")).unwrap();
+    door43_commit(&door43, "titus-pj", "ingredients/tc/project.json", None);
+    save(&a, 1, 1, "Paul");
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        on_door43(&door43, "titus-pj", "ingredients/tc/project.json"),
+        Some(ours)
+    );
+    a.close().unwrap();
+}
+
+/// L29 (sync-design §9.1): a file the project carries (an audio recording) travels to
+/// Door43 and to a teammate who joins, byte for byte.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn loss_carried_file_travels() {
+    let door43 = door43("titus-audio").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    let song = "ingredients/audio/TIT_01_01.mp3";
+    let bytes: Vec<u8> = (0..20_000u32).map(|i| (i * 7 % 251) as u8).collect();
+    std::fs::create_dir_all(folder_a.join("ingredients/audio")).unwrap();
+    std::fs::write(folder_a.join(song), &bytes).unwrap();
+    blocking(|| a.focus().wait().unwrap());
+    a.wait_idle();
+    connect(&a, &door43, "titus-audio");
+    synced(&sync(&a, &door43).await);
+    assert_eq!(on_door43(&door43, "titus-audio", song), Some(bytes.clone()));
+    let juan = computer(dir.path(), "juan");
+    let repo: tc_door43::RepoRef = format!("{}/titus-audio", seeded::USER).parse().unwrap();
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(std::fs::read(folder_b.join(song)).unwrap(), bytes);
+    a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// An Open Bible Stories project on `computer`, made as a new one is: its details and each
+/// story's template base.
+fn stories(computer: &Computer) -> PathBuf {
+    let mut records = vec![
+        Record::ProjectMeta {
+            field: MetaField::Name,
+            value: Some(json(r#"{"en":"Stories"}"#)),
+        },
+        Record::ProjectMeta {
+            field: MetaField::Languages,
+            value: Some(json(
+                r#"[{"name":{"en":"English"},"scriptDirection":"ltr","tag":"en"}]"#,
+            )),
+        },
+    ];
+    for story in tc_obs::ids::StoryNo::all() {
+        records.push(Record::StoryBase {
+            story: tc_journal::StoryNo::new(story.get()).unwrap(),
+            value: tc_obs::story::seed_story(tc_obs::template::template_story(story)).unwrap(),
+        });
+    }
+    computer
+        .store
+        .create(&NewProject {
+            name: "Stories".into(),
+            kind: ProjectKind::Stories,
+            records,
+            books: Vec::new(),
+        })
+        .unwrap()
+}
+
+fn frame_key(story: u8, frame: u16) -> RecordKey {
+    RecordKey::Frame(
+        tc_journal::StoryNo::new(story).unwrap(),
+        tc_journal::FrameNo::new(frame),
+    )
+}
+
+fn save_frame(handle: &ProjectHandle, story: u8, frame: u16, text: &str) {
+    let shown = handle.mint(&frame_key(story, frame), None).unwrap();
+    handle
+        .submit(Command::SaveFrame {
+            shown,
+            text: text.to_owned(),
+        })
+        .wait()
+        .unwrap();
+}
+
+fn frame_text(handle: &ProjectHandle, story: u8, frame: u16) -> Option<String> {
+    match handle.snapshot().fold().projected(&frame_key(story, frame)) {
+        Some(Record::Frame { value, .. }) => Some(format!("{value:?}")),
+        _ => None,
+    }
+}
+
+/// L32 (sync-design §9.1): an Open Bible Stories project shares, joins and syncs both ways
+/// as a Bible project does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_sync_obs_project() {
+    let door43 = door43("en_obs").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = stories(&ana);
+    let a = open(&ana, &folder_a);
+    save_frame(&a, 1, 1, "This is how God made everything, as Ana has it.");
+    connect(&a, &door43, "en_obs");
+    synced(&sync(&a, &door43).await);
+    let juan = computer(dir.path(), "juan");
+    let repo: tc_door43::RepoRef = format!("{}/en_obs", seeded::USER).parse().unwrap();
+    let folder_b = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Stories",
+    )
+    .await
+    .unwrap();
+    let b = open(&juan, &folder_b);
+    assert_eq!(b.facts().kind, ProjectKind::Stories);
+    assert_eq!(frame_text(&b, 1, 1), frame_text(&a, 1, 1));
+    assert!(
+        frame_text(&b, 1, 1).unwrap().contains("as Ana has it"),
+        "{:?}",
+        frame_text(&b, 1, 1)
+    );
+    save_frame(
+        &b,
+        1,
+        2,
+        "God created the world in six days, as Juan has it.",
+    );
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    assert!(
+        frame_text(&a, 1, 2)
+            .unwrap_or_default()
+            .contains("as Juan has it")
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+    let story = "ingredients/content/01.md";
+    let ours = std::fs::read(folder_a.join(story)).unwrap();
+    assert!(String::from_utf8_lossy(&ours).contains("as Juan has it"));
+    assert_eq!(ours, std::fs::read(folder_b.join(story)).unwrap());
+}
+
+/// The packs on Door43's tip, by path.
+fn packs_on_door43(door43: &Door43, name: &str) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, name)).unwrap();
+    let tree = bare
+        .find_reference("refs/heads/main")
+        .unwrap()
+        .peel_to_tree()
+        .unwrap();
+    let mut out = std::collections::BTreeMap::new();
+    tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
+        let path = format!("{dir}{}", entry.name().unwrap_or_default());
+        if path.starts_with("ingredients/tc/changes/")
+            && entry.kind() == Some(git2::ObjectType::Blob)
+        {
+            out.insert(path, bare.find_blob(entry.id()).unwrap().content().to_vec());
+        }
+        git2::TreeWalkResult::Ok
+    })
+    .unwrap();
+    out
+}
+
+/// L22 (G2) and L45: a teammate's pack reaches Door43 damaged. Each file is checked alone, so
+/// the sync goes on: the pack's readable changes are taken, the rest of the team's work
+/// with them, and the damaged pack stays on Door43's tip for its owner to repair.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn loss_bad_pack_from_teammate_sync_continues() {
+    let door43 = door43("titus-bad").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-bad");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    let before = packs_on_door43(&door43, "titus-bad");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    save(&b, 1, 3, "in his time, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    let juans: Vec<(String, Vec<u8>)> = packs_on_door43(&door43, "titus-bad")
+        .into_iter()
+        .filter(|(path, _)| !before.contains_key(path))
+        .collect();
+    assert_eq!(juans.len(), 1, "{juans:?}");
+    let (path, bytes) = &juans[0];
+    // Door43's copy loses its last bytes: the last change in it no longer reads.
+    let damaged = bytes[..bytes.len() - 7].to_vec();
+    door43_commit(&door43, "titus-bad", path, Some(&damaged));
+    let a = open(&ana, &folder_a);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert!(report.received.salvaged >= 1, "{report:?}");
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Juan has it"));
+    assert_eq!(
+        on_door43(&door43, "titus-bad", path),
+        Some(damaged),
+        "the damaged pack stays on the tip"
+    );
+    // Its owner's sync repairs it from the copy only Juan's computer holds whole.
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    assert_eq!(
+        words(&a, 1, 3).as_deref(),
+        Some("in his time, as Juan has it")
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}
+
+/// L26 (sync-design §9.3): three computers sync at once. One that loses the race to another's
+/// push fetches what is new and pushes again, within its attempts, and all three converge.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_contention_three_devices_converge() {
+    let door43 = door43("titus-busy").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-busy");
+    synced(&sync(&a, &door43).await);
+    let repo: tc_door43::RepoRef = format!("{}/titus-busy", seeded::USER).parse().unwrap();
+    let mut others = Vec::new();
+    for name in ["juan", "maria"] {
+        let computer = computer(dir.path(), name);
+        let folder = tc_sync::join(
+            &computer.store,
+            &door43.client,
+            Some(&door43.session),
+            &repo,
+            "Titus",
+        )
+        .await
+        .unwrap();
+        others.push((computer, folder));
+    }
+    let b = open(&others[0].0, &others[0].1);
+    let c = open(&others[1].0, &others[1].1);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    save(&b, 1, 2, "in hope, as Juan has it");
+    save(&c, 1, 3, "in his time, as Maria has it");
+    synced(&sync(&b, &door43).await);
+    // Ana's work is committed already, so the only commit her sync makes is its merge of
+    // Juan's work, after the fetch. It waits there while Maria pushes, so Ana's push loses
+    // the race.
+    a.checkpoint(tc_store::CheckpointReason::Other("before the sync".into()))
+        .await
+        .unwrap();
+    let hooks = ana.store.hooks();
+    let point = tc_store::Point::BeforeHeadUpdate;
+    hooks.hold(point);
+    let maria = async {
+        held_at(hooks, point, 1).await;
+        let report = sync(&c, &door43).await;
+        hooks.release(point);
+        report
+    };
+    let (ana_report, maria_report) = tokio::join!(sync(&a, &door43), maria);
+    synced(&ana_report);
+    synced(&maria_report);
+    assert!(ana_report.raced >= 1, "{ana_report:?}");
+    for handle in [&b, &c] {
+        synced(&sync(handle, &door43).await);
+    }
+    for handle in [&a, &b, &c] {
+        assert_eq!(words(handle, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+        assert_eq!(
+            words(handle, 1, 2).as_deref(),
+            Some("in hope, as Juan has it")
+        );
+        assert_eq!(
+            words(handle, 1, 3).as_deref(),
+            Some("in his time, as Maria has it")
+        );
+    }
+    a.close().unwrap();
+    b.close().unwrap();
+    c.close().unwrap();
+}
+
+/// Every file under the project's `ingredients/`, by path relative to the folder.
+fn ingredient_paths(folder: &Path) -> Vec<String> {
+    project_files(folder)
+        .into_keys()
+        .filter(|p| p.starts_with("ingredients/") && !p.starts_with("ingredients/tc/"))
+        .collect()
+}
+
+/// L79 (§3.3, §7.7): two teammates add a recording whose paths differ only in letter case.
+/// Both are kept: on Door43 and on each computer one of them is at a `.case-` path, so on
+/// Windows or macOS neither file is written over the other, and the look at the folder
+/// records neither as an edit of the other.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn loss_door43_case_alias_never_recorded() {
+    let door43 = door43("titus-case").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-case");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    let a = open(&ana, &folder_a);
+    let add = |handle: &ProjectHandle, folder: &Path, rel: &str, bytes: &[u8]| {
+        std::fs::create_dir_all(folder.join("ingredients/audio")).unwrap();
+        std::fs::write(folder.join(rel), bytes).unwrap();
+        blocking(|| handle.focus().wait().unwrap());
+        handle.wait_idle();
+    };
+    add(&a, &folder_a, "ingredients/audio/Intro.mp3", b"Ana's intro");
+    add(
+        &b,
+        &folder_b,
+        "ingredients/audio/intro.mp3",
+        b"Juan's intro",
+    );
+    synced(&sync(&a, &door43).await);
+    synced(&sync(&b, &door43).await);
+    synced(&sync(&a, &door43).await);
+    let on_tip: std::collections::BTreeMap<String, Vec<u8>> = {
+        let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-case")).unwrap();
+        let tree = bare
+            .find_reference("refs/heads/main")
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
+        let mut out = std::collections::BTreeMap::new();
+        tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
+            let path = format!("{dir}{}", entry.name().unwrap_or_default());
+            if path.starts_with("ingredients/audio/") {
+                out.insert(path, bare.find_blob(entry.id()).unwrap().content().to_vec());
+            }
+            git2::TreeWalkResult::Ok
+        })
+        .unwrap();
+        out
+    };
+    let folded: std::collections::BTreeSet<String> =
+        on_tip.keys().map(|p| p.to_lowercase()).collect();
+    assert_eq!(
+        folded.len(),
+        on_tip.len(),
+        "two paths alias on Door43: {on_tip:?}"
+    );
+    assert!(on_tip.values().any(|b| b == b"Ana's intro"), "{on_tip:?}");
+    assert!(on_tip.values().any(|b| b == b"Juan's intro"), "{on_tip:?}");
+    for (handle, folder) in [(&a, &folder_a), (&b, &folder_b)] {
+        let before: Vec<_> = handle.snapshot().fold().carried_files();
+        let paths = ingredient_paths(folder);
+        let folded: std::collections::BTreeSet<String> =
+            paths.iter().map(|p| p.to_lowercase()).collect();
+        assert_eq!(folded.len(), paths.len(), "two paths alias: {paths:?}");
+        let bytes: Vec<Vec<u8>> = paths
+            .iter()
+            .filter(|p| p.to_lowercase().contains("intro"))
+            .map(|p| std::fs::read(folder.join(p)).unwrap())
+            .collect();
+        assert!(bytes.contains(&b"Ana's intro".to_vec()), "{paths:?}");
+        assert!(bytes.contains(&b"Juan's intro".to_vec()), "{paths:?}");
+        blocking(|| handle.focus().wait().unwrap());
+        handle.wait_idle();
+        assert_eq!(
+            handle.snapshot().fold().carried_files(),
+            before,
+            "the look at the folder recorded nothing"
+        );
+    }
+    a.close().unwrap();
+    b.close().unwrap();
 }
 
 /// §9.7 `restored`: Door43's branch moved back behind a teammate's push (tC4's
