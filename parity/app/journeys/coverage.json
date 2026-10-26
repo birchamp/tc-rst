@@ -137,7 +137,10 @@
         ]
       },
       {
-        "pending": "E2"
+        "file": "parity/app/journeys/usb-exchange.test.mjs",
+        "tests": [
+          "E2: a file saved for a teammate opens on their computer, comes back with their verse, and reaches a third computer"
+        ]
       }
     ],
     "J8": [
@@ -282,7 +285,10 @@
         ]
       },
       {
-        "pending": "E2"
+        "file": "parity/app/journeys/usb-exchange.test.mjs",
+        "tests": [
+          "E2: a file saved for a teammate opens on their computer, comes back with their verse, and reaches a third computer"
+        ]
       }
     ],
     "J24": {
@@ -466,7 +472,10 @@
         ]
       },
       {
-        "pending": "E2"
+        "file": "parity/app/journeys/usb-exchange.test.mjs",
+        "tests": [
+          "E2: a file saved for a teammate opens on their computer, comes back with their verse, and reaches a third computer"
+        ]
       }
     ],
     "j08-resume.spec.ts": [

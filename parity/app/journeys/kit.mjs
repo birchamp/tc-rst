@@ -134,6 +134,46 @@ export async function withApp(body, { locale = 'en', probe = false, hooks = fals
   }
 }
 
+/** `n` apps at once in one browser, each its own `tc4 serve` over its own projects folder
+ * (`scenarios[i]`, 'store' being an empty folder), as teammates' computers in a USB exchange
+ * (E2). Each page has a shell stub whose folder and file pickers answer what the test set with
+ * `pickFolder` / `pickFile`, so the dialogs run the shell path a translator sees. */
+export async function withApps(scenarios, body) {
+  const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
+  const apps = [];
+  try {
+    for (const [i, scenario] of scenarios.entries()) {
+      const runDir = path.join(REPO, 'target', 'parity-rust', `${process.pid}-${Date.now()}-${i}`);
+      const env = await startRustEnv({ scenario, tc4: setup.tc4, ui: setup.ui, runDir });
+      const context = await browser.newContext(env.contextOptions);
+      await env.prepare(context);
+      await context.addInitScript(() => {
+        window.tc4Shell = { chooseFolder: () => window.__tcPick?.folder ?? '', chooseFile: () => window.__tcPick?.file ?? '' };
+      });
+      const page = await context.newPage();
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+      await loadHome(page, env);
+      apps.push({
+        env, page, context, errors,
+        pickFolder: (folder) => page.evaluate((f) => { window.__tcPick = { folder: f }; }, folder),
+        pickFile: (file) => page.evaluate((f) => { window.__tcPick = { file: f }; }, file),
+      });
+    }
+    const result = await body(apps);
+    for (const app of apps) {
+      assert.deepEqual(app.errors, [], 'no page error and no console error');
+      assert.equal(await app.page.locator('[data-testid="view-error"], [data-testid="boot-error"]').count(), 0, 'no view error or boot error left on the page');
+      await assertValidProjects(app.env, { seeded: true });
+    }
+    return result;
+  } finally {
+    for (const app of apps) await app.env.close();
+    await browser.close();
+  }
+}
+
 /** Home afresh in `locale`, as the capture's `home()` loads it. */
 export async function loadHome(page, env, locale = 'en') {
   await env.load(page, { locale });
