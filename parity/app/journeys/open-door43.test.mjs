@@ -9,7 +9,7 @@
 //     node --test parity/app/journeys/open-door43.test.mjs
 import assert from 'node:assert/strict';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
-import { DOOR43_TEAM, saveTitus, titusWords } from '../env-rust.mjs';
+import { DOOR43_OWNER, saveTitus, titusWords } from '../env-rust.mjs';
 import { BIBLE as BIBLE_REPO } from '../screens.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
@@ -41,7 +41,7 @@ async function openFromDoor43(page, env, name) {
   await page.getByTestId('add-project').click();
   await page.getByTestId('add-project-door43').click();
   await page.getByTestId('open-door43-modal').waitFor();
-  await page.getByTestId('open-door43-repo').fill(`${DOOR43_TEAM}/${env.door43Repo(BIBLE_REPO)}`);
+  await page.getByTestId('open-door43-repo').fill(`${DOOR43_OWNER}/${env.door43Repo(BIBLE_REPO)}`);
   await page.getByTestId('open-door43-name').fill(name);
   await page.getByTestId('open-door43-submit').click();
   await page.getByTestId('open-door43-modal').waitFor({ state: 'detached', timeout: 120_000 });

@@ -228,3 +228,9 @@ FIX-HIDE	A dirty section field restored after a reload (a panic) stays hidden: t
 FIX-HIDE	A teammate's newer text that arrives while a verse's save is failed or held waits behind the translator's text with no notice once the card closed; nothing is lost (the save sends its base tokens)	crates/tc-ui/src/app/save/mod.rs close clears the notice; loss lens of FIX-HIDE
 FIX-HIDE	After a verse save is acknowledged the grid can show the old stored text for one round trip until the chapter is read again	save/mod.rs Clean on the Ack; query.rs chapter reread; races lens of FIX-HIDE
 E1a	J26 check-conflict step waits for C7b	parity/app/journeys/team-sync.test.mjs; units/E1a.md step 6
+E1b	Home's removed-open notice and its Close have no UI test or capture	views/home.rs banners; only home/list's notices is tested (store.rs a_join_cut_short_is_removed_and_home_says_so_once); parity lens of E1b
+E1b	No journey checks that the share's run shows no buttons and ignores Escape	share.test.mjs; the share-progress-* captures check the DOM statically; parity lens of E1b
+E1b	A second tab can start a sync of a project while its share's own push runs	flows.rs: the share's sync does not hold FlowRequest::Sync; races lens of E1b
+E1b	A resend later than the reply cache's 10 minutes shows name-exists for the person's own new repository	follow ends Lost and the form takes a new id; races lens of E1b
+E1b	Connect failing after the create leaves an empty repository, and later shares of that name say name-exists	tc-sync share.rs between create_repo and connect; loss lens of E1b
+E1b	J17's [G2] case (an invalid journal file refuses the open, writing nothing) is not ported	needs X's join to name the file it could not read; open-door43.test.mjs header

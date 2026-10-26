@@ -7,7 +7,7 @@
 //     node --test parity/app/journeys/share.test.mjs
 import assert from 'node:assert/strict';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
-import { DOOR43_TEAM, saveTitus } from '../env-rust.mjs';
+import { DOOR43_OWNER, saveTitus } from '../env-rust.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
 const en = catalog('en');
@@ -42,12 +42,11 @@ async function openShare(page, folder) {
 
 const WORDS = 'Pablo, siervo de Dios, como se compartió';
 
-browserTest('J11 1. Share to the team organization: one progress line, the end with its address, Copy link and the team-access line; the main on Door43 holds the verse saved just before', async () => {
+browserTest('J11 1. Share to the account: one progress line, the end with its address, Copy link and the team-access line; the main on Door43 holds the verse saved just before', async () => {
   await withApp(async ({ page, env, context, teammate }) => {
     await page.getByTestId(`share-${BIBLE}`).waitFor();
     await saveTitus(env.call, BIBLE, 1, 1, WORDS);
     await openShare(page, BIBLE);
-    await page.getByTestId(`share-org-${DOOR43_TEAM}`).click();
     await page.getByTestId('share-next').click();
     assert.equal(await page.getByLabel('Repository name').inputValue(), BIBLE, 'the folder name by default');
     assert.equal(await page.getByTestId('share-items').textContent(), 'Jonah, Titus');
@@ -55,7 +54,7 @@ browserTest('J11 1. Share to the team organization: one progress line, the end w
     const done = page.getByTestId('share-done');
     await done.waitFor({ timeout: 120_000 });
     assert.equal(await done.getAttribute('data-steps'), 'create,push', 'the two steps, in order');
-    const url = `${env.door43.url}/${DOOR43_TEAM}/${BIBLE}`;
+    const url = `${env.door43.url}/${DOOR43_OWNER}/${BIBLE}`;
     assert.equal(await page.getByTestId('share-url').textContent(), url);
     assert.equal(await page.getByTestId('share-done-text').textContent(), en['shareDialog.doneText']);
     assert.equal(await page.getByTestId('share-team-access').textContent(), en['shareDialog.teamAccess']);
@@ -82,9 +81,8 @@ browserTest('J11 1. Share to the team organization: one progress line, the end w
 browserTest('J11 6. A name that exists on Door43 is refused on the check step with its sentence, and nothing is pushed; another name shares', async () => {
   await withApp(async ({ page, env }) => {
     await page.getByTestId(`share-${BIBLE}`).waitFor();
-    await env.door43.addRepo(DOOR43_TEAM, BIBLE);
+    await env.door43.addRepo(DOOR43_OWNER, BIBLE);
     await openShare(page, BIBLE);
-    await page.getByTestId(`share-org-${DOOR43_TEAM}`).click();
     await page.getByTestId('share-next').click();
     await env.door43.clear();
     await page.getByTestId('share-submit').click();
@@ -98,7 +96,7 @@ browserTest('J11 6. A name that exists on Door43 is refused on the check step wi
     assert.equal(await error.count(), 0, 'typing takes the refusal away');
     await page.getByTestId('share-submit').click();
     await page.getByTestId('share-done').waitFor({ timeout: 120_000 });
-    assert.equal(await page.getByTestId('share-url').textContent(), `${env.door43.url}/${DOOR43_TEAM}/${BIBLE}_2`);
+    assert.equal(await page.getByTestId('share-url').textContent(), `${env.door43.url}/${DOOR43_OWNER}/${BIBLE}_2`);
   }, opts);
 });
 

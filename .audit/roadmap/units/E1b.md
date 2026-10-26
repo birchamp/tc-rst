@@ -4,7 +4,7 @@ title: Share and open from Door43
 track: A
 lane: app
 milestone: M3
-state: building
+state: gating
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-E1b
 worktree: .worktrees/track-REF1
@@ -15,7 +15,7 @@ proves: [P1, P2]
 no_loss: true
 size: 3-4 sessions (basis: B9b)
 merged: none
-updated: 2026-10-25
+updated: 2026-10-26
 next: Step 6 waits for H14 (#837): build only what the owner rules. Everything else is ready for a batch once E1a lands.
 blocked_by: none
 ---
@@ -268,3 +268,5 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 - 2026-10-26 13:30 EDT | REF1 session (Claude Code 56b3f56d) | verify | none | Browser and parity lens (independent reviewer against tC4 b86270f ShareDialog.jsx, state.jsx shareRun, j11 and j17 specs). 1 Code: test ids, data-steps, role=status, data-code, the callout, Copy link, Open on Door43, no footer or close while running all match. 2 Checks: real payloads (fake creates and receives the push, a teammate reads the verse, the clipboard read back). 3 Reach: fine. 5 No loss: covered. 6 Prose: the four differences declared. Major: no test pressed Open on Door43 any more (internet-consent d's second half). Minors: share-open's data-code assertion dropped; the Home notice has no UI test; J14's notEqual passed on an empty verse; the run's no-buttons moment unchecked | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/E1b-lens-parity.md
 - 2026-10-26 13:30 EDT | REF1 session (Claude Code 56b3f56d) | fix | none | Blocker: share_form() finds the form under the sign-in step (patch_sh, share_run_now), as open_form does. Majors: the server refuses a share of a connected project (ShareRefusal::AlreadyShared, checked under the flow; a_shared_project_is_never_shared_to_a_second_repository; rebuild key refusal.share.already-shared, pending in nine languages); a push refused after the create keeps Share off (ShareForm::push_refused, a_push_refused_after_the_repository_was_made_never_offers_a_second_share); J11 1 presses Open on Door43 and checks the page's address. Minors fixed: share-open asserts sync.clone-failed; J14 asserts the team's verse; door43_share's doc. Also: a share that ended before any progress report shows both lines. Left as minors: the Home notice's UI test, the run's no-buttons check, the concurrent sync from a second tab, the late resend's sentence, an empty repository after a failed connect | cargo test -p tc-ui --features tc-api/test-hooks --test app share; cargo test -p tc-app --features test-hooks --test app port_contract
 - 2026-10-26 14:20 EDT | REF1 session (Claude Code 56b3f56d) | step 5 | none | share-dialog, share-dialog-check and open-door43-refused captured on the store with --real-sync (by E1b, backend store). open-door43-refused's DOM now differs in the account button alone (signed in on the way, Q3), its residual updated to both layers; the screen's run signs in when the sign-in step comes, which tC4 never shows | cargo test -p tc-ui --test screen_record
+- 2026-10-26 15:10 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Merged track-E1a at 45c00a00 (e8b3b983). The lens minors are in .audit/minors.tsv. Step 6 (#837) waits for H14; the card lands without it only if the owner says so. Hand-off: side-session-notes E1b-handoff.md | git log --oneline -1 e8b3b983
+- 2026-10-26 16:00 EDT | REF1 session (Claude Code 56b3f56d) | note | none | After the merge, the journeys follow E1a's final environment (team repositories are the parity user's own, teammates collaborators: DOOR43_OWNER), so J11 1 shares to the person's account. Every journey file once: 243 of 245, the two failures being these files before the rename; then share and open-door43 3 runs in a row, 5 of 5, skipped 0; share-open, sync-button and j11-sign-in 3 of 3, 3 of 3, 8 of 8 | node --test parity/app/journeys/share.test.mjs parity/app/journeys/open-door43.test.mjs
