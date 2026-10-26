@@ -30,6 +30,9 @@ use tc_journal::{
 };
 use unicode_normalization::is_nfc;
 
+/// The new blobs past which a commit is a chain of commits (§9.5).
+pub(crate) const CHAIN_BYTES: u64 = 16 * 1024 * 1024;
+
 /// One entry of the tree being built.
 #[derive(Debug, Clone)]
 struct Desired {
@@ -67,6 +70,7 @@ struct Built {
     same: bool,
     books: BTreeSet<BookId>,
     problem: Option<String>,
+    desired: BTreeMap<String, Desired>,
 }
 
 /// The files of the tree being built, as the burrito validator sees them.
@@ -412,15 +416,23 @@ impl Writer {
             let codes: Vec<&str> = built.books.iter().map(|b| b.code()).collect();
             message.push_str(&format!(": {}", codes.join(", ")));
         }
-        message.push_str(&format!(
-            " (tC)\n\n{TRAILER_DEVICE}: {device}\n{TRAILER_FORMAT}: {FORMAT_MAJOR}.{FORMAT_MINOR}\n{TRAILER_FRONTIER}: {}\n",
-            self.fold.frontier().to_hex()
-        ));
         let author = Author {
             name: self.author_name(device),
             time_ms: self.clock.now().0,
         };
-        let parents: Vec<GitOid> = head.iter().map(|h| h.commit).chain(remote).collect();
+        // A merge's links grow from Door43's commit, so each is a fast-forward of the one
+        // before; a checkpoint's from HEAD.
+        let base = remote.or(head.as_ref().map(|h| h.commit));
+        let last_link = match base {
+            Some(base) => self.write_chain(git, base, &built, &message, device, &author)?,
+            None => None,
+        };
+        message.push_str(&trailers(device, &self.fold.frontier().to_hex()));
+        let parents: Vec<GitOid> = match (head.as_ref(), remote, last_link) {
+            (Some(h), Some(_), Some(link)) => vec![h.commit, link],
+            (_, _, Some(link)) => vec![link],
+            _ => head.iter().map(|h| h.commit).chain(remote).collect(),
+        };
         let commit = git.write_commit(built.tree, &parents, &author, &message)?;
         self.shared
             .hooks
@@ -440,6 +452,113 @@ impl Writer {
             expected: head.map(|h| h.commit),
             tree: built.tree,
         })
+    }
+
+    /// §9.5: when the commit's new blobs pass the bound, the links that go before it: each is
+    /// `base`'s tree with more of the new packs and the `metadata.json` that lists them, so a
+    /// push sends one link at a time and a dropped connection loses only the one in flight. A
+    /// link takes a pack only while its packs fold to the same changes as `base`'s, so it keeps
+    /// `base`'s derived files and they are the fold of its own packs; a pack that would change
+    /// them waits for the commit itself. A `base` without the app's trailers (another tool's
+    /// commit) gets no chain, since its derived files need not be the fold of its packs.
+    /// Answers the last link written.
+    fn write_chain(
+        &mut self,
+        git: &Git,
+        base: GitOid,
+        built: &Built,
+        subject: &str,
+        device: DeviceId,
+        author: &Author,
+    ) -> Result<Option<GitOid>, StoreError> {
+        let bound = self.shared.hooks.chain_threshold();
+        let base_tree = git.tree_of(base)?;
+        let theirs = git.tree_entries(base_tree)?;
+        let new = |path: &String, d: &Desired| theirs.get(path).is_none_or(|e| e.oid != d.oid);
+        let new_bytes: u64 = built
+            .desired
+            .iter()
+            .filter(|(path, d)| new(path, d))
+            .map(|(_, d)| d.size)
+            .sum();
+        if new_bytes <= bound {
+            return Ok(None);
+        }
+        let (message, _) = git.commit_facts(base)?;
+        let prefix = format!("{TRAILER_FRONTIER}: ");
+        let Some(frontier) = message
+            .lines()
+            .find_map(|line| line.strip_prefix(&prefix))
+            .map(str::to_owned)
+        else {
+            return Ok(None);
+        };
+        let pack_name = |path: &str| tc_journal::pack::PackPath::parse(path).map(|p| p.name);
+        let before: BTreeSet<PackName> = theirs.keys().filter_map(|p| pack_name(p)).collect();
+        let new_packs: Vec<(String, PackName, u64)> = built
+            .desired
+            .iter()
+            .filter(|(path, d)| new(path, d))
+            .filter_map(|(path, d)| Some((path.clone(), pack_name(path)?, d.size)))
+            .collect();
+        let links = plan_links(&new_packs, bound, |added| {
+            self.fold.completes_batch(&before, added)
+        });
+        if links.is_empty() {
+            return Ok(None);
+        }
+        // `base`'s ingredients as `metadata.json` lists them: a file this commit changes is
+        // read from `base` once, for its md5.
+        let mut listed: BTreeMap<String, Desired> = BTreeMap::new();
+        for (path, entry) in &theirs {
+            if !path.starts_with("ingredients/") || path.split('/').any(|p| p.starts_with('.')) {
+                continue;
+            }
+            if let Some(d) = built.desired.get(path).filter(|d| d.oid == entry.oid) {
+                listed.insert(path.clone(), d.clone());
+                continue;
+            }
+            let Some(bytes) = git.read_blob(entry.oid)? else {
+                return Ok(None);
+            };
+            let nfc = is_text_path(path).then(|| is_nfc(&String::from_utf8_lossy(&bytes)));
+            listed.insert(
+                path.clone(),
+                Desired {
+                    oid: entry.oid,
+                    mode: entry.mode,
+                    md5: Md5::of(&bytes),
+                    size: bytes.len() as u64,
+                    nfc,
+                },
+            );
+        }
+        let mut parent = None;
+        for (n, packs) in links.iter().enumerate() {
+            let mut files = listed.clone();
+            let mut upserts: Vec<(String, GitOid, u32)> = Vec::new();
+            for path in packs {
+                if let Some(d) = built.desired.get(path) {
+                    files.insert(path.clone(), d.clone());
+                    upserts.push((path.clone(), d.oid, d.mode));
+                }
+            }
+            let Ok(metadata) = self.tree_metadata(&files) else {
+                break;
+            };
+            if !tc_burrito::validate_project(&metadata, &TreeFiles(&files)).is_empty() {
+                break;
+            }
+            upserts.push((METADATA.to_owned(), git.ensure_blob(&metadata)?, MODE_BLOB));
+            let tree = git.update_tree(Some(base_tree), &upserts, &[])?;
+            if tree == built.tree {
+                // The commit itself adds nothing more: no empty commit after it (C4).
+                break;
+            }
+            let message = format!("{subject}, part {}{}", n + 1, trailers(device, &frontier));
+            parent = Some(git.write_commit(tree, &[parent.unwrap_or(base)], author, &message)?);
+        }
+        Ok(parent)
     }
 
     /// The Door43 username the device's profile holds (written only after consent, D98), else
@@ -822,6 +941,7 @@ impl Writer {
                     same: false,
                     books: BTreeSet::new(),
                     problem: Some(e.to_string()),
+                    desired: BTreeMap::new(),
                 });
             }
         };
@@ -842,6 +962,7 @@ impl Writer {
                 same: false,
                 books: BTreeSet::new(),
                 problem: Some(format!("{first:?}")),
+                desired: BTreeMap::new(),
             });
         }
 
@@ -883,6 +1004,7 @@ impl Writer {
             tree,
             books,
             problem: None,
+            desired,
         })
     }
 
@@ -909,6 +1031,7 @@ impl Writer {
             same: false,
             books: BTreeSet::new(),
             problem: Some(format!("{rel} could not be read")),
+            desired: BTreeMap::new(),
         }
     }
 
@@ -991,6 +1114,45 @@ impl Writer {
         }
         self.assemble_metadata(&entries, nfc)
     }
+}
+
+/// A commit message's trailers (§5.13).
+fn trailers(device: DeviceId, frontier: &str) -> String {
+    format!(
+        " (tC)\n\n{TRAILER_DEVICE}: {device}\n{TRAILER_FORMAT}: {FORMAT_MAJOR}.{FORMAT_MINOR}\n{TRAILER_FRONTIER}: {frontier}\n"
+    )
+}
+
+/// §9.5: the packs of each link before a large commit, each holding the packs of the one
+/// before and more, in path order, cut once a link adds `bound` bytes. A pack after which
+/// `completes` says the link's packs make a batch whole is left to the commit itself. A link
+/// whose new packs fall short of `bound` closes the chain.
+fn plan_links(
+    packs: &[(String, PackName, u64)],
+    bound: u64,
+    completes: impl Fn(&BTreeSet<PackName>) -> bool,
+) -> Vec<BTreeSet<String>> {
+    let mut links = Vec::new();
+    let mut names: BTreeSet<PackName> = BTreeSet::new();
+    let mut paths: BTreeSet<String> = BTreeSet::new();
+    let mut added = 0u64;
+    for (path, name, size) in packs {
+        names.insert(*name);
+        if completes(&names) {
+            names.remove(name);
+            continue;
+        }
+        paths.insert(path.clone());
+        added += size;
+        if added >= bound {
+            links.push(paths.clone());
+            added = 0;
+        }
+    }
+    if added > 0 {
+        links.push(paths);
+    }
+    links
 }
 
 /// The path a `.conflict-<oid8>` or `.case-<oid8>` placement stands for, if `path` is one.

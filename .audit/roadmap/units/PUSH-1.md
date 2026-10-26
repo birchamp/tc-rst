@@ -4,7 +4,7 @@ title: A large push goes to Door43 as a chain of commits, so a poor link can fin
 track: A
 lane: storage
 milestone: M2
-state: claimed
+state: building
 owner: PUSH-1 lane (Claude Code e939c6d5)
 branch: track-PUSH-1
 worktree: .worktrees/track-PUSH-1
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 d (basis: X's push and confirm, steps 4-5, about a day, plus the chain's tree builds)
 merged: none
 updated: 2026-10-26
-next: Step 1, the chain in the store.
+next: Step 2, push and confirm link by link.
 blocked_by: none
 ---
 
@@ -107,9 +107,13 @@ but it never reaches Door43 or the team, and nothing offers the exchange file in
 
 ## References
 
+- GitHub issue: https://github.com/birchamp/tc-rst/issues/2.
+- Owner ruling, 2026-10-26: "REL-1 doesn't wait for PUSH-1; it lands in the next release."
 - `docs/STORAGE.md` §9.1 S7, §9.5 "Large pushes are a chain", §14, §15 L96; `.audit/roadmap/units/LOSS-1.md`.
 
 ## Log
 
 - 2026-10-26 12:50 EDT | LOSS-1 lane (Claude Code d63a7912) | created | none | at the orchestrator's word: LOSS-1 found §9.5's push chain is not in the code (one `git::push` of HEAD in S8), so L96 has no protection to test | crates/tc-sync/src/sync.rs
 - 2026-10-26 13:18 EDT | PUSH-1 lane (Claude Code e939c6d5) | claim | none | claimed at the orchestrator's word, on a branch from track-LOSS-1 | .worktrees/track-PUSH-1
+- 2026-10-26 13:32 EDT | PUSH-1 lane (Claude Code e939c6d5) | ruling | none | owner, 2026-10-26, through the orchestrator: "REL-1 doesn't wait for PUSH-1; it lands in the next release."; the card links issue #2 at the owner's ask | https://github.com/birchamp/tc-rst/issues/2
+- 2026-10-26 15:12 EDT | PUSH-1 lane (Claude Code e939c6d5) | step 1 | none | C5 and S7 write a chain when a commit's new blobs pass 16 MiB: each link is its base's tree with more new packs and their metadata.json, taken only while FoldState::completes_batch says no batch becomes whole, so it keeps its base's derived files; a_large_commit_is_a_chain_of_valid_commits passes and fails with the chain off (bound u64::MAX) | cargo test -p tc-store --test store a_large_commit_is_a_chain
