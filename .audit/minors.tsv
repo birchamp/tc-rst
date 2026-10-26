@@ -249,3 +249,9 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+E1c	The remote match of an open (host with port, owner, repo) is inline in tc-app share.rs; Home's door43_card compares hosts without the port, so the two disagree on a server with a port	crates/tc-app/src/share.rs Handle<OpenDoor43>; crates/tc-app/src/home.rs door43_card. One pure function for both
+E1c	No test or doc comment names INV-ONE-NAME-PER-PROJECT or INV-ONE-COPY-PER-COMPUTER; no journey checks Home's second line	crates/tc-app/tests/app/port_contract.rs; crates/tc-ui/tests/app/home.rs two_cards_of_one_name_each_say_where_they_live
+E1c	Copy the project (read-only offer, R7) keeps the Door43 link, so one computer can hold two copies of one Door43 project, which H14 rules out; both cards show the same second line	tc-store Store::copy_project; older than E1c
+E1c	A folder of the chosen name made during an open ends in open-door43.name-exists, whose tC4 sentence says Choose another name, though the dialog has no name field	crates/tc-app/src/share.rs door43_open NameExists mapping; race only
+E1c	The internet question comes before the already-here answer, which needs no network	door43/open is NetKind::Open; the check runs in the handler
+E1c	The opened-from-Door43 toast names the repository, not the project's name the card shows	crates/tc-ui/src/app/web/app_ctx.rs open_door43_now, openDoor43.done

@@ -1,7 +1,8 @@
 //! "Open a project from Door43" (M6, unit B9b; tC4's `od`, #677,
 //! `tC4:src/views/modals/OpenFromDoor43.jsx`): the repository and the refusal with its code.
-//! It asks for no name, as tC4 does (ruling H14): the project keeps its Door43 name. Pure; the
-//! rules of a repository are `tc_api::door43`'s, which the server applies too.
+//! It asks for no name, unlike tC4 (ruling H14, a declared difference): the project keeps its
+//! Door43 name. Pure; the rules of a repository are `tc_api::door43`'s, which the server
+//! applies too.
 
 use tc_api::door43::RepoSource;
 use tc_api::ids::{ProjectRef, RequestId};

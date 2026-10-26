@@ -4,7 +4,7 @@ title: One name for a project; open from Door43 asks none
 track: A
 lane: app
 milestone: M3
-state: building
+state: blocked
 owner: E1b session (Claude Code fd622395)
 branch: track-E1c
 worktree: .worktrees/track-E1c
@@ -15,8 +15,8 @@ no_loss: false
 size: 0.5 d (basis: E1b step 6 as planned, plus Home's second line)
 merged: none
 updated: 2026-10-26
-next: Run the touched gate and the open journeys, then hand over after E1b.
-blocked_by: none
+next: Ready for a batch with E1a and E1b (track-E1c holds track-E1b2).
+blocked_by: E1b not done; E1c is ready on track-E1c and merges with or after E1b
 ---
 
 # E1c: One name for a project; open from Door43 asks none
@@ -82,3 +82,7 @@ and drifted from what the team calls the project.
 - 2026-10-26 13:11 EDT | E1b session (Claude Code fd622395) | created | none | E1b's step 6 split off at the audit session's request so E1b lands first; ruling H14 recorded | .audit/roadmap/rulings/2026-10-26-H14.md
 - 2026-10-26 13:11 EDT | E1b session (Claude Code fd622395) | ruling | none | H14: "I agree with your naming recommendation." One name per project, the open asks none, twin cards say where they live | .audit/roadmap/rulings/2026-10-26-H14.md
 - 2026-10-26 13:50 EDT | E1b session (Claude Code fd622395) | ruling | none | H14, second question: "1 agree". A computer holds one copy of a Door43 project; Open from Door43 offers the one here | .audit/roadmap/rulings/2026-10-26-H14.md
+- 2026-10-26 15:40 EDT | E1b session (Claude Code fd622395) | step 1 | 42a58850 | door43/open asks no name and refuses a project already here (AlreadyHere, "Open it"); Home's second line for twin names; the contract and J14/J17 open on a second computer | git log --oneline origin/track-E1b2..42a58850
+- 2026-10-26 15:40 EDT | E1b session (Claude Code fd622395) | gate | 42a58850 | scripts/gates.sh --touched: 17 crates, 13 journey files, app-e2e 102 pass 0 skipped (J14, J17, the open case of share-open, J11, J24 among them); cargo fmt --check passes | scripts/gates.sh --touched
+- 2026-10-26 16:10 EDT | E1b session (Claude Code fd622395) | verify | 42a58850 | reviewer: general-purpose subagent, read-only. 1 Code: one entry point (door43/open's handler) carries the one-copy check before any request; the name is gone from the request type. 2 Checks: every named test exists; the touched gate ran them (not seen failing without the fix). 3 Reach: two opens at once are not reachable from the dialog. 4 Siblings: Copy the project keeps the Door43 link (older code, minor). 5 No loss: not a no-loss card. 6 Prose and Human: two comment slips fixed; H14 and its second question have a ruling file. No blockers, no majors; six minors in .audit/minors.tsv | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/E1c-verify.md
+- 2026-10-26 16:10 EDT | E1b session (Claude Code fd622395) | block | none | Ready for a batch on track-E1c; it merges with or after E1b, which merges with or after E1a | python3 -I -B .audit/tools/board.py --check

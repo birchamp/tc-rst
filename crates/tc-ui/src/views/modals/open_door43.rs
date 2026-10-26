@@ -2,8 +2,8 @@
 //! the fourth card of "Add a project" opens it. The repository is `owner/repository` or a link;
 //! it asks for no name (ruling H14, a declared difference: tC4 asks for one), so the project
 //! keeps the name the team gave it. A refusal shows in a warn callout with its code, and no
-//! project was added. The note names the server without tC4's "Only public repositories can be opened": a
-//! private repository opens after sign-in here (Q3).
+//! project was added. The note names the server without tC4's "Only public repositories can be
+//! opened": a private repository opens after sign-in here (Q3).
 
 use std::sync::Arc;
 
@@ -148,7 +148,6 @@ pub fn OpenFromDoor43() -> impl IntoView {
     .into_any()
 }
 
-/// tC4's artboard g: the refusal, its code, "No project was added", and Ask for help.
 /// The repository's project is on this computer (ruling H14): no second copy, and Open it.
 fn already_here(
     actions: &crate::app::web::Actions,
@@ -173,6 +172,7 @@ fn already_here(
     }
 }
 
+/// tC4's artboard g: the refusal, its code, "No project was added", and Ask for help.
 fn refused(actions: &crate::app::web::Actions, refusal: OpenRefusal) -> impl IntoView + use<> {
     let key = refusal_key(refusal.code.as_deref());
     let code = refusal.code.clone().unwrap_or_default();
