@@ -24,8 +24,8 @@ use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
-use crate::app::outside::{KeptOffer, kept_import_label, kept_line, kept_offer, with_kept};
 use crate::app::load::Load;
+use crate::app::outside::{KeptOffer, kept_import_label, kept_line, kept_offer, with_kept};
 use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
