@@ -7,7 +7,6 @@
   "align.unavailable.alignedInText.title": "This verse already holds its alignment",
   "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
   "check.markNotSaved": "This check was not saved: {reason}. Mark it again to try again. Nothing was lost.",
-  "check.sort.byCategory": "By category",
   "drafts.offer.copyText": "Copy text",
   "drafts.offer.discard": "Discard",
   "drafts.offer.found": "Unsaved text from your last session was found for {place}.",
