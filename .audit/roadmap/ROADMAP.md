@@ -113,6 +113,7 @@ every unpushed branch has an off-PC copy; the board is the only tracker.
 | LIC-1 | Move the rebuild to the MIT licence, as tC4 did | integration | SWEEP | 0.5 d |
 | CHK-7 | CI runs the full tests only on gates and main; fast checks before a gate; nightly failures become cards | integration | | 0.5 d |
 | CHK-7b | One command runs what a branch's change reaches before it is handed over | integration | CHK-7 | 0.25 d |
+| CHK-7c | The scale tests run at twice Psalms on pushes and gates, ten times at night | integration | CHK-7b | 0.25 d |
 
 **Exit:** the checks in `FUNNEL.md` §"Checks the repository must have" all run in CI; the shared
 structures exist and the remaining units' cards point at them; S3's core slices are merged.

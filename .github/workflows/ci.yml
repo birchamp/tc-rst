@@ -153,6 +153,7 @@ jobs:
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step model-long 2>&1 | tee nightly.log
+      - run: scripts/gates.sh --step scale-long 2>&1 | tee -a nightly.log
       - run: scripts/gates.sh --step sync-model-long 2>&1 | tee -a nightly.log
       - if: failure() && github.event_name == 'schedule'
         run: scripts/nightly-stub.sh store-model-nightly nightly.log

@@ -34,11 +34,16 @@ async fn conflict_tab_costs_its_conflicts() {
         let listed = listed.lock().unwrap().clone();
         let (on_small, on_large) = listed.split_at(ReviewTab::ALL.len());
         let conflicts = |counts: &[u64]| counts[..4].iter().sum::<u64>();
+        let factor = tc_corpus::Spec::test_factor();
         assert!(
             conflicts(on_small) > 0 && conflicts(on_large) > conflicts(on_small),
-            "{backing:?}: the corpora hold conflicts, ten times as many in the larger one: {listed:?}"
+            "{backing:?}: the corpora hold conflicts, more in the one {factor} times larger: {listed:?}"
         );
-        for (cost, counts, scale) in [(small, on_small, "Psalms"), (large, on_large, "ten times")] {
+        let larger = format!("{factor} times");
+        for (cost, counts, scale) in [
+            (small, on_small, "Psalms"),
+            (large, on_large, larger.as_str()),
+        ] {
             let entries: u64 = counts.iter().sum();
             let app = cost.app;
             assert_eq!(

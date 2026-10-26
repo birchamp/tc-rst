@@ -41,7 +41,7 @@ fn psalms() -> &'static FoldState {
 
 fn larger() -> &'static FoldState {
     static STATE: OnceLock<FoldState> = OnceLock::new();
-    STATE.get_or_init(|| fold_corpus(&Spec::scaled(1, 10)))
+    STATE.get_or_init(|| fold_corpus(&Spec::scaled(1, Spec::test_factor())))
 }
 
 /// A snapshot of `state` that counts its own work.
@@ -212,12 +212,13 @@ fn assert_local(action: &str, counts: Counters, changes: u64) {
 }
 
 #[test]
-fn the_larger_corpus_is_ten_times_larger() {
+fn the_larger_corpus_is_the_test_factor_times_larger() {
     let small = psalms();
     let big = larger();
+    let factor = Spec::test_factor();
     assert!(
-        big.len() >= 9 * small.len(),
-        "{} vs {}",
+        big.len() >= (factor - 1) * small.len(),
+        "TC_SCALE_FACTOR={factor}: {} vs {}",
         big.len(),
         small.len()
     );

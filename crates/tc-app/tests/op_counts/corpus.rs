@@ -66,7 +66,7 @@ pub fn corpora() -> &'static Corpora {
     static CORPORA: OnceLock<Corpora> = OnceLock::new();
     CORPORA.get_or_init(|| {
         let psalms = project(&Spec::psalms(1));
-        let larger = project(&Spec::scaled(1, 10));
+        let larger = project(&Spec::scaled(1, Spec::test_factor()));
         let chapter = psalms
             .fold
             .chapters_of(PSALMS)
@@ -167,7 +167,7 @@ pub fn store_corpora() -> &'static StoreCorpora {
     static CORPORA: OnceLock<StoreCorpora> = OnceLock::new();
     CORPORA.get_or_init(|| StoreCorpora {
         psalms: on_disk(&Spec::psalms(1)),
-        larger: on_disk(&Spec::scaled(1, 10)),
+        larger: on_disk(&Spec::scaled(1, Spec::test_factor())),
     })
 }
 
