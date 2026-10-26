@@ -11,7 +11,7 @@ $gates = [ordered]@{
   fmt    = 'cargo fmt --all --check'
   clippy = 'cargo clippy --locked --workspace --all-targets --keep-going -- -D warnings'
   test   = 'cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app && cargo test --locked --workspace --doc --no-fail-fast --exclude tc-app'
-  'test-app' = 'cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast'
+  'test-app' = 'cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --test op_counts --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast'
   'wasm-ui' = 'cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings'
 }
 

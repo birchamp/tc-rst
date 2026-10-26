@@ -109,7 +109,8 @@ test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on requ
 test('INV-A-HUNG-TEST-IS-NAMED-AND-STOPPED: every gate test has a time limit (CHK-8)', () => {
   const problems = [];
   for (const step of steps) {
-    const libtest = step.command.split('&&').filter((c) => /cargo test /.test(c) && !/ --doc\b| --list\b/.test(c));
+    // tc-app's op-count tests stay on libtest, which shares their 7 GB corpora (.config/nextest.toml).
+    const libtest = step.command.split('&&').filter((c) => /cargo test /.test(c) && !/ --doc\b| --list\b|-p tc-app --test op_counts\b/.test(c));
     if (libtest.length) problems.push(`step ${step.name} runs Rust tests through cargo test, which stops no hung test; use cargo nextest run`);
   }
   const config = read('.config/nextest.toml').split(/^\[profile\.default\]$/m)[1]?.split(/^\[/m)[0] ?? '';

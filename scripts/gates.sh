@@ -16,7 +16,9 @@ STEPS=(
   # CHK-8); it runs no doctests, so cargo test --doc does.
   "test|cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app && cargo test --locked --workspace --doc --no-fail-fast --exclude tc-app"
   # tc-app alone took 39 min locally: in one CI job with the rest it ran past the job's 75 min.
-  "test-app|cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast"
+  # Its op-count tests run on libtest, which shares their 7 GB corpora (.config/nextest.toml);
+  # CI's job limit bounds them.
+  "test-app|cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --test op_counts --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast"
   "alignment-budget|cargo nextest run --locked -p tc-align --release --test suggestion_budget --run-ignored only --no-capture"
   "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
@@ -183,6 +185,7 @@ touched() {
   if (( ${#crates[@]} )); then
     cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
     cargo test --locked --no-fail-fast --doc "${crates[@]/#/--package=}" || code=1
+    if [[ " ${crates[*]} " == *" tc-app "* ]]; then cargo test --locked --no-fail-fast -p tc-app --test op_counts || code=1; fi
   fi
   if (( ${#files[@]} )); then
     journeys "${files[@]}" || code=1

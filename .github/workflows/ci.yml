@@ -104,8 +104,10 @@ jobs:
 
   test-app:
     runs-on: ubuntu-latest
-    # tc-app's tests, on their own runner: with the rest they ran past 75 min (batch 7).
-    timeout-minutes: 150
+    # tc-app's tests, on their own runner: with the rest they ran past 75 min (batch 7). nextest
+    # stops each hung test but the op-count tests, which stay on libtest (.config/nextest.toml);
+    # this limit bounds them: the job took 16 min on run 40356855830 (CHK-8).
+    timeout-minutes: 40
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
     if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:

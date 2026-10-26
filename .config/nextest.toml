@@ -4,6 +4,11 @@
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
 fail-fast = false
+# tc-app's op-count tests stay on libtest (scripts/gates.sh step test-app): nearly every one builds
+# the Psalms corpora and their 10x in memory, 7.1 GB a process, which libtest builds once for the
+# binary (14.6 GB at 4 threads) and nextest once per test. Two at a time passed 22 GB, and one at
+# a time, about 250 s each, is 48 tests in over three hours.
+default-filter = 'not binary_id(tc-app::op_counts)'
 
 # Longer limits only for tests whose measured time needs one (CHK-8: a local run at 4 threads,
 # and CI's libtest times). Each still stops, and SLOW names it every minute.
@@ -25,13 +30,3 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 filter = 'binary_id(tc-app::app) & test(=app::store_scenario::a_crash_while_a_scenario_project_is_written_leaves_no_half_project)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
-# tc-app's op-count tests of alignment and checks build the Psalms corpora and their 10x in each
-# test's process (7.1 GB peak, where libtest shared one build): more than two at once passed the
-# 22 GB a local run may use, and a CI runner has 16 GB. Each took 250 to 265 s locally.
-[test-groups]
-op-count-corpora = { max-threads = 2 }
-
-[[profile.default.overrides]]
-filter = 'binary_id(tc-app::op_counts) & test(/^op_counts::(align|check)::/)'
-test-group = 'op-count-corpora'
-slow-timeout = { period = "60s", terminate-after = 10 }
