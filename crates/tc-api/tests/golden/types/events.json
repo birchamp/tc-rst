@@ -138,7 +138,8 @@
                 "count": 1,
                 "was": null
               }
-            ]
+            ],
+            "handEdited": []
           }
         }
       }
@@ -185,6 +186,9 @@
             "keptNewest": 1,
             "verseConflicts": 1,
             "alignments": 0,
+            "restored": 0,
+            "missingPins": 0,
+            "replaced": [],
             "handEdited": [
               {
                 "path": "ingredients/TIT.usfm",

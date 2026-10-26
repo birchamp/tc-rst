@@ -444,6 +444,9 @@ impl ReceiveForm {
             1 => lines.push(t(keys::exchange::receive::CONFLICTS_ONE, &[])),
             n => lines.push(t(keys::exchange::receive::CONFLICTS, &[("n", &n)])),
         }
+        for row in &view.replaced {
+            lines.push(crate::app::sync::replaced_text(row));
+        }
         for file in &view.hand_edited {
             lines.push(t(
                 keys::exchange::receive::HAND_EDITED,

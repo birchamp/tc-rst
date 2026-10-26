@@ -98,6 +98,7 @@ pub fn synced_view(
         restored,
         missing_pins: missing_pins(snapshot, installed),
         replaced,
+        hand_edited: Vec::new(),
     }
 }
 

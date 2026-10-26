@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::door43::ProjectName;
 use crate::ids::{ProjectRef, RequestId, UploadId};
-use crate::shown::PersonLabel;
 
 /// Where an exchange file is: a path the shell's `chooseFile()` gave, read in place, or an
 /// upload a browser sent (`UploadFlow::Exchange`, up to 4 GiB).
@@ -76,22 +75,9 @@ pub struct Receive {
     pub file: ExchangeFile,
 }
 
-/// What a receive brought and left, as the Received sheet shows it (the counts as
-/// `SyncResultView` has them), and the files inside the exchange file that were edited by hand.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
-pub struct ReceivedView {
-    /// The teammates' changes this receive took in.
-    pub received: u32,
-    /// Who made them, each person once, named as the conflict review names them.
-    pub from: Vec<PersonLabel>,
-    /// Open conflicts of kinds other than a verse's text and alignments.
-    pub kept_newest: u32,
-    pub verse_conflicts: u32,
-    pub alignments: u32,
-    pub hand_edited: Vec<HandEdited>,
-}
+/// What a receive brought and left: the sync's own view (the Received sheet, `door43/lastSync`
+/// and the toast read it the same way), with `hand_edited` filled.
+pub type ReceivedView = crate::jobs::SyncResultView;
 
 /// A derived file inside the exchange file that its own packs do not make: someone edited it
 /// by hand. The app's own record is the project, so it was not taken in and nothing was kept;

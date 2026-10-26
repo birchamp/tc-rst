@@ -467,6 +467,7 @@ fn the_toasts_review_opens_where_something_waits() {
             alignments,
             restored: 0,
             missing_pins: 0,
+            hand_edited: Vec::new(),
             replaced: Vec::new(),
         }),
     };

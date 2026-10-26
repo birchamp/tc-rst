@@ -325,6 +325,9 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
 pub struct ReceiveReport {
     pub intake: IntakeReport,
     pub received_by: BTreeMap<PersonLabel, u32>,
+    /// The changes this receive took in (new before the file, in the project after it), for
+    /// the Received sheet's "what replaced what".
+    pub received_ids: Vec<tc_journal::ChangeId>,
     pub new_conflicts: Vec<ConflictId>,
     /// Entries whose bytes failed their CRC: never compared, reported or written (R4).
     pub damaged: Vec<String>,
@@ -414,9 +417,11 @@ pub async fn receive(
     let snapshot = project.snapshot();
     // Received: new before the file, and in the project after it.
     let mut received_from: BTreeMap<tc_journal::DeviceId, u32> = BTreeMap::new();
+    let mut received_ids = Vec::new();
     for (device, change) in changes {
         if held.fold().change(&change).is_none() && snapshot.fold().change(&change).is_some() {
             *received_from.entry(device).or_insert(0) += 1;
+            received_ids.push(change);
         }
     }
     let labels = snapshot.fold().person_labels(facts.device);
@@ -431,6 +436,7 @@ pub async fn receive(
     Ok(ReceiveReport {
         intake: report.intake,
         received_by,
+        received_ids,
         new_conflicts: snapshot
             .fold()
             .conflicts()

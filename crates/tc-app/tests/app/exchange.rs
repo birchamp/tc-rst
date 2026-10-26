@@ -269,3 +269,44 @@ async fn a_teammates_audio_file_arrives_byte_for_byte() {
         .join("ingredients/audio/jon_01.wav");
     assert_eq!(std::fs::read(&arrived).unwrap(), wav, "INV-CARRIED-BYTES");
 }
+
+/// E2 step 4: what a receive brought is readable again after a gap, through the same query
+/// the sync's toast uses (`door43/lastSync`, HIST-1), hand-edited files included.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_received_sheet_reads_again_after_a_resync() {
+    use tc_api::door43::{LastSync, LastSyncView};
+    use tc_api::jobs::{JobOutcome, JobState};
+
+    use super::common::folder;
+    use super::port_contract::{ExchangePortFixture, ScriptedExchange, ended, receive};
+
+    let w = ScriptedExchange::world().await;
+    let app = ScriptedExchange::app(&w);
+    let before: LastSyncView = post(
+        app,
+        &LastSync {
+            project: folder("sample_burrito"),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(before.view, None, "nothing received yet");
+    let (file, path) = ScriptedExchange::receive_with_a_hand_edit(&w).await;
+    let job = post(app, &receive(12, file)).await.unwrap();
+    let JobState::Done(JobOutcome::Received(shown)) = ended(app, job).await else {
+        panic!("the receive did not end");
+    };
+    let again: LastSyncView = post(
+        app,
+        &LastSync {
+            project: folder("sample_burrito"),
+        },
+    )
+    .await
+    .unwrap();
+    let view = again.view.expect("the receive's result is readable again");
+    assert_eq!(view, shown);
+    assert_eq!(view.received, 2);
+    assert_eq!(view.hand_edited.len(), 1, "{view:?}");
+    assert_eq!(view.hand_edited[0].path, path);
+}
