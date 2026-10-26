@@ -4,7 +4,7 @@ title: A hung test is named and stopped within minutes, in CI and in scripts/gat
 track: A
 lane: checks
 milestone: M1
-state: gating
+state: done
 owner: checks lane (Claude Code 70ea6b18)
 branch: track-CHK-8
 worktree: .worktrees/track-CHK-8
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: one runner swap, one config file, a timeout per journey file)
-merged: none
+merged: 26ddb55f
 updated: 2026-10-26
-next: Ready for a batch: the integration lane merges track-CHK-8 and gates it with scripts/gates.sh --wait-ci.
+next: none
 blocked_by: none
 ---
 
@@ -81,3 +81,4 @@ translators a day late. A named, stopped test costs minutes and points at the bu
 - 2026-10-26 17:20 EDT | checks lane (Claude Code 70ea6b18) | verify | 6bfe2f04 | one pass by a fresh read-only reviewer agent: override filters match their binaries and tests; default-filter, --run-ignored only and --package lists behave; cmd /c quoting right; every nextest job installs it; build_once_per_run right within a run (no prefix collision, the rename loser reuses the winner). §8: code tooling; checks exist and run in CI's node step; reach N/A (tooling); siblings: the four fixed bundle folders; no-loss N/A; prose TRACKING item 3. One major: tc-server's never_blocked relied on a static lock to run alone. Minors: `a && b` steps skipped later parts after a failure; ps1 counted no timed out; overrides unbounded in the check; Windows FaultFs mirrors, pid reuse, other wall-clock asserts, NIGHTLY on libtest | reviewer report in this session
 - 2026-10-26 17:20 EDT | checks lane (Claude Code 70ea6b18) | fix | 6bfe2f04 | never_blocked runs alone (threads-required = num-test-threads); each part is its own step (test-doc) and CI runs it even after a failure; ps1 counts timed out; the check bounds every override; the other minors are in .audit/minors.tsv | node --test .audit/tools/gates-sync.test.mjs
 - 2026-10-26 17:40 EDT | checks lane (Claude Code 70ea6b18) | gate | f0d236eb | hand-off checks with main (ad4b67bc) merged: scripts/gates.sh --touched (2 crates: nextest 1,001 tests pass in 508 s, doctests pass), clippy -D warnings on tc-app and tc4 all targets, scripts/gates.sh --step node (# pass 128, # fail 0; journeys skip without builds), gates-sync # pass 9. Every journey file depends on kit.mjs's new 120 s default, which no --touched selection reaches: the batch gate's app-e2e runs them all (CI's slowest journey test took 14.8 s) | scripts/gates.sh --touched
+- 2026-10-26 17:30 EDT | integration lane (Claude Code 3d07d5f8) | merge | 26ddb55f | merged into main in batch 16, gated by scripts/gates.sh --wait-ci batch-16 | scripts/gates.sh --wait-ci batch-16
