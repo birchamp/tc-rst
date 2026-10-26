@@ -142,3 +142,47 @@ fn read_sums(path: &Path) -> Result<BTreeMap<String, String>, String> {
     }
     Ok(sums)
 }
+
+/// `build_bundle` into `tmp/<name>-<run>`, once per test run. nextest runs each test in its own
+/// process (CHK-8), so a fixed folder that each process cleared and rebuilt was cleared under
+/// another's reads. The first process to rename its build into place wins; folders of earlier
+/// runs are removed. The build must install `installs` pins.
+#[cfg(test)]
+pub fn build_once_per_run(
+    tmp: &Path,
+    name: &str,
+    from: &Path,
+    wanted: &dyn Fn(&ResourcePin) -> bool,
+    installs: usize,
+) -> Result<std::path::PathBuf, String> {
+    let run = std::env::var("NEXTEST_RUN_ID").unwrap_or_else(|_| std::process::id().to_string());
+    let out = tmp.join(format!("{name}-{run}"));
+    if let Ok(entries) = fs::read_dir(tmp) {
+        for entry in entries.flatten() {
+            let file = entry.file_name().to_string_lossy().into_owned();
+            if file.starts_with(&format!("{name}-")) && !file.starts_with(&format!("{name}-{run}"))
+            {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    if out.is_dir() {
+        return Ok(out);
+    }
+    let mine = tmp.join(format!("{name}-{run}.{}", std::process::id()));
+    let _ = fs::remove_dir_all(&mine);
+    let built = build_bundle(from, &mine, wanted)?;
+    if built.installed.len() != installs {
+        return Err(format!("{installs} installs expected: {built:?}"));
+    }
+    match fs::rename(&mine, &out) {
+        Ok(()) => Ok(out),
+        // Another process of this run renamed its build first; a folder is never renamed onto
+        // one that is not empty.
+        Err(_) if out.is_dir() => {
+            let _ = fs::remove_dir_all(&mine);
+            Ok(out)
+        }
+        Err(e) => Err(format!("{}: {e}", out.display())),
+    }
+}
