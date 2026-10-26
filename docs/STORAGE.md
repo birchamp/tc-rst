@@ -3955,7 +3955,11 @@ lost race. This also splits the first push of a long local history. Each confirm
 progress that a dropped connection cannot undo, the report's `confirmed` names the last one, and
 the next sync continues from there. After three consecutive `sync.unreachable` failures of one
 chain (counted in `.tc/sync.json` `chainFailures`; saves between the tries do not reset it, a
-confirmed push does), the report's `offer_exchange` offers "Save an exchange file instead" (§10).
+confirmed push does), the report's `offer_exchange` offers "Save an exchange file instead" (§10). A push
+with no links counts only after a chain failed before it (the last commit, once every link went
+through). When the branch had been deleted on Door43 and a failed chain made it again with its
+first links, `.tc/sync.json` `putBackUnsaid` keeps the notice of owner ruling H5 for the next sync
+that gets through, which says it once.
 
 ### 9.6 Share (J11), join (J17) and connecting a project
 

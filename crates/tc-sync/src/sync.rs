@@ -487,7 +487,7 @@ impl Run<'_> {
         match result {
             Ok(restored) => {
                 // Said only once the push made the branch again (tC4 reports it after the push).
-                self.report.recreated = self.branch_gone;
+                self.report.recreated = self.branch_gone || self.put_back(None).await;
                 self.report.restored += restored;
                 SyncEvent::Pushed
             }
@@ -497,24 +497,48 @@ impl Run<'_> {
             }
             Err(Pushed::Raced) => SyncEvent::PushRaced,
             Err(Pushed::Failed(refusal)) => {
+                if self.branch_gone && chain.confirmed.is_some() {
+                    // A link made the branch again; this failed sync cannot say so.
+                    self.put_back(Some(true)).await;
+                }
                 if refusal == SyncRefusal::Unreachable
-                    && let Some(tip) = chain.tip.filter(|_| chain.links > 0)
+                    && let Some(tip) = chain.tip
                 {
-                    self.report.offer_exchange = self.chain_failed(tip.to_string()).await;
+                    self.report.offer_exchange =
+                        self.chain_failed(tip.to_string(), chain.links > 0).await;
                 }
                 SyncEvent::PushFailed(refusal)
             }
         }
     }
 
-    /// Counts a large push's failure for want of a connection in `.tc/sync.json`; `true` from
-    /// the third in a row. Saves made between the tries give the chain a new tip but leave it
-    /// the same push, so only a confirmed push starts the count again. A file that cannot be
-    /// written counts nothing.
-    async fn chain_failed(&self, tip: String) -> bool {
+    /// The mark of a branch put back that no report has said yet: `Some(true)` sets it, `None`
+    /// reads and clears it. A file that cannot be read or written holds no mark.
+    async fn put_back(&self, set: Option<bool>) -> bool {
         let Ok(Some(mut file)) = self.project.sync_file().await else {
             return false;
         };
+        let was = file.put_back_unsaid;
+        let now = set.unwrap_or(false);
+        if was != now {
+            file.put_back_unsaid = now;
+            let _ = self.project.set_sync_file(file).await;
+        }
+        was
+    }
+
+    /// Counts a large push's failure for want of a connection in `.tc/sync.json`; `true` from
+    /// the third in a row. Saves made between the tries give the chain a new tip but leave it
+    /// the same push, so only a confirmed push starts the count again. A push with no links
+    /// counts only as the rest of a chain that failed before: its last commit, after every link
+    /// went through. A file that cannot be written counts nothing.
+    async fn chain_failed(&self, tip: String, chained: bool) -> bool {
+        let Ok(Some(mut file)) = self.project.sync_file().await else {
+            return false;
+        };
+        if !chained && file.chain_failures.is_none() {
+            return false;
+        }
         let count = file
             .chain_failures
             .as_ref()

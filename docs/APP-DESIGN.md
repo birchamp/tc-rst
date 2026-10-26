@@ -529,6 +529,12 @@ changed", and the type cannot pair them with "after intake". *(A1: the first ske
 `{ refusal, after_intake: bool }`, could say "Nothing changed" and "received and kept" in one
 banner.)*
 
+Declared difference from tC4, which sends a sync in one push (PUSH-1): a sync whose new work
+passes 16 MiB sends it to Door43 as a chain of commits named "<subject>, part N", each pushed and
+read back, so a poor connection keeps what got through and the next sync goes on from there
+(STORAGE §9.5). A push in one piece could fail forever on such a link. Door43's history shows
+the extra commits; no screen of the app does.
+
 The UI builds a sentence the way tC4's `failureText` does: diagnosis, then the recovery sentence
 (`tC4:src/state.jsx:1781-1788`). "Ask for help" shows when the sentence contains `feedback.ask`
 (`tC4:src/state.jsx:1792-1793`).

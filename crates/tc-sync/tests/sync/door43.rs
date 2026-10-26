@@ -2037,3 +2037,42 @@ async fn a_sync_sends_again_what_door43_lost_and_never_counts_a_profile() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// §9.5 and owner ruling H5: the branch was deleted on Door43, and the large push that makes
+/// it again breaks after its first link. The failed sync cannot say "The project was missing
+/// from Door43, so tC4 put your copy back"; the next sync, which finds the branch there, says
+/// it once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_branch_put_back_by_a_broken_chain_is_said_by_the_next_sync() {
+    let door43 = door43("titus-back").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-back");
+    synced(&sync(&a, &door43).await);
+    ana.store.hooks().chain_after(1);
+    offline_days(&a, 2).await;
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-back")).unwrap();
+    bare.find_reference("refs/heads/main")
+        .unwrap()
+        .delete()
+        .unwrap();
+    door43.fake.inject(tc_door43_fake::FaultRule::nth(
+        "POST",
+        &format!("/{}/titus-back.git/git-receive-pack", seeded::USER),
+        2,
+        tc_door43_fake::Fault::BreakOff { after: 0 },
+    ));
+    let report = sync(&a, &door43).await;
+    assert!(matches!(report.ended, Ended::Failed(_)), "{report:?}");
+    assert!(
+        report.confirmed.is_some(),
+        "a link made the branch again: {report:?}"
+    );
+    let again = sync(&a, &door43).await;
+    synced(&again);
+    assert!(again.recreated, "{again:?}");
+    assert!(!sync(&a, &door43).await.recreated, "said once");
+    a.close().unwrap();
+}

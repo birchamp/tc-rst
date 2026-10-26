@@ -631,6 +631,10 @@ pub struct SyncFile {
     /// A large push (§9.5) that failed for want of a connection, until one confirms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain_failures: Option<ChainFailures>,
+    /// A sync put the deleted branch back on Door43 with the first links of a large push and
+    /// then failed (§9.5): the next sync that gets through says so (owner ruling H5).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub put_back_unsaid: bool,
 }
 
 /// §9.5: after three failures in a row of a large push, "Save an exchange file instead" (§10).

@@ -52,6 +52,7 @@ pub async fn connect(
             confirmed: None,
             username_device,
             chain_failures: None,
+            put_back_unsaid: false,
         })
         .await?;
     Ok(())

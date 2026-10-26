@@ -62,6 +62,7 @@ pub async fn join(
             confirmed: None,
             username_device: None,
             chain_failures: None,
+            put_back_unsaid: false,
         })
         .map_err(|e| JoinError::Io(e.to_string()))?;
         bytes.push(b'\n');
