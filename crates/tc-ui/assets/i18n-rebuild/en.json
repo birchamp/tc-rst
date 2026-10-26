@@ -7,6 +7,7 @@
   "align.unavailable.alignedInText.title": "This verse already holds its alignment",
   "check.markLookAgain": "This check was not saved: the check or its verse changed while you were looking. Look at it again, then mark it again. Nothing was lost.",
   "check.markNotSaved": "This check was not saved: {reason}. Mark it again to try again. Nothing was lost.",
+  "check.sort.byCategory": "By category",
   "drafts.offer.copyText": "Copy text",
   "drafts.offer.discard": "Discard",
   "drafts.offer.found": "Unsaved text from your last session was found for {place}.",
@@ -51,6 +52,7 @@
   "refusal.open.lock-held": "Another program is using this project (process {pid} on {host}). Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.lock-held-unnamed": "Another program is using this project. Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.newer-format": "This project was saved by a newer translationCore (project format {format}). Update translationCore, then open the project again. Nothing was changed.",
+  "refusal.share.already-shared": "This project is already on Door43. Use Sync with Door43 on its card. Nothing was created.",
   "review.by.door43": "Edited on Door43",
   "review.by.exchangeFile": "From a file of work",
   "review.by.import": "Imported",
@@ -174,6 +176,5 @@
   "upgrade.checkFailedServer": "Could not check for updates: Door43 did not answer properly. Try again later.",
   "upgrade.checkFailedUnreachable": "Could not check for updates: Door43 cannot be reached. Check the connection and try again.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
-  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code.",
-  "check.sort.byCategory": "By category"
+  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
 }

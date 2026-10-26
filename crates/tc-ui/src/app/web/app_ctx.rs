@@ -148,6 +148,18 @@ fn open_form(dialog: &mut Option<Dialog>) -> Option<&mut OpenForm> {
     }
 }
 
+/// The share form, also while the sign-in step covers its dialog: its run goes on after it.
+fn share_form(dialog: &mut Option<Dialog>) -> Option<&mut ShareForm> {
+    match dialog.as_mut()? {
+        Dialog::Share(sh) => Some(sh),
+        Dialog::SignIn { under } => match under.as_deref_mut()? {
+            Dialog::Share(sh) => Some(sh),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 impl Dialog {
     pub fn kind(&self) -> DialogKind {
         match self {
@@ -221,6 +233,8 @@ pub struct AppState {
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
     /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
     pub commit_error: ArcRwSignal<Option<HomeBanner>>,
+    /// The person closed Home's word on work this launch's start removed (`StartNotice`).
+    pub start_notice_closed: ArcRwSignal<bool>,
     /// The project a sync runs for (tC4 `syncing`).
     pub syncing: ArcRwSignal<Option<ProjectRef>>,
     /// The result of the last sync, which Home shows (tC4 `syncResult`). Never stored.
@@ -402,6 +416,7 @@ impl AppState {
             gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
             book_error: ArcRwSignal::new(None),
             commit_error: ArcRwSignal::new(None),
+            start_notice_closed: ArcRwSignal::new(false),
             syncing: ArcRwSignal::new(None),
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
@@ -1368,7 +1383,7 @@ impl Actions {
 
     pub fn patch_sh(&self, patch: impl FnOnce(&mut ShareForm)) {
         self.s().layers.dialog.try_update(|dialog| {
-            if let Some(Dialog::Share(sh)) = dialog {
+            if let Some(sh) = share_form(dialog) {
                 patch(sh);
             }
         });
@@ -1401,9 +1416,9 @@ impl Actions {
     /// The run of the form as it stands: `door43/share`, its progress lines, then the done step
     /// or the refusal on the check step. The answer goes to this dialog's form only.
     fn share_run_now(&self) {
-        let form = self.s().layers.dialog.try_update(|dialog| match dialog {
-            Some(Dialog::Share(sh)) => sh.run().map(|run| (sh.project.project.clone(), run)),
-            _ => None,
+        let form = self.s().layers.dialog.try_update(|dialog| {
+            let sh = share_form(dialog)?;
+            sh.run().map(|run| (sh.project.project.clone(), run))
         });
         let Some(Some((project, (attempt, owner, name)))) = form else {
             self.drop_pending(Pending::ShareRun);
@@ -1464,9 +1479,13 @@ impl Actions {
                     None => this.patch_sh(|sh| sh.interrupted(js::random_request_id())),
                     Some(ApiError::Refused(refusal)) => {
                         let text = crate::i18n::refusal_text(&refusal);
-                        this.patch_sh(|sh| {
-                            sh.refused(refusal.code(), text, js::random_request_id())
-                        });
+                        let next = js::random_request_id();
+                        // A sync's refusal comes from the push, after the repository was made.
+                        if matches!(refusal, tc_api::Refusal::Sync(_)) {
+                            this.patch_sh(|sh| sh.push_refused(refusal.code(), text, next));
+                        } else {
+                            this.patch_sh(|sh| sh.refused(refusal.code(), text, next));
+                        }
                     }
                     Some(other) => {
                         let text = other.to_string();

@@ -375,11 +375,6 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
       if (realSync) return door43.branch(DOOR43_TEAM, door43Repo(repo), 'master', before.get(segment));
       return scriptSync(repo, synced({ restored: 1 }));
     },
-    // With `realSync`, nothing to do: the fake holds no such repository, so the open fails.
-    door43Lacks: () => (realSync ? Promise.resolve() : call('test/script', {
-      request: newRequestId(),
-      next: { type: 'openDoor43Fails', value: { type: 'beforeIntake', value: { type: 'remoteMissing' } } },
-    })),
     refused: () => [...refused],
     /** tc4 is still running: a journey can quit it or crash it on purpose. */
     alive: () => child.exitCode === null && child.signalCode === null,

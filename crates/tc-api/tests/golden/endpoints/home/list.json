@@ -135,7 +135,10 @@
         "mode": "draft",
         "tool": null,
         "snippet": "Pablo, siervo de Dios"
-      }
+      },
+      "notices": [
+        "openDoor43Removed"
+      ]
     }
   },
   "error": {

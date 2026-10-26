@@ -1,7 +1,7 @@
 //! The real sync port (E1a): sync and open from Door43 through unit X's `tc-sync`.
 
 use tc_api::door43::{ProjectName, RepoName, RepoSource, ShareOwner, SharedRepo};
-use tc_api::error::{ApiError, Feature};
+use tc_api::error::ApiError;
 use tc_api::ids::ProjectRef;
 use tc_api::jobs::SyncResultView;
 
@@ -19,13 +19,13 @@ impl SyncPort for Door43Sync {
 
     fn share(
         &self,
-        _app: App,
-        _folder: ProjectRef,
-        _owner: ShareOwner,
-        _name: RepoName,
-        _progress: ProgressSink,
+        app: App,
+        folder: ProjectRef,
+        owner: ShareOwner,
+        name: RepoName,
+        progress: ProgressSink,
     ) -> BoxFuture<Result<SharedRepo, JobEnd>> {
-        Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync))) })
+        Box::pin(async move { app.door43_share(folder, owner, name, progress).await })
     }
 
     fn open(

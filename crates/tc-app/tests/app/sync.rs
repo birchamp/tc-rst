@@ -55,11 +55,16 @@ pub(super) async fn shared() -> World {
 
 /// [`shared`] on another sync port than the tests' scripted one.
 pub(super) async fn shared_with(port: Option<Arc<dyn tc_app::ports::SyncPort>>) -> World {
+    world_of("shared", port).await
+}
+
+/// The world over `name`'s scenario.
+pub(super) async fn world_of(name: &str, port: Option<Arc<dyn tc_app::ports::SyncPort>>) -> World {
     let fake = FakeDoor43::start().await.unwrap();
     tc_door43_fake::seeded::parity_account(&fake).await.unwrap();
     let fs = FaultFs::new();
     let (backend, watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
-    let state = scenario("shared");
+    let state = scenario(name);
     let (store, _) = ScenarioStore::write(backend, state).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();

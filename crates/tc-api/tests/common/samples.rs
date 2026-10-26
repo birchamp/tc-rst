@@ -126,6 +126,7 @@ pub fn sync() -> Vec<SyncFailure> {
 pub fn share() -> Vec<ShareRefusal> {
     vec![
         ShareRefusal::NameExists,
+        ShareRefusal::AlreadyShared,
         ShareRefusal::Offline,
         ShareRefusal::AuthFailed,
         ShareRefusal::CreateRejected {

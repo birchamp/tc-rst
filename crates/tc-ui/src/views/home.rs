@@ -13,10 +13,11 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::home::{
-    Card as CardRead, Door43Card, HomeCard, HomeView, LastEditView, List, ProjectKind,
+    Card as CardRead, Door43Card, HomeCard, HomeView, LastEditView, List, ProjectKind, StartNotice,
     StoryTileView, UnusableCard,
 };
 use tc_api::ids::ProjectRef;
+use tc_api::refusal::OpenDoor43Refusal;
 use tc_api::shown::{Direction, Known};
 use wasm_bindgen::JsValue;
 
@@ -34,7 +35,7 @@ use crate::ds::{
     Badge, BadgeSize, BadgeTone, BookTile, Button, ButtonVariant, Callout, CalloutTone, Card,
     Overline, Size, Toast, ToastTone,
 };
-use crate::i18n::{keys, t};
+use crate::i18n::{keys, refusal_text, t};
 use crate::views::sync_result::SyncResult;
 
 fn dir_str(dir: Direction) -> &'static str {
@@ -208,6 +209,31 @@ fn banners(
             })
         }
     };
+    let removed = {
+        let (closed, style) = (s.start_notice_closed.clone(), banner_style.clone());
+        move || {
+            let shown = list.with(|l| {
+                l.value()
+                    .is_some_and(|v| v.notices.contains(&StartNotice::OpenDoor43Removed))
+            });
+            (shown && !closed.get()).then(|| {
+                let closed = closed.clone();
+                view! {
+                    <Callout tone=CalloutTone::Warn style=style.clone() attrs=Attrs::from([("role", "status"), ("data-testid", "home-open-removed")])>
+                        {move || refusal_text(&OpenDoor43Refusal::Removed)}" "
+                        <Button
+                            size=Size::Sm
+                            variant=ButtonVariant::Outline
+                            attrs=Attrs::from([("data-testid", "home-open-removed-close")])
+                            on_click=Callback::new(move |_| closed.set(true))
+                        >
+                            {move || t(keys::common::CLOSE, &[])}
+                        </Button>
+                    </Callout>
+                }
+            })
+        }
+    };
     let open = {
         let (error, actions, style) = (s.book_error.clone(), actions.clone(), banner_style);
         move || {
@@ -240,7 +266,7 @@ fn banners(
             })
         }
     };
-    view! { {commit} {open} }
+    view! { {commit} {removed} {open} }
 }
 
 /// "Ask for help" on a banner (tC4 #378).

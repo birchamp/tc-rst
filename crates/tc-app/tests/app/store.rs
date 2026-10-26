@@ -456,3 +456,40 @@ async fn the_open_refuses_a_name_any_entry_of_the_projects_folder_has() {
     let home = post(&t.app, &tc_api::home::List {}).await.unwrap();
     assert_eq!(home.others, ["Notes", "afile", "empty"]);
 }
+
+/// INV-A-HALF-JOIN-NEVER-SITS-AT-THE-PROJECT-NAME: an open from Door43 that `tc4` did not
+/// finish left only its staging folder; the next start removes it, Home says so in that launch,
+/// and the launch after says nothing.
+#[tokio::test]
+async fn a_join_cut_short_is_removed_and_home_says_so_once() {
+    use tc_api::home::{HomeView, List, StartNotice};
+    let disk = OnDisk::new();
+    make_project(&disk.app_data(), &disk.projects, "titus_on_disk");
+    let join = disk.projects.join(".staging-join-feedfacefeedface");
+    std::fs::create_dir_all(join.join("ingredients")).unwrap();
+    std::fs::write(join.join("ingredients/TIT.usfm"), b"\\id TIT\n").unwrap();
+    let first = disk.start().await;
+    let view: HomeView = post(&first.app, &List {}).await.unwrap();
+    assert_eq!(
+        view.notices,
+        vec![StartNotice::OpenDoor43Removed],
+        "INV-A-HALF-JOIN-NEVER-SITS-AT-THE-PROJECT-NAME: Home says the open was removed"
+    );
+    assert!(!join.exists(), "the part copy is gone");
+    assert_eq!(
+        view.cards
+            .iter()
+            .map(|c| c.project.as_str())
+            .collect::<Vec<_>>(),
+        ["titus_on_disk"],
+        "no half project is listed"
+    );
+    drop(first);
+    let next = disk.start().await;
+    let view: HomeView = post(&next.app, &List {}).await.unwrap();
+    assert_eq!(
+        view.notices,
+        Vec::new(),
+        "INV-A-HALF-JOIN-NEVER-SITS-AT-THE-PROJECT-NAME: the next launch says nothing"
+    );
+}

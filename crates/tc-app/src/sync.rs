@@ -377,10 +377,7 @@ impl Handle<tc_api::test::Script> for App {
     async fn handle(&self, req: tc_api::test::Script) -> Result<(), ApiError> {
         use tc_api::test::Scripted;
         self.hooks()?;
-        let scripts_door43 = matches!(
-            req.next,
-            Scripted::OpenDoor43Fails(_) | Scripted::Sync { .. }
-        );
+        let scripts_door43 = matches!(req.next, Scripted::Sync { .. });
         if scripts_door43 && self.scripted_sync_port().is_none() {
             return Err(ApiError::BadRequest {
                 field: "next".to_owned(),
@@ -388,9 +385,6 @@ impl Handle<tc_api::test::Script> for App {
             });
         }
         match req.next {
-            Scripted::OpenDoor43Fails(failure) => {
-                self.script_open_door43(Err(ApiError::Refused(tc_api::Refusal::Sync(failure))))
-            }
             Scripted::Sync { project, outcome } => self.script_sync(project, outcome),
             next @ (Scripted::Updates(_) | Scripted::Plan(_)) => {
                 self.inner.scripted_resources.script(next);

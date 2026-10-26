@@ -373,6 +373,22 @@ fn share_sends_one_request_per_attempt_and_shows_each_progress_line() {
         vec![SharePhase::Create, SharePhase::Push],
         "the done step keeps the lines"
     );
+    let mut quick = on_check();
+    quick.run().unwrap();
+    quick.progress(SharePhase::Push);
+    assert_eq!(
+        quick.shown,
+        vec![SharePhase::Create, SharePhase::Push],
+        "a create no report showed is a line too"
+    );
+    let mut unseen = on_check();
+    unseen.run().unwrap();
+    unseen.shared(shared_repo());
+    assert_eq!(
+        unseen.shown,
+        vec![SharePhase::Create, SharePhase::Push],
+        "a share that ended before any report showed went through both steps"
+    );
     form.go(ShareStep::Check);
     assert_eq!(
         form.step,
@@ -444,4 +460,24 @@ fn the_done_step_names_team_access_for_every_project() {
 #[test]
 fn the_run_asks_the_share_question() {
     assert_eq!(Pending::ShareRun.kind(), NetKind::Share);
+}
+
+#[test]
+fn a_push_refused_after_the_repository_was_made_never_offers_a_second_share() {
+    let mut form = on_check();
+    form.run().unwrap();
+    form.progress(SharePhase::Push);
+    form.push_refused(
+        Some("sync.unreachable"),
+        "Door43 cannot be reached.".into(),
+        rid(8),
+    );
+    assert_eq!(form.step, ShareStep::Check);
+    assert!(form.error.is_some(), "the sync's sentence shows");
+    form.type_name("another_name".into(), rid(9));
+    assert!(
+        !form.can_submit(),
+        "another name would move the project to a second repository"
+    );
+    assert_eq!(form.run(), None);
 }

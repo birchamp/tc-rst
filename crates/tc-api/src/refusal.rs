@@ -546,6 +546,9 @@ impl Message for SyncFailure {
 )]
 pub enum ShareRefusal {
     NameExists,
+    /// The project is already connected to a Door43 repository: a second share would move it
+    /// to another one (a second tab's dialog, or a resend after a lost reply).
+    AlreadyShared,
     Offline,
     AuthFailed,
     CreateRejected {
@@ -562,6 +565,7 @@ impl Message for ShareRefusal {
     fn code(&self) -> Option<&'static str> {
         Some(match self {
             Self::NameExists => "share.name-exists",
+            Self::AlreadyShared => "share.already-shared",
             Self::Offline => "share.offline",
             Self::AuthFailed => "share.auth-failed",
             Self::CreateRejected { .. } => "share.create-rejected",
@@ -571,6 +575,7 @@ impl Message for ShareRefusal {
     fn key(&self) -> &'static str {
         match self {
             Self::NameExists => "shareDialog.error.name-exists",
+            Self::AlreadyShared => "refusal.share.already-shared",
             Self::Offline => "shareDialog.error.offline",
             Self::AuthFailed => "shareDialog.error.auth-failed",
             Self::CreateRejected { .. } => "shareDialog.error.create-rejected",
@@ -580,9 +585,11 @@ impl Message for ShareRefusal {
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::PushFailed { reason } => vec![("reason", reason.clone())],
-            Self::NameExists | Self::Offline | Self::AuthFailed | Self::CreateRejected { .. } => {
-                Vec::new()
-            }
+            Self::NameExists
+            | Self::AlreadyShared
+            | Self::Offline
+            | Self::AuthFailed
+            | Self::CreateRejected { .. } => Vec::new(),
         }
     }
 }

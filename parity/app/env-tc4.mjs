@@ -192,7 +192,6 @@ export async function startTc4Env({ scenario, port }) {
       for (let dir = path.dirname(segment); dir !== journal && fs.readdirSync(dir).length === 0; dir = path.dirname(dir)) fs.rmdirSync(dir);
     },
     /** The mock's Door43 holds only the repositories the scenario pushes. */
-    door43Lacks: () => {},
     /** A mark in the mock's request log, for `absentReads`. */
     requestMark: () => mock.requests.length,
     /** The reads since `mark` that came back absent (HTTP 400 and up), journal reads left out,

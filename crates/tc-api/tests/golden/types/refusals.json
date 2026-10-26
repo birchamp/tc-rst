@@ -715,6 +715,18 @@
     "wire": {
       "type": "share",
       "value": {
+        "type": "alreadyShared"
+      }
+    },
+    "code": "share.already-shared",
+    "key": "refusal.share.already-shared",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
         "type": "offline"
       }
     },

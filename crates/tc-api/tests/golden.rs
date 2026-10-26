@@ -68,7 +68,8 @@ use tc_api::helps::{
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
     LanguagesView, LastEditView, List, ProjectKind, RecentStory, RepoPlace, ResumePlace,
-    StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
+    StartNotice, StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications,
+    VersificationsView,
 };
 use tc_api::ids::{
     AlignerId, ChangeRef, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId,
@@ -1571,6 +1572,7 @@ impl Example for HomeView {
                 tool: None,
                 snippet: "Pablo, siervo de Dios".into(),
             }),
+            notices: vec![StartNotice::OpenDoor43Removed],
         }
     }
 }

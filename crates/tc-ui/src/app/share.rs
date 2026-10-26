@@ -111,6 +111,10 @@ pub struct ShareForm {
     pub error: Option<ShareProblem>,
     /// Copy link put the address on the clipboard: its label says Copied.
     pub copied: bool,
+    /// The repository was made and the project connected to it, but the push did not finish:
+    /// Share stays off, since another name would move the project to a second repository;
+    /// the card's Sync sends the work.
+    pub created: bool,
 }
 
 /// Whether Door43 accepts `name` as a repository name (tC4's `nameOk`): letters, digits, dots,
@@ -133,6 +137,7 @@ impl ShareForm {
             shown: Vec::new(),
             error: None,
             copied: false,
+            created: false,
         }
     }
 
@@ -175,7 +180,7 @@ impl ShareForm {
 
     /// Share needs a name Door43 accepts, and no run in flight.
     pub fn can_submit(&self) -> bool {
-        name_ok(&self.name) && !self.submit.busy()
+        name_ok(&self.name) && !self.submit.busy() && !self.created
     }
 
     /// The name field shows itself invalid once it holds something Door43 would refuse.
@@ -193,7 +198,7 @@ impl ShareForm {
     /// Share on the check step (`shareRun`): the request to send, with the run on its first
     /// progress line; `None` when Share is off or its request is in flight.
     pub fn run(&mut self) -> Option<(RequestId, ShareOwner, RepoName)> {
-        if self.step != ShareStep::Check {
+        if self.step != ShareStep::Check || self.created {
             return None;
         }
         let name = RepoName::parse(&self.name).ok()?;
@@ -208,12 +213,17 @@ impl ShareForm {
         Some((request, owner, name))
     }
 
-    /// The run reached `phase`: its line shows, and joins the lines shown.
+    /// The run reached `phase`: its line shows, and joins the lines shown. A push comes only
+    /// after the repository was made, so a create too short for a progress report to show is
+    /// still one of the lines.
     pub fn progress(&mut self, phase: SharePhase) {
         if !matches!(self.step, ShareStep::Running(now) if now != phase) {
             return;
         }
         self.step = ShareStep::Running(phase);
+        if phase == SharePhase::Push && !self.shown.contains(&SharePhase::Create) {
+            self.shown.push(SharePhase::Create);
+        }
         if phase != SharePhase::Preparing {
             self.shown.push(phase);
         }
@@ -224,6 +234,12 @@ impl ShareForm {
         if matches!(self.step, ShareStep::Running(_)) {
             self.submit.answered();
             self.step = ShareStep::Done(repo);
+            // A share Door43 took went through both steps, shown or too short to show.
+            for phase in [SharePhase::Create, SharePhase::Push] {
+                if !self.shown.contains(&phase) {
+                    self.shown.push(phase);
+                }
+            }
         }
     }
 
@@ -236,6 +252,13 @@ impl ShareForm {
             code: code.map(str::to_owned),
             text,
         });
+    }
+
+    /// The repository was made, and the push after it was refused: the sync's sentence on the
+    /// check step, with Share off for good.
+    pub fn push_refused(&mut self, code: Option<&str>, text: String, next: RequestId) {
+        self.refused(code, text, next);
+        self.created = true;
     }
 
     /// The internet question or the sign-in step took over, or the run ended without a word:

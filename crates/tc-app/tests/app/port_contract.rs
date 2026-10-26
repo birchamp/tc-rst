@@ -3,7 +3,11 @@
 //! project's card. The scripted port runs it here; E1a adds the real port's invocation.
 
 use tc_api::ApiError;
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
+use tc_api::account::WebUrl;
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    SyncProject,
+};
 use tc_api::editor::SaveVerse;
 use tc_api::endpoint::NetKind;
 use tc_api::home::{HomeView, List};
@@ -22,7 +26,7 @@ use tc_journal::record::VerseValue;
 
 use super::common::{folder, open_progress, post, rid, tit, until};
 use super::sync::{
-    World, card_with_counts, internet_on, script, shared, shared_with, sign_in, synced,
+    World, card_with_counts, internet_on, script, shared, shared_with, sign_in, synced, world_of,
 };
 use std::sync::Arc;
 use tc_door43_fake::{Fault, FaultRule, RepoSeed};
@@ -53,6 +57,13 @@ pub(super) trait SyncPortFixture {
     /// Whether Door43's copy of the sample holds `words` at Titus 1:1; `None` for a port with
     /// no Door43 behind it.
     async fn door43_holds(w: &World, words: &str) -> Option<bool>;
+    /// A world whose sample is not on Door43 yet, for a first share.
+    async fn share_world() -> World;
+    /// The next share of `project` as `name` succeeds; the repository it ends with.
+    async fn share_succeeds(w: &World, project: &ProjectRef, name: &str) -> SharedRepo;
+    /// Whether Door43's `name`, opened on this computer as a new project, holds `words` at
+    /// Titus 1:1; `None` for a port with no Door43 behind it.
+    async fn shared_holds(w: &World, name: &str, words: &str) -> Option<bool>;
 }
 
 /// A project of the `shared` scenario that tells stories (#761).
@@ -84,6 +95,27 @@ async fn save_titus_1_1(app: &App, project: &ProjectRef, n: u8, words: &str) {
 
 /// Titus 1:`verse` of `project`, opened for the screens, saved as `words`; then closed.
 async fn save_titus(app: &App, project: &ProjectRef, verse: u16, n: u8, words: &str) {
+    let at = save_titus_open(app, project, verse, n, words).await;
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(n.wrapping_add(1)),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+/// Titus 1:`verse` of `project` saved as `words`, the project left open for the screens: the
+/// save is in its journal and not yet in a commit.
+async fn save_titus_open(
+    app: &App,
+    project: &ProjectRef,
+    verse: u16,
+    n: u8,
+    words: &str,
+) -> tc_api::ids::Scope {
     let at = app
         .sessions()
         .open_screen(project, open_progress())
@@ -109,15 +141,7 @@ async fn save_titus(app: &App, project: &ProjectRef, verse: u16, n: u8, words: &
     .await
     .unwrap();
     assert_eq!(ack.stored, Stored::Written);
-    post(
-        app,
-        &Close {
-            at,
-            request: rid(n.wrapping_add(1)),
-        },
-    )
-    .await
-    .unwrap();
+    at
 }
 
 /// Titus 1:1's words in `project`, as the project holds them now.
@@ -207,6 +231,47 @@ impl SyncPortFixture for Scripted {
     async fn door43_holds(_w: &World, _words: &str) -> Option<bool> {
         None
     }
+
+    async fn share_world() -> World {
+        world_of("sample", None).await
+    }
+
+    async fn share_succeeds(w: &World, _project: &ProjectRef, name: &str) -> SharedRepo {
+        let repo = SharedRepo {
+            repo: RepoSource::new(PARITY_USER, name).unwrap(),
+            url: WebUrl::parse(&format!("https://git.door43.org/{PARITY_USER}/{name}")).unwrap(),
+        };
+        w.t.app.script_share(Ok(repo.clone()));
+        repo
+    }
+
+    async fn shared_holds(_w: &World, _name: &str, _words: &str) -> Option<bool> {
+        None
+    }
+}
+
+pub(super) fn share(n: u8, project: &ProjectRef, name: &str) -> ShareOnDoor43 {
+    ShareOnDoor43 {
+        request: rid(n),
+        project: project.clone(),
+        owner: ShareOwner::Mine,
+        name: RepoName::parse(name).unwrap(),
+    }
+}
+
+/// Door43's `repo` of the parity user opened here as the new project `name`.
+async fn open_shared(app: &App, n: u8, repo: &str, name: &str) -> JobState {
+    let job = post(
+        app,
+        &OpenDoor43 {
+            request: rid(n),
+            repo: RepoSource::new(PARITY_USER, repo).unwrap(),
+            name: ProjectName::parse(name).unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    ended(app, job).await
 }
 
 pub(super) fn sync(n: u8) -> SyncProject {
@@ -282,6 +347,61 @@ macro_rules! sync_port_contract {
                         assert!(listed(app).await.contains(&added), "{added:?} is listed");
                     }
                     other => panic!("{other:?}"),
+                }
+            }
+
+            /// #677: a project opened from Door43 on another computer holds what Door43's main
+            /// holds, the last sync's text included.
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn open_from_door43_equals_main() {
+                let w = <$fixture>::world().await;
+                let app = &w.t.app;
+                internet_on(app).await;
+                sign_in(app).await;
+                let words = "Pablo, siervo, como Door43 lo tiene";
+                save_titus_1_1(app, &folder(SAMPLE), 50, words).await;
+                <$fixture>::sync_succeeds(&w, &folder(SAMPLE), 51).await;
+                let job = post(app, &sync(52)).await.unwrap();
+                assert!(
+                    matches!(ended(app, job).await, JobState::Done(_)),
+                    "the sync took the text to Door43"
+                );
+                if let Some(holds) = <$fixture>::door43_holds(&w, words).await {
+                    assert!(holds, "the project opened from Door43 holds main's text");
+                }
+            }
+
+            /// INV-SHARE-PUSHES-WHAT-THE-TRANSLATOR-SAW: a save made just before Share is in
+            /// the main Door43 holds after it.
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn share_pushes_the_checkpointed_main() {
+                let w = <$fixture>::share_world().await;
+                let app = &w.t.app;
+                internet_on(app).await;
+                sign_in(app).await;
+                let project = folder(SAMPLE);
+                // The translator shares from Home with the project still open in the screens.
+                let at =
+                    save_titus_open(app, &project, 1, 30, "Pablo, siervo, antes de compartir")
+                        .await;
+                let expected = <$fixture>::share_succeeds(&w, &project, "contract-share").await;
+                let job = post(app, &share(31, &project, "contract-share")).await.unwrap();
+                assert_eq!(
+                    ended(app, job).await,
+                    JobState::Done(tc_api::jobs::JobOutcome::Shared(expected))
+                );
+                post(app, &Close { at, request: rid(33) }).await.unwrap();
+                if let Some(holds) = <$fixture>::shared_holds(
+                    &w,
+                    "contract-share",
+                    "Pablo, siervo, antes de compartir",
+                )
+                .await
+                {
+                    assert!(
+                        holds,
+                        "INV-SHARE-PUSHES-WHAT-THE-TRANSLATOR-SAW: Door43's main lacks the save made before Share"
+                    );
                 }
             }
 
@@ -486,6 +606,29 @@ impl SyncPortFixture for Door43 {
         let app = &w.t.app;
         let job = post(app, &open(20, "door43-copy")).await.unwrap();
         let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(app, job).await
+        else {
+            return Some(false);
+        };
+        Some(titus_1_1(app, &project).await.as_deref() == Some(words))
+    }
+
+    async fn share_world() -> World {
+        let w = world_of("sample", Some(Arc::new(tc_app::ports::door43::Door43Sync))).await;
+        w.fake.clear_requests();
+        w
+    }
+
+    async fn share_succeeds(w: &World, _project: &ProjectRef, name: &str) -> SharedRepo {
+        SharedRepo {
+            repo: RepoSource::new(PARITY_USER, name).unwrap(),
+            url: WebUrl::parse(&format!("{}/{PARITY_USER}/{name}", w.fake.url())).unwrap(),
+        }
+    }
+
+    async fn shared_holds(w: &World, name: &str, words: &str) -> Option<bool> {
+        let app = &w.t.app;
+        let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) =
+            open_shared(app, 32, name, "shared-copy").await
         else {
             return Some(false);
         };
@@ -798,5 +941,169 @@ async fn the_first_sync_sends_the_username_at_once() {
         name.as_deref(),
         Some(PARITY_USER),
         "Door43 has the name after one sync"
+    );
+}
+
+/// Door43's requests that would write a repository: a create or a push.
+fn writes(w: &World) -> Vec<String> {
+    w.fake
+        .requests()
+        .into_iter()
+        .map(|r| format!("{} {}", r.method, r.path))
+        .filter(|r| r.starts_with("POST /api/v1/user/repos") || r.contains("git-receive-pack"))
+        .collect()
+}
+
+/// tC4 RISKS #7: a repository of that name on Door43 (a tC3-era one included) is never pushed
+/// over; the share is refused before any push and the project stays unshared.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn share_name_taken_on_door43_is_refused_before_any_push() {
+    let w = Door43::share_world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    w.fake
+        .add_repo(RepoSeed {
+            owner: PARITY_USER.to_owned(),
+            name: "tc3-era".to_owned(),
+            subject: "Bible".to_owned(),
+            language: "es-419".to_owned(),
+            topics: Vec::new(),
+            private: false,
+            commits: Vec::new(),
+        })
+        .await
+        .unwrap();
+    w.fake.clear_requests();
+    let job = post(app, &share(40, &folder(SAMPLE), "tc3-era"))
+        .await
+        .unwrap();
+    assert_eq!(
+        ended(app, job).await,
+        JobState::Failed(ApiError::Refused(Refusal::Share(
+            tc_api::refusal::ShareRefusal::NameExists
+        )))
+    );
+    assert!(
+        !writes(&w).iter().any(|r| r.contains("git-receive-pack")),
+        "nothing was pushed: {:?}",
+        writes(&w)
+    );
+}
+
+/// INV-PRIVATE-OPEN-ASKS-SIGN-IN-ONCE: an open of a private repository without a sign-in asks
+/// it once, and the open after the sign-in gets the project; a 401 or 404 with a sign-in is
+/// the refusal, never a second ask.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn open_private_repo_signs_in_and_retries() {
+    let w = Door43::share_world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    // A private repository that holds the sample: made empty, then filled by a sync.
+    w.fake
+        .add_repo(RepoSeed {
+            owner: PARITY_USER.to_owned(),
+            name: "privado".to_owned(),
+            subject: "Bible".to_owned(),
+            language: "es-419".to_owned(),
+            topics: Vec::new(),
+            private: true,
+            commits: Vec::new(),
+        })
+        .await
+        .unwrap();
+    app.connect_door43(&folder(SAMPLE), PARITY_USER, "privado", "master")
+        .await
+        .unwrap();
+    synced(app, 41).await;
+    post(app, &tc_api::account::SignOut { request: rid(42) })
+        .await
+        .unwrap();
+    w.fake.clear_requests();
+    let job = post(
+        app,
+        &OpenDoor43 {
+            request: rid(43),
+            repo: RepoSource::new(PARITY_USER, "privado").unwrap(),
+            name: ProjectName::parse("privado-aqui").unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        ended(app, job).await,
+        JobState::Failed(ApiError::NeedsSignIn(
+            tc_api::error::SignInReason::NotSignedIn
+        )),
+        "without a sign-in Door43 hides the repository: the open asks for one"
+    );
+    assert!(
+        w.fake
+            .requests()
+            .iter()
+            .all(|r| r.authorization == tc_door43_fake::AuthSeen::None),
+        "the first try carried no token"
+    );
+    sign_in_again(app, 47).await;
+    let after = open_shared(app, 44, "privado", "privado-aqui").await;
+    assert!(
+        matches!(
+            after,
+            JobState::Done(tc_api::jobs::JobOutcome::Created { .. })
+        ),
+        "the open after the sign-in gets the project: {after:?}"
+    );
+    assert_eq!(
+        open_shared(app, 45, "no-such-repo", "nada").await,
+        JobState::Failed(ApiError::Refused(Refusal::Sync(SyncFailure::BeforeIntake(
+            SyncRefusal::RemoteMissing
+        )))),
+        "INV-PRIVATE-OPEN-ASKS-SIGN-IN-ONCE: a 404 with a sign-in is the refusal, not a second ask"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn open_name_in_use_refused_before_request() {
+    let w = Door43::share_world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    w.fake.clear_requests();
+    assert_eq!(
+        post(
+            app,
+            &OpenDoor43 {
+                request: rid(46),
+                repo: RepoSource::new(PARITY_USER, "anything").unwrap(),
+                name: ProjectName::parse("SAMPLE_burrito").unwrap(),
+            },
+        )
+        .await,
+        Err(ApiError::Refused(Refusal::OpenDoor43(
+            OpenDoor43Refusal::NameExists
+        )))
+    );
+    assert_eq!(w.fake.requests(), Vec::new(), "Door43 was asked nothing");
+}
+
+/// A project already on Door43 is never shared again: a second tab's dialog, or a resend with
+/// a changed name after a lost reply, would move it to another repository.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_shared_project_is_never_shared_to_a_second_repository() {
+    let w = Door43::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    assert_eq!(
+        post(app, &share(60, &folder(SAMPLE), "a-second-repository")).await,
+        Err(ApiError::Refused(Refusal::Share(
+            tc_api::refusal::ShareRefusal::AlreadyShared
+        )))
+    );
+    assert_eq!(
+        writes(&w),
+        Vec::<String>::new(),
+        "nothing was created or pushed"
     );
 }

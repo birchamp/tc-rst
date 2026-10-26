@@ -50,6 +50,7 @@
   "refusal.open.lock-held",
   "refusal.open.lock-held-unnamed",
   "refusal.open.newer-format",
+  "refusal.share.already-shared",
   "review.by.door43",
   "review.by.exchangeFile",
   "review.by.import",

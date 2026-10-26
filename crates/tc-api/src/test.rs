@@ -396,9 +396,6 @@ pub struct Script {
     deny_unknown_fields
 )]
 pub enum Scripted {
-    /// A `door43/open` fails so, as a clone from Door43 fails (tC4 refuses an open with the
-    /// sync's codes). Scripted opens wait in order.
-    OpenDoor43Fails(crate::refusal::SyncFailure),
     /// The next `door43/sync` of `project` ends so, whatever was scripted for it before: a
     /// test scripts what Door43 holds now.
     Sync {

@@ -8,9 +8,9 @@
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/share-open.test.mjs
 //
-// Not here, with the unit that takes them: the share's run, its progress and its end with "Open on
-// Door43" (internet-consent d's second half, E1b), and the open's copy from Door43 (X, E1b): until
-// then the open ends in its refusal, which the last case shows.
+// The share's run, its progress and its end, with internet-consent d's second half (Open on
+// Door43 opens at once), are share.test.mjs's J11 1 (E1b); the open of a repository
+// is open-door43.test.mjs's. The last case here opens one the fake Door43 does not hold.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -126,7 +126,7 @@ browserTest('internet-consent d, J11 2. Share: the sign-in, then where it goes w
   }, { ...opts, init: (context) => countAsks(context) });
 });
 
-browserTest('Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; the open ends in its refusal, and no project was added', async () => {
+browserTest('Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added', async () => {
   await withApp(async ({ page, env }) => {
     await env.door43.clear();
     await page.getByTestId('add-project').click();
@@ -163,18 +163,22 @@ browserTest('Open a project from Door43: the name follows the repository; a name
     assert.deepEqual(await apiRequests(env.door43), [], 'Not now sends nothing');
     assert.equal(await submit.textContent(), en['openDoor43.open']);
     assert.ok(!(await page.getByTestId('open-door43-name').isDisabled()), 'the form can be changed again');
-    // Turn on internet: the open runs; until unit X it ends in its refusal, in the dialog.
+    // Turn on internet: Door43 shows no such repository to a request without a sign-in, which
+    // may be a private one, so the sign-in step asks once; with it, the open ends in its refusal.
     await submit.click();
     await page.getByTestId('net-confirm').click();
+    await page.getByTestId('share-signin').waitFor();
+    await signInHere(page);
     const refused = page.getByTestId('open-door43-refused');
     await refused.waitFor();
+    assert.equal(await page.getByTestId('share-signin').count(), 0, 'INV-PRIVATE-OPEN-ASKS-SIGN-IN-ONCE: no second ask');
     const words = await refused.textContent();
     assert.ok(words.includes(rebuild['openDoor43.refused.notOpened']), words);
     assert.ok(words.includes(en['openDoor43.nothingWritten']));
     assert.ok(!words.includes('public'), 'the sentence does not ask for a public repository (Q-21)');
-    assert.equal(await refused.getAttribute('data-code'), '');
+    assert.equal(await refused.getAttribute('data-code'), 'sync.clone-failed', 'tC4\'s code for a clone that failed');
     assert.equal(await page.getByTestId(`project-${'titus_equipo'}`).count(), 0, 'no project was added');
     await page.getByTestId('open-door43-cancel').click();
     await until('the dialog closed', async () => (await dialog.count()) === 0);
-  }, opts);
+  }, { ...opts, realSync: true });
 });

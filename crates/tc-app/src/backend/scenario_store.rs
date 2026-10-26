@@ -457,6 +457,10 @@ impl ProjectStore for ScenarioStore {
         self.backend.list()
     }
 
+    fn removed_an_open_at_start(&self) -> bool {
+        self.backend.removed_an_open_at_start()
+    }
+
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
         self.backend.peek(folder)
     }

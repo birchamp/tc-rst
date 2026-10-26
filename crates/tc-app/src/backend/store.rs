@@ -683,6 +683,12 @@ impl ProjectStore for StoreBackend {
 
     /// Both projects folders: the chosen one, and the local one beside it when copies were made
     /// there (Q-30).
+    fn removed_an_open_at_start(&self) -> bool {
+        self.removed_at_start()
+            .iter()
+            .any(|removed| removed.kind == Some(tc_store::StagingKind::Join))
+    }
+
     fn list(&self) -> Result<Listing, StoreError> {
         let mut listing = self.list_here()?;
         let beside = lock(&self.beside).clone();
@@ -1502,6 +1508,35 @@ impl ProjectHandle for StoreHandle {
                 }
             }
             Some(report)
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
+    fn door43_share(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: tc_door43::Session,
+        owner: tc_door43::NewRepoOwner,
+        name: tc_door43::NewRepoName,
+        pushing: Box<dyn FnOnce() + Send>,
+    ) -> BoxFuture<Option<Result<(tc_door43::CreatedRepo, tc_sync::SyncReport), tc_sync::ShareError>>>
+    {
+        let runtime = tokio::runtime::Handle::current();
+        // As the sync: the share holds the open project under the read lock for its whole run.
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            let backoff = tc_sync::Backoff::default();
+            Some(runtime.block_on(tc_sync::share(
+                handle,
+                &client,
+                &session,
+                &owner,
+                &name,
+                tc_door43::Visibility::Public,
+                &backoff,
+                pushing,
+            )))
         });
         Box::pin(async move { work.await.ok().flatten() })
     }

@@ -1064,6 +1064,12 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// be opened as one. No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
 
+    /// Whether this launch's start removed the part copy of an open from Door43 that did not
+    /// finish. Blocking: it waits for the start's cleanup.
+    fn removed_an_open_at_start(&self) -> bool {
+        false
+    }
+
     /// What `folder`'s Home card shows besides its summary: `metadata.json`, the Door43 remote
     /// and the summary's stamp. No lock, no fold. Blocking. `NotAProject` when the folder went
     /// away since it was listed.
@@ -1241,6 +1247,22 @@ pub trait ProjectHandle: Send + Sync {
         session: Option<tc_door43::Session>,
     ) -> BoxFuture<Option<tc_sync::SyncReport>> {
         let _ = (client, session);
+        Box::pin(async { None })
+    }
+
+    /// The first share of this project (unit X's `tc_sync::share`): the repository `name` under
+    /// `owner`, then `pushing`, then the sync that pushes. `None` from a backend that keeps no
+    /// git repository.
+    fn door43_share(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: tc_door43::Session,
+        owner: tc_door43::NewRepoOwner,
+        name: tc_door43::NewRepoName,
+        pushing: Box<dyn FnOnce() + Send>,
+    ) -> BoxFuture<Option<Result<(tc_door43::CreatedRepo, tc_sync::SyncReport), tc_sync::ShareError>>>
+    {
+        let _ = (client, session, owner, name, pushing);
         Box::pin(async { None })
     }
 
