@@ -267,6 +267,10 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+CHK-8	Under nextest each tc-store corpus test leaves a FaultFs mirror under %TEMP%\tc-faultfs on Windows (statics never drop; sweep_dead_mirrors runs only on Linux), where libtest left one per binary; the VM's disk filled once	crates/tc-store/src/fault.rs sweep_dead_mirrors
+CHK-8	build_once_per_run under libtest keys the folder by pid, so a leftover folder of an earlier run with the same pid is reused; a transient Windows rename failure while the folder is absent panics	crates/tc-app/examples/bundle_store/build.rs build_once_per_run
+CHK-8	Wall-clock asserts in other binaries can flake on a loaded runner as nextest runs binaries together (as libtest already ran their tests together): lifecycle.rs:317,440 and applock.rs:111 under 1 s, aquifer.rs:798 under 5 s	crates/tc-server/tests, crates/tc-resources/tests
+CHK-8	NIGHTLY model-long and sync-model-long stay on libtest, bounded by their 180 min job	scripts/gates.sh NIGHTLY
 C7b	A move wins at a check's old place even over a newer decision; a decision or Restore saved at the old check with a token from before a sync that brought the move is hidden at once, in History with no row; refuse with LookAgain once a sync can land while a tool page is open (E2)	evidence/2026-10-24/C7b-lens-races.md m1
 C7b	The Received sheet counts an old loss again on each later sync that touches the same record	evidence/2026-10-24/C7b-lens-races.md m2
 C7b	Changes of a held, incomplete batch that is completed or released later never get a replaced row	evidence/2026-10-24/C7b-lens-races.md m3
@@ -288,3 +292,4 @@ CHK-3	STORAGE §15 L52 names only the store test that adding a removed book agai
 CHK-7c	larger_psalms keeps records with no book on both sides, so growth that reads every project-level record would be masked	crates/tc-app/tests/op_counts/corpus.rs
 CHK-7c	the plan test's Psalms-alone action skips its rows-are-Psalms assertion	crates/tc-app/tests/op_counts/plans.rs
 CHK-7c	growth messages say "on Psalms" when the baseline is the larger corpus's Psalms alone	crates/tc-app/tests/op_counts/harness.rs
+CHK-8	tc-journal fold_converges_under_any_union fails now and then: in 64 random cases the generator may place no check decision, and the census assert at tests/common/mod.rs:847 trips (seen on track-E1a2 f77e5ab9; passes 3 of 3 alone). Fix: a fixed-seed runner for the census, or a named history that places a decision (storage lane's diagnosis)	crates/tc-journal/tests/properties.rs

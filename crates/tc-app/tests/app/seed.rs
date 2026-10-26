@@ -1,6 +1,6 @@
 //! First-launch seeding (unit A9): the plan at start, the `Seed` job, the `Startup` events
 //! that follow it, and a quit that stops it. The bundled store is the four Open Bible Stories
-//! resources of `bundle/en` (about 60 files), built once per test binary with the same code the
+//! resources of `bundle/en` (about 60 files), built once per test run with the same code the
 //! installer's `bundle_store` example runs. Every test uses real time: the seed does real file
 //! I/O on the blocking pool, and a paused clock would jump ahead of it.
 
@@ -25,19 +25,20 @@ pub(super) mod bundle_build;
 
 use super::common::{TestApp, hello_value, rid};
 
-/// The bundled store of these tests, built once per test binary.
+/// The bundled store of these tests, built once per test run.
 fn bundle() -> &'static Path {
     static BUNDLE: OnceLock<PathBuf> = OnceLock::new();
     BUNDLE.get_or_init(|| {
-        let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("a9-bundle-tc-app");
-        let _ = fs::remove_dir_all(&out);
         let from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en");
         let obs = ["en_obs", "en_obs-tn", "en_obs-tq", "en_obs-twl"];
-        let built =
-            bundle_build::build_bundle(&from, &out, &|pin| obs.contains(&pin.repo.name().as_str()))
-                .unwrap_or_else(|e| panic!("the test bundle could not be built: {e}"));
-        assert_eq!(built.installed.len(), 4, "{built:?}");
-        out
+        bundle_build::build_once_per_run(
+            &PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+            "a9-bundle-tc-app",
+            &from,
+            &|pin| obs.contains(&pin.repo.name().as_str()),
+            4,
+        )
+        .unwrap_or_else(|e| panic!("the test bundle could not be built: {e}"))
     })
 }
 

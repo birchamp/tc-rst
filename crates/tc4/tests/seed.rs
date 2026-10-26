@@ -1,7 +1,7 @@
 //! First-launch seeding through the real binary (APP-DESIGN §10, unit A9): `tc4 serve --bundle`
 //! says "preparing" from its first answer, finishes the seed, stops it when the shell closes,
 //! and a repeat launch touches no resource file. The bundled store is the four Open Bible
-//! Stories resources of `bundle/en` (about 60 files), built once per test binary with the
+//! Stories resources of `bundle/en` (about 60 files), built once per test run with the
 //! code the installer's `bundle_store` example runs.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -22,19 +22,20 @@ use tempfile::TempDir;
 #[path = "../../tc-app/examples/bundle_store/build.rs"]
 mod bundle_build;
 
-/// The bundled store of these tests, built once per test binary.
+/// The bundled store of these tests, built once per test run.
 fn bundle() -> &'static Path {
     static BUNDLE: OnceLock<PathBuf> = OnceLock::new();
     BUNDLE.get_or_init(|| {
-        let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("a9-bundle-tc4");
-        let _ = fs::remove_dir_all(&out);
         let from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en");
         let obs = ["en_obs", "en_obs-tn", "en_obs-tq", "en_obs-twl"];
-        let built =
-            bundle_build::build_bundle(&from, &out, &|pin| obs.contains(&pin.repo.name().as_str()))
-                .unwrap_or_else(|e| panic!("the test bundle could not be built: {e}"));
-        assert_eq!(built.installed.len(), 4, "{built:?}");
-        out
+        bundle_build::build_once_per_run(
+            &PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+            "a9-bundle-tc4",
+            &from,
+            &|pin| obs.contains(&pin.repo.name().as_str()),
+            4,
+        )
+        .unwrap_or_else(|e| panic!("the test bundle could not be built: {e}"))
     })
 }
 
