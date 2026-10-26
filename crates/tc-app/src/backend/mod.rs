@@ -1150,6 +1150,20 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(CreateFailure::Unavailable)
     }
 
+    /// A project this computer lacks, built from an exchange file (STORAGE §10.2, E2 step 4b):
+    /// the file's entries into a staging folder, placed whole or not at all. Blocking. Only
+    /// the store on disk creates projects.
+    fn receive_new(
+        &self,
+        file: &std::path::Path,
+        name: &str,
+    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+        let _ = (file, name);
+        Err(tc_sync::exchange::ExchangeError::NotCommitted(
+            "this store cannot create projects".to_owned(),
+        ))
+    }
+
     /// Creates a project from an import, as [`ProjectStore::create`] does, with `cause` on
     /// every record so History says where the work came from (STORAGE §13).
     fn create_imported(
@@ -1334,4 +1348,10 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Closes the project and lets go of its lock.
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>;
+
+    /// tc-store's own handle, for the USB exchange (E2), which runs tc-sync's export and
+    /// receive on it. `None` for a backend that is not tc-store: the exchange is unavailable.
+    fn store_handle(&self) -> Option<Arc<tc_store::ProjectHandle>> {
+        None
+    }
 }

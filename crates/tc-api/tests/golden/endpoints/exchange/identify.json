@@ -1,0 +1,27 @@
+{
+  "path": "exchange/identify",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "file": {
+      "type": "path",
+      "value": "/media/stick/tit-2026-10-25-maria.zip"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "name": "Tito",
+      "project": "sample_burrito"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@
 
 use serde_json::json;
 use tc_api::account::{LinkView, OrgChoice, Orgs, RepoLink, ShareTargets};
-use tc_api::door43::OpenDoor43;
+use tc_api::door43::{OpenDoor43, ProjectName};
 use tc_api::endpoint::NetKind;
 use tc_api::ids::JobId;
 use tc_api::jobs::{JobKind, Phase, SyncPhase};
@@ -145,12 +145,11 @@ impl App {
     }
 }
 
-impl Handle<OpenDoor43> for App {
-    /// tC4's `openFromDoor43Asking` after its question: the name is checked against every
-    /// entry of the projects folder, without letter case, before anything is sent; then the
-    /// job.
-    async fn handle(&self, req: OpenDoor43) -> Result<JobId, ApiError> {
-        let name = req.name.clone();
+impl App {
+    /// Whether `name` is taken by any entry of the projects folder, without letter case
+    /// (tC4 `repoPathInUse`): checked before anything is sent or written.
+    pub(crate) async fn project_name_in_use(&self, name: &ProjectName) -> Result<bool, ApiError> {
+        let name = name.clone();
         let listed = self
             .with_store(move |store| {
                 store.list().map(|listing| {
@@ -165,13 +164,21 @@ impl Handle<OpenDoor43> for App {
                 })
             })
             .await?;
-        let in_use = listed.map_err(|e| {
+        listed.map_err(|e| {
             self.internal(
                 "the projects folder could not be listed",
                 facts(json!({ "reason": e.to_string() })),
             )
-        })?;
-        if in_use {
+        })
+    }
+}
+
+impl Handle<OpenDoor43> for App {
+    /// tC4's `openFromDoor43Asking` after its question: the name is checked against every
+    /// entry of the projects folder, without letter case, before anything is sent; then the
+    /// job.
+    async fn handle(&self, req: OpenDoor43) -> Result<JobId, ApiError> {
+        if self.project_name_in_use(&req.name).await? {
             return Err(ApiError::Refused(Refusal::OpenDoor43(
                 OpenDoor43Refusal::NameExists,
             )));

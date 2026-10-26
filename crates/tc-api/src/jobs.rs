@@ -92,6 +92,7 @@ pub struct Progress {
 pub enum Phase {
     Open(OpenPhase),
     Sync(SyncPhase),
+    Exchange(ExchangePhase),
     /// Installing one resource repository.
     Install {
         repo: String,
@@ -142,6 +143,19 @@ pub enum SyncPhase {
     Confirm,
 }
 
+/// The phases of a USB export (STORAGE §10.1: checkpoint, write, verify from the device) and of
+/// a receive (§10.2: read the file, take its packs in).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum ExchangePhase {
+    Checkpoint,
+    Write,
+    Verify,
+    Read,
+    TakeIn,
+}
+
 /// A finished job's result. It stays readable through `jobs/get` for 10 minutes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
@@ -163,6 +177,10 @@ pub enum JobOutcome {
     ExportReady(crate::export::Exported),
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
+    /// An exchange file written and verified (E2): "You can remove the stick".
+    Exported(crate::exchange::ExportedView),
+    /// A receive from an exchange file that completed (E2): what the Received sheet shows.
+    Received(crate::exchange::ReceivedView),
     /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
     PlanReady(Box<crate::resources::PlanView>),
     /// The resource versions an import's projects name, looked up (F1).
@@ -297,6 +315,15 @@ starts_job! {
     }
     crate::door43::SyncProject => SyncResultView {
         JobOutcome::Synced(view) => view, view => JobOutcome::Synced(view)
+    }
+    crate::exchange::Export => crate::exchange::ExportedView {
+        JobOutcome::Exported(view) => view, view => JobOutcome::Exported(view)
+    }
+    crate::exchange::Receive => crate::exchange::ReceivedView {
+        JobOutcome::Received(view) => view, view => JobOutcome::Received(view)
+    }
+    crate::exchange::ReceiveNew => ProjectRef {
+        JobOutcome::Created { project } => project, project => JobOutcome::Created { project }
     }
     crate::session::Open => Box<crate::session::OpenedProject> {
         JobOutcome::Opened(opened) => opened, opened => JobOutcome::Opened(opened)

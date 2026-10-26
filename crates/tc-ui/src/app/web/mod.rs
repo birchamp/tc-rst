@@ -13,6 +13,7 @@ pub mod app_ctx;
 pub(crate) mod bridge;
 pub mod check;
 mod create;
+mod exchange;
 pub(crate) mod export;
 mod fix;
 mod import;
@@ -594,6 +595,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
         actions: Actions::new(runtime.clone(), s.clone()),
         s,
     };
+    ctx.actions.resume_receive_job();
 
     let root = root_element().ok_or("the page has no #root")?;
     let provided = SendWrapper::new(runtime);

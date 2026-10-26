@@ -98,6 +98,7 @@ const EDGES: &[(&str, &[&str])] = &[
             "tc-obs",
             "tc-resources",
             "tc-store",
+            "tc-sync",
             "tc-usfm",
             "tc-versification",
         ],

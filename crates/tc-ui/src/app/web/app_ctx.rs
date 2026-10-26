@@ -67,6 +67,10 @@ pub enum DialogKind {
     Settings,
     Sources,
     UpdateBook,
+    /// Save work for a teammate (E2).
+    SaveForTeammate,
+    /// Receive work from a file (E2).
+    ReceiveWork,
 }
 
 /// The dialog that shows, with its form (UI-3): a form lives exactly as long as its dialog, so
@@ -101,6 +105,10 @@ pub enum Dialog {
     Sources,
     /// Update a book from USFM (F1).
     UpdateBook(UpdateBookForm),
+    /// Save work for a teammate (E2).
+    SaveForTeammate(crate::app::exchange::ExportForm),
+    /// Receive work from a file (E2).
+    ReceiveWork(crate::app::exchange::ReceiveForm),
 }
 
 /// A dialog's form seen as the slot it used to be (UI-3): `None` while its dialog does not
@@ -167,6 +175,8 @@ impl Dialog {
             Self::Settings(_) => DialogKind::Settings,
             Self::Sources => DialogKind::Sources,
             Self::UpdateBook(_) => DialogKind::UpdateBook,
+            Self::SaveForTeammate(_) => DialogKind::SaveForTeammate,
+            Self::ReceiveWork(_) => DialogKind::ReceiveWork,
         }
     }
 }
@@ -216,6 +226,9 @@ pub struct AppState {
     /// Get source texts' form (tC4 `src`, B9a), kept across the dialog's openings as tC4
     /// keeps it.
     pub src: ArcRwSignal<crate::app::sources::SourcesForm>,
+    /// The last receive's form, kept when its dialog closed while it ran, so the next
+    /// Receive dialog shows what came of it (E2 step 4b).
+    pub rx_last: ArcRwSignal<Option<crate::app::exchange::ReceiveForm>>,
     /// The release upgrades of Get source texts and their confirmation (tC4 `upgrade`, C8).
     pub up: ArcRwSignal<crate::app::upgrades::UpgradeState>,
     /// The change of checking language and its confirmation (tC4 `gatewayBusy`,
@@ -420,6 +433,20 @@ impl AppState {
     }
 
     /// The share dialog's form while it shows (tC4 `sh`).
+    pub fn export_form(&self) -> Signal<Option<crate::app::exchange::ExportForm>> {
+        self.form(|d| match d {
+            Dialog::SaveForTeammate(ex) => Some(ex),
+            _ => None,
+        })
+    }
+
+    pub fn receive_form(&self) -> Signal<Option<crate::app::exchange::ReceiveForm>> {
+        self.form(|d| match d {
+            Dialog::ReceiveWork(rx) => Some(rx),
+            _ => None,
+        })
+    }
+
     pub fn share_form(&self) -> Signal<Option<ShareForm>> {
         self.form(|d| match d {
             Dialog::Share(sh) => Some(sh),
@@ -447,6 +474,7 @@ impl AppState {
             sign_in: ArcRwSignal::new(SignInFlow::Idle),
             view_error: ArcRwSignal::new(view_error),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
+            rx_last: ArcRwSignal::new(None),
             up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
             gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
             book_error: ArcRwSignal::new(None),
@@ -1117,7 +1145,14 @@ impl Actions {
     /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`), which also ends
     /// the share flow: an answer that comes for it later does nothing.
     pub fn close_modal(&self) {
-        self.s().layers.dialog.try_set(None);
+        let s = self.s();
+        // A receive that runs on is kept aside: its end shows at the next Receive dialog.
+        if let Some(Dialog::ReceiveWork(form)) = s.layers.dialog.try_update(Option::take).flatten()
+            && matches!(form.step, crate::app::exchange::ReceiveStep::Working(_))
+        {
+            s.rx_last.try_set(Some(form));
+        }
+        s.layers.dialog.try_set(None);
         self.0.share_flows.begin();
     }
 

@@ -53,6 +53,18 @@ pub enum ExchangeError {
     Store(#[from] tc_store::StoreError),
 }
 
+/// Why the store skipped the checkpoint, in a translator's words (the reason reaches the
+/// screen inside the refusal's sentence).
+fn skip_words(why: tc_store::CheckpointSkip) -> String {
+    match why {
+        tc_store::CheckpointSkip::ReadOnly => "the project is read-only".to_owned(),
+        tc_store::CheckpointSkip::SecondWriter => {
+            "another translationCore is saving into this project".to_owned()
+        }
+        other => format!("{other:?}"),
+    }
+}
+
 fn io(e: impl std::fmt::Display) -> ExchangeError {
     ExchangeError::Io(e.to_string())
 }
@@ -71,7 +83,7 @@ pub async fn export(
         .skipped
         .filter(|why| *why != tc_store::CheckpointSkip::NoChanges)
     {
-        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+        return Err(ExchangeError::NotCommitted(skip_words(why)));
     }
     let facts = project.facts();
     let git_dir = facts.git_dir.ok_or(ExchangeError::NoHistory)?;
@@ -322,6 +334,42 @@ pub struct ReceiveReport {
     pub hand_edited: Vec<String>,
 }
 
+/// What an exchange file holds: the project's name as `metadata.json` states it (the first
+/// language listed) and its id. Nothing is written (§10.2 R1-R2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identified {
+    pub name: String,
+    pub id: tc_journal::ProjectId,
+}
+
+/// §10.2 R1-R2: reads the file's project before the person confirms the receive.
+pub fn identify(path: &Path) -> Result<Identified, ExchangeError> {
+    let zip = read_zip(path)?;
+    let json = |name: &str| {
+        zip.files
+            .get(name)
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+    };
+    let id = json(PROJECT_JSON)
+        .and_then(|v| {
+            v.get("projectId")?
+                .as_str()
+                .and_then(tc_journal::ProjectId::parse)
+        })
+        .ok_or_else(|| ExchangeError::Damaged("no project id".into()))?;
+    let name = json(METADATA)
+        .and_then(|v| {
+            v.pointer("/identification/name")?
+                .as_object()?
+                .values()
+                .next()?
+                .as_str()
+                .map(str::to_owned)
+        })
+        .unwrap_or_default();
+    Ok(Identified { name, id })
+}
+
 /// §10.2: takes a teammate's exchange file into `project`. A file of another project, or of
 /// a newer format, is refused before anything is written.
 pub async fn receive(
@@ -361,7 +409,7 @@ pub async fn receive(
             tc_store::CheckpointSkip::ReadOnly | tc_store::CheckpointSkip::SecondWriter
         )
     }) {
-        return Err(ExchangeError::NotCommitted(format!("{why:?}")));
+        return Err(ExchangeError::NotCommitted(skip_words(why)));
     }
     let snapshot = project.snapshot();
     // Received: new before the file, and in the project after it.
