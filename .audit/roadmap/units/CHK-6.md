@@ -4,8 +4,8 @@ title: Lint ratchet and fresh P7 captures
 track: A
 lane: checks
 milestone: M1
-state: parked
-owner: checks lane (Claude Code 2198ee19)
+state: building
+owner: checks lane (Claude Code 2414b2c7)
 branch: track-CHK-6
 worktree: .worktrees/track-CHK-6
 depends: [INT-4, CHK-6a]
@@ -14,8 +14,8 @@ proves: [P7]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-24
-next: step 2 after C7a, FIX-R and S2 merge (the lint pass edits their crates); step 3 after CHK-1 merges (crates/tc-arch); step 5 after the app lane's UI merges (recapture); then the review and a merge turn. Branch track-CHK-6
+updated: 2026-10-26
+next: steps 2 and 3 on this branch; step 5 (the recapture) waits until E1a, E1b and E1c merge. Branch track-CHK-6
 blocked_by: none
 ---
 
@@ -273,3 +273,4 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 - 2026-10-24 00:29 EDT | checks lane (Claude Code 2198ee19) | fix | none | CI on 95d6badd (run 40060957519) failed app::save_machine::c3_reload_anywhere_keeps_each_saved_field_once: "Elapsed" at the scenario's 30 s wall-clock bound (a Reference field, not the test field step 1 touched). Raised to 120 s with a "hung" message, as S2's branch already does for the verse scenario two hunks above (so the edits merge); ruling 2026-10-23 | gh run view 40060957519 --log-failed
 - 2026-10-24 00:30 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1, 4 and 6 and the C3 bound are card CHK-6a, merged on its own; this card keeps steps 2, 3 and 5 and depends on CHK-6a | .audit/roadmap/units/CHK-6a.md
 - 2026-10-24 01:44 EDT | checks lane (Claude Code 2198ee19) | note | none | On the orchestrator's option A (ruling 2026-10-23, rule 1): the alignment-budget job reports and does not fail in CI. suggestions_meet_the_full_training_corpus_budget asserts its p95 only with TC_ALIGN_BUDGET_ENFORCE set; its suggestion check still fails in CI. Main's ci 40065010453 had failed it at p95 150.76 ms against the 150 ms CI limit. The change rides with CHK-1a | crates/tc-align/tests/suggestion_budget.rs
+- 2026-10-26 15:22 EDT | checks lane (Claude Code 2414b2c7) | resume | none | Resumed on main 86d669b1 (INT-4, S2, C7a, FIX-R and CHK-1 done; steps 1, 4 and 6 merged as CHK-6a): steps 2 and 3 now; step 5 waits until E1a, E1b and E1c merge, so its trees are not stale at once (orchestrator, 2026-10-26) | python3 -I .audit/tools/board.py
