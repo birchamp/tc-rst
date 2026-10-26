@@ -247,10 +247,25 @@ async fn a_bulk_keep_costs_its_conflicts() {
                 let ReviewEntries::Conflicts(entries) = view.entries else {
                     panic!()
                 };
-                let MadeBy::Person(label) = &entries[0].versions[0].by else {
-                    panic!("{:?}", entries[0])
+                // C7a keeps a person's version only where a conflict holds exactly one of
+                // theirs, so the person is one who does somewhere in this corpus.
+                let who = |by: &MadeBy| match by {
+                    MadeBy::Person(label) => Some(label.who.clone()),
+                    _ => None,
                 };
-                inputs.lock().unwrap().push((label.who.clone(), entries));
+                let person = entries
+                    .iter()
+                    .find_map(|e| {
+                        e.versions.iter().filter_map(|v| who(&v.by)).find(|p| {
+                            e.versions
+                                .iter()
+                                .filter(|v| who(&v.by).as_ref() == Some(p))
+                                .count()
+                                == 1
+                        })
+                    })
+                    .expect("a person who holds exactly one version of some conflict");
+                inputs.lock().unwrap().push((person, entries));
                 if let Some(memory) = s.memory() {
                     memory.script(&s.folder, Scripted::Written).unwrap();
                 }

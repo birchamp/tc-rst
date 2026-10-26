@@ -7,10 +7,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use tc_app::backend::memory::MemoryProject;
+use tc_corpus::history::{Journal, PackFile};
 use tc_corpus::{Corpus, Spec};
-use tc_journal::BookId;
+use tc_journal::change::Verified;
 use tc_journal::fold::{ChapterKeys, FoldInput, FoldState, ProjectKind, Resolved};
 use tc_journal::format::FormatDoc;
+use tc_journal::{BookId, RecordKey};
 use tc_store::fault::FaultFs;
 use tc_store::layout::{GITATTRIBUTES_BYTES, GITIGNORE_BYTES};
 use tc_store::{FakePlatform, OpenOptions};
@@ -32,16 +34,18 @@ pub struct Corpora {
 }
 
 fn project(spec: &Spec) -> MemoryProject {
-    let corpus = Corpus::generate(spec).expect("the corpus builds");
+    project_of(&Corpus::generate(spec).expect("the corpus builds").journal)
+}
+
+fn project_of(journal: &Journal) -> MemoryProject {
     let fold = FoldState::fold(
         ProjectKind::Bible,
-        corpus
-            .journal
+        journal
             .lines()
             .into_iter()
             .map(|line| FoldInput::from(line).prepare()),
     );
-    let mut project = MemoryProject::empty(corpus.journal.project, ProjectKind::Bible);
+    let mut project = MemoryProject::empty(journal.project, ProjectKind::Bible);
     project.fold = fold;
     project
 }
@@ -99,8 +103,7 @@ pub struct StoreCorpora {
 /// tc-store's `put_corpus` (`crates/tc-store/tests/store/corpus.rs`): the corpus's packs and
 /// pending files, the fixed files, and `.tc/device.json`, so the corpus's device 0 is the
 /// folder's device.
-fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, corpus: &Corpus) {
-    let journal = &corpus.journal;
+fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, journal: &Journal) {
     let project = serde_json::json!({
         "schemaVersion": 1,
         "projectId": journal.project.to_string(),
@@ -143,11 +146,14 @@ fn put_corpus(store: &tc_store::Store, fs: &FaultFs, folder: &Path, corpus: &Cor
 }
 
 fn on_disk(spec: &Spec) -> FaultFs {
-    let corpus = Corpus::generate(spec).expect("the corpus builds");
+    on_disk_of(&Corpus::generate(spec).expect("the corpus builds").journal)
+}
+
+fn on_disk_of(journal: &Journal) -> FaultFs {
     let fs = FaultFs::new();
     let (backend, _backend_watch) = backend_over(&fs, APP, FakePlatform::default(), Arc::default());
     let folder = Path::new(PROJECTS).join(FOLDER);
-    put_corpus(backend.store(), &fs, &folder, &corpus);
+    put_corpus(backend.store(), &fs, &folder, journal);
     let handle = backend
         .store()
         .open(&folder, &OpenOptions::default())
@@ -169,6 +175,94 @@ pub fn store_corpora() -> &'static StoreCorpora {
         psalms: on_disk(&Spec::psalms(1)),
         larger: on_disk(&Spec::scaled(1, Spec::test_factor())),
     })
+}
+
+/// The larger corpus's Psalms alone, in memory and on disk: its journal without the other
+/// books' records and the comments on them. More devices wrote the larger corpus, so its
+/// Psalms holds a few more or fewer merged and conflicting records than the Psalms corpus;
+/// an action on Psalms costs the same on this as on the larger corpus, or it costs the
+/// project's size.
+pub struct LargerPsalms {
+    pub memory: MemoryProject,
+    pub disk: FaultFs,
+}
+
+pub fn larger_psalms() -> &'static LargerPsalms {
+    static ALONE: OnceLock<LargerPsalms> = OnceLock::new();
+    ALONE.get_or_init(|| {
+        let larger = Corpus::generate(&Spec::scaled(1, Spec::test_factor()))
+            .expect("the corpus builds")
+            .journal;
+        let journal = psalms_alone(&larger, &corpora().larger);
+        let memory = project_of(&journal);
+        assert_eq!(memory.fold.projected_books(), vec![PSALMS]);
+        let keys = corpora().larger.fold.book_keys(PSALMS);
+        assert_eq!(memory.fold.book_keys(PSALMS), keys);
+        for key in &keys {
+            assert_eq!(
+                memory.fold.key_state(key),
+                corpora().larger.fold.key_state(key),
+                "Psalms alone holds the larger corpus's {key:?}"
+            );
+        }
+        LargerPsalms {
+            memory,
+            disk: on_disk_of(&journal),
+        }
+    })
+}
+
+/// `journal` with Psalms' records, the comments `folded` places in Psalms and the records
+/// of no book, each pack and pending file kept as it was with the rest left out.
+fn psalms_alone(journal: &Journal, folded: &MemoryProject) -> Journal {
+    let comments: std::collections::BTreeSet<RecordKey> =
+        folded.fold.comments_of(PSALMS).into_iter().collect();
+    let keep = |line: &Verified| match line.as_change().map(|c| c.body().record.key()) {
+        Some(key @ RecordKey::Comment(_)) => comments.contains(&key),
+        Some(key) => key.book().is_none_or(|book| book == PSALMS),
+        None => true,
+    };
+    let mut packs = Vec::new();
+    for pack in &journal.packs {
+        let read = tc_journal::pack::read_pack(&pack.path, &pack.bytes, journal.project);
+        let header = read.header.expect("a corpus pack has its header");
+        let lines: Vec<Verified> = read.entries.into_iter().filter(keep).collect();
+        if lines.is_empty() {
+            continue;
+        }
+        let spec = tc_journal::pack::PackSpec {
+            project: journal.project,
+            sealer: header.sealer,
+            sealed: header.sealed,
+        };
+        let sealed = tc_journal::pack::seal(&spec, &lines).unwrap();
+        assert!(sealed.set_aside.is_empty());
+        packs.extend(sealed.packs.into_iter().map(|p| PackFile {
+            path: p.path.to_string(),
+            id: p.id,
+            changes: p.changes.len(),
+            bytes: p.bytes,
+        }));
+    }
+    let pending = journal
+        .pending
+        .iter()
+        .filter_map(|file| {
+            let read = tc_journal::pending::read_pending(&file.bytes, journal.project);
+            let lines: Vec<Verified> = read.entries.into_iter().filter(keep).collect();
+            (!lines.is_empty()).then(|| {
+                let header = read.header.expect("a corpus pending file has its header");
+                tc_journal::pending::encode_pending(&header, &lines).unwrap()
+            })
+        })
+        .collect();
+    Journal {
+        project: journal.project,
+        devices: journal.devices.clone(),
+        packs,
+        pending,
+        stats: Default::default(),
+    }
 }
 
 #[allow(dead_code)]
