@@ -295,6 +295,11 @@ pub(crate) struct Shared {
     /// How many write groups ever began: a look at the folder that saw this number change
     /// may have read a group's middle.
     groups_begun: AtomicU64,
+    /// Changes the watcher has heard of, and how many of them the writer has looked at: a
+    /// look at the folder while the first is ahead may see another program's bytes the
+    /// writer has not met yet, which are not a state the store wrote.
+    heard: AtomicU64,
+    examined: AtomicU64,
     /// The project is closing: background maintenance (a repack) stops and does not start.
     closing: Arc<AtomicBool>,
     /// The books that wait for an answer and the kept copies, as the manifest on disk names
@@ -332,6 +337,8 @@ impl Shared {
             traffic: AtomicU64::new(0),
             open_groups: AtomicU32::new(0),
             groups_begun: AtomicU64::new(0),
+            heard: AtomicU64::new(0),
+            examined: AtomicU64::new(0),
             closing: Arc::default(),
             kept: Mutex::default(),
         }
@@ -363,6 +370,21 @@ impl Shared {
     pub(crate) fn open_group(&self) {
         self.groups_begun.fetch_add(1, Ordering::AcqRel);
         self.open_groups.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// The watcher heard of a change in the folder.
+    pub(crate) fn heard(&self) {
+        self.heard.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// The writer looked at what the watcher had heard up to `upto`.
+    pub(crate) fn examined(&self, upto: u64) {
+        self.examined.fetch_max(upto, Ordering::AcqRel);
+    }
+
+    /// Whether the watcher heard of a change the writer has not looked at yet.
+    pub(crate) fn unexamined(&self) -> bool {
+        self.heard.load(Ordering::Acquire) > self.examined.load(Ordering::Acquire)
     }
 
     pub(crate) fn groups_begun(&self) -> u64 {

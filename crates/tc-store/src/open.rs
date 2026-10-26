@@ -733,7 +733,7 @@ fn open_inner(
     let deferred = std::mem::take(&mut writer.deferred_paths);
     let writer_thread = crate::writer::spawn(writer, writer_rx);
     if !deferred.is_empty() {
-        let _ = writer_tx.send(crate::writer::Job::Paths(deferred));
+        let _ = writer_tx.send(crate::writer::Job::Paths(deferred, 0));
     }
     let watch_writer = writer_tx.clone();
     let watch_actor = actor_tx.clone();
@@ -753,6 +753,7 @@ fn open_inner(
             &vfs,
             &folder,
             env.watch_debounce,
+            handle.shared.clone(),
             watch_writer,
             watch_actor,
         );

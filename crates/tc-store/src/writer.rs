@@ -107,7 +107,8 @@ pub(crate) enum Job {
         reply: Resolver<Result<crate::reply::FocusReport, StoreError>>,
     },
     /// The watcher told these paths changed (§11.1).
-    Paths(Vec<String>),
+    /// The paths the watcher told, and how many changes it had heard of when it told them.
+    Paths(Vec<String>, u64),
     /// *Take in the file as an edit* for a held path (§6.2).
     TakeInHeld {
         rel: String,
@@ -569,7 +570,10 @@ impl Writer {
                 let result = self.focus();
                 reply.resolve(result);
             }
-            Job::Paths(rels) => self.paths_changed(rels),
+            Job::Paths(rels, upto) => {
+                self.paths_changed(rels);
+                self.shared.examined(upto);
+            }
             Job::TakeInHeld { rel, reply } => self.take_in_held(&rel, reply),
             Job::DismissNotice { id, reply } => {
                 let result = self.dismiss(id);
@@ -627,7 +631,7 @@ impl Writer {
         if !self.wrote_group || !self.shared.hooks.looks_at_burrito() {
             return;
         }
-        if !self.pending_record.is_empty() || self.shared.group_open() {
+        if !self.pending_record.is_empty() || self.shared.group_open() || self.shared.unexamined() {
             // Looked at after a later job, when the group is closed.
             return;
         }
