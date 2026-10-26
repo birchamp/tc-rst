@@ -1220,6 +1220,7 @@ fn ready(
     let session = view! {
         <div data-testid="align-session">
             {header(s, actions, &view, book)}
+            {align_history(s, actions, &view, book)}
             {how_toggle(s)}
             {stale}
             {dropped}
@@ -1234,4 +1235,32 @@ fn ready(
         </div>
     };
     session.into_any()
+}
+
+/// The verse's History under its reference (owner ruling H5); an alignment in conflict has its
+/// review.
+fn align_history(s: &AppState, actions: &Actions, view: &AlignerView, book: BookId) -> AnyView {
+    let Some(at) = s
+        .project
+        .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+    else {
+        return ().into_any();
+    };
+    let shown = view.history.clone().filter(|_| view.marker.is_none());
+    let reference = t(
+        keys::align::REF,
+        &[("book", &book.english_name()), ("ref", &view.place.label())],
+    );
+    let (restoring, failed) = (s.a.restoring.clone(), s.a.restore_failed.clone());
+    let actions = actions.clone();
+    crate::views::history::record_history(crate::views::history::RecordHistory {
+        test_id: "align-history",
+        at,
+        shown: Signal::stored(shown),
+        open: s.a.history_open.clone(),
+        busy: Signal::derive(move || restoring.get()),
+        failed: Signal::derive(move || failed.get()),
+        reference,
+        restore: Callback::new(move |from| actions.restore_alignment(from)),
+    })
 }

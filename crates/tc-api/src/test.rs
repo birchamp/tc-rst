@@ -425,9 +425,40 @@ pub enum ScriptedSync {
         /// when this computer changed one of the verses meanwhile).
         #[serde(default)]
         joined: Option<TeammatesJoin>,
+        /// For each kind, Teammates 1 and 2 changed one record of that kind on Door43 from one
+        /// version, each differently: the sync receives a conflict of the kind. These kinds
+        /// reach a translator only by sync or USB, so the review's other tabs are shown with
+        /// them until unit X brings the real sync.
+        #[serde(default)]
+        kinds: Vec<TeammatesKind>,
         restored: u32,
     },
     Failed(crate::refusal::SyncFailure),
+}
+
+/// The kind of record two teammates change from one version (C7b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum TeammatesKind {
+    /// A Translation Notes decision's comment.
+    Check,
+    /// A new comment on Titus 1:1, which both write under one id.
+    Comment,
+    /// The first alignment of the project: one marks it done, the other invalid.
+    Alignment,
+    /// A new setting, which both write.
+    Setting,
+    /// A slot both add to a pin group.
+    Pins,
+    /// Jonah: one restores its text, the other starts it empty.
+    BookPresence,
+    /// Jonah: Teammate 1 removes it, having seen nobody's work on it.
+    BookRemoved,
+    /// A carried file Teammate 1 added, which both then replace.
+    CarriedFile,
+    /// Two carried files whose paths differ only in case, one by each.
+    PathCase,
 }
 
 /// Teammate 1's join of the verses `first` to `last` of one chapter into one span.

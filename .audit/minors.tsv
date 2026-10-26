@@ -182,6 +182,7 @@ D1	A kept-entry dedupe after a crash (kept.rs:368) runs after copy_external, so 
 D1	Two retries of a failed checkpoint started at the same instant on a project turned read-only can clear "Checkpoint not saved": the second sees Running, not the earlier Failed, and ends last with Unchanged; with gaps of 0-50 ms the failure stays	crates/tc-app/src/session.rs SessionRegistry::checkpoint; races lens R11
 D1	Two kept copies of the same book read alike in the Notices ("Titus was changed outside translationCore. A copy is kept.") with no time or what changed, so the translator cannot tell which Import is the newer save	crates/tc-ui/src/app/outside.rs:59-65; browser lens g-1-notices.png
 D1	A story file's question uses the book words (as the owner's ruling OE 3 says) but its report names the file: "01.md: 1 verses imported, 0 to review."	crates/tc-ui/src/app/outside.rs name_of; browser lens i-2-story-at-open.png
+C7b	The property census of fold_converges_under_any_union can miss "decision placed" on an unlucky run (one run reached 0, the next two passed): the random generator reaches a placed decision rarely now that moves win at a check's old place	cargo test -p tc-journal --test properties fold_converges_under_any_union, 2026-10-25
 UI-1	A Door43 open or sync that ends Lost (the server restarted mid-job) leaves its dialog or button with no word on how it ended; the project list is read again, but a finished clone may look like nothing happened	crates/tc-ui/src/app/web/app_ctx.rs, the JobEnd::Cancelled | Lost | Left arms of open_door43_now and sync_now; the UI offers no cancel for these jobs, so only a server restart reaches it
 UI-1	A book open whose job the server forgot now closes the opening overlay with no message (it spun forever before)	crates/tc-ui/src/app/web/understand.rs, the open follow's Lost arm; reachable only after a server restart without a page reload
 OLH-1	The check-comment draft test fails now and then when the whole app suite runs at once, and passes alone	a_check_comment_typed_on_an_undecided_check_is_kept_as_its_first_decision (check_item.rs:728) failed once with OfferedDrafts { offers: [], settle: [] } in a 37-test run of check_item, understand and translate; three runs alone passed. Not touched by OLH-1.
@@ -248,6 +249,7 @@ D1	On the verse_imported path of an Import the file's alignment takes the curren
 D1	has_copy_of reads every copy of the path in .tc/external on each hold against HEAD, so its cost grows with the copies kept, not with the action	crates/tc-store/src/kept.rs:282; storage lane review of bf20ef45..0badcdfd
 D1	store::outside::a_second_outside_save_keeps_the_first_copy_in_the_notices failed once in a run beside the full tc-store suite (message not kept) and passed 30 runs alone under load and in two group runs; watch it for a timing dependence	crates/tc-app/tests/app/store.rs:673; checks lane, 2026-10-26
 D1	A header-only outside edit's Import report says "Titus: 1 verse imported, 0 to review." (and a header conflict "0 verses imported, 1 to review"): the report counts every imported record, the book header among them, and the words say verses	crates/tc-store/src/kept.rs:1046; browser lens round 2, hdr-1-report.png
+FIX-R	No journey pins H12 in the browser: a Psalm verse written on \q lines shows data-drafted 1 in Check, its first word taps, and a Valid mark survives reopening	only the Rust test a_verse_on_poetry_lines_is_drafted_in_check_and_its_mark_is_saved (crates/tc-app/tests/app/check_item.rs); parity lens of FIX-R step 4
 CHK-7b	--touched misses one-word test ids ("bookmark") and ids built with format! (story-{})	the token regex needs a hyphen
 CHK-7b	--touched picks no journey for a change with no quoted token (view logic, i18n or English text journeys match)	heuristic by design; the batch gate runs every journey
 CHK-7b	--touched runs nothing for changes outside crates/ (fixtures/, Cargo.toml, Cargo.lock, kit.mjs, no-skips.mjs) or for untracked files	the batch gate runs everything
@@ -257,3 +259,24 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+C7b	A move wins at a check's old place even over a newer decision; a decision or Restore saved at the old check with a token from before a sync that brought the move is hidden at once, in History with no row; refuse with LookAgain once a sync can land while a tool page is open (E2)	evidence/2026-10-24/C7b-lens-races.md m1
+C7b	The Received sheet counts an old loss again on each later sync that touches the same record	evidence/2026-10-24/C7b-lens-races.md m2
+C7b	Changes of a held, incomplete batch that is completed or released later never get a replaced row	evidence/2026-10-24/C7b-lens-races.md m3
+C7b	After a carried file's removal, a file dropped in at its name raises a carried-file question	evidence/2026-10-24/C7b-lens-races.md m4
+C7b	Kept-copy names change as profiles or newer versions arrive; the copy under its old name stays in the folder (left out of the commit)	evidence/2026-10-24/C7b-lens-races.md m5, C7b-lens-loss.md m4
+C7b	newest_wins_converges accepts any outcome other than a conflict without comparing it across computers, and never makes an outside edit with no known base	evidence/2026-10-24/C7b-lens-races.md m6
+C7b	A kept copy of a carried file cannot be removed: its token is not offered, and a deleted copy is placed again	evidence/2026-10-24/C7b-lens-loss.md m3; storage review minor 3
+C7b	When a book's newest head cannot be read the record shows nothing and editing is blocked (before H5 a listed conflict)	evidence/2026-10-24/C7b-lens-loss.md m2
+C7b	A removed book's count of hidden edits is dropped (BookView::Removed carries none), so the Received row cannot say how many edits are in History	storage review minor 4, 2026-10-25
+C7b	The book restore race is on the Text tab but its card offers no choice there yet	evidence/2026-10-24/C7b-lens-parity.md
+C7b	A path-case clash gives no Received row and no count	evidence/2026-10-24/C7b-lens-parity.md
+HIST-1	The aligner's History token is the last view's: after an autosave the open History misses the newest version until the next edit (a Restore reads the current token, so it is not affected)	evidence/2026-10-25/HIST-1-lens-loss.md
+HIST-1	The last sync result behind the Home card's link lives in memory: it is gone after the app quits	shell lane, 2026-10-25
+HIST-1	An aligner Restore ignores a rail click or a tool close made while it runs and opens the restored verse again (an edit on the other verse fails visibly as a stale session)	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	A mark clicked while a check's Restore waits on the save gate is written first, and the Restore then lands over it (the mark stays in History)	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	A Restore whose reply was lost after it was saved says it was not restored; the read that follows shows it restored	evidence/2026-10-25/HIST-1-lens-races.md
+HIST-1	History rows draw their labels (Selected:, Comment:, Aligned:) in the scripture font	evidence/2026-10-25/HIST-1-lens-parity.md
+CHK-3	STORAGE §15 L52 names only the store test that adding a removed book again keeps the old text (restored with or without it); no test asserts that the dialog offers "Restore the text" first	crates/tc-store/tests/store/commands.rs a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way; CHK-3 step 5 review
+CHK-7c	larger_psalms keeps records with no book on both sides, so growth that reads every project-level record would be masked	crates/tc-app/tests/op_counts/corpus.rs
+CHK-7c	the plan test's Psalms-alone action skips its rows-are-Psalms assertion	crates/tc-app/tests/op_counts/plans.rs
+CHK-7c	growth messages say "on Psalms" when the baseline is the larger corpus's Psalms alone	crates/tc-app/tests/op_counts/harness.rs

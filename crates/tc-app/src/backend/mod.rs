@@ -318,6 +318,19 @@ impl StoreCommand {
         }
     }
 
+    /// *Restore this version* (#78, owner ruling H5): the value of the version `from` of the
+    /// record `shown` names, kept over every head the token shows.
+    pub fn restore(shown: EditToken, from: ChangeId) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::Restore {
+                shown: shown.0,
+                from,
+            },
+            listed,
+        )
+    }
+
     /// `SaveVerse` (STORAGE §5.1): the words over the verse the token shows.
     pub fn save_verse(shown: EditToken, words: String) -> Self {
         let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
@@ -1155,6 +1168,19 @@ pub trait ProjectStore: Send + Sync + 'static {
         last: tc_journal::VerseNo,
     ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
         let _ = (folder, book, chapter, first, last);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
+    /// Teammates 1 and 2's versions of one record of `kind` in `folder`, both from one version,
+    /// written as a sync's intake would ([`memory::teammates::Teammates::change_kind`]): the
+    /// changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_change_kind(
+        &self,
+        folder: &ProjectRef,
+        kind: tc_api::test::TeammatesKind,
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, kind);
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 

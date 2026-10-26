@@ -595,9 +595,9 @@ fn an_edit_with_no_heads_file_is_an_unknown_base_conflict() {
 /// project.
 #[test]
 fn reconciling_an_outside_edit_costs_what_it_changed() {
-    use crate::corpus::{psalms, psalms_x10};
+    use crate::corpus::{psalms, psalms_larger};
     let mut costs = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         // The entries settle once their time stamp's tick is over.
         fs.advance(std::time::Duration::from_secs(5));
@@ -650,9 +650,9 @@ fn reconciling_an_outside_edit_costs_what_it_changed() {
 /// three changes.
 #[test]
 fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
-    use crate::corpus::{psalms, psalms_x10};
+    use crate::corpus::{psalms, psalms_larger};
     let mut costs = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         fs.advance(std::time::Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");

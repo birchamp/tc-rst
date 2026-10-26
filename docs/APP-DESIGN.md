@@ -1381,10 +1381,13 @@ B1b).
   (STORAGE §3.5), the listing must count such a folder a project, as the open does:
   `a_folder_is_listed_as_a_project_exactly_when_tc_store_opens_it` fails until it does.
 - A summary (`tc_app::home::Summary`, serializable, so C1a keeps it as it is) holds per-book
-  drafted and total verses (`tc_app::drafted`, one rule for the tiles and B3's rail, #572: a span
-  counts every verse it covers; a verse is drafted when its stored words, trimmed as JavaScript
-  trims, are neither empty nor `___`; a declared difference from tC4's `draftPercent`, which reads
-  a verse's body only up to its first paragraph marker), the verse conflicts by book, and a story
+  drafted and total verses (`tc_app::drafted`, #572: a span counts every verse it covers; a
+  verse is drafted when its stored words, trimmed as JavaScript trims, are neither empty nor
+  `___`, by `tc_usfm::codec::words_drafted`, the one rule of the tiles, B3's rail, Check, Align,
+  the store and the fold, owner ruling H12; a declared difference from tC4's `draftPercent` and
+  `verseTextIndex`, which read a verse's body only up to its first paragraph marker, so tC4's
+  Home, Check and aligner all show a poem verse whose words start on a `\q` line as not
+  drafted), the verse conflicts by book, and a story
   project's stories (`tc_obs::obs_progress`) with each story's title: the drafted one, else the
   title of the pinned gateway story when it is on this computer (#328), kept in the summary so a
   later launch reads no resource for it. The in-progress count is the UI's, from the tiles *(B2)*.

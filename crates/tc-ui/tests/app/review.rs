@@ -20,7 +20,7 @@ use tc_ui::app::net::NetEnd;
 use tc_ui::app::review::{
     BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
     choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
-    notice_text, persons, picks_of, place_book, place_label, tabs_shown,
+    notice_text, persons, picks_of, place_book, place_label, tabs_shown, version_text,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -467,6 +467,7 @@ fn the_toasts_review_opens_where_something_waits() {
             alignments,
             restored: 0,
             missing_pins: 0,
+            replaced: Vec::new(),
         }),
     };
     assert_eq!(toast(1, 0).review_tab(), ReviewTab::Text);
@@ -661,4 +662,68 @@ fn in_flight(keep: &KeepPhase) -> RequestId {
 
 fn keep_press() -> Press {
     press_keep('1', 'a')
+}
+
+/// The screens of the H5 packet the ruling kept all draw, and the conflict cards of the kinds
+/// whose newest version now wins are gone from it.
+#[test]
+fn the_packet_draws_every_screen_the_ruling_kept() {
+    use tc_ui::app::q9::{SCREENS, screen};
+
+    for name in SCREENS {
+        assert!(screen(name).is_some(), "{name}");
+    }
+    for gone in [
+        "checks",
+        "alignments",
+        "settings-carried",
+        "settings-path-case",
+    ] {
+        assert!(screen(gone).is_none(), "{gone}");
+    }
+}
+
+/// A version in History says what the person chose, so the one to restore can be told apart
+/// (owner ruling H5): a check's words, status, bookmark and comment; an alignment's pairs.
+#[test]
+fn a_checks_version_names_its_selection_and_comment() {
+    use tc_api::check::DecisionStatus;
+    let check = |selected: &[&str], nothing: bool, status, bookmarked, comment: Option<&str>| {
+        version_text(&VersionValue::Check {
+            selected: selected.iter().map(|w| (*w).to_owned()).collect(),
+            nothing_to_select: nothing,
+            status,
+            bookmarked,
+            comment: comment.map(str::to_owned),
+        })
+    };
+    assert_eq!(
+        check(
+            &["siervo", "Dios"],
+            false,
+            Some(DecisionStatus::Valid),
+            true,
+            Some("Revisar")
+        )
+        .as_deref(),
+        Some("Selected: siervo … Dios · Valid · Bookmarked\nComment: Revisar")
+    );
+    assert_eq!(
+        check(&[], false, None, false, None).as_deref(),
+        Some("Nothing selected")
+    );
+    assert_eq!(
+        check(&[], true, Some(DecisionStatus::Todo), false, None).as_deref(),
+        Some("No selection needed · To do")
+    );
+    assert_eq!(
+        version_text(&VersionValue::Alignment {
+            pairs: vec!["Παῦλος = Pablo".into(), "δοῦλος = siervo".into()],
+            done: true,
+            marked_invalid: false,
+        })
+        .as_deref(),
+        Some("Aligned: Παῦλος = Pablo · δοῦλος = siervo · Marked done")
+    );
+    assert_eq!(version_text(&VersionValue::NotShown), None);
 }

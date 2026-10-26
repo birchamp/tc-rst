@@ -41,12 +41,12 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | USFM, Translate and helps | 0 | 5 | 1 | 39 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
 | Sync, storage and import | 0 | 17 | 3 | 30 | 2 | 13 | 65 |
-| Shell, startup, languages and help | 0 | 9 | 1 | 48 | 0 | 18 | 76 |
-| All area rows | 1 | 35 | 8 | 186 | 3 | 63 | 296 |
+| Shell, startup, languages and help | 0 | 7 | 1 | 48 | 0 | 20 | 76 |
+| All area rows | 1 | 33 | 8 | 186 | 3 | 65 | 296 |
 
-Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1, I, REF1, G4 and D2. A row counts once
-per area table. All area rows: 296; 1 rebuild bug, 35 unit todo, 8 reference
-change, 186 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
+Counted from the rows on 2026-10-26, after FIX-R (step 4 reconciled #569 and #505), the 2026-10-23 sweep, T, G1, I, REF1, G4 and D2. A row counts once
+per area table. All area rows: 296; 1 rebuild bug, 33 unit todo, 8 reference
+change, 186 covered, 3 owner question and 65 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -201,7 +201,7 @@ the rebuild fixed it or does as tC4 does:
 | #121 | Understand: source text for verses mapped into another book | covered | B3 | `cross_book_verse_shows_the_statement_and_keys_comments_to_the_project_verse` (tc-ui); `a_verse_in_another_book_names_that_book` (tc-app) | Done by B3: a project verse the sources have in another book is `understand.verseCrossBook` with its place (`DAG 13:1`), never this book's text; the comment box keeps the project verse; a chapter wholly in another book says `understand.helpsCrossBook`. |
 | #118 | Understand: Section view in projects with other verse numbers | covered | B3, B4a | `cross_frame_project_shows_the_verse_only_statement_instead_of_the_switch` (B3 journey); `a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it` (tc-app); `cross_frame_translate_shows_the_mapped_source_verse` (B4a journey) | Done by B3 and B4a: one unit per project verse, each the source verse the project's numbering names (`editor/sources` `frame`), `understand.crossFrameVerseOnly` in place of the switch on both screens, `understand.frameUnavailable` when the scheme is unknown. |
 | #55 | Draft book introductions | not applicable | — | — | tC4 4.1.0. The introduction is kept byte for byte. |
-| #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_visible` | None. |
+| #27 | Merge concurrent edits automatically | covered | tc-journal | `merge_bookmark_and_status`; `loss_check_two_ways_newest_wins` | None. |
 | #767 | Import creates an empty book after the size warning | covered | C6 | `adding_a_book_from_usfm_is_one_batch_whole_or_absent`; `a_psalm_adds_whole_with_every_verse_and_its_selah` | See §1 row 17. C6 built the one-batch command `AddBookText` (APP-DESIGN C6 D3). No refusal stays, so `addBook.usfmTooLarge` is not vendored: the rebuild never refuses a book for its size. |
 | #782 | Words inside nested alignments are dropped | covered | tc-usfm | `shown_text_reads_words_inside_nested_alignments`; `selah_inside_qs_shows` | See §1 row 2 (fixed). |
 | #773 | A reordered quote picks up words from elsewhere | covered | tc-helps | `a_reordered_quote_lights_only_its_own_phrase` | Fixed: the test passes (2026-10-23, `crates/tc-helps/tests/highlight.rs`); §1 row 1. |
@@ -402,7 +402,7 @@ the rebuild fixed it or does as tC4 does:
 | #642 | Remove the Linux native title bar | covered | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
 | #613 | Bundle a Devanagari interface font | unit todo | G2 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (neither G1 nor G4 bundles one; it waits with G2, whose P7 review covers how each script looks). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
 | #606 | Third-party licenses in About | unit todo | REL-1 (G3 ships them) | `every_crate_in_cargo_lock_has_a_notice`, `every_bundled_resource_has_an_attribution` | G3 ships THIRD-PARTY-NOTICES.txt beside LICENSE in every installer (crates, NOTICE files, fonts' OFL texts, Electronite, each bundled resource's attribution); About does not list it yet. |
-| #569 | Keyboard shortcuts for Understand, Translate and Check | unit todo | A5; FIX-R reconciles | the Switcher key port | Match 4.0 (no shortcuts). Port tC4's if it adds them. |
+| #569 | Keyboard shortcuts for Understand, Translate and Check | not applicable | later, if tC4 adds them | — | Outside tC4 4.0, which has no such shortcuts; the rebuild matches it (FIX-R reconciled). Port tC4's if it adds them. |
 | #525 | Choose the app language automatically | covered | tc-app | `hello_answers_real_state` | C1a adds a relaunch test that the saved language survives. |
 | #523 | Collect translation corrections in Weblate | not applicable | tc-ui | — | They arrive with the next vendoring. |
 | #278 | Show the build in the app | covered | G3 (A5 and G1 done: G1 passes the build to both builds) | `about_commit_matches_the_release_record` | The smoke test reads About's commit from the installed app on each platform. |
@@ -419,7 +419,7 @@ the rebuild fixed it or does as tC4 does:
 | #42 | Keyboard pass on the Check pages | covered | B5b (B5a done) | port of `check-keyboard.spec.ts` | As in §4. |
 | #568 | A keyboard-only user cannot align | covered | B6 | `align_by_keyboard_only` | As in §2. Done by B6, journey `align_by_keyboard_only`: Enter or Space on a bank chip selects it (with Ctrl, Cmd or Shift for several), a card is a Tab stop while words are chosen (`tabindex` 0, else -1 so it can hold the focus) and Enter or Space places the chosen words; the focus stays through the redraw. A declared difference (residual of `align-workspace`). |
 | #599 | Keep the mode switch centred | covered | A5; FIX-R | journey switcher_stays_centred_while_the_save_indicator_changes in `parity/app/journeys/shell.test.mjs` | Within 1 px, in en and ar. |
-| #505 | No Project settings in the top bar | unit todo | A5; FIX-R reconciles | DOM parity of the in-project screens | Settings open from the Home card (B2). |
+| #505 | No Project settings in the top bar | not applicable | B2 | — | Outside tC4 4.0, which opens Project settings from the Home card only; the rebuild does the same (B2, journey `Settings from Home show the project as its files hold it, and Save waits for them`). FIX-R reconciled. |
 | #506 | QA label on the card, not the top bar | covered | B2, A5 | `debug_card_names_qa_server` | As in §5. |
 | #120 | Development builds use QA | covered | tc4 | `the_door43_server_defaults_by_build` | A8 and X test that reads still go to production under a QA config. |
 | #514 | Account menu | covered | A5, A8 | `the_keys_move_wrap_and_tab_closes_the_menu` (journey `account-menu`) | Rows and order as tC4 `AccountMenu.jsx` at d310bf3. |

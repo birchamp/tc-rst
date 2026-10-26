@@ -3,7 +3,7 @@
 use super::attach::{self, Place};
 use super::meta::{ChangeIdx, KeyIdx};
 use super::state::{BookStatus, FoldState, Local, Projected};
-use super::{Anomaly, AutoRule, Conflict, ConflictId, ConflictKind, KeyState, Resolved};
+use super::{Anomaly, Conflict, ConflictId, ConflictKind, KeyState, Resolved};
 use crate::change::ChangeBody;
 use crate::ids::{BatchId, ChangeId, DeviceId, DeviceSeq, PackId, WallTime};
 use crate::keys::RecordKey;
@@ -110,9 +110,9 @@ impl FoldState {
                 Local::Settled(c) => Resolved::Settled {
                     head: self.meta(*c).id,
                 },
-                Local::ByRule(c) => Resolved::SettledByRule {
-                    head: self.meta(*c).id,
-                    rule: AutoRule::SeedStubs,
+                Local::ByRule { head, rule, .. } => Resolved::SettledByRule {
+                    head: self.meta(*head).id,
+                    rule: *rule,
                 },
                 Local::Merged(merged) => Resolved::Merged {
                     merged: Box::new((*merged.0).clone()),
@@ -138,7 +138,7 @@ impl FoldState {
             .collect::<Option<_>>()?;
         self.sort_by_id(&mut idx);
         match super::merge::resolve_heads(self, key, idx).0 {
-            Local::Settled(c) | Local::ByRule(c) => super::merge::record_of(self, c),
+            Local::Settled(c) | Local::ByRule { head: c, .. } => super::merge::record_of(self, c),
             Local::Merged(merged) => Some((*merged.0).clone()),
             Local::Empty | Local::Conflict(_) | Local::Passage => None,
         }
@@ -273,18 +273,35 @@ impl FoldState {
         self.bytes(c)
     }
 
-    /// Every folded version of a record, oldest first by (at, id): its History.
+    /// Every folded version of a record, oldest first by (at, id): its History. A check's
+    /// History also lists the decisions of the checks that moved into it ([`Self::moved_into`]),
+    /// so a version a move left behind can be restored (ruling H5).
     pub fn history(&self, key: &RecordKey) -> Vec<ChangeId> {
-        let Some(k) = self.key_idx(key) else {
-            return Vec::new();
+        let moved: Vec<RecordKey> = match key {
+            RecordKey::Check(check) => self
+                .moved_into(check)
+                .into_iter()
+                .map(RecordKey::Check)
+                .collect(),
+            _ => Vec::new(),
         };
-        let mut out: Vec<(WallTime, ChangeId)> = self
-            .entry(k)
-            .changes
-            .iter()
-            .filter(|c| self.meta(**c).active())
-            .map(|c| (self.meta(*c).at, self.meta(*c).id))
-            .collect();
+        let mut out: Vec<(WallTime, ChangeId)> = Vec::new();
+        for (i, key) in std::iter::once(key).chain(&moved).enumerate() {
+            let Some(k) = self.key_idx(key) else {
+                continue;
+            };
+            out.extend(
+                self.entry(k)
+                    .changes
+                    .iter()
+                    .filter(|c| self.meta(**c).active())
+                    // A move left behind is no version of the check it moved to.
+                    .filter(|c| {
+                        i == 0 || !matches!(self.meta(**c).form, super::meta::Form::MovedTo)
+                    })
+                    .map(|c| (self.meta(*c).at, self.meta(*c).id)),
+            );
+        }
         out.sort();
         out.into_iter().map(|(_, id)| id).collect()
     }
@@ -320,13 +337,36 @@ impl FoldState {
             // A settled record shows its head's value; a merged one shows a value kept in
             // memory that stands for every head.
             let shown = match &entry.local {
-                Local::Settled(c) | Local::ByRule(c) => Some(*c),
+                Local::Settled(c) | Local::ByRule { head: c, .. } => Some(*c),
                 _ => None,
             };
             if shown.is_some_and(|c| !self.readable(c)) {
                 return Vec::new();
             }
-            return entry.heads.iter().map(|h| self.meta(*h).id).collect();
+            // The other versions of a carried file are files of their own beside it: an edit
+            // or a removal of the shown one leaves them (H5 keeps both).
+            if matches!(key, RecordKey::CarriedFile(_))
+                && let Local::ByRule {
+                    head,
+                    rule: super::AutoRule::Newest,
+                    ..
+                } = &entry.local
+            {
+                return vec![self.meta(*head).id];
+            }
+            let some_unreadable = matches!(
+                entry.local,
+                Local::ByRule {
+                    unreadable: true,
+                    ..
+                }
+            );
+            return entry
+                .heads
+                .iter()
+                .filter(|h| !some_unreadable || self.readable(**h))
+                .map(|h| self.meta(*h).id)
+                .collect();
         }
         let chosen = displayed
             .and_then(|id| self.change_idx(&id))

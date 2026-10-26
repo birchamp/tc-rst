@@ -4,7 +4,7 @@
 //! never converted, foreign entries kept, and a save never waiting for any of it.
 
 use crate::common::*;
-use crate::corpus::{OnDisk, psalms, psalms_x10};
+use crate::corpus::{OnDisk, psalms, psalms_larger};
 use sha2::Digest;
 use std::path::Path;
 use std::sync::Arc;
@@ -429,7 +429,7 @@ fn psalms_checkpoint(corpus: &OnDisk) -> CheckpointCost {
 /// the same on a corpus ten times the size.
 #[test]
 fn a_checkpoint_after_one_save_writes_only_changed_trees() {
-    let costs: Vec<CheckpointCost> = [psalms(), psalms_x10()]
+    let costs: Vec<CheckpointCost> = [psalms(), psalms_larger()]
         .into_iter()
         .map(psalms_checkpoint)
         .collect();

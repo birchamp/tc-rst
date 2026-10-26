@@ -1318,6 +1318,14 @@ impl Actions {
         self.s().sync_result.try_set(None);
     }
 
+    /// The Home card's link to its last sync: that sync's toast again (owner ruling H5).
+    pub fn show_last_sync(&self, project: ProjectRef, view: tc_api::jobs::SyncResultView) {
+        self.s().sync_result.try_set(Some(SyncToast {
+            project,
+            end: SyncEnd::Synced(view),
+        }));
+    }
+
     /// The toast's Review: the synced project's conflict review. The toast stays until the
     /// review is open, so a failed open keeps its links (tC4 #724).
     pub fn sync_review(&self) {

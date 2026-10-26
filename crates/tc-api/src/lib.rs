@@ -122,6 +122,7 @@ macro_rules! endpoint_table {
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
             job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
+            query "door43/lastSync": $crate::door43::LastSync => $crate::door43::LastSyncView;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 
@@ -180,7 +181,10 @@ macro_rules! endpoint_table {
             query "conflicts/list": $crate::conflicts::List => $crate::conflicts::ReviewView;
             query "conflicts/history": $crate::conflicts::History
                 => $crate::conflicts::HistoryView;
+            query "conflicts/versions": $crate::conflicts::Versions
+                => $crate::conflicts::HistoryView;
             command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
+            command "conflicts/restore": $crate::conflicts::Restore => $crate::write::Ack;
             command "conflicts/resolveBulk": $crate::conflicts::ResolveBulk
                 => $crate::conflicts::BulkKept;
 
