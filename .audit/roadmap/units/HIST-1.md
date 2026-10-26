@@ -4,7 +4,7 @@ title: History and Restore on the screens, and the Received sheet's replaced row
 track: A
 lane: app
 milestone: M3
-state: building
+state: verifying
 owner: shell lane (Claude Code e1bb3a0c)
 branch: track-HIST-1
 worktree: .worktrees/track-HIST-1
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 sessions (basis: C7a's History view exists; this adds entry points and one list of rows)
 merged: none
 updated: 2026-10-25
-next: Touched crates, clippy and the journeys that use these screens after the lens fixes, then push once and hand to the integration lane.
+next: With the integration lane; it depends on C7b and goes in the batch after it.
 blocked_by: none
 ---
 
@@ -80,3 +80,4 @@ replaced and can put their own version back in two clicks.
 - 2026-10-25 17:10 EDT | races lens (subagent of shell lane (Claude Code e1bb3a0c)) | verify | ca3ada86 | 0 blockers, 0 majors. Minors: an aligner Restore ignores a rail click made while it runs; a mark clicked while a check's Restore waits on the gate lands first; a lost reply after a saved Restore says it was not restored; the aligner's open History can be stale after an autosave or a sync; a doc comment on the wrong impl | .audit/roadmap/evidence/2026-10-25/HIST-1-lens-races.md
 - 2026-10-25 17:10 EDT | parity lens (subagent of shell lane (Claude Code e1bb3a0c)) | verify | ca3ada86 | 0 blockers. M1: grouped rows ("Titus 1:1 and 4 more") hid which records were replaced, where tC4 lists each replaced alignment (#791), and PLAN.md said tC4 only counts. Minors: no aria-expanded on the toggle; identical Restore names; no dir on History text; labels in the scripture font; a check's History named only the verse; toast rows as spans after the notes; the Home link indented when it wrapped; "Settings can set it back." | .audit/roadmap/evidence/2026-10-25/HIST-1-lens-parity.md
 - 2026-10-25 17:30 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Parity M1: one Received row per record (a direction's two records once); the rows are tC4's list right after "Changes from", scrolling past 30vh; PLAN.md's sentence on tC4 corrected. Minors fixed: aria-expanded, a Restore's aria-label names the version, dir=auto on History text, a check's History names its title, "Project settings can set it back.", the Home link does not wrap, the restore failure no longer says "Nothing was changed", the doc comment. The rest are in .audit/minors.tsv
+- 2026-10-26 | shell lane (Claude Code e1bb3a0c) | verify | none | Main 1a0c8469 and C7b's tip merged in; the save gate's lint allows the three Restores. tc-api, tc-app and tc-ui tests, clippy (workspace and wasm32), and the journeys conflict-kinds 2/2, rtl-project, check-detail, check-writes, conflict-review, sync-button, align, story and translate pass | node --test parity/app/journeys/conflict-kinds.test.mjs
