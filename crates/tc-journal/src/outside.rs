@@ -956,6 +956,13 @@ fn verse_has_words(record: Option<&Record>) -> bool {
     }
 }
 
+fn same_heads(a: &[ChangeId], b: &[ChangeId]) -> bool {
+    let (mut a, mut b) = (a.to_vec(), b.to_vec());
+    a.sort();
+    b.sort();
+    a == b
+}
+
 impl FoldState {
     /// Plans "Update a book from USFM" for `book` from `bytes`, the file `file_name` chosen
     /// from anywhere, so with no base (§13.6 U1-U5, H20). The file is read as the book's
@@ -976,6 +983,23 @@ impl FoldState {
         book: BookId,
         bytes: &[u8],
         file_name: &str,
+    ) -> Result<UpdatePlan, String> {
+        self.plan_update_book_from(book, bytes, file_name, &Base::Unknown)
+    }
+
+    /// [`FoldState::plan_update_book`] for a file whose base is known (§13.6 U2 a: the
+    /// kept copy of a book file another program changed, compared with the placement it was
+    /// found against). A record (a verse, the header, a chapter's front) the file changed
+    /// since the base while the project kept the base's heads is imported with those heads as
+    /// its parents, so no conflict; a record the file left as the base had it is nothing,
+    /// whatever the project did since. Every other rule is H20's, so a record changed on both
+    /// sides is still one to review.
+    pub fn plan_update_book_from(
+        &self,
+        book: BookId,
+        bytes: &[u8],
+        file_name: &str,
+        base: &Base,
     ) -> Result<UpdatePlan, String> {
         let mut plan = UpdatePlan::default();
         let mut parts = tc_usfm::codec::decompose_bytes(bytes)
@@ -1036,7 +1060,8 @@ impl FoldState {
             path: RepoPath::parse(&file.path()).map_err(|e| e.to_string())?,
             seen_md5: Md5::of(bytes),
         };
-        let outside = self.plan_outside_edit(&file, &decoded, &Base::Unknown, source, true);
+        let unknown = matches!(base, Base::Unknown);
+        let outside = self.plan_outside_edit(&file, &decoded, base, source, unknown);
         plan.book_added = outside.book_added.is_some();
         let cause = |unknown_base| {
             Cause::Import(crate::change::ImportSource::Usfm {
@@ -1098,6 +1123,19 @@ impl FoldState {
                             cause: cause(false),
                             record: change.record,
                         });
+                    } else if file_has
+                        && !change.parents.is_empty()
+                        && same_heads(&change.parents, &heads)
+                    {
+                        // Changed in the file since its base, and the project still holds
+                        // the base's heads: the file's edit, with no question.
+                        verse_imported.insert((*c, *v));
+                        plan.imported.push(key.clone());
+                        plan.changes.push(PlannedChange {
+                            parents: heads,
+                            cause: cause(false),
+                            record: change.record,
+                        });
                     } else if is_a_head {
                     } else {
                         verse_review.insert((*c, *v));
@@ -1126,6 +1164,18 @@ impl FoldState {
                     });
                     continue;
                 }
+            }
+            let heads = self.heads(&key);
+            if !change.parents.is_empty() && same_heads(&change.parents, &heads) {
+                // As for a verse: changed in the file since its base (a header, a chapter's
+                // front), and the project still holds the base's heads.
+                plan.imported.push(key);
+                plan.changes.push(PlannedChange {
+                    parents: heads,
+                    cause: cause(false),
+                    record: change.record,
+                });
+                continue;
             }
             let wanted = compare_key(&change.record, true);
             let in_history = self.history(&key).into_iter().any(|id| {

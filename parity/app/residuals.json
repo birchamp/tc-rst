@@ -115,6 +115,14 @@
       "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
       "until": null
     },
+    "home-checkpoint-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The banner is tC4's line for line: \"Checkpoint not saved: Failed to fetch Open the project again to retry.\" with the same computed style. Only the order of the two project cards differs. tC4's case is its Home state patched with commitError, with no project opened, so the OBS sample stands first; the Rust app reaches the banner the way a translator does, by opening Titus and leaving it with its checkpoint scripted to fail (test/script CheckpointFails), and an opened project moves to the top of Home in tC4 too. So the Bible card comes first, and the cards' pixels move with it.",
+      "until": null
+    },
     "home-list-error": {
       "layers": [
         "pixels",

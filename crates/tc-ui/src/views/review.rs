@@ -17,11 +17,14 @@ use tc_api::conflicts::{
     ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
+use tc_api::event::SessionMode;
 use tc_api::ids::{ChangeRef, Scope};
+use tc_api::session::{KeptCopy, OutsideEdits};
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
+use crate::app::outside::{KeptOffer, kept_import_label, kept_line, kept_offer, with_kept};
 use crate::app::load::Load;
 use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
@@ -220,21 +223,35 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
             })
         }
     };
-    let tabs = {
-        let actions = actions.clone();
+    let outside = {
+        let (sessions, at) = (s.server.sessions.clone(), at.clone());
         move || {
+            sessions.with(|sessions| {
+                sessions
+                    .iter()
+                    .find(|s| s.at == at)
+                    .map(|s| s.outside.clone())
+                    .unwrap_or_default()
+            })
+        }
+    };
+    let tabs = {
+        let (actions, outside) = (actions.clone(), outside.clone());
+        move || {
+            let kept = outside().kept.len();
             view.with(|v| {
                 let on_tab = {
                     let actions = actions.clone();
                     Callback::new(move |tab| actions.choose_review_tab(tab))
                 };
                 v.as_ref()
-                    .map(|v| tab_strip(on_tab, &tabs_shown(&v.tabs, tab), tab))
+                    .map(|v| tab_strip(on_tab, &tabs_shown(&with_kept(&v.tabs, kept), tab), tab))
             })
         }
     };
     let body = {
         let (s, actions, at) = (s.clone(), actions.clone(), at.clone());
+        let outside = outside.clone();
         move || {
             let outcome = review.with(|r| r.as_ref().and_then(|r| r.keep.outcome()));
             let error = outcome.map(outcome_callout);
@@ -255,7 +272,16 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
                     None => none(t(keys::conflicts::NONE, &[])).into_any(),
                 },
                 Some(ReviewEntries::Detached(entries)) => detached(entries).into_any(),
-                Some(ReviewEntries::Notices(entries)) => notices(entries).into_any(),
+                Some(ReviewEntries::Notices(entries)) => {
+                    let mode = s.server.sessions.with(|sessions| {
+                        sessions
+                            .iter()
+                            .find(|s| s.at == at)
+                            .map_or(SessionMode::Writable, |s| s.mode)
+                    });
+                    let refused = s.outside_refused.get();
+                    notices(&actions, &outside(), &mode, refused, entries).into_any()
+                }
                 None => ().into_any(),
             });
             (error, content)
@@ -1333,16 +1359,70 @@ fn detached(entries: &[DetachedEntry]) -> AnyView {
     )
 }
 
-/// The notices, one sentence each (STORAGE §8.5).
-fn notices(entries: &[NoticeEntry]) -> AnyView {
-    if entries.is_empty() {
+/// The notices, one sentence each (STORAGE §8.5); first each kept copy of a book another
+/// program changed, with *Import* and *Dismiss* until it is imported or dismissed (D1,
+/// INV-A-KEPT-COPY-STAYS-ON-A-SCREEN). No *Undo* follows an import (delta Q7).
+fn notices(
+    actions: &Actions,
+    outside: &OutsideEdits,
+    mode: &SessionMode,
+    refused: Option<String>,
+    entries: &[NoticeEntry],
+) -> AnyView {
+    if entries.is_empty() && outside.kept.is_empty() {
         return none(t(keys::review::NONE, &[])).into_any();
     }
+    // A refused *Import* or *Dismiss* says why above the rows, which stay.
+    let refused = refused.filter(|_| !outside.kept.is_empty()).map(|why| {
+        let style = measure().merge(&crate::css! { "margin-bottom": 12, "overflow-wrap": "anywhere" });
+        view! {
+            <Callout tone=CalloutTone::Warn style=style attrs=Attrs::from([("role", "alert"), ("data-testid", "outside-refused")])>
+                {why}
+            </Callout>
+        }
+    });
+    let kept = outside
+        .kept
+        .iter()
+        .map(|kept| kept_row(actions, kept, kept_offer(kept, &outside.waiting, mode)))
+        .collect_view();
     let rows = entries
         .iter()
         .map(|e| (String::new(), notice_text(&e.notice)))
         .collect();
-    list_box(rows, "review-notice", None)
+    view! { {refused}{kept}{list_box(rows, "review-notice", None)} }.into_any()
+}
+
+fn kept_row(actions: &Actions, kept: &KeptCopy, offer: KeptOffer) -> AnyView {
+    let import = (offer != KeptOffer::Nothing).then(|| {
+        let (actions, copy) = (actions.clone(), kept.copy.clone());
+        let on_click = Callback::new(move |_| actions.import_kept(copy.clone()));
+        let label = kept_import_label(kept);
+        view! {
+            <Button variant=ButtonVariant::Secondary on_click=on_click
+                attrs=Attrs::new().with("data-testid", "kept-import")>
+                {label}
+            </Button>
+        }
+    });
+    let dismiss = (offer == KeptOffer::ImportOrDismiss).then(|| {
+        let (actions, copy) = (actions.clone(), kept.copy.clone());
+        let on_click = Callback::new(move |_| actions.dismiss_kept(copy.clone()));
+        view! {
+            <Button variant=ButtonVariant::Ghost on_click=on_click
+                attrs=Attrs::new().with("data-testid", "kept-dismiss")>
+                {t(keys::common::DISMISS, &[])}
+            </Button>
+        }
+    });
+    view! {
+        <div data-testid="review-kept" style="margin-bottom: 10px; padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-card); border: var(--stroke-hair) solid var(--border); display: flex; align-items: center; gap: 10px;">
+            <span style="flex: 1; font-size: var(--fs-ui-sm); color: var(--uw-ink);">{kept_line(kept)}</span>
+            {import}
+            {dismiss}
+        </div>
+    }
+    .into_any()
 }
 
 /// One screen of the H5 packet (C7b step 2), drawn from its fixed data in the review's own

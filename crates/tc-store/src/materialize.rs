@@ -372,6 +372,7 @@ impl Writer {
             self.stamp_ns = self.stamp_ns.max(meta.mtime_ns);
         }
         self.manifest_changed = false;
+        self.publish_kept();
         Ok(())
     }
     /// M0: a hold ends when its file is gone, and the file is written again (§6.2): a
@@ -1283,7 +1284,7 @@ impl Writer {
         let mut taken = Taken::Accepted;
         for action in self.read_event(METADATA, disk_md5, &facts)? {
             match action {
-                Action::Record(base) => {
+                Action::Record(base) | Action::Keep(base) => {
                     taken = self.keep_edited_metadata(&disk, base)?;
                 }
                 Action::Hold(_) => {
@@ -1379,6 +1380,9 @@ impl Writer {
             State::Writing { old, new } => old.into_iter().map(|o| o.md5).chain([new]).collect(),
             State::Held { .. } | State::Unknown => Vec::new(),
         };
+        // The base of each live kept copy is what its *Import* compares with (delta §2.3).
+        let mut keep = keep;
+        keep.extend(self.kept_bases(rel));
         let keep: Vec<&str> = keep.iter().map(String::as_str).collect();
         let heads = self
             .heads_of(rel)

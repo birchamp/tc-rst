@@ -24,6 +24,7 @@ mod app {
     mod check;
     mod check_item;
     mod check_story;
+    mod checkpoints;
     pub mod common;
     mod conflicts;
     mod create;

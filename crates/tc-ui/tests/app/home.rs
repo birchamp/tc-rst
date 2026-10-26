@@ -247,3 +247,26 @@ fn the_resume_card_names_the_place_and_the_text() {
     assert_eq!(resume_place(&resume), "Story 3");
     assert_eq!(resume_line(&resume), "Last edited frame 2");
 }
+
+/// D1: Home's banner leads with "Checkpoint not saved" (tC4 `app.commitError`), and offers Ask
+/// for help only for a failure that is a problem in the app.
+#[test]
+fn the_checkpoint_banner_says_checkpoint_not_saved() {
+    use tc_ui::app::home::checkpoint_banner;
+    let mut failed = tc_api::app::FailedCheckpoint {
+        project: ProjectRef::parse("en_ult").unwrap(),
+        reason: "the disk is full".into(),
+        code: None,
+    };
+    assert_eq!(
+        checkpoint_banner(&failed),
+        ("Checkpoint not saved: the disk is full".to_owned(), None)
+    );
+    failed.code = Some("checkpoint.seal-failed".into());
+    let (text, help) = checkpoint_banner(&failed);
+    let help = help.expect("Ask for help");
+    assert_eq!(
+        (help.code.as_str(), help.text.as_str()),
+        ("checkpoint.seal-failed", text.as_str())
+    );
+}

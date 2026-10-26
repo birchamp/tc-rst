@@ -491,3 +491,21 @@ pub fn tree_differs_from_its_packs(
     }
     differs
 }
+
+/// *Import* of the newest kept copy of every book that waits for an answer (delta §2.11 Q4),
+/// as the one question's *Import* does; the reports, in the order of the books.
+pub fn import_waiting(handle: &ProjectHandle) -> Vec<tc_store::ImportReport> {
+    handle.wait_idle();
+    let reports = handle
+        .waiting_books()
+        .into_iter()
+        .map(|book| handle.import_kept(&book.kept.copy).wait().unwrap())
+        .collect();
+    handle.wait_idle();
+    reports
+}
+
+/// The imported and to-review counts of each report.
+pub fn counts(reports: &[tc_store::ImportReport]) -> Vec<(u32, u32)> {
+    reports.iter().map(|r| (r.imported, r.to_review)).collect()
+}

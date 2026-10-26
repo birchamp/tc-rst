@@ -1,0 +1,36 @@
+{
+  "path": "session/importKept",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "23232323232323232323232323232323",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "copy": ".tc/external/TIT.usfm.20261024T101500Z"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "file": "ingredients/TIT.usfm",
+      "book": "TIT",
+      "imported": 12,
+      "toReview": 2,
+      "bookAdded": false,
+      "outside": {
+        "waiting": [],
+        "kept": []
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
