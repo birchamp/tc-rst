@@ -410,7 +410,7 @@ browserTest('a_refused_verse_switch_keeps_the_open_verse_shown', async () => {
 /** tC4 #807: after a sync, Home waited forever on a span save queued behind a refused
  * alignment save. The rebuild has no such queue, and the aligner has no text field: leaving
  * Translate for it saved every field. The gate asks the server to save the links; a refusal no
- * retry in this open can fix (the project was opened again under the aligner) lets the person
+ * retry in this open can fix (StaleScope, faked here as the server would answer it) lets the person
  * leave in one click, as a field's does (#801); the server's close keeps the links' draft (its
  * own tests). A full disk still holds the person
  * (queued_links_hold_the_close_guard_through_save_failure_and_retry). */
@@ -420,11 +420,16 @@ browserTest('a_refused_align_save_behind_a_span_save_lets_home_leave', async () 
     await chip(page, 'fe').click();
     await card(page, 'πίστιν').click();
     await until('seven words placed', async () => (await placed(page)) === '7 of 27 words placed');
-    await page.route('**/api/v1/align/flush', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"ok","value":{"type":"failed","value":{"type":"staleScope"}}}' }));
+    let refused = 0;
+    await page.route('**/api/v1/align/flush', (route) => {
+      refused += 1;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"ok","value":{"type":"failed","value":{"type":"staleScope"}}}' });
+    });
     await page.getByTestId('project-switch').click();
     await page.getByTestId(`project-${BIBLE}`).waitFor({ timeout: 10_000 }).catch(() => {
       throw new Error('INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR: Home is reached in one click after a refused alignment save');
     });
+    assert.ok(refused >= 1, 'the gate met the refusal');
   });
 });
 

@@ -177,6 +177,7 @@ browserTest('failed_open_keeps_the_sync_toast_links', async () => {
     await page.route('**/api/v1/session/open', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(refusal) }), { times: 1 });
     await toast(page).getByTestId('sync-download').click();
     await page.getByTestId('home-open-error').waitFor();
+    await sleep(500);
     assert.equal(await toast(page).count(), 1, 'INV-THE-SYNC-TOAST-OUTLIVES-A-REFUSED-OPEN: the toast stays when its open is refused');
     assert.deepEqual(await links(), before, 'the toast keeps every link it had');
     assert.equal(await toast(page).textContent(), said, 'and its counts');
