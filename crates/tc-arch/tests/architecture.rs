@@ -98,6 +98,7 @@ const EDGES: &[(&str, &[&str])] = &[
             "tc-obs",
             "tc-resources",
             "tc-store",
+            // E1a: the sync, share and join operations behind the sync screens.
             "tc-sync",
             "tc-usfm",
             "tc-versification",

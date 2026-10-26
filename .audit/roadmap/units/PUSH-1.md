@@ -4,10 +4,10 @@ title: A large push goes to Door43 as a chain of commits, so a poor link can fin
 track: A
 lane: storage
 milestone: M2
-state: todo
-owner: none
-branch: none
-worktree: none
+state: verifying
+owner: PUSH-1 lane (Claude Code e939c6d5)
+branch: track-PUSH-1
+worktree: .worktrees/track-PUSH-1
 depends: [LOSS-1, E1a]
 needs_owner: []
 proves: [P1]
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 d (basis: X's push and confirm, steps 4-5, about a day, plus the chain's tree builds)
 merged: none
 updated: 2026-10-26
-next: Claim this card, then do step 1.
+next: Ready for a batch: hand to the integration lane.
 blocked_by: none
 ---
 
@@ -109,8 +109,21 @@ but it never reaches Door43 or the team, and nothing offers the exchange file in
 
 ## References
 
+- GitHub issue: https://github.com/birchamp/tc-rst/issues/2.
+- Owner ruling, 2026-10-26: "REL-1 doesn't wait for PUSH-1; it lands in the next release."
 - `docs/STORAGE.md` §9.1 S7, §9.5 "Large pushes are a chain", §14, §15 L96; `.audit/roadmap/units/LOSS-1.md`.
 
 ## Log
 
 - 2026-10-26 12:50 EDT | LOSS-1 lane (Claude Code d63a7912) | created | none | at the orchestrator's word: LOSS-1 found §9.5's push chain is not in the code (one `git::push` of HEAD in S8), so L96 has no protection to test | crates/tc-sync/src/sync.rs
+- 2026-10-26 13:18 EDT | PUSH-1 lane (Claude Code e939c6d5) | claim | none | claimed at the orchestrator's word, on a branch from track-LOSS-1 | .worktrees/track-PUSH-1
+- 2026-10-26 13:32 EDT | PUSH-1 lane (Claude Code e939c6d5) | ruling | none | owner, 2026-10-26, through the orchestrator: "REL-1 doesn't wait for PUSH-1; it lands in the next release."; the card links issue #2 at the owner's ask | https://github.com/birchamp/tc-rst/issues/2
+- 2026-10-26 15:12 EDT | PUSH-1 lane (Claude Code e939c6d5) | step 1 | none | C5 and S7 write a chain when a commit's new blobs pass 16 MiB: each link is its base's tree with more new packs and their metadata.json, taken only while FoldState::completes_batch says no batch becomes whole, so it keeps its base's derived files; a_large_commit_is_a_chain_of_valid_commits passes and fails with the chain off (bound u64::MAX) | cargo test -p tc-store --test store a_large_commit_is_a_chain
+- 2026-10-26 15:13 EDT | PUSH-1 lane (Claude Code e939c6d5) | step 2 | none | S8 pushes the commits between Door43's commit and HEAD as links of up to 16 MiB, each from refs/tc/push-link and read back before the next; a failure names the last confirmed link; three sync.unreachable failures of one chain (counted in .tc/sync.json chainFailures) set offer_exchange; sync_large_push_chain_resumes and a_large_push_that_keeps_breaking_offers_the_exchange_file pass and both fail with links_of off; STORAGE §9.5 and L96 updated | cargo test -p tc-sync --test sync -- sync_large_push_chain_resumes a_large_push_that_keeps_breaking
+- 2026-10-26 16:34 EDT | PUSH-1 lane (Claude Code e939c6d5) | verify | 7bca94e9 | loss lens (an independent subagent): merge, no blocker or major. 1 Code: store builds the chain, one push entry point. 2 Checks: the three tests pass and fail with the chain off; a merge-path test passed. 3 Reach: large first share, long offline history, split batch received. 4 Siblings: checkpoint and merge, sync.json writers. 5 No loss: none under crashes, full disk, races, consolidated, held or released batches, partial chain on Door43. 6 Prose: S7 and three comments stale | crates/tc-store/tests/store/intake.rs; crates/tc-sync/tests/sync/door43.rs
+- 2026-10-26 16:34 EDT | PUSH-1 lane (Claude Code e939c6d5) | fix | none | loss-lens minors: the failure count no longer resets when saves make a new tip between tries; S7 prose and three comments name the last link as a chained merge's second parent; a_large_merge_is_a_chain_grown_from_door43s_commit kept; the offer's app wiring and non-app commits in an adopted history went to minors.tsv | cargo test -p tc-store --test store -- a_large_; cargo test -p tc-sync --test sync -- a_large_push sync_large
+- 2026-10-26 17:24 EDT | PUSH-1 lane (Claude Code e939c6d5) | verify | 7d2e6362 | races and protocol lens (an independent subagent): fix_first, one major. 1 Code: push and merge chains sound under races; recreated lost when a recreating chain breaks. 2 Checks: L96 and the offer test; probes showed a teammate push between links and a chained first share work. 3 Reach: big first share, upgrade, USB-received project, deleted branch on a poor link. 4 Siblings: share goes through sync(); join and connect updated. 5 No loss: none in any race run; copies converge. 6 Prose: §9.5 should say the H5 notice rule | crates/tc-sync/tests/sync/door43.rs
+- 2026-10-26 17:24 EDT | PUSH-1 lane (Claude Code e939c6d5) | verify | 7d2e6362 | browser and parity lens (an independent subagent): merge, no blocker or major. 1 Code: S8's one push becomes push_chain; tc-app, tc-ui, tc-api untouched. 2 Checks: the chain tests pin the outcome; no journey affected. 3 Reach: chain reachable; the offer is not yet (minor). 4 Siblings: toast paths unchanged. 5 No loss: a link keeps its base's derived files. 6 Prose: tC4 (d310bf3, syncOperation.ts) pushes once and never resumes; declare the chain in APP-DESIGN; the offer needs words tC4 lacks, owner to be asked under Q-9 by the card that wires it | docs/APP-DESIGN.md; .audit/minors.tsv
+- 2026-10-26 17:24 EDT | PUSH-1 lane (Claude Code e939c6d5) | fix | none | races major: a deleted branch put back by the first links of a chain that then broke was never said; .tc/sync.json putBackUnsaid keeps the H5 notice for the next sync that gets through; a_branch_put_back_by_a_broken_chain_is_said_by_the_next_sync passes and fails without the fix. Also: the last push of a resumed chain counts toward the offer; APP-DESIGN declares the chain; four minors to minors.tsv | cargo test -p tc-sync --test sync -- a_branch_put_back sync_large_push a_large_push_that_keeps
+- 2026-10-26 19:20 EDT | PUSH-1 lane (Claude Code e939c6d5) | fix | a30d6f24 | gate: one save on the Psalms corpus wrote a link (checkpoint op-count test), since the fold holds no pack for changes sealed this session; the link check now reads each new pack's changes from its blob, and a pack whose path the base holds counts like a consolidated one (an independent read of the rework found that case). Also: batch_of listed in the op-count lint; E1a's tc-app to tc-sync edge and the fake's remove_repo allowed in tc-arch | cargo test -p tc-store --test store (413 pass); cargo test -p tc-sync --test sync (43 pass)
+- 2026-10-26 19:20 EDT | PUSH-1 lane (Claude Code e939c6d5) | gate | none | scripts/gates.sh --touched on 9054a761 (track-E1a2 20c3faeb and track-LOSS-1 merged): every step passed but one journey, align a_refused_verse_switch_keeps_the_open_verse_shown, which hung on 'seven words placed' under load and passed alone on the next tree; store and sync suites pass after the last fix | scratchpad gates2.log quoted here

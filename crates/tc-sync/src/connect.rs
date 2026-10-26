@@ -51,6 +51,8 @@ pub async fn connect(
             branch: branch.to_owned(),
             confirmed: None,
             username_device,
+            chain_failures: None,
+            put_back_unsaid: false,
         })
         .await?;
     Ok(())

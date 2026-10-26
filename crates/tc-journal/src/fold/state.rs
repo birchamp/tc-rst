@@ -1168,6 +1168,18 @@ impl FoldState {
         out
     }
 
+    /// §9.5: the batch of change `id` as a link of a large push's chain needs it: its valid
+    /// changes, whether the fold applies it whole, and whether a release names it (then some
+    /// of its changes apply one by one). `None` for a change the fold does not hold.
+    pub fn batch_of(&self, id: &ChangeId) -> Option<super::BatchOf> {
+        let b = self.meta(self.change_idx(id)?).batch;
+        Some(super::BatchOf {
+            members: self.members(b).iter().map(|m| self.meta(*m).id).collect(),
+            whole: self.is_complete(b),
+            released: self.released.get(&self.batch(b).id).is_some(),
+        })
+    }
+
     /// F1 for a fold from scratch: the tables [`FoldState::insert`] builds one change at a
     /// time, built in passes that each fill one table. A pass reads its input in order and
     /// does one lookup per change, so the lookups of neighbouring changes overlap; a
