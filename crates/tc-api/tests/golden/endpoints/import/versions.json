@@ -1,0 +1,25 @@
+{
+  "path": "import/versions",
+  "kind": "startJob",
+  "net": "importVersions",
+  "request": {
+    "request": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+    "files": [
+      {
+        "upload": "00000000000000000000000000000007",
+        "name": "cfm_fbt_tit_book.zip"
+      }
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "needsInternet",
+      "value": "importVersions"
+    }
+  }
+}

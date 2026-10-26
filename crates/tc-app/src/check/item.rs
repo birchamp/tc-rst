@@ -106,7 +106,6 @@ fn text_at(read: &CountingSnapshot, key: &RecordKey, target: &CheckTarget) -> Op
     let Some(Record::Verse {
         value:
             VerseValue::Text {
-                marker,
                 words,
                 layout,
                 last,
@@ -127,8 +126,7 @@ fn text_at(read: &CountingSnapshot, key: &RecordKey, target: &CheckTarget) -> Op
         }
     };
     let content = format!("{words}{layout}");
-    (inside && tc_usfm::codec::is_drafted(marker.term(), &content))
-        .then(|| TargetText::new(content))
+    (inside && tc_usfm::codec::words_drafted(&words)).then(|| TargetText::new(content))
 }
 
 /// The record a story check's frame text is in, with that text as the fold reads it (the

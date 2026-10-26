@@ -748,16 +748,24 @@ fn a_newer_alignment_draft_survives_a_crash_before_the_saves_ack() {
         })
         .wait()
         .unwrap();
-    assert!(
-        !kept.new_conflicts.is_empty(),
-        "the intervening save stays a conflict"
-    );
+    // Ruling H5: no conflict. The newest by (at, id) wins; the test clock starts again
+    // at reopen, so here the save does. Both versions stay heads, in History.
+    assert!(kept.new_conflicts.is_empty(), "no alignment conflict");
     let snapshot = handle.snapshot();
-    let heads = snapshot.fold().heads(&key);
+    let fold = snapshot.fold();
+    let heads = fold.heads(&key);
+    assert_eq!(heads.len(), 2, "the intervening save stays a head");
+    let history = fold.history(&key);
+    assert!(heads.iter().all(|head| history.contains(head)));
     assert!(heads.iter().any(|head| {
-        matches!(snapshot.fold().body(head).map(|body| body.record),
+        matches!(fold.body(head).map(|body| body.record),
             Some(Record::Alignment { value, .. }) if value.alignments == newer.alignments)
     }));
+    let newest = heads
+        .iter()
+        .max_by_key(|h| (fold.body(h).unwrap().at, **h))
+        .unwrap();
+    assert_eq!(fold.projected(&key), fold.body(newest).map(|b| b.record));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }

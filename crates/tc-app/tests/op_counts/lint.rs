@@ -73,6 +73,8 @@ const COSTS_LESS: &[(&str, &[&str])] = &[
             "body",
             "raw",
             "history",
+            // The moves into one check: what it touches, never the project (H5).
+            "moved_into",
             "shown_heads",
             "review_token",
             "token",

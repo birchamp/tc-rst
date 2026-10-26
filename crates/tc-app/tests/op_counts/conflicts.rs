@@ -34,11 +34,16 @@ async fn conflict_tab_costs_its_conflicts() {
         let listed = listed.lock().unwrap().clone();
         let (on_small, on_large) = listed.split_at(ReviewTab::ALL.len());
         let conflicts = |counts: &[u64]| counts[..4].iter().sum::<u64>();
+        let factor = tc_corpus::Spec::test_factor();
         assert!(
             conflicts(on_small) > 0 && conflicts(on_large) > conflicts(on_small),
-            "{backing:?}: the corpora hold conflicts, ten times as many in the larger one: {listed:?}"
+            "{backing:?}: the corpora hold conflicts, more in the one {factor} times larger: {listed:?}"
         );
-        for (cost, counts, scale) in [(small, on_small, "Psalms"), (large, on_large, "ten times")] {
+        let larger = format!("{factor} times");
+        for (cost, counts, scale) in [
+            (small, on_small, "Psalms"),
+            (large, on_large, larger.as_str()),
+        ] {
             let entries: u64 = counts.iter().sum();
             let app = cost.app;
             assert_eq!(
@@ -189,7 +194,10 @@ async fn a_restore_costs_its_record() {
             },
         )
         .await;
-        for (cost, scale) in [(small, "Psalms"), (large, "ten times")] {
+        for (cost, scale) in [
+            (small, "Psalms".to_owned()),
+            (large, format!("{} times", tc_corpus::Spec::test_factor())),
+        ] {
             // The old version's body, the token checks and the reply's token: a constant.
             assert!(
                 cost.app.records_read <= 2 * READS_PER_CONFLICT,
@@ -239,10 +247,25 @@ async fn a_bulk_keep_costs_its_conflicts() {
                 let ReviewEntries::Conflicts(entries) = view.entries else {
                     panic!()
                 };
-                let MadeBy::Person(label) = &entries[0].versions[0].by else {
-                    panic!("{:?}", entries[0])
+                // C7a keeps a person's version only where a conflict holds exactly one of
+                // theirs, so the person is one who does somewhere in this corpus.
+                let who = |by: &MadeBy| match by {
+                    MadeBy::Person(label) => Some(label.who.clone()),
+                    _ => None,
                 };
-                inputs.lock().unwrap().push((label.who.clone(), entries));
+                let person = entries
+                    .iter()
+                    .find_map(|e| {
+                        e.versions.iter().filter_map(|v| who(&v.by)).find(|p| {
+                            e.versions
+                                .iter()
+                                .filter(|v| who(&v.by).as_ref() == Some(p))
+                                .count()
+                                == 1
+                        })
+                    })
+                    .expect("a person who holds exactly one version of some conflict");
+                inputs.lock().unwrap().push((person, entries));
                 if let Some(memory) = s.memory() {
                     memory.script(&s.folder, Scripted::Written).unwrap();
                 }
@@ -276,8 +299,12 @@ async fn a_bulk_keep_costs_its_conflicts() {
         .await;
         let listed = listed.lock().unwrap().clone();
         for (cost, (n, left), scale) in [
-            (small, listed[0], "Psalms"),
-            (large, listed[1], "ten times"),
+            (small, listed[0], "Psalms".to_owned()),
+            (
+                large,
+                listed[1],
+                format!("{} times", tc_corpus::Spec::test_factor()),
+            ),
         ] {
             assert!(
                 n > 0 && left < n,
@@ -304,7 +331,8 @@ async fn a_bulk_keep_costs_its_conflicts() {
         }
         assert!(
             listed[1].0 > listed[0].0,
-            "{backing:?}: ten times the conflicts: {listed:?}"
+            "{backing:?}: {} times the conflicts: {listed:?}",
+            tc_corpus::Spec::test_factor()
         );
     }
 }

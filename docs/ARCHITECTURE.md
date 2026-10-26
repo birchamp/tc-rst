@@ -75,7 +75,7 @@ Every crate lives in `crates/`. Arrows read "is used by".
 | `tc-align` | Alignment editing, keeping alignments across edits, suggestions. |
 | `tc-obs` | Open Bible Stories: stories and frames. |
 | `tc-sync` | Door43 sync, share, join and connect, and USB exchange (unit X): one state machine over `tc-store`, the network through `tc_door43::git`. It writes no project file itself: project files go through `tc-store`'s atomic writes; it writes only the exchange file it exports. |
-| `tc-import` | Import into a new project's records: tC3 projects (unit I). tC4 4.0, raw USFM and Scripture Burrito imports come after the first release. Pure: the store writes the records. |
+| `tc-import` | Import into a new project's records: tC3 projects (unit I). tC4 4.0, raw USFM and Scripture Burrito imports come after the first release. Pure: the store writes the records; `tc-app`'s import port calls it (F1). |
 | `tc-export` | The print model of a book or an OBS project, on `tc-api`'s page setup and print parts; the producers behind `produce`: aligned and plain USFM (on `tc-usfm`'s codec, `tc-align`'s one weave and review rule, `tc-journal`'s alignment value), OBS Markdown, print HTML for PDF. Returns bytes; the app zips and writes them. |
 | `tc-api` | Request and response types shared by the server and the UI. Builds for wasm32. |
 | `tc-app` | Application services: the operations behind every screen. |

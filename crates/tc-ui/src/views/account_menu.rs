@@ -670,6 +670,32 @@ fn menu_rows_view(
                 })
         }
     };
+    // F1: a Bible open on screen can take a book edited elsewhere (STORAGE §13.6). Stories have
+    // no update yet: tc-api has no story update.
+    let update_book = {
+        let (actions, project) = (actions.clone(), s.project.clone());
+        move || {
+            let actions = actions.clone();
+            project
+                .with(|p| {
+                    p.as_ref().is_some_and(|p| {
+                        p.flavor == crate::app::shell::ProjectFlavor::TextTranslation
+                    })
+                })
+                .then(|| {
+                    view! {
+                        <Rule style=crate::css! { "margin": "5px 4px" } />
+                        {Row::new(
+                            "account-update-book",
+                            || t(keys::account::UPDATE_BOOK, &[]),
+                            choose(Box::new(move || actions.open_update_book())),
+                        )
+                        .sub(|| t(keys::account::UPDATE_BOOK_HINT, &[]))
+                        .view()}
+                    }
+                })
+        }
+    };
     let report = actions.clone();
     view! {
         {account_rows}
@@ -682,6 +708,7 @@ fn menu_rows_view(
             .view()}
         {Row::new("account-report", || t(keys::account::REPORT, &[]), choose(Box::new(move || report.report_problem()))).view()}
         {Row::new("account-about", || t(keys::account::ABOUT, &[]), choose(Box::new(move || about.set(Some(AboutStep::About))))).view()}
+        {update_book}
         {sign_out}
     }
 }

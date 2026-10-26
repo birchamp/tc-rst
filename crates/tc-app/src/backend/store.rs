@@ -798,21 +798,15 @@ impl ProjectStore for StoreBackend {
     }
 
     fn create(&self, new: super::NewProjectSpec) -> Result<(), super::CreateFailure> {
-        use super::CreateFailure;
-        let created = self.store.create(&tc_store::NewProject {
-            name: new.folder.as_str().to_owned(),
-            kind: new.kind,
-            records: new.records,
-            books: Vec::new(),
-        });
-        match created {
-            Ok(_) => Ok(()),
-            Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
-            Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
-                tc_store::Refusal::NotValidInBurrito(why),
-            ))) => Err(CreateFailure::NotHeld(why)),
-            Err(error) => Err(CreateFailure::Failed(error.to_string())),
-        }
+        create_failure(self.store.create(&new_project(new)))
+    }
+
+    fn create_imported(
+        &self,
+        new: super::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), super::CreateFailure> {
+        create_failure(self.store.create_imported(&new_project(new), cause))
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
@@ -844,13 +838,26 @@ impl ProjectStore for StoreBackend {
 /// thread of its own, so the reports are written from another, and the start never waits for
 /// them. "Ask for help" attaches them; E1b tells the person of a join that did not finish, and
 /// F1 of an import (APP-DESIGN §10).
+///
+/// An import's removal also sets `import_removed` for Home's next listing, and Home lists again.
 pub(crate) fn report_removed_staging(
     backend: Arc<StoreBackend>,
     reports: ReportLog,
     clock: Arc<dyn Clock>,
+    bus: crate::events::EventBus,
+    import_removed: Arc<std::sync::atomic::AtomicBool>,
 ) {
-    fn record(backend: &StoreBackend, reports: &ReportLog, clock: &dyn Clock, started: WallMs) {
-        for removed in backend.removed_at_start() {
+    let started = clock.now();
+    let record = move |started: WallMs| {
+        let removed = backend.removed_at_start();
+        if removed
+            .iter()
+            .any(|r| r.kind == Some(tc_store::StagingKind::Import))
+        {
+            import_removed.store(true, std::sync::atomic::Ordering::SeqCst);
+            bus.publish(tc_api::event::Event::ProjectsChanged);
+        }
+        for removed in removed {
             let (op, outcome, facts) = staging_report(&removed);
             reports.add(
                 op,
@@ -860,17 +867,14 @@ pub(crate) fn report_removed_staging(
                 clock.now(),
             );
         }
-    }
-    let started = clock.now();
+    };
     let spawned = {
-        let (backend, reports, clock) = (backend.clone(), reports.clone(), clock.clone());
-        spawn("tc-app staging report", move || {
-            record(&backend, &reports, clock.as_ref(), started);
-        })
+        let record = record.clone();
+        spawn("tc-app staging report", move || record(started))
     };
     if spawned.is_none() {
         // No thread to be had: wait for the cleanup here rather than lose the reports.
-        record(&backend, &reports, clock.as_ref(), started);
+        record(started);
     }
 }
 
@@ -997,6 +1001,29 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
 
 /// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
 /// that holds none (tC4 #766): every group or, should one not convert, none.
+fn new_project(new: super::NewProjectSpec) -> tc_store::NewProject {
+    tc_store::NewProject {
+        name: new.folder.as_str().to_owned(),
+        kind: new.kind,
+        records: new.records,
+        books: Vec::new(),
+    }
+}
+
+fn create_failure(
+    created: Result<std::path::PathBuf, tc_store::CreateError>,
+) -> Result<(), super::CreateFailure> {
+    use super::CreateFailure;
+    match created {
+        Ok(_) => Ok(()),
+        Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
+        Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
+            tc_store::Refusal::NotValidInBurrito(why),
+        ))) => Err(CreateFailure::NotHeld(why)),
+        Err(error) => Err(CreateFailure::Failed(error.to_string())),
+    }
+}
+
 pub(crate) fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
     let pins = tc_resources::suite::project_pins();
     PinGroup::ALL
@@ -1047,6 +1074,7 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
         seq: reply.seq,
         changes: reply.changes,
         skipped: reply.skipped,
+        kept: reply.kept,
     }
 }
 

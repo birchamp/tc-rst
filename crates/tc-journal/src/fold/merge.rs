@@ -173,7 +173,7 @@ pub(crate) fn resolve_heads(
         heads.iter().map(|h| value_of(state, *h)).collect();
     let mut unreadable = values.iter().any(Result::is_err);
     if !unreadable && values.iter().all(|v| *v == values[0]) {
-        return equal_values(state, &heads);
+        return equal_values(state, key, &heads);
     }
     // Stub rules: a seed stub is absorbed by any head that is not one; if every head is a
     // stub, the smallest id stays.
@@ -182,7 +182,14 @@ pub(crate) fn resolve_heads(
     if seed_stub_kind(key) {
         let stubs: Vec<bool> = heads.iter().map(|h| state.meta(*h).stub()).collect();
         if stubs.iter().all(|s| *s) {
-            return (Local::ByRule(heads[0]), SmallVec::new());
+            return (
+                Local::ByRule {
+                    head: heads[0],
+                    rule: super::AutoRule::SeedStubs,
+                    unreadable: false,
+                },
+                SmallVec::new(),
+            );
         }
         if stubs.iter().any(|s| *s) {
             let kept: Vec<(ChangeIdx, Result<Option<Json>, Unreadable>)> = heads
@@ -193,13 +200,20 @@ pub(crate) fn resolve_heads(
                 .map(|(pair, _)| (pair.0.to_owned(), pair.1))
                 .collect();
             if kept.len() == 1 {
-                return (Local::ByRule(kept[0].0), SmallVec::new());
+                return (
+                    Local::ByRule {
+                        head: kept[0].0,
+                        rule: super::AutoRule::SeedStubs,
+                        unreadable: false,
+                    },
+                    SmallVec::new(),
+                );
             }
             heads = kept.iter().map(|(h, _)| *h).collect();
             values = kept.into_iter().map(|(_, v)| v).collect();
             unreadable = values.iter().any(Result::is_err);
             if !unreadable && values.iter().all(|v| *v == values[0]) {
-                return equal_values(state, &heads);
+                return equal_values(state, key, &heads);
             }
         }
     }
@@ -221,7 +235,7 @@ pub(crate) fn resolve_heads(
         ancestry.bases.iter().map(|b| value_of(state, *b)).collect();
     let values: Result<Vec<Option<Json>>, Unreadable> = values.into_iter().collect();
     let (Ok(values), Ok(base_values)) = (values, base_values) else {
-        return conflict(state, &heads, true);
+        return conflict(state, key, &heads, true);
     };
     let outcome = merge_units(key, &values, &base_values);
     match outcome.merged {
@@ -235,30 +249,97 @@ pub(crate) fn resolve_heads(
             ),
             // A merged value that does not decode is a conflict; so is a template whose
             // bytes could not be read again, until they can.
-            None => conflict(state, &heads, state.bytes(heads[0]).is_none()),
+            None => conflict(state, key, &heads, state.bytes(heads[0]).is_none()),
         },
-        None => conflict(state, &heads, false),
+        None => conflict(state, key, &heads, false),
     }
 }
 
 /// Several heads with equal values: merged, standing for all of them.
-fn equal_values(state: &FoldState, heads: &[ChangeIdx]) -> (Local, SmallVec<[BatchIdx; 1]>) {
+fn equal_values(
+    state: &FoldState,
+    key: &RecordKey,
+    heads: &[ChangeIdx],
+) -> (Local, SmallVec<[BatchIdx; 1]>) {
     match record_of(state, heads[0]) {
         Some(record) => (
             Local::Merged(Box::new((Arc::new(record), MergeHow::EqualValues))),
             SmallVec::new(),
         ),
         // Read a moment ago, unreadable now: judged again when it can be read.
-        None => conflict(state, heads, true),
+        None => conflict(state, key, heads, true),
     }
+}
+
+/// Owner ruling H5: only text conflicts. For these kinds the newest head wins with no
+/// question, and the others stay in History, where Restore brings one back.
+pub(crate) fn newest_wins(key: &RecordKey) -> bool {
+    matches!(
+        key,
+        RecordKey::Alignment(..)
+            | RecordKey::Check(_)
+            | RecordKey::Comment(_)
+            | RecordKey::Pins(_)
+            | RecordKey::ResourcesExtra(_)
+            | RecordKey::Setting(_)
+            | RecordKey::ProjectMeta(_)
+            | RecordKey::Versification
+            | RecordKey::DeviceProfile(_)
+            | RecordKey::BookLayout(_)
+            // The newest keeps the name; the other versions stay beside it (carried_files).
+            | RecordKey::CarriedFile(_)
+    )
+}
+
+/// *Restore the text* against *Start empty*: one of them empties verse text, so the person
+/// decides (H5 keeps verse text a conflict).
+fn restore_race(state: &FoldState, heads: &[ChangeIdx]) -> bool {
+    let how = |wanted| {
+        heads
+            .iter()
+            .any(|h| state.meta(*h).form == super::meta::Form::Presence(Some(wanted)))
+    };
+    how(crate::record::PresentHow::RestoredText) && how(crate::record::PresentHow::StartedEmpty)
 }
 
 fn conflict(
     state: &FoldState,
+    key: &RecordKey,
     heads: &[ChangeIdx],
     unreadable: bool,
 ) -> (Local, SmallVec<[BatchIdx; 1]>) {
     let provisional = provisional(state, heads);
+    // An outside edit recorded without a known base (every comment edited in a file, §11.1)
+    // never wins by itself, and the person's own edit is never dropped unasked: the outside
+    // edit's review (*Accept all from the file*) decides, so it stays a conflict.
+    let ranks: BTreeSet<u8> = heads.iter().map(|h| state.meta(*h).rank()).collect();
+    let outside_without_base = ranks.len() > 1;
+    if !outside_without_base
+        && (newest_wins(key)
+            || (matches!(key, RecordKey::BookPresence(_)) && !restore_race(state, heads)))
+    {
+        // A check that moved holds no decision at its old place: a move there wins over a
+        // decision, newer or not, so the decision a teammate saved meanwhile is listed in the
+        // History of the check it moved to (moved_into) and never shown as a second copy.
+        let moves: Vec<ChangeIdx> = heads
+            .iter()
+            .copied()
+            .filter(|h| matches!(state.shape(*h), Shape::MovedTo { .. }))
+            .collect();
+        let head = if matches!(key, RecordKey::Check(_)) && !moves.is_empty() {
+            self::provisional(state, &moves)
+        } else {
+            provisional
+        };
+        return (
+            Local::ByRule {
+                head,
+                rule: super::AutoRule::Newest,
+                unreadable,
+            },
+            SmallVec::new(),
+        );
+    }
     let ids: Vec<crate::ids::ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
     (
         Local::Conflict(Box::new(super::state::LocalConflict {

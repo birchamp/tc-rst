@@ -158,13 +158,22 @@
       }
     ],
     "J9a": {
-      "pending": "F1"
+      "file": "parity/app/journeys/import.test.mjs",
+      "tests": [
+        "refuse: a damaged file is refused on the review page and nothing is written",
+        "all or nothing: a write failure leaves no project and says import.write-failed",
+        "tC3 offline: the review page shows what carries over; Use installed versions; one new project",
+        "tC3 multi-zip: three books of one language are one project; the license is chosen on the review page",
+        "tC3 online: each version Door43 has is a full pin; the project opens and the guided fix lists the en_tn v87 this computer lacks",
+        "tC3 online, mixed: the found pins stay named when translationWords moves to the installed versions, and they are stored",
+        "tC3 name clash: a Bible name of a project on this computer is flagged and Import stays off; a stale review still writes nothing (#436)"
+      ]
     },
     "J9c": {
-      "pending": "F1"
+      "pending": "DONE"
     },
     "J9d": {
-      "pending": "F1"
+      "pending": "DONE"
     },
     "J11": [
       {
@@ -474,9 +483,23 @@
         "pending": "D1"
       }
     ],
-    "j09-import.spec.ts": {
-      "pending": "F1"
-    },
+    "j09-import.spec.ts": [
+      {
+        "file": "parity/app/journeys/import.test.mjs",
+        "tests": [
+          "refuse: a damaged file is refused on the review page and nothing is written",
+          "all or nothing: a write failure leaves no project and says import.write-failed",
+          "tC3 offline: the review page shows what carries over; Use installed versions; one new project",
+          "tC3 multi-zip: three books of one language are one project; the license is chosen on the review page",
+          "tC3 online: each version Door43 has is a full pin; the project opens and the guided fix lists the en_tn v87 this computer lacks",
+          "tC3 online, mixed: the found pins stay named when translationWords moves to the installed versions, and they are stored",
+          "tC3 name clash: a Bible name of a project on this computer is flagged and Import stays off; a stale review still writes nothing (#436)"
+        ]
+      },
+      {
+        "pending": "DONE"
+      }
+    ],
     "j10-rtl.spec.ts": {
       "file": "parity/app/journeys/rtl-project.test.mjs",
       "tests": [
@@ -592,7 +615,8 @@
     "language-suggestions.spec.ts": {
       "file": "parity/app/journeys/language-suggestions.test.mjs",
       "tests": [
-        "New Bible: suggestions from the shipped list, by keyboard and pointer, with nothing sent off this machine"
+        "New Bible: suggestions from the shipped list, by keyboard and pointer, with nothing sent off this machine",
+        "Import review: Language code is the plain field, with no suggestions"
       ]
     },
     "language-tags.spec.ts": {
@@ -614,7 +638,7 @@
       ]
     },
     "sync-refusal.spec.ts": {
-      "pending": "FIX-R"
+      "pending": "E1a"
     }
   }
 }

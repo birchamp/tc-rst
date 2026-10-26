@@ -36,7 +36,7 @@ use crate::app::account::{SignInFlow, SignInForm, SignInNext};
 use crate::app::client::CallError;
 use crate::app::feedback::{self, Attachment, FeedbackForm, HelpRequest, Opened};
 use crate::app::fix::Fix;
-use crate::app::forms::{AddBookForm, ImportForm, ImportKind, NewProjectForm};
+use crate::app::forms::{AddBookForm, ImportForm, NewProjectForm};
 use crate::app::internet::{InternetFlow, LinkKind, NetStep, Pending, SwitchRequests, SwitchStep};
 use crate::app::latest::Latest;
 pub(crate) use crate::app::net::NetEnd;
@@ -47,6 +47,7 @@ use crate::app::shell::{CurrentProject, Editing, View};
 use crate::app::sources::SettingsForm;
 use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
+use crate::app::update_book::UpdateBookForm;
 use crate::i18n::show_locale;
 
 /// Which dialog shows (tC4 `s.modal`, `tC4:src/state.jsx:476`): what the modal host switches
@@ -65,6 +66,7 @@ pub enum DialogKind {
     GuidedFix,
     Settings,
     Sources,
+    UpdateBook,
 }
 
 /// The dialog that shows, with its form (UI-3): a form lives exactly as long as its dialog, so
@@ -97,6 +99,8 @@ pub enum Dialog {
     Settings(SettingsForm),
     /// Get source texts (M8); its form is `src`, kept across openings as tC4 keeps it.
     Sources,
+    /// Update a book from USFM (F1).
+    UpdateBook(UpdateBookForm),
 }
 
 /// A dialog's form seen as the slot it used to be (UI-3): `None` while its dialog does not
@@ -162,6 +166,7 @@ impl Dialog {
             Self::GuidedFix(_) => DialogKind::GuidedFix,
             Self::Settings(_) => DialogKind::Settings,
             Self::Sources => DialogKind::Sources,
+            Self::UpdateBook(_) => DialogKind::UpdateBook,
         }
     }
 }
@@ -228,6 +233,9 @@ pub struct AppState {
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
+    /// Home's `home.importRemoved`: the server said so in one listing of this launch, and it
+    /// stays until the person opens Import.
+    pub import_removed: ArcRwSignal<bool>,
     /// The open and the Understand screen (B3).
     pub u: super::understand::UnderstandState,
     /// The Check screen (B5a).
@@ -321,6 +329,42 @@ impl AppState {
         )
     }
 
+    /// Import's form (tC4 `im`).
+    pub fn im_slot(&self) -> FormSlot<ImportForm> {
+        self.slot(
+            |d| match d {
+                Dialog::Import(im) => Some(im),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::Import(im) => Some(im),
+                _ => None,
+            },
+        )
+    }
+
+    /// Update a book's form (F1).
+    pub fn ub_slot(&self) -> FormSlot<UpdateBookForm> {
+        self.slot(
+            |d| match d {
+                Dialog::UpdateBook(ub) => Some(ub),
+                _ => None,
+            },
+            |d| match d {
+                Dialog::UpdateBook(ub) => Some(ub),
+                _ => None,
+            },
+        )
+    }
+
+    /// Update a book's form while it shows.
+    pub fn update_book_form(&self) -> Signal<Option<UpdateBookForm>> {
+        self.form(|d| match d {
+            Dialog::UpdateBook(ub) => Some(ub),
+            _ => None,
+        })
+    }
+
     /// New Bible's or New Open Bible Stories' form while it shows.
     pub fn new_project_form(&self) -> Signal<Option<NewProjectForm>> {
         self.form(|d| match d {
@@ -405,6 +449,7 @@ impl AppState {
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
             imported_repo: ArcRwSignal::new(None),
+            import_removed: ArcRwSignal::new(false),
             u: super::understand::UnderstandState::new(
                 place.map(|p| p.book),
                 place.map_or(1, |p| p.chapter),
@@ -675,6 +720,7 @@ impl Actions {
             Pending::UpgradeSet(rung) => self.upgrade_set_now(rung),
             Pending::UpgradeText(repo) => self.upgrade_text_now(repo),
             Pending::Fix(id) => self.fix_fetch_now(id),
+            Pending::ImportVersions => self.import_versions_now(),
         }
     }
 
@@ -693,6 +739,7 @@ impl Actions {
                 self.patch_od(|od| od.submit.not_sent());
             }
             Pending::Catalog => self.catalog_dropped(),
+            Pending::ImportVersions => self.patch_im(|im| im.versions_not_looked_up()),
             // The sign-in step stays open and sends nothing (tC4: "Not now keeps the dialog").
             // Not now: the download never started, and the guided fix is as it was.
             Pending::Download
@@ -999,7 +1046,9 @@ impl Actions {
     /// Import, at its kind step (tC4 `openImport`).
     pub fn open_import(&self) {
         let form = ImportForm::open(js::random_request_id());
-        self.s().layers.dialog.try_set(Some(Dialog::Import(form)));
+        let s = self.s();
+        s.import_removed.try_set(false);
+        s.layers.dialog.try_set(Some(Dialog::Import(form)));
     }
 
     /// Add a book, at its method step (tC4 `openAddBook`).
@@ -1064,9 +1113,6 @@ impl Actions {
             tc_api::home::Door43Card::Local => Pending::Share(Box::new(ShareProject::of(card))),
         });
     }
-
-    /// Import's kind step: F1 draws the files step it leads to.
-    pub fn import_pick_kind(&self, _kind: ImportKind) {}
 
     /// "Open a project from Door43", the fourth card of Add a project (tC4 `openDoor43Dialog`).
     pub fn open_door43_dialog(&self) {
@@ -1286,6 +1332,14 @@ impl Actions {
 
     pub fn dismiss_sync_result(&self) {
         self.s().sync_result.try_set(None);
+    }
+
+    /// The Home card's link to its last sync: that sync's toast again (owner ruling H5).
+    pub fn show_last_sync(&self, project: ProjectRef, view: tc_api::jobs::SyncResultView) {
+        self.s().sync_result.try_set(Some(SyncToast {
+            project,
+            end: SyncEnd::Synced(view),
+        }));
     }
 
     /// The toast's Review: the synced project's conflict review. The toast stays until the

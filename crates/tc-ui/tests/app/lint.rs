@@ -140,7 +140,9 @@ fn no_hand_made_attempt_counters() {
 /// INV-ONE-LEAVE-PATH (UI-3): every move away from a screen or a project runs `leave`, which
 /// runs the save gate, then the checkpoint, then the switch. Allowed: `leave` itself; saves.rs,
 /// the gate and the window-close guard (D1's quit flow takes that over); the test-hooks probe
-/// page (mod.rs `ProbeRoot`, probe.rs), which drives the gate directly to test it.
+/// page (mod.rs `ProbeRoot`, probe.rs), which drives the gate directly to test it; and the three
+/// *Restore this version* of History (HIST-1), which save every field before writing over the
+/// record, so a save in flight never lands over the restore (owner ruling H5).
 #[test]
 fn only_leave_calls_the_gate() {
     let callers = found(&[".gate()"], |file, text, line| {
@@ -148,6 +150,9 @@ fn only_leave_calls_the_gate() {
             || file == "app/web/saves.rs"
             || file == "app/web/probe.rs"
             || (file == "app/web/mod.rs" && fn_lines(text, "ProbeRoot").contains(&line))
+            || (file == "app/web/check.rs" && fn_lines(text, "restore_check").contains(&line))
+            || (file == "app/web/align.rs" && fn_lines(text, "restore_alignment").contains(&line))
+            || (file == "views/comment_box.rs" && fn_lines(text, "comment_history").contains(&line))
     });
     assert!(
         callers.is_empty(),

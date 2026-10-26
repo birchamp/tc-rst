@@ -12,9 +12,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use serde_json::json;
 use tc_api::conflicts::{
     BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
-    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk,
+    HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk, Restore,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
-    VersionValue,
+    VersionValue, Versions,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
@@ -22,7 +22,7 @@ use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
-use tc_journal::record::{BookPresence, ChapterFront, VerseValue};
+use tc_journal::record::{BookPresence, ChapterFront, CheckValue, VerseValue};
 use tc_journal::{Cause, ChangeId, DeviceId, DeviceKind, Record, RecordKey, WallTime};
 
 use crate::app::App;
@@ -46,11 +46,13 @@ fn tab_of(kind: &Kind) -> ReviewTab {
         | Kind::ChapterFront
         | Kind::StoryBase
         | Kind::Frame
-        | Kind::StoryRef => ReviewTab::Text,
+        | Kind::StoryRef
+        // H5: the one book question left, *Restore the text* against *Start empty*, decides
+        // verse text.
+        | Kind::BookPresence => ReviewTab::Text,
         Kind::Alignment => ReviewTab::Alignments,
         Kind::Check | Kind::CheckMoved | Kind::Comment => ReviewTab::Checks,
-        Kind::BookPresence
-        | Kind::BookRemovedWhileEdited { .. }
+        Kind::BookRemovedWhileEdited { .. }
         | Kind::LastBookRemoved
         | Kind::BookLayout
         | Kind::Pins
@@ -124,7 +126,7 @@ fn kind_view(kind: &Kind) -> ConflictKind {
 }
 
 /// Where a record is, as the review names it.
-fn place_of(key: &RecordKey) -> ReviewPlace {
+pub(crate) fn place_of(key: &RecordKey) -> ReviewPlace {
     match key {
         RecordKey::Verse(book, chapter, verse) | RecordKey::Alignment(book, chapter, verse) => {
             ReviewPlace::Verse {
@@ -187,6 +189,38 @@ fn value_of(record: &Record) -> VersionValue {
             value: BookPresence::Removed { .. },
             ..
         } => VersionValue::Absent,
+        Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        } => VersionValue::Check {
+            selected: (d.judgement.selections.iter().flatten())
+                .map(|s| s.text.clone())
+                .collect(),
+            nothing_to_select: d.judgement.nothing_to_select,
+            status: d.judgement.status.map(|s| match s {
+                tc_journal::record::UserStatus::Valid => tc_api::check::DecisionStatus::Valid,
+                tc_journal::record::UserStatus::Invalid => tc_api::check::DecisionStatus::Invalid,
+                tc_journal::record::UserStatus::Todo => tc_api::check::DecisionStatus::Todo,
+            }),
+            bookmarked: d.bookmarked,
+            comment: d.comment.clone(),
+        },
+        Record::Comment { value, .. } => VersionValue::Text(value.text.trim().to_owned()),
+        Record::Alignment { value, .. } => VersionValue::Alignment {
+            pairs: (value.alignments.iter())
+                .filter(|g| !g.bottom_words.is_empty())
+                .map(|g| {
+                    let words = |w: Vec<&str>| w.join(" ");
+                    format!(
+                        "{} = {}",
+                        words(g.top_words.iter().map(|w| w.word.as_str()).collect()),
+                        words(g.bottom_words.iter().map(|w| w.word.as_str()).collect())
+                    )
+                })
+                .collect(),
+            done: value.done,
+            marked_invalid: value.marked_invalid,
+        },
         _ => VersionValue::NotShown,
     }
 }
@@ -195,9 +229,13 @@ fn value_of(record: &Record) -> VersionValue {
 /// typed here came from (STORAGE §8.5).
 fn made_by(
     device: &DeviceId,
+    cause: &Cause,
     labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
 ) -> MadeBy {
     match device.kind() {
+        // Update a book writes the file's text from this computer; the file, not the person,
+        // made it.
+        DeviceKind::Local if matches!(cause, Cause::Import(_)) => MadeBy::Import,
         DeviceKind::Door43Edit => MadeBy::Door43,
         DeviceKind::ExchangeEdit => MadeBy::ExchangeFile,
         DeviceKind::Importer => MadeBy::Import,
@@ -410,7 +448,7 @@ fn versions(
                 Version {
                     change: ChangeRef::parse(&c.head.to_hex()).ok()?,
                     place: place_of(&c.value.key()),
-                    by: made_by(&c.device, labels),
+                    by: made_by(&c.device, &c.cause, labels),
                     at: WallMs(c.at.0),
                     clock_ahead: clock_ahead(c.at, now),
                     shown: c.head == conflict.provisional || c.also.contains(&conflict.provisional),
@@ -541,9 +579,25 @@ impl Handle<List> for App {
 
 impl Handle<History> for App {
     async fn handle(&self, req: History) -> Result<HistoryView, ApiError> {
-        let session = self.read(&req.at)?;
-        let read = session.read();
         let key = wire::scope::record_key(&req.record)?;
+        self.history(&req.at, &key)
+    }
+}
+
+impl Handle<Versions> for App {
+    async fn handle(&self, req: Versions) -> Result<HistoryView, ApiError> {
+        let session = self.read(&req.at)?;
+        let shown = wire::token::edit_token(session.handle().as_ref(), &req.shown)?;
+        drop(session);
+        self.history(&req.at, shown.key())
+    }
+}
+
+impl App {
+    fn history(&self, at: &tc_api::ids::Scope, key: &RecordKey) -> Result<HistoryView, ApiError> {
+        let session = self.read(at)?;
+        let read = session.read();
+        let key = key.clone();
         let me = session.handle().facts().device;
         let labels = read.person_labels(me);
         let now = self.inner.clock.now();
@@ -556,7 +610,7 @@ impl Handle<History> for App {
                 let version = Version {
                     change: ChangeRef::parse(&id.to_hex()).ok()?,
                     place: place_of(&key),
-                    by: made_by(&body.device, &labels),
+                    by: made_by(&body.device, &body.cause, &labels),
                     at: WallMs(body.at.0),
                     clock_ahead: clock_ahead(body.at, now),
                     shown: shown == Some(id),
@@ -697,6 +751,22 @@ impl Handle<Resolve> for App {
             .collect::<Result<Vec<_>, _>>()?;
         let command =
             choose(&session.read(), &req.conflict, review, &req.choice)?.requested_by(req.request);
+        match handle.submit(command).await {
+            Ok(reply) => self.ack(&reply),
+            Err(error) => Err(self.not_written(error)),
+        }
+    }
+}
+
+impl Handle<Restore> for App {
+    /// *Restore this version* from a record's History, outside any conflict (owner ruling H5):
+    /// the old version's value over every head the screen's token shows, so a version the
+    /// screen did not show is never written over (it answers `LookAgain`).
+    async fn handle(&self, req: Restore) -> Result<Ack, ApiError> {
+        let session = self.writer(&req.at)?;
+        let handle = session.handle().clone();
+        let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
+        let command = StoreCommand::restore(shown, change_id(&req.from)?).requested_by(req.request);
         match handle.submit(command).await {
             Ok(reply) => self.ack(&reply),
             Err(error) => Err(self.not_written(error)),

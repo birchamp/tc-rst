@@ -41,7 +41,7 @@ fn psalms() -> &'static FoldState {
 
 fn larger() -> &'static FoldState {
     static STATE: OnceLock<FoldState> = OnceLock::new();
-    STATE.get_or_init(|| fold_corpus(&Spec::scaled(1, 10)))
+    STATE.get_or_init(|| fold_corpus(&Spec::scaled(1, Spec::test_factor())))
 }
 
 /// A snapshot of `state` that counts its own work.
@@ -191,11 +191,12 @@ fn assert_no_growth(action: &str, small: Counters, big: Counters) {
         ),
     ];
     eprintln!("{action}, Psalms: {small:?}");
-    eprintln!("{action}, ten times larger: {big:?}");
+    eprintln!("{action}, {} times larger: {big:?}", Spec::test_factor());
     for (name, s, b) in rows {
         assert!(
             b <= s,
-            "{action}: {name} grows with the project: {s} on Psalms, {b} on the corpus ten times larger"
+            "{action}: {name} grows with the project: {s} on Psalms, {b} on the corpus {} times larger",
+            Spec::test_factor()
         );
     }
 }
@@ -212,12 +213,13 @@ fn assert_local(action: &str, counts: Counters, changes: u64) {
 }
 
 #[test]
-fn the_larger_corpus_is_ten_times_larger() {
+fn the_larger_corpus_is_the_test_factor_times_larger() {
     let small = psalms();
     let big = larger();
+    let factor = Spec::test_factor();
     assert!(
-        big.len() >= 9 * small.len(),
-        "{} vs {}",
+        big.len() >= (factor - 1) * small.len(),
+        "TC_SCALE_FACTOR={factor}: {} vs {}",
         big.len(),
         small.len()
     );
@@ -414,7 +416,8 @@ fn a_book_renders_as_its_files_do() {
 /// that belong to Psalms (and the comments, which are placed by their target).
 #[test]
 fn a_book_lists_its_files_from_its_own_records() {
-    for (corpus, state) in [("Psalms", psalms()), ("ten times larger", larger())] {
+    let larger_name = format!("{} times larger", Spec::test_factor());
+    for (corpus, state) in [("Psalms", psalms()), (larger_name.as_str(), larger())] {
         let state = fork(state);
         let before = state.counters();
         let files = state.render_book(PSALMS);

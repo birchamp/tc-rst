@@ -810,6 +810,10 @@ impl Handle<List> for App {
             cards,
             unusable,
             others,
+            import_removed: self
+                .inner
+                .import_removed
+                .swap(false, std::sync::atomic::Ordering::SeqCst),
         })
     }
 }

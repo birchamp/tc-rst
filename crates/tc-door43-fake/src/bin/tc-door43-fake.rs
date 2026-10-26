@@ -71,6 +71,9 @@ async fn run() -> ExitCode {
     if let Err(error) = seeded::unfolding_word_resources(&fake).await {
         return failed(&error.to_string());
     }
+    if let Err(error) = seeded::tc3_original_languages(&fake).await {
+        return failed(&error.to_string());
+    }
     let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
         Ok(listener) => listener,
         Err(error) => return failed(&error.to_string()),

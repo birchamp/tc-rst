@@ -15,6 +15,7 @@ pub mod check;
 mod create;
 pub(crate) mod export;
 mod fix;
+mod import;
 mod jobs;
 pub(crate) mod js;
 mod leave;
@@ -619,6 +620,10 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
 /// The page: the port of tC4's `App.jsx`, or, in a test build that asks for it, the no-loss
 /// probe outside the App, so a restart's way Home never unmounts its fields (D15).
 fn page(after: Option<CrashMarker>, probe: bool) -> AnyView {
+    #[cfg(feature = "test-hooks")]
+    if let Some(name) = probe::q9_requested() {
+        return view! { <probe::Q9 name=name /> }.into_any();
+    }
     #[cfg(feature = "test-hooks")]
     if probe {
         return view! { <ProbeRoot after=after /> }.into_any();
