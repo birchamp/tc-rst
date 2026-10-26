@@ -4,7 +4,7 @@ title: Share and open from Door43
 track: A
 lane: app
 milestone: M3
-state: gating
+state: blocked
 owner: E1b session (Claude Code fd622395)
 branch: track-E1b2
 worktree: .worktrees/track-E1b2
@@ -17,7 +17,7 @@ size: 3-4 sessions (basis: B9b)
 merged: none
 updated: 2026-10-26
 next: Ready for a batch with E1a (track-E1a2 at 97df12e3, merged in). Step 6 moved to card E1c.
-blocked_by: none
+blocked_by: E1a not done; E1b is ready on track-E1b2 and merges with or after E1a
 ---
 
 # E1b: Share and open from Door43
@@ -274,3 +274,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 - 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | takeover | 8043ef7b | Taken over from the REF1 session at the audit session's request; cut track-E1b2 from track-E1b, merged main (30da7cf0, with a fix for its tc-app manifest and lock, e79b6b86) and track-E1a2 at 97df12e3 | git log --oneline -4 track-E1b2
 - 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | note | d5adc536 | Step 6 (#837) moved to card E1c at the audit session's request, so E1b lands without it; the owner ruled H14 the same day (rulings/2026-10-26-H14.md). Dropped check.sort.byCategory, which main removed and the merge brought back | .audit/roadmap/units/E1c.md
 - 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | gate | d5adc536 | scripts/gates.sh --touched on 8043ef7b: 17 crates, 13 journey files, app-e2e 102 tests 0 skipped; its one failure, tc-api refusals' pending lists, is the key d5adc536 drops, and that test passes on d5adc536; cargo fmt --check passes | scripts/gates.sh --touched
+- 2026-10-26 15:05 EDT | E1b session (Claude Code fd622395) | block | 8828b61f | Ready for a batch on track-E1b2, but the board refuses gating before E1a is done: E1b merges with or after E1a | python3 -I -B .audit/tools/board.py --check
