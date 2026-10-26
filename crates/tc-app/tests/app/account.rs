@@ -1026,7 +1026,7 @@ async fn no_keychain_hides_stay_signed_in() {
     let t = TestApp::start_in(dir.path(), |_, _| {}).await;
     assert_eq!(state(&t.app).await.keychain, KeychainState::Works);
 
-    // The product of phase 0 has none until E1a's operating-system keychain.
+    // A test build's product keychain is none: tests never touch the computer's store (H11).
     let production = tc_app::AppDeps::production();
     assert_eq!(
         production.keychain.read(),

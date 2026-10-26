@@ -19,7 +19,9 @@ use tc_door43::{Door43Client, InternetSwitch};
 use tc_resources::ResourceStore;
 use tokio::sync::watch;
 
-use crate::account::{Account, AccountState, Keychain, MemKeychain, MemKeychainMode};
+#[cfg(feature = "test-hooks")]
+use crate::account::MemKeychain;
+use crate::account::{Account, AccountState, Keychain};
 use crate::backend::ProjectStore;
 use crate::backend::store::StoreBackend;
 use crate::clock::{Clock, SystemClock};
@@ -76,7 +78,7 @@ pub struct AppDeps {
     /// The projects: tc-store on disk; the memory backend in tests and parity captures
     /// (feature `fixture-backend`).
     pub store: StoreChoice,
-    /// Sync, share and open from Door43 (UI-2): unavailable until E1a; scripted in tests.
+    /// Sync, share and open from Door43 (UI-2): Door43 through unit X; scripted in tests.
     pub sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange: unavailable until E2.
     pub exchange: Arc<dyn crate::ports::ExchangePort>,
@@ -93,9 +95,8 @@ pub struct AppDeps {
 }
 
 impl AppDeps {
-    /// This computer's clock, folders and variables; no keychain (the operating system's comes
-    /// with unit E1a, Q-3: a keychain in memory, which forgets at quit, is not "Stay signed in
-    /// on this computer", so the sign-in step hides that box until then, tC4 #496); the
+    /// This computer's clock, folders and variables; the computer's own credential store for
+    /// "Stay signed in" (ruling H11, [`crate::account::OsKeychain`]); the
     /// app-data folder and the projects through tc-store, both built by [`App::start`]; and,
     /// with test hooks, an ender that ends the process. It builds nothing itself:
     /// `..AppDeps::production()` evaluates it in full.
@@ -103,12 +104,12 @@ impl AppDeps {
         let host = HostEnv::current();
         Self {
             clock: Arc::new(SystemClock),
-            keychain: Arc::new(MemKeychain::with_mode(MemKeychainMode::NoKeychain)),
+            keychain: product_keychain(),
             folders: Arc::new(HostFolders::new(host.clone())),
             host,
             files: FilesChoice::OnDisk,
             store: StoreChoice::OnDisk,
-            sync: Arc::new(crate::ports::UnavailableSync),
+            sync: Arc::new(crate::ports::door43::Door43Sync),
             exchange: Arc::new(crate::ports::usb::UsbExchange),
             import: Arc::new(crate::import::TcImport),
             #[cfg(feature = "test-hooks")]
@@ -117,6 +118,21 @@ impl AppDeps {
             test_keychain: None,
         }
     }
+}
+
+/// "Stay signed in"'s store: the computer's own in a real build (ruling H11). A build with the
+/// test hooks is a test's, and tests never touch the real store: it has none, as a computer
+/// without a credential store has none.
+#[cfg(not(feature = "test-hooks"))]
+fn product_keychain() -> Arc<dyn Keychain> {
+    Arc::new(crate::account::OsKeychain::platform())
+}
+
+#[cfg(feature = "test-hooks")]
+fn product_keychain() -> Arc<dyn Keychain> {
+    Arc::new(MemKeychain::with_mode(
+        crate::account::MemKeychainMode::NoKeychain,
+    ))
 }
 
 /// Why the app did not start. `tc4 serve` prints it and exits.

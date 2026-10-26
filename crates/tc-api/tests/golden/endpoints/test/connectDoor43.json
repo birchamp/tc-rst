@@ -1,0 +1,25 @@
+{
+  "path": "test/connectDoor43",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "17171717171717171717171717171717",
+    "project": "sample_burrito",
+    "owner": "facilitator-zq",
+    "name": "sample_burrito",
+    "branch": "master"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

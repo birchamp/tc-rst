@@ -611,7 +611,7 @@ async fn share_makes_the_repository_and_pushes_the_project() {
     let a = open(&ana, &folder);
     save(&a, 1, 1, "Paul, a servant of God");
     let name: tc_door43::NewRepoName = "en_tit_ana".parse().unwrap();
-    let report = tc_sync::share(
+    let (created, report) = tc_sync::share(
         &a,
         &door43.client,
         &door43.session,
@@ -619,9 +619,11 @@ async fn share_makes_the_repository_and_pushes_the_project() {
         &name,
         Visibility::Public,
         &NoPause,
+        || {},
     )
     .await
     .unwrap();
+    assert_eq!(created.repo.name.as_str(), "en_tit_ana");
     synced(&report);
     assert_eq!(branch_on_door43(&door43, "en_tit_ana"), head(&a));
     let again = tc_sync::share(
@@ -632,6 +634,7 @@ async fn share_makes_the_repository_and_pushes_the_project() {
         &name,
         Visibility::Public,
         &NoPause,
+        || panic!("nothing is pushed under a name that exists"),
     )
     .await;
     assert!(

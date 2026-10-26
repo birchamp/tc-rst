@@ -468,6 +468,10 @@ impl ProjectStore for ScenarioStore {
         self.backend.list()
     }
 
+    fn removed_an_open_at_start(&self) -> bool {
+        self.backend.removed_an_open_at_start()
+    }
+
     fn peek(&self, folder: &ProjectRef) -> Result<ProjectPeek, StoreError> {
         self.backend.peek(folder)
     }
@@ -499,6 +503,16 @@ impl ProjectStore for ScenarioStore {
             lock(&self.touched).insert(folder.clone());
         }
         self.backend.open(folder, progress)
+    }
+
+    fn door43_join(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+        repo: tc_door43::RepoRef,
+        name: String,
+    ) -> super::BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+        super::store::join_on(self, |s| s.backend.store(), client, session, repo, name)
     }
 
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), super::CopyFailure> {

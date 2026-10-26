@@ -193,7 +193,12 @@
         ]
       },
       {
-        "pending": "E1b"
+        "file": "parity/app/journeys/share.test.mjs",
+        "tests": [
+          "J11 1. Share to the account: one progress line, the end with its address, Copy link and the team-access line; the main on Door43 holds the verse saved just before",
+          "J11 6. A name that exists on Door43 is refused on the check step with its sentence, and nothing is pushed; another name shares",
+          "J11 11, J24. An Open Bible Stories project shares the same way, and its end names the team access too (#724)"
+        ]
       }
     ],
     "J12": [
@@ -223,11 +228,14 @@
       {
         "file": "parity/app/journeys/share-open.test.mjs",
         "tests": [
-          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; the open ends in its refusal, and no project was added"
+          "Open a project from Door43: it asks no name (ruling H14); Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
         ]
       },
       {
-        "pending": "E1b"
+        "file": "parity/app/journeys/open-door43.test.mjs",
+        "tests": [
+          "J17. The project opens from Door43 on another computer with the text and name of the team, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there"
+        ]
       }
     ],
     "J18": [
@@ -239,11 +247,6 @@
           "C7a. A teammate joined Titus 1:4-5 on Door43 while this computer changed 1:5: the review lists one passage conflict with a button per side; Keep Teammate 1’s passage writes one resolution over both verses however often it is pressed, and Translate then holds 4-5 as one verse",
           "C7a (#78). Every History row but the one shown has Restore this version; a double press writes one restore, the restored text is the one kept, and the replaced version stays in History",
           "C7a. With two verses in conflict, Keep all of Teammate 1’s keeps their version in both with one request however often it is pressed, and says how many were left"
-        ]
-      },
-      {
-        "pending": [
-          "E1a"
         ]
       }
     ],
@@ -286,7 +289,10 @@
       }
     ],
     "J24": {
-      "pending": "E1b"
+      "file": "parity/app/journeys/share.test.mjs",
+      "tests": [
+        "J11 11, J24. An Open Bible Stories project shares the same way, and its end names the team access too (#724)"
+      ]
     },
     "J25": [
       {
@@ -303,9 +309,15 @@
         ]
       }
     ],
-    "J26": {
-      "pending": "E1a"
-    }
+    "J26": [
+      {
+        "file": "parity/app/journeys/team-sync.test.mjs",
+        "tests": [
+          "J26 [G1]. Three computers: B and C change verses, A takes their work in by name, and every computer ends with the same text",
+          "J26 [G6]. A and B change the same verse: both versions are kept, and the sync on A counts one verse conflict to review"
+        ]
+      }
+    ]
   },
   "specs": {
     "app-language.spec.ts": {
@@ -528,7 +540,12 @@
         ]
       },
       {
-        "pending": "E1b"
+        "file": "parity/app/journeys/share.test.mjs",
+        "tests": [
+          "J11 1. Share to the account: one progress line, the end with its address, Copy link and the team-access line; the main on Door43 holds the verse saved just before",
+          "J11 6. A name that exists on Door43 is refused on the check step with its sentence, and nothing is pushed; another name shares",
+          "J11 11, J24. An Open Bible Stories project shares the same way, and its end names the team access too (#724)"
+        ]
       }
     ],
     "j12-upgrade-resources.spec.ts": [
@@ -549,7 +566,10 @@
       }
     ],
     "j14-join-isolation.spec.ts": {
-      "pending": "E1b"
+      "file": "parity/app/journeys/open-door43.test.mjs",
+      "tests": [
+        "J14. A teammate who opens the team copy gets none of the unsynced work of this computer, and this computer keeps it"
+      ]
     },
     "j15-slow-open.spec.ts": {
       "rust": "crates/tc-app/tests/app/store_scenario.rs",
@@ -567,11 +587,14 @@
       {
         "file": "parity/app/journeys/share-open.test.mjs",
         "tests": [
-          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; the open ends in its refusal, and no project was added"
+          "Open a project from Door43: it asks no name (ruling H14); Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
         ]
       },
       {
-        "pending": "E1b"
+        "file": "parity/app/journeys/open-door43.test.mjs",
+        "tests": [
+          "J17. The project opens from Door43 on another computer with the text and name of the team, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there"
+        ]
       }
     ],
     "j20-obs-create.spec.ts": {
@@ -615,9 +638,15 @@
         ]
       }
     ],
-    "j26-team-sync.spec.ts": {
-      "pending": "E1a"
-    },
+    "j26-team-sync.spec.ts": [
+      {
+        "file": "parity/app/journeys/team-sync.test.mjs",
+        "tests": [
+          "J26 [G1]. Three computers: B and C change verses, A takes their work in by name, and every computer ends with the same text",
+          "J26 [G6]. A and B change the same verse: both versions are kept, and the sync on A counts one verse conflict to review"
+        ]
+      }
+    ],
     "language-suggestions.spec.ts": {
       "file": "parity/app/journeys/language-suggestions.test.mjs",
       "tests": [
@@ -643,8 +672,13 @@
         "#678. Nothing goes to Door43 at launch or after 5 s idle; one press asks, signs in and syncs once, and the result shows until it is dismissed"
       ]
     },
-    "sync-refusal.spec.ts": {
-      "pending": "E1a"
-    }
+    "sync-refusal.spec.ts": [
+      {
+        "file": "parity/app/journeys/sync-button.test.mjs",
+        "tests": [
+          "E1a. A real sync pushes the project to Door43; a cut connection fails and changes nothing"
+        ]
+      }
+    ]
   }
 }

@@ -24,6 +24,7 @@
         "alignments": 0,
         "restored": 0,
         "missingPins": 0,
+        "recreated": false,
         "replaced": [
           {
             "by": {

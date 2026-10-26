@@ -104,8 +104,14 @@ test('INV-CLAIMED-TESTS-EXIST: units', () => {
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.md') && !f.startsWith('_'))) {
     const card = fs.readFileSync(path.join(dir, file), 'utf8');
     if (!/^state: done$/m.test(card)) continue;
-    for (const m of claimed(bullet(card, 'Checks')).join('\n').matchAll(/`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`/g)) {
-      if (!resolve(m[1], names)) problems.push(`INV-CLAIMED-TESTS-EXIST: units/${file} names ${m[1]} but no test has that name`);
+    for (const { claim, pending } of claimsWithPending(claimed(bullet(card, 'Checks')).join('\n'))) {
+      if (!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(claim)) continue;
+      // A test a done card moved to another card waits on that card, which must exist and not be done.
+      const missing = pending.filter((id) => !known.has(id));
+      const done = pending.filter((id) => known.get(id) === 'done');
+      if (missing.length) problems.push(`INV-CLAIMED-TESTS-EXIST: units/${file} names ${claim} pending on ${missing.join(', ')}, but no such card exists`);
+      else if (pending.length && !done.length) continue;
+      if (!resolve(claim, names)) problems.push(`INV-CLAIMED-TESTS-EXIST: units/${file} names ${claim} but no test has that name`);
     }
     for (const m of new Set(claimed(bullet(card, 'Invariants')).join('\n').match(/INV-[A-Z0-9-]*[A-Z0-9]/g) ?? [])) {
       if (!sources.includes(m)) problems.push(`INV-INVARIANT-NAMES-ARE-USED: units/${file} names ${m} but nothing prints or tests it`);

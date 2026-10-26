@@ -359,13 +359,18 @@ export const SCREEN_LIST = [
     rebuildDiffers: { ruling: 'Q3', rebuild: 'The refusal sentence (openDoor43.refused.other) says "Make sure that the repository is public". The rebuild opens private repositories, so its sentence must not say this. The delta document replaces only openDoor43.where, so the new text of this sentence is not decided yet. When Door43 answers 401 or 404 and nobody is signed in, the rebuild shows the sign-in step instead of this refusal.' },
     run: async (app) => {
       const { page } = app;
-      await app.home(); await app.door43Lacks(OPEN_REPO);
+      // Door43 has no repository of that name. The rebuild asks the sign-in first, since an open
+      // without one cannot tell a private repository from a missing one; tC4 never asks here.
+      await app.home();
       await page.getByTestId('add-project').click();
       await page.getByText('Open a project from Door43', { exact: true }).click();
       await page.getByTestId('open-door43-repo').fill(OPEN_REPO);
       await page.getByTestId('open-door43-submit').click();
       await page.getByTestId('net-confirm').click();
-      await page.getByTestId('open-door43-refused').waitFor();
+      const refused = page.getByTestId('open-door43-refused');
+      await refused.or(page.getByTestId('share-signin')).waitFor();
+      if (!(await refused.count())) await app.signIn();
+      await refused.waitFor();
     },
   },
 
