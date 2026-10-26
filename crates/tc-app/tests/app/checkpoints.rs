@@ -222,19 +222,15 @@ mod policy {
     }
 }
 
-/// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED: a full disk at the seal can leave the project
-/// read-only (the store takes its own half-written pack for a second writer). The retry then
-/// skips without looking, so the failure stays shown: the saved verse is not in the history.
+/// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED: a checkpoint that a full disk stopped at any
+/// write point fails, and once the disk has room its retry commits and clears the failure; the
+/// folder stays a valid Scripture Burrito throughout (the store's watch).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_retry_skipped_as_read_only_keeps_the_failure_shown() {
+async fn a_retry_after_a_full_disk_commits_and_clears_the_failure() {
     use tc_app::backend::CheckpointReason;
-    let mut reached = Vec::new();
+    let mut failed_at = Vec::new();
     for n in 0..20 {
-        let mut world = crate::store_world::store_world();
-        world.watch.stop(
-            "a full disk at the seal leaves a journal changes file metadata.json does not list; \
-             the storage lane's bug (side-session note 2026-10-24-store-unlisted-journal-file.md)",
-        );
+        let world = crate::store_world::store_world();
         let (_dir, t) = store_app(&world).await;
         let open = t
             .app
@@ -260,28 +256,93 @@ async fn a_retry_skipped_as_read_only_keeps_the_failure_shown() {
         if !matches!(first, CheckpointOutcome::Failed { .. }) {
             continue;
         }
+        assert_eq!(failed(&t).await.len(), 1, "fail point {n}");
         let retried = t
             .app
             .sessions()
             .checkpoint(&session, CheckpointReason::Other("retry".into()))
             .await;
-        if !matches!(
-            session.handle().facts().mode,
-            tc_api::event::SessionMode::ReadOnly(_)
-        ) {
-            continue;
-        }
-        assert!(
-            matches!(retried, CheckpointOutcome::Failed { .. }),
-            "fail point {n}: {retried:?}"
-        );
-        assert_eq!(failed(&t).await.len(), 1, "fail point {n}");
-        reached.push(n);
+        assert_eq!(retried, CheckpointOutcome::Committed, "fail point {n}");
+        assert!(failed(&t).await.is_empty(), "fail point {n}");
+        failed_at.push(n);
     }
     assert!(
-        !reached.is_empty(),
-        "no fail point left the project read-only"
+        !failed_at.is_empty(),
+        "no fail point stopped the checkpoint"
     );
+}
+
+/// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED: after a failed checkpoint another computer
+/// writes into the folder (a synced folder), so the project turns read-only and the retry skips
+/// without looking. The failure stays shown: the saved verse is still not in the history.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_retry_skipped_by_a_second_writer_keeps_the_failure_shown() {
+    use tc_app::backend::{CheckpointReason, ProjectStore};
+    let world = crate::store_world::store_world();
+    let (_dir, t) = store_app(&world).await;
+    let open = t
+        .app
+        .sessions()
+        .open_screen(&world.bible, super::common::open_progress())
+        .await
+        .unwrap();
+    let session = t.app.read(&open.at).unwrap();
+    crate::store_world::save(
+        session.handle().as_ref(),
+        &crate::store_world::tit(1, 2),
+        "a change to commit",
+    )
+    .await
+    .unwrap();
+    session.handle().wait_idle();
+    world.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let first = t
+        .app
+        .sessions()
+        .checkpoint(&session, CheckpointReason::LeavingTranslate)
+        .await;
+    world.fs.fail_writes(None);
+    assert!(
+        matches!(first, CheckpointOutcome::Failed { .. }),
+        "{first:?}"
+    );
+    let (theirs, _theirs_watch) = crate::store_world::backend_over(
+        &world.fs.other_machine(),
+        "/app-desktop",
+        tc_store::FakePlatform {
+            machine: "machine-2".to_owned(),
+            host: "host-2".to_owned(),
+            ..tc_store::FakePlatform::default()
+        },
+        std::sync::Arc::default(),
+    );
+    theirs.trust_lock(&world.bible);
+    let handle = theirs
+        .open(&world.bible, crate::store_world::progress())
+        .unwrap();
+    crate::store_world::save(handle.as_ref(), &crate::store_world::tit(1, 15), "theirs")
+        .await
+        .unwrap();
+    handle.wait_idle();
+    let retried = t
+        .app
+        .sessions()
+        .checkpoint(&session, CheckpointReason::Other("retry".into()))
+        .await;
+    assert!(
+        matches!(
+            session.handle().facts().mode,
+            tc_api::event::SessionMode::ReadOnly(_)
+        ),
+        "{:?}",
+        session.handle().facts().mode
+    );
+    assert!(
+        matches!(retried, CheckpointOutcome::Failed { .. }),
+        "{retried:?}"
+    );
+    assert_eq!(failed(&t).await.len(), 1);
+    drop(handle);
 }
 
 /// tC4 `retryOwedCheckpoint`: opening a project whose last checkpoint failed runs it again, so
