@@ -844,7 +844,6 @@ fn target_text(check: &CheckKey, verse: &RecordKey, value: Option<&Record>) -> O
     let Some(Record::Verse {
         value:
             VerseValue::Text {
-                marker,
                 words,
                 layout,
                 last,
@@ -864,8 +863,7 @@ fn target_text(check: &CheckKey, verse: &RecordKey, value: Option<&Record>) -> O
                 && tc_usfm::codec::label(first, end) == v.as_str()
         }
     };
-    let content = format!("{words}{layout}");
-    (inside && tc_usfm::codec::is_drafted(marker.term(), &content)).then_some(content)
+    (inside && tc_usfm::codec::words_drafted(words)).then(|| format!("{words}{layout}"))
 }
 
 /// The text a story's decision is judged against: the frame the detail showed. A frame no

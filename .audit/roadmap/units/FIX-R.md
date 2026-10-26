@@ -5,9 +5,9 @@ track: A
 lane: app
 milestone: M1
 state: building
-owner: C7a session (Claude Code 3058c665)
-branch: track-FIX-R
-worktree: .worktrees/track-FIX-R
+owner: shell lane (Claude Code 6f39d119)
+branch: track-FIX-R4
+worktree: .worktrees/track-FIX-R4
 depends: [INT-4]
 needs_owner: []
 later: ["S2 from step 4"]
@@ -15,7 +15,7 @@ proves: [P1, P8]
 no_loss: true
 size: 2-3 d
 merged: none
-updated: 2026-10-24
+updated: 2026-10-26
 next: Step 4 (H12, poetry everywhere): S2 is on main; change the Check reader, the store and the fold together, then merge it as its own small merge. Steps 1-3, 5 and the Q37, Q38 and save-machine fixes are on main.
 blocked_by: none
 ---
@@ -347,3 +347,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 - 2026-10-24 01:30 EDT | C7a session (Claude Code 3058c665) | test | none | Q38 (rulings/2026-10-23-Q38-raw-rc-links.md, on track-SWEEP): keep-it test `a_bare_rc_link_shows_as_its_raw_text` (tc-helps blocks.rs): a bare rc link and a `[[rc://…]]` link show as their raw address, the brackets dropped as tC4's own renderer drops them (the vectors' Titus intro holds one). A first version that expected the brackets kept failed, so the test reads the renderer's output; no code change was needed. TC4-ISSUES' two #628 rows now state the ruling | cargo test -p tc-helps --test blocks
 - 2026-10-24 | C7a session (Claude Code 3058c665) | fix | none | the checks lane's c3_reload case (shared note 2026-10-24-c3-story-ref-retry.md; seed `kind = Reference, steps = [Type(2), Blur, Type(0), Deliver(false), Blur, Type(2), Cut]`) failed at save_machine.rs:1224 here too. No loss: the first save stored "é" and its reply was lost, the empty text was refused, and the person typed "é" again, which the store already holds; Retry rightly sends nothing and lets the field go as saved (`retry_field` on a field that is not dirty). The test wanted a resend in every case; it now wants none, and the field Clean, when the store holds the correction, and a fresh-request resend otherwise. The seed is kept in save_machine.proptest-regressions; the save machine tests pass with PROPTEST_CASES=256 | cargo test -p tc-app --test app save_machine
 - 2026-10-24 | C7a session (Claude Code 3058c665) | merge | e5765cfa | steps 1-3 and 5 with Q37, Q38 and the save-machine test fix merge into main on the orchestrator's turn (main 0189cee4 merged in; TC4-ISSUES conflicts resolved to FIX-R's reconciled rows, five rows fixed for the claims ledger, #505 kept as "FIX-R reconciles"). The card stays open for step 4, so `merged` stays none (board: merged needs done) | scripts/gates.sh --wait-ci FIX-R
+- 2026-10-26 | shell lane (Claude Code 6f39d119) | claim | none | took the card over from the C7a session, whose claim is 1.8 days stale (orchestrator's word); step 4 on track-FIX-R4 from main 1a0c8469, where S2 is merged (33d2378d) and no claimed storage card holds commands.rs or fold/project.rs | .worktrees/track-FIX-R4

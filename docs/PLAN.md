@@ -213,9 +213,10 @@ rule that no one's work disappears without a word add these (unit B2):
 - Choosing a language whose Door43 code a Scripture Burrito cannot hold (such as
   `acm-x-lebarabic`) fills the Code box with a code it can hold that keeps every letter
   (`acm-x-lebarabi-c`), and one sentence says so. tC4 4.0 stores "Undetermined" (#582, Q35).
-- A book tile counts a verse as drafted when it has words, whatever line they are on. tC4 4.0
-  reads a verse only up to its first paragraph marker, so a poem verse whose words are on
-  `\q` lines counts as not drafted there (#572).
+- A verse counts as drafted when it has words, whatever line they are on, on Home's book
+  tiles and in Check alike, so a Psalm verse written on `\q` lines can be checked and its
+  decision is saved (owner ruling H12). tC4 4.0 reads a verse only up to its first paragraph
+  marker, so such a verse counts as not drafted there and Check leaves it out (#572).
 
 And these (unit B10):
 
