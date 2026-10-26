@@ -171,6 +171,7 @@ DOM-2	This app's own alignment sidecar now reads a digit-string occurrence ("1")
 DOM-2	Writer::Tc4 keeps a non-boolean dismissed or markedInvalid as an unknown field, which this app's reader would refuse once written back; Tc4 has no production caller yet (card I)	crates/tc-journal/src/fold/sidecar.rs decode_alignment_record; races-lens review
 DOM-2	Opening a tC4 project (tc-app seed/records.rs) rewrites `invalid` into `markedInvalid` and reads with decode_alignments (Writer::ThisApp): a second path for tC4 records next to Writer::Tc4; card I should read tC4 records with Writer::Tc4	crates/tc-app/src/backend/seed/records.rs:383-420; loss-lens review
 DOM-2	Imported cards stand in first-run (target) order where word-aligner orders them by the source verse; invisible, since Aligner::open re-sorts as tC4 does	crates/tc-journal/src/alignment.rs tc4_cards; parity-lens review
+C7b	The property census of fold_converges_under_any_union can miss "decision placed" on an unlucky run (one run reached 0, the next two passed): the random generator reaches a placed decision rarely now that moves win at a check's old place	cargo test -p tc-journal --test properties fold_converges_under_any_union, 2026-10-25
 UI-1	A Door43 open or sync that ends Lost (the server restarted mid-job) leaves its dialog or button with no word on how it ended; the project list is read again, but a finished clone may look like nothing happened	crates/tc-ui/src/app/web/app_ctx.rs, the JobEnd::Cancelled | Lost | Left arms of open_door43_now and sync_now; the UI offers no cancel for these jobs, so only a server restart reaches it
 UI-1	A book open whose job the server forgot now closes the opening overlay with no message (it spun forever before)	crates/tc-ui/src/app/web/understand.rs, the open follow's Lost arm; reachable only after a server restart without a page reload
 OLH-1	The check-comment draft test fails now and then when the whole app suite runs at once, and passes alone	a_check_comment_typed_on_an_undecided_check_is_kept_as_its_first_decision (check_item.rs:728) failed once with OfferedDrafts { offers: [], settle: [] } in a 37-test run of check_item, understand and translate; three runs alone passed. Not touched by OLH-1.
@@ -242,3 +243,14 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+C7b	A move wins at a check's old place even over a newer decision; a decision or Restore saved at the old check with a token from before a sync that brought the move is hidden at once, in History with no row; refuse with LookAgain once a sync can land while a tool page is open (E2)	evidence/2026-10-24/C7b-lens-races.md m1
+C7b	The Received sheet counts an old loss again on each later sync that touches the same record	evidence/2026-10-24/C7b-lens-races.md m2
+C7b	Changes of a held, incomplete batch that is completed or released later never get a replaced row	evidence/2026-10-24/C7b-lens-races.md m3
+C7b	After a carried file's removal, a file dropped in at its name raises a carried-file question	evidence/2026-10-24/C7b-lens-races.md m4
+C7b	Kept-copy names change as profiles or newer versions arrive; the copy under its old name stays in the folder (left out of the commit)	evidence/2026-10-24/C7b-lens-races.md m5, C7b-lens-loss.md m4
+C7b	newest_wins_converges accepts any outcome other than a conflict without comparing it across computers, and never makes an outside edit with no known base	evidence/2026-10-24/C7b-lens-races.md m6
+C7b	A kept copy of a carried file cannot be removed: its token is not offered, and a deleted copy is placed again	evidence/2026-10-24/C7b-lens-loss.md m3; storage review minor 3
+C7b	When a book's newest head cannot be read the record shows nothing and editing is blocked (before H5 a listed conflict)	evidence/2026-10-24/C7b-lens-loss.md m2
+C7b	A removed book's count of hidden edits is dropped (BookView::Removed carries none), so the Received row cannot say how many edits are in History	storage review minor 4, 2026-10-25
+C7b	The book restore race is on the Text tab but its card offers no choice there yet	evidence/2026-10-24/C7b-lens-parity.md
+C7b	A path-case clash gives no Received row and no count	evidence/2026-10-24/C7b-lens-parity.md

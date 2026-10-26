@@ -194,6 +194,7 @@ scoped!(
     crate::align::Flush,
     crate::align::Close,
     crate::conflicts::Resolve,
+    crate::conflicts::Restore,
     crate::conflicts::ResolveBulk,
     crate::export::RunExport,
 );

@@ -106,7 +106,7 @@ use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TeammatesJoin, TokenBase,
+    TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
 use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
@@ -2779,6 +2779,17 @@ impl Example for Resolve {
     }
 }
 
+impl Example for tc_api::conflicts::Restore {
+    fn example() -> Self {
+        tc_api::conflicts::Restore {
+            at: scope(),
+            request: request(27),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            from: ChangeRef::parse(&"a".repeat(64)).unwrap(),
+        }
+    }
+}
+
 impl Example for ResolveBulk {
     fn example() -> Self {
         ResolveBulk {
@@ -2933,6 +2944,7 @@ impl Example for Script {
                         first: 4,
                         last: 5,
                     }),
+                    kinds: vec![TeammatesKind::Check, TeammatesKind::CarriedFile],
                     restored: 0,
                 },
             },
@@ -3217,6 +3229,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "check/decide",
             "conflicts/resolve",
             "conflicts/resolveBulk",
+            "conflicts/restore",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -3452,6 +3465,23 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                replaced: vec![tc_api::jobs::ReplacedView {
+                    by: PersonLabel {
+                        who: Who::Teammate(1),
+                        computer: None,
+                    },
+                    whose: PersonLabel {
+                        who: Who::Username("maria".into()),
+                        computer: None,
+                    },
+                    kind: tc_api::jobs::ReplacedKind::Alignment,
+                    place: tc_api::conflicts::ReviewPlace::Verse {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        verse: 1,
+                    },
+                    count: 1,
+                }],
             })),
         }),
         Event::Job(JobView {

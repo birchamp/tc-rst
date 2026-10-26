@@ -18,7 +18,7 @@ use tc_api::home::Card;
 use tc_api::ids::{ChangeRef, ConflictRef, Scope};
 use tc_api::session::Close;
 use tc_api::shown::{Known, PersonLabel, Who};
-use tc_api::test::{ScriptedSync, TeammatesEdit, TeammatesJoin};
+use tc_api::test::{ScriptedSync, TeammatesEdit, TeammatesJoin, TeammatesKind};
 use tc_api::write::Stored;
 use tc_app::App;
 use tc_app::events::Next;
@@ -433,6 +433,7 @@ async fn versions_that_differ_only_in_a_footnote_look_different() {
             texts: vec![FIRST.into(), SECOND.into()],
         }),
         joined: None,
+        kinds: Vec::new(),
         restored: 0,
     })
     .await;
@@ -712,6 +713,7 @@ async fn joined_while_i_changed_five() -> (super::sync::World, Scope, ConflictEn
                 first: 4,
                 last: 5,
             }),
+            kinds: Vec::new(),
             restored: 0,
         },
     )
@@ -985,4 +987,207 @@ async fn bulk_keep_leaves_out_conflicts_with_two_candidates() {
     assert_eq!(view.conflicts, 2);
     let two = history(app, &at, &record_ref(&tit(1, 2)).unwrap()).await;
     assert_eq!(two[0].cause, VersionCause::Kept);
+}
+
+/// The shared project after a sync brought Teammates 1 and 2's versions of one record of each
+/// of `kinds`, open at Titus: their conflicts as only a sync or a USB file brings them.
+async fn synced_kinds(kinds: Vec<TeammatesKind>) -> (super::sync::World, Scope) {
+    synced_with(ScriptedSync::Synced {
+        teammates: None,
+        joined: None,
+        kinds,
+        restored: 0,
+    })
+    .await
+}
+
+/// The conflicts a tab lists, by kind.
+async fn kinds_on(app: &App, at: &Scope, on: ReviewTab) -> Vec<ConflictKind> {
+    let ReviewEntries::Conflicts(entries) = tab(app, at, on).await.entries else {
+        panic!("{on:?} lists no conflicts")
+    };
+    let mut kinds: Vec<ConflictKind> = entries.iter().map(|e| e.kind).collect();
+    kinds.sort_by_key(|k| format!("{k:?}"));
+    kinds
+}
+
+/// Owner ruling H5: of every kind outside a verse's text, the newest version wins with no
+/// question, so a sync that brings two versions of each lists nothing outside the Text tab,
+/// where the one book question left, *Restore the text* against *Start empty*, is.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn only_text_kinds_reach_the_review() {
+    let (w, at) = synced_kinds(vec![
+        TeammatesKind::Check,
+        TeammatesKind::Comment,
+        TeammatesKind::Alignment,
+        TeammatesKind::Setting,
+        TeammatesKind::Pins,
+        TeammatesKind::BookPresence,
+        TeammatesKind::CarriedFile,
+        TeammatesKind::PathCase,
+    ])
+    .await;
+    let app = &w.t.app;
+    assert_eq!(
+        kinds_on(app, &at, ReviewTab::Text).await,
+        vec![ConflictKind::BookPresence]
+    );
+    for on in [
+        ReviewTab::Alignments,
+        ReviewTab::Checks,
+        ReviewTab::Settings,
+    ] {
+        assert_eq!(kinds_on(app, &at, on).await, vec![], "{on:?}");
+    }
+}
+
+/// Owner ruling H5: the Received sheet says what a newer version replaced, and whose:
+/// "Teammate 2's check replaced Teammate 1's" (or "yours" when the other version is this
+/// person's).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn received_says_what_was_replaced() {
+    use tc_api::jobs::ReplacedKind;
+
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    script(
+        app,
+        41,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: None,
+            kinds: vec![TeammatesKind::Check, TeammatesKind::Alignment],
+            restored: 0,
+        },
+    )
+    .await;
+    let synced = synced(app, 42).await;
+    let rows: Vec<_> = synced
+        .replaced
+        .iter()
+        .map(|r| (r.by.clone(), r.whose.clone(), r.kind, r.count))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (teammate(2), teammate(1), ReplacedKind::Check, 1),
+            (teammate(2), teammate(1), ReplacedKind::Alignment, 1),
+        ]
+    );
+    assert!(matches!(
+        synced.replaced[0].place,
+        ReviewPlace::Check { .. }
+    ));
+    assert!(matches!(
+        synced.replaced[1].place,
+        ReviewPlace::Verse { .. }
+    ));
+}
+
+/// Owner ruling H5: the older version of a record that settled on its newest stays in History,
+/// and *Restore this version* brings it back with no conflict to open.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_record_outside_a_conflict_restores_an_older_version_from_history() {
+    use tc_api::conflicts::{History, Restore};
+    use tc_journal::Record;
+    use tc_journal::keys::ToolId;
+    use tc_journal::record::CheckValue;
+
+    let (w, at) = synced_kinds(vec![TeammatesKind::Check]).await;
+    let app = &w.t.app;
+    let session = app.read(&at).unwrap();
+    let read = session.read();
+    let key = read
+        .decisions_of(ToolId::TranslationNotes, BookId::Titus)
+        .into_iter()
+        .find(|key| read.heads(key).len() > 1)
+        .expect("the check two teammates changed");
+    let comment = |record: Option<Record>| match record {
+        Some(Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        }) => d.comment,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        comment(read.projected(&key)).as_deref(),
+        Some("Comentario del compañero 2.")
+    );
+    let shown = tc_app::wire::token::shown(&read.mint(&key, None).unwrap()).unwrap();
+    drop(read);
+    drop(session);
+    let history: tc_api::conflicts::HistoryView = post(
+        app,
+        &History {
+            at: at.clone(),
+            record: record_ref(&key).unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    let older = history
+        .versions
+        .iter()
+        .find(|v| v.version.by == MadeBy::Person(teammate(1)))
+        .expect("Teammate 1's version is in History");
+    let _: tc_api::write::Ack = post(
+        app,
+        &Restore {
+            at: at.clone(),
+            request: rid(77),
+            shown,
+            from: older.version.change.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let read = app.read(&at).unwrap().read();
+    assert_eq!(
+        comment(read.projected(&key)).as_deref(),
+        Some("Comentario del compañero 1.")
+    );
+    assert_eq!(read.heads(&key).len(), 1);
+}
+
+/// Owner ruling H5: a teammate's newer removal removes the book with no question; the Received
+/// sheet says so, as the removal replaced this person's book.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn received_says_a_teammate_removed_a_book() {
+    use tc_api::jobs::ReplacedKind;
+
+    let w = shared().await;
+    w.t.clock.set(START_MS);
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    script(
+        app,
+        41,
+        ScriptedSync::Synced {
+            teammates: None,
+            joined: None,
+            kinds: vec![TeammatesKind::BookRemoved],
+            restored: 0,
+        },
+    )
+    .await;
+    let synced = synced(app, 42).await;
+    let rows: Vec<_> = synced
+        .replaced
+        .iter()
+        .map(|r| (r.by.clone(), r.kind, r.place.clone()))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![(
+            teammate(1),
+            ReplacedKind::Book,
+            ReviewPlace::Book {
+                book: BookId::Jonah
+            }
+        )]
+    );
 }

@@ -57,8 +57,10 @@ The project owner ruled on these points on 2026-10-16 (`docs/TC4-DELTA-2026-10-1
 - A sync checks write access before it fetches. One API call reads `permissions.push`.
   Without write access the sync refuses, and nothing changes, as in tC4. Other refusals
   after the received work arrived keep that work and say so (Q8).
-- A conflict between two check decisions is shown and can be resolved. tC4 keeps the
-  newest decision and shows only a count (Q1, AGENTS.md).
+- Only verse text and story frame text conflict (owner ruling H5, 2026-10-24). A check,
+  alignment, comment, setting, resource pin or book keeps the newest version with no question, as
+  in tC4, and the older one stays in History, where *Restore this version* brings it back. tC4
+  keeps the older one in its journal where no screen reaches it.
 - One damaged incoming file is salvaged. It does not stop the whole sync or open (Q4).
 - Every other question in that §5 follows its recommendation.
 
@@ -286,15 +288,27 @@ And this (unit C3):
 
 And this (unit B11):
 
-- The conflict review lists, besides tC4's verses whose text two people changed, everything
-  else a project can hold in two versions (alignments, checks and comments, settings, sources
-  and books), the records that lost their place and the notices, each in a tab of its own,
-  read only until unit C7b. The tabs show only while one of them holds something, so a
-  project with verse conflicts alone shows tC4's review. tC4 4.0 keeps the newest version of
-  those records and only counts them on the sync result, so the person cannot see what was
-  set aside.
-- An aligned verse and a check decision that hold two versions show "2 versions · Review" on
-  the Align and Check screens (#791); tC4 4.0 shows nothing there.
+- The conflict review lists, besides tC4's verses whose text two people changed, the records
+  that lost their place and the notices, each in a tab of its own; under H5 the Alignments,
+  Checks and Settings tabs hold only an edit made outside the app with no known base. The tabs
+  show only while one of them holds something, so a project with verse conflicts alone shows
+  tC4's review.
+- The Received sheet says what a newer version replaced: "Juan's alignment of Titus 1:1 replaced
+  yours. Your version is in History." tC4's sync result only counts "{n} conflicts kept the
+  newest version" (H5).
+- Two versions of an audio or other carried file are both kept. The newest keeps the name, the
+  other is saved beside it under its author's name, `jon_01-Juan.wav` (`-2`, `-3` while the name
+  is taken). tC4 does not journal `audio/` and keeps one copy (H5 rule 3).
+- A check that moved (a carry-over) keeps the move at its old place even when a teammate's
+  decision there is newer; that decision is listed in the History of the check it moved to.
+  Newest-wins there would show the check twice. tC4 keys decisions without moves.
+- A file whose name differs only in letter case from another keeps one name by byte order, never
+  by which is newer; the other is placed beside it. A newer recording that took the name would,
+  on Windows and macOS, read the other file's bytes. tC4 leaves this to git.
+- An edit made to a project file outside the app with no known base never wins by date alone: it
+  stays a question in the outside edit's review, so nothing the person wrote is dropped unasked.
+- A newer removal of a book removes it, and its edits stay in History; a newer edit keeps it; the
+  last book of a project is never removed by a sync (H5 rules 4 and 5).
 - A version dated more than a day after this computer's clock says the clock it was made on
   may be wrong, and the review has a History of the verse (#78). tC4 4.0 has neither.
 

@@ -467,6 +467,7 @@ fn the_toasts_review_opens_where_something_waits() {
             alignments,
             restored: 0,
             missing_pins: 0,
+            replaced: Vec::new(),
         }),
     };
     assert_eq!(toast(1, 0).review_tab(), ReviewTab::Text);
@@ -649,4 +650,23 @@ fn in_flight(keep: &KeepPhase) -> RequestId {
 
 fn keep_press() -> Press {
     press_keep('1', 'a')
+}
+
+/// The screens of the H5 packet the ruling kept all draw, and the conflict cards of the kinds
+/// whose newest version now wins are gone from it.
+#[test]
+fn the_packet_draws_every_screen_the_ruling_kept() {
+    use tc_ui::app::q9::{SCREENS, screen};
+
+    for name in SCREENS {
+        assert!(screen(name).is_some(), "{name}");
+    }
+    for gone in [
+        "checks",
+        "alignments",
+        "settings-carried",
+        "settings-path-case",
+    ] {
+        assert!(screen(gone).is_none(), "{gone}");
+    }
 }

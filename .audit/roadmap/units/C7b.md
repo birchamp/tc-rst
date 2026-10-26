@@ -1,298 +1,130 @@
 ---
 id: C7b
-title: Conflict choices: every other kind
+title: Newest wins outside verse text (H5), and the conflict screens that stay
 track: A
 lane: app
 milestone: M3
-state: todo
-owner: none
-branch: none
-worktree: none
+state: verifying
+owner: shell lane (Claude Code e1bb3a0c)
+branch: track-C7b
+worktree: .worktrees/track-C7b
 depends: [C7a, S2]
 needs_owner: []
 proves: [P2, P3, P7]
 no_loss: true
-size: 4.5-6.5 sessions plus the owner's wait (basis: B11 and C8; carried choices shrink to two, about -0.5 session, docs/STORAGE-DELTA-2026-10-21.md §6)
+size: 3-5 sessions (basis: the design in the 2026-10-24 log; the fold already orders heads, so the rule is small, the tests and goldens are most of it)
 merged: none
-updated: 2026-10-22
-next: Claim this card after C7a and S2 merge; steps 1-2 need no ruling; step 3 waits for H5. H19 and H22 are ruled (rulings/2026-10-22-H19.md, -H22.md).
+updated: 2026-10-24
+next: With the integration lane for batch 8.
 blocked_by: none
-later: ["H5 from step 3"]
 ---
 
 # C7b: Conflict choices: every other kind
 
 ## Goal
 
-Every conflict kind outside the Text tab has its choices in the review: check, moved check,
-alignment, settings and pins, the project's books, comment, carried file and path case. Detached
-records can be dismissed, a held batch of changes can be applied ("Apply what was recovered"), and a
-notice can be dismissed. The Received sheet is drawn for E2's *Receive work from a file* (Q-8). The
-owner has signed off every rebuild-only screen (H5) before its choices are wired, and the screens
-match what was signed off.
-
-A carried file conflict has two choices only, by the owner's ruling of 2026-10-21 (CF 3): *Keep
-this one*, on each version, and *Keep both*, which saves the second version under its own free
-name. *Keep the other* is gone. Carried files stay (`rulings/2026-10-22-H19.md`, option A) and the
-second file's name is `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md` part 2).
-
-Not here: the grouped row of one import reuses `OutsideEditLarge`'s three choices on the Text tab
-(C7a). The notices of kept copies of outside-edited files, with *Import*, *Dismiss* and *Bring it
-back*, are D1's (delta §6).
+Owner ruling H5 (`rulings/2026-10-24-H5.md`): only verse text and story frame text conflict. For
+check decisions, moved checks, alignments, comments, settings, resource pins, book presence and
+path-case clashes, the newest version wins with no question asked, and the older one stays in
+History, where *Restore this version* brings it back. A carried file's newest version keeps the
+name, and the other is kept beside it as `<stem>-<person>.<ext>` (`jon_01-Juan.wav`). A removal
+that is the newest removes the book, and its edits stay in History; the last book never goes.
+The Received sheet says what the newest version replaced. This card changes the fold and the
+store to that rule, removes the conflict tabs and choice cards that no longer apply, and keeps
+History with Restore, Detached, Notices, the Received sheet, the read-only banner, the draft
+offer, the boot error and the first-launch failure.
 
 ## Why it matters to a translator
 
-When a teammate's sync or USB file brings a second check decision, alignment, setting or file, the
-translator can decide which one stays. Today those tabs are read only. No choice moves a resource
-pin without showing what it changes, and no rename loses a file.
+A teammate's newer check, alignment or setting arrives without a question to answer, the
+translator's own older version is one click away in History, and the Received sheet says what
+changed. Only a verse's words, where both versions may matter, still ask.
 
 ## Before you start
 
-- `python3 -I .audit/tools/board.py` shows C7a as `done`.
-- `grep -n 'pub enum KeepChoice' crates/tc-api/src/conflicts.rs` prints one line (C7a's type).
-- `grep -n 'fn tab_of' crates/tc-app/src/conflicts.rs` prints line 37 or near it.
-- `awk '/pub enum ConflictKind/,/^}/' crates/tc-api/src/conflicts.rs | grep -c '^    [A-Z]'` prints
-  `25` (24 kinds and `Unknown`).
-- `python3 -I .audit/tools/board.py` shows S2 as `done`. S2 is in `depends` because
-  `Command::ResolvePins` and `Choice::KeepBothCarried` exist only on the S2 branch today.
-  `git grep -n 'ResolvePins {\|KeepBothCarried' HEAD -- crates/tc-journal/src/command.rs` prints
-  both.
-- `ls .audit/roadmap/rulings/2026-10-22-H19.md .audit/roadmap/rulings/2026-10-22-H22.md` prints
-  both: carried files stay and *Keep both* is named `jon_01-Juan.wav`.
-- For steps 3 to 8: `ls .audit/roadmap/rulings/*-H5.md` prints one file.
+- `rulings/2026-10-24-H5.md` exists (on main, or merged from `track-RULING-H5`).
+- The design: the shell lane's 2026-10-24 log line below and
+  `side-session-notes/.../C7b-newest-wins-design.md`. "Newest" is `ChangeMeta::order() = (rank,
+  at, id)` (`crates/tc-journal/src/fold/meta.rs:301`), the order the fold already uses for the
+  provisional head, compared only between concurrent heads.
 
 ## Funnel card
 
 - **Invariants**:
-  - INV-EVERY-KIND-HAS-A-CHOICE: `choices(kind)` (C7a, `crates/tc-ui/src/app/review.rs`) and
-    `choose` (C7a, `crates/tc-app/src/conflicts.rs`) match every `ConflictKind` and every
-    `KeepChoice` with no wildcard; after this card only `Unknown` answers `Later`.
-  - INV-NO-SILENT-PIN-MOVE: a pins choice moves a pin only through a plan the person saw, with its
-    counts ("With v92: 1,204 checks valid, 37 to check again", STORAGE §8.3); a plan that changed
-    since is refused, and nothing moves.
-  - INV-A-RENAME-KEEPS-BOTH-FILES: a path-case rename and *Keep both* write the file at a path that
-    holds no file, so both files stay. *Keep this one* removes only the other version of that same
-    conflict; no choice removes any other carried file.
-  - INV-A-CHOICE-NEVER-OVERWRITES-AN-UNSEEN-VERSION (from C7a) holds for every new choice, Dismiss
-    included.
-- **Wrong states**:
-  - A pins choice that runs the carry-over without the counts, so checks turn invalid unannounced (a
-    teammate pinned v93 while I pinned v92).
-  - A rename onto a path that already holds a file: `rename_carried` in
-    `crates/tc-journal/src/fold/resolve.rs` writes the new path with that path's heads as parents,
-    which would replace the file there. (`keep_both_carried`, from S2, refuses such a
-    path; `rename_carried` does not.)
-  - A *Keep both* name with a space, such as the ruling's example `jon_01 (Juan).wav`: the path
-    grammar forbids it (S2:1024). The name is `<stem>-<person>.<ext>` (`jon_01-Juan.wav`), the
-    person part cleaned as an export file name is, with `-2`, `-3` when taken (delta §2.7;
-    `rulings/2026-10-22-H22.md` part 2).
-  - A *Keep the other* button, or a third carried choice: CF 3 gives two.
-  - A Detached entry or a notice with no token or id, so Dismiss cannot name what it dismisses
-    (`DetachedEntry` and `NoticeEntry` in `crates/tc-api/src/conflicts.rs` carry none today).
-  - `tab_of` (`crates/tc-app/src/conflicts.rs:37`) remapping a kind to another tab: nothing fails
-    today (B11's minor).
-- **Code**:
-  - Types: new `KeepChoice` variants (to create) for the choices `Candidate` cannot carry:
-    `ApplyToMovedCheck`, `PerUnit { .. }`, `KeepBothComments`, `Pins { plan }`,
-    `RestoreBook { mode }`, `Rename { file, to: FreePath }`, `KeepBothFiles { other, to: FreePath }`. `FreePath` (to create) is a path only
-    `free_path(snapshot, wanted)` makes, and it never names a path the project holds. For *Keep
-    both*, `wanted` is `<stem>-<Door43 user>.<ext>`, for example `jon_01-Juan.wav` (delta §2.7;
-    `rulings/2026-10-22-H22.md` part 2: no spaces in project paths).
-    `DetachedEntry.shown: ShownToken` and `NoticeEntry.id` (to create).
-  - One entry point: C7a's `choose` gains one arm per variant, mapping to
-    `tc_journal::command::Choice` (`Candidate`, `Values`, `ApplyToMovedCheck`, `RenameCarried`,
-    and S2's `KeepBothCarried`),
-    `Command::RestoreBook` (`RestoreMode::{KeepText, StartEmpty}`) or S2's `Command::ResolvePins`.
-    `Candidate` already covers the book kinds, *Keep this one* for a carried file, and *Remove*
-    for a path case (`keep_candidate`, in `crates/tc-journal/src/fold/resolve.rs`). `Values`
-    records come only from the fold's own builders (`per_unit`, `keep_both_comments`, same file).
-    Detached and Notices use `Command::{Dismiss, ReleaseBatch}` and the handle's `dismiss_notice`.
-    `Command::MoveCheck` (re-key a decision, R7) stays unused unless the signed-off packet has a
-    screen for it.
-  - Notices after the delta: `StorageDamage` goes; `OutsideEditHeld` becomes "book changed
-    outside, waiting"; `MetadataEditedOutside` becomes one notice for any rewritten generated file
-    (delta §2.15). A kept copy's notice is D1's: its *Dismiss* deletes the copy, so C7b's generic
-    dismiss never applies to it.
-  - Removed: the `Later` arms of `choices` for every kind but `Unknown`; `later_bar` stays for
-    `Unknown` only.
-  - Left to checks, and why: the tab of each kind is a design decision no type can carry;
-    `every_kind_is_listed_on_its_tab` holds it.
-- **Checks**:
-  - `every_kind_is_listed_on_its_tab` (to create) in `crates/tc-app/tests/app/conflicts.rs`; kind:
-    unit on a fold built with tc-journal; runs in: CI `rust` job. Proof: move `Kind::Alignment` to
-    `ReviewTab::Checks` in `tab_of`; the test must fail.
-  - `align_and_check_show_the_two_versions_marker` (to create), same file; kind: unit. Proof: return
-    `None` for the aligner's `marker`; the test must fail.
-  - `a_pins_choice_moves_no_pin_until_its_plan_is_confirmed` and
-    `a_stale_pins_plan_is_refused_and_moves_nothing` (to create), same file; kind: unit.
-  - `a_rename_keeps_both_files` and `free_path_never_names_a_held_path` (to create), same file; the
-    second is a `proptest` over random file lists. Proof: make `free_path` return `wanted`
-    unchanged; the property must fail.
-  - `keep_this_one_removes_only_the_other_version` and
-    `keep_both_saves_the_second_version_under_a_free_name` (to create), same file; kind: unit.
-    Proof: drop the `-<person>` part from `wanted`; the second test must fail. Carried files
-    stay (`rulings/2026-10-22-H19.md`, option A), so these tests are built here.
-  - `dismiss_needs_the_shown_token` (to create), same file; kind: unit.
-  - `one_resolution_per_kind_through_the_ui` (to create) in
-    `parity/app/journeys/conflict-kinds.test.mjs` (to create), one `browserTest` per group (a) to
-    (d); kind: journey; runs in: G5's job once G5 lands (they skip in CI until then).
-  - `rebuild_only_screens_equal_their_signed_off_capture` (to create) in
-    `crates/tc-ui/tests/screen_record.rs`; kind: parity gate; runs in: CI `rust` job.
-  - J26's check-decision step (to create) in `parity/app/journeys/team-sync.test.mjs`: A resolves
-    the conflict between two check decisions, B and C sync and see the kept decision (PLAN P2
-    J26); kind: journey; runs in: G5's job. Step 7b says which of C7b and E1a writes it.
-- **Prose**: `docs/PLAN.md` declared differences for each new screen; `docs/TC4-ISSUES.md` rows #25
-  and #791.
-- **Human**: H5 (ROADMAP.md): sign off the rebuild-only screens as one packet. Options: approve as
-  drawn (the choices are wired as shown); ask for changes (the card redraws, then asks again);
-  approve some (only those groups are wired). Recommendation: approve the packet. Ruling file:
-  `.audit/roadmap/rulings/<date>-H5.md`.
-- **Human, ruled 2026-10-22**: H19 (delta Q3): S2's carried code stays, without its git backups
-  (`rulings/2026-10-22-H19.md`, option A). H22 (delta Q4): the second file's name under *Keep
-  both* is `<stem>-<Door43 user>.<ext>`, `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md` part 2).
+  - INV-NEWEST-WINS-CONVERGES: for every key of a newest-wins kind, every computer settles on the
+    same head after any union order, and it is the head with the largest `(rank, at, id)`.
+  - INV-THE-LOSER-STAYS-IN-HISTORY: every head that lost is listed in History and can be restored.
+  - INV-ONLY-TEXT-CONFLICTS: the conflicts the fold lists are only the text kinds (verse, passage,
+    structure, frame, book header, chapter front, story base and reference, the book restore
+    race) and `Unknown`.
+  - INV-A-CARRIED-FILE-KEEPS-BOTH: every present version of a carried file has one placement, at
+    distinct paths that no other file holds.
+- **Wrong states**: a loser no screen can reach (a moved check's old key); a winner that differs
+  between computers; a beside file written over another file; a project left with no book; a
+  Received sheet that says nothing about a replaced version.
+- **Code**: one pure predicate `newest_wins` in `crates/tc-journal/src/fold/merge.rs`; at each
+  conflict site the fold returns `Local::ByRule(provisional)` with `AutoRule::Newest`. Books in
+  `books.rs` (`status_of`, `last_book`). Carried beside names in `attach::stage_paths`, read by
+  tc-store's checkpoint from the fold's placements, never from file names. `moved_into` for
+  History across check moves. tc-app: a pure `replaced(snapshot, me, received)` for the Received
+  sheet. Removed: the newest-wins kinds from `ConflictKind`, `KeepChoice`, `ReviewTab::{Alignments,
+  Checks}`, and their choice cards; INV-EVERY-KIND-HAS-A-CHOICE and INV-NO-SILENT-PIN-MOVE (made
+  obsolete by H5).
+- **Checks**: `newest_wins_converges`, `the_loser_stays_in_history`, `only_text_conflicts`,
+  `carried_keeps_both`, `a_newer_removal_removes_and_a_newer_edit_keeps` (property tests in
+  `crates/tc-journal/tests/properties.rs`); `a_moved_checks_older_decision_is_restored` (tc-store);
+  `only_text_kinds_reach_the_review` and `received_says_what_was_replaced` (tc-app); the
+  conflict-kinds journey. Proof it can fail: the min instead of the max fails
+  `newest_wins_converges`; no free-path check fails `carried_keeps_both`; no last-book rule fails
+  the book test.
+- **Prose**: STORAGE I2, I3, §7.2, §7.6, §8.1, §8.3, §8.5, §11.4, §12; PLAN.md declared differences.
+- **Human**: H5 is ruled. Seven detail questions went to the owner on 2026-10-24 with defaults (log).
 
 ## Steps
 
-### Step 1: Test the read side of every tab
+### Step 1: The fold: newest wins on records (tc-journal)
+- Do: `newest_wins`, `AutoRule::Newest`, the `Local` rule, unreadable keys still registered; the
+  three property tests; update `conservation`, `concurrent_differences_are_visible`,
+  `no_survival_by_time_or_identity` (rename `heads_and_text_conflicts_read_no_clock`),
+  `resolution_always_possible` and the scenario tests and fixtures that asserted these kinds.
+- Done when: `cargo test -p tc-journal` passes; the min instead of the max fails
+  `newest_wins_converges`. The storage lane reviews the diff.
 
-- Do: Add a scripted teammates' change for each kind group (a check decision, a comment, an
-  alignment, a setting, a pin, a book presence, a carried file and a path case), beside
-  `teammates_edit_verse` (`crates/tc-app/src/backend/mod.rs:1087`, `memory.rs` module `teammates`,
-  `scenario_store.rs`), made with tc-journal's encoder as `Teammates::edit_verse` does, and
-  reachable from `tc_api::test::ScriptedSync::Synced` (to create: a field). These kinds reach a
-  translator only by sync or USB; this stands in for X. Write `every_kind_is_listed_on_its_tab` and
-  `align_and_check_show_the_two_versions_marker`. A carried file conflict is two versions that
-  replaced the same version (CF 3); S2's code makes them (`rulings/2026-10-22-H19.md`).
-- Files: as named; `crates/tc-api/src/test.rs`; `crates/tc-api/tests/golden/endpoints/test/*`;
-  `crates/tc-app/tests/app/conflicts.rs`.
-- Done when: `cargo test -p tc-app --test app app::conflicts::` passes; each proof mutation of the
-  funnel card fails its test (paste the first failure line into the log);
-  `cargo test -p tc-api --test golden` passes.
-- Record: log line `step 1`; set `state: building`; update `next`.
+### Step 2: The fold: books
+- Do: `status_of` and `last_book` by newest, the book property test, STORAGE §7.6, I2, I3.
+- Done when: `cargo test -p tc-journal` passes; dropping the last-book rule fails it.
 
-### Step 2: Send the H5 packet, then stop
+### Step 3: Carried files and path case (tc-journal, tc-store)
+- Do: the beside map and names, `checkpoint.rs` reading the fold's placements, the newest keeps the
+  name in a case clash, `carried_keeps_both`, the tc-store carried tests.
+- Done when: `cargo test -p tc-journal -p tc-store` passes; no free-path check fails
+  `carried_keeps_both`.
 
-- Do: Draw each proposed screen as a pure view: the Alignments, Checks, Settings, Detached and
-  Notices tabs with their choice footers (STORAGE §8.3 words), and the Received sheet (STORAGE
-  §8.5). Add a test-hooks page `?probe=q9&screen=<name>` (to create) in
-  `crates/tc-ui/src/app/web/probe.rs` that draws one screen from fixed data; it never builds in a
-  release. Write `parity/app/q9-packet.mjs` (to create), which opens each screen with the journeys
-  kit and saves `<name>.png` and `<name>.json` into `docs/evidence/q9-<date>/`. Include the screens
-  built earlier that have no tC4 design: History and Restore, the bulk keep (C7a), the draft offer,
-  the read-only banner, the first-launch failure and the boot error. E2's USB screens do not exist
-  yet: list them as "follows E2" in the packet. Draw the carried file card with *Keep this one* on
-  each version and *Keep both* naming `jon_01-Juan.wav` (`rulings/2026-10-22-H19.md` keeps carried
-  files; `rulings/2026-10-22-H22.md` part 2 names the file). Draw no *Keep the other*. Write `docs/evidence/q9-<date>.md`: one line per
-  screen, what the translator sees, and what each button does. End that file with a section
-  `## Question for the owner`: the H5 question in short plain sentences, with the options and the
-  recommendation from the funnel card. Tell the owner the file's path in your session's last message.
-- Files: `crates/tc-ui/src/views/review.rs`, `crates/tc-ui/src/app/web/probe.rs`,
-  `parity/app/q9-packet.mjs`, `docs/evidence/q9-<date>/`, `docs/evidence/q9-<date>.md`.
-- Done when: `ls docs/evidence/q9-<date>/*.png | wc -l` equals the number of lines in the packet's
-  list; `grep -c '^## Question for the owner' docs/evidence/q9-<date>.md` prints `1`; the four tc-ui
-  wasm32 clippy commands pass.
-- Record: log line `step 2`; add `H5` to `needs_owner`; set `state: blocked`,
-  `blocked_by: waiting for the owner's H5 ruling`,
-  `next: when rulings/<date>-H5.md exists, do step 3`.
+### Step 4: History across check moves (tc-journal, tc-store)
+- Do: `moved_into`, Restore of a version whose key moved into the shown key, and
+  `a_moved_checks_older_decision_is_restored`. Ships with step 1.
 
-### Step 3: Group (a): check and moved check
+### Step 5: STORAGE.md
+- Do: I2, I3, §7.2, §7.6, §8.1, §8.3, §8.5, §11.4 and §12 to the rule.
 
-- Do: When the ruling file exists, remove `H5` from `needs_owner`, set `state: building`, and log
-  `ruling`. Add `KeepChoice::{ApplyToMovedCheck, PerUnit, KeepBothComments}`: *Keep mine*, *Keep
-  <person>'s* (Candidate), *Choose per line*, *Keep both* for a check comment, *Apply <person>'s
-  change to the moved check*, *Keep <person>'s check where it was* (Candidate). Map them in
-  `choose`. Wire the Checks tab's buttons. Add the group's `one_resolution_per_kind_through_the_ui`
-  test.
-- Files: `crates/tc-api/src/conflicts.rs`, `crates/tc-app/src/conflicts.rs`,
-  `crates/tc-ui/src/app/review.rs`, `crates/tc-ui/src/views/review.rs`,
-  `parity/app/journeys/conflict-kinds.test.mjs`, the goldens.
-- Done when: `cargo test -p tc-api`, `cargo test -p tc-app --test app app::conflicts::` and
-  `cargo test -p tc-ui --test app app::review::` pass; the journey prints `# fail 0` and
-  `# skipped 0` (commands as in step 8).
-- Record: log line `step 3`; update `next`.
+### Step 6: tc-api and tc-app
+- Do: remove the newest-wins kinds and choices, the restore race to the Text tab, the Received
+  sheet's `replaced` rows (drop `kept_newest`), the scripted kinds of step 1 (2026-10-24) asserting
+  newest-wins rows, the goldens.
+- Done when: `cargo test -p tc-api -p tc-app` passes.
 
-### Step 4: Group (b): alignment
+### Step 7: tc-ui
+- Do: remove the Alignments, Checks and Settings tabs, their cards and markers, and the dropped
+  packet screens; draw the Received sheet's replaced rows; keep History and Restore, Detached,
+  Notices, the banners, the draft offer, the boot error and the first-launch failure.
+- Done when: the four tc-ui wasm32 clippy runs and `cargo test -p tc-ui` pass.
 
-- Do: *Use this alignment* (Candidate); *Open in the aligner starting from this one* (its save is
-  the resolution); bulk *Dismiss alignments made for text that was not kept*. Each card says whether
-  it was made for the current text (STORAGE §8.3).
-- Files: as step 3; `crates/tc-ui/src/views/align/session.rs` for the open.
-- Done when: as step 3, for the Alignments tab.
-- Record: log line `step 4`; update `next`.
-
-### Step 5: Group (c): settings, pins and the project's books
-
-- Do: *Keep this one* for Setting, ProjectMeta, Versification, BookLayout and DeviceProfile. Pins: a
-  `conflicts/planPins` read (to create) that returns the plan of each version with its counts, and
-  `KeepChoice::Pins { plan }` through S2's `Command::ResolvePins`; a missing release offers
-  *Download* first. Books: *Restore <book>*, *Keep it removed* and *Keep <book>* through `Candidate`
-  (`keep_candidate` handles `BookRemovedWhileEdited`, `LastBookRemoved` and `BookPresence`);
-  *Restore the text* and *Start empty* through `KeepChoice::RestoreBook { mode }` and
-  `Command::RestoreBook` (STORAGE §8.3). Write the two pins tests.
-- Files: as step 3; `crates/tc-app/src/plans.rs` (reuse C8's plan reading).
-- Done when: as step 3, plus `a_pins_choice_moves_no_pin_until_its_plan_is_confirmed` and
-  `a_stale_pins_plan_is_refused_and_moves_nothing` pass, and each fails with the confirm skipped
-  (temporary edit, reverted).
-- Record: log line `step 5`; update `next`.
-
-### Step 6: Group (d): comments, Detached, notices, then carried files and path cases
-
-- Do, no new ruling needed: Comment: *Keep this one*, *Keep both*. Detached: *Dismiss* with the
-  entry's token (`conflicts/dismiss`, to create). Notices: *Apply what was recovered* for
-  `IncompleteChanges` (`conflicts/releaseBatch`, to create) and dismiss for every notice but a
-  kept copy's (D1's) through `session/dismissNotice` (whichever of D1 and C7b lands first creates
-  it; the other reuses it). Wire the Received sheet's view for E2.
-- Do, carried files and path cases (ruled: `rulings/2026-10-22-H19.md` option A keeps S2's
-  carried-file code, so these are wired here): CarriedFile: *Keep this one* on each version
-  through `Candidate` (the other version's file is removed, and the change names every head);
-  *Keep both* through `KeepChoice::KeepBothFiles` and `Choice::KeepBothCarried { keep, other, to }`,
-  with `to` from `free_path`. PathCase: *Rename* (with `FreePath`) and *Remove*. *Keep both*'s
-  name is `<stem>-<Door43 user>.<ext>`, for example `jon_01-Juan.wav` (`rulings/2026-10-22-H22.md`
-  part 2; project paths cannot hold spaces).
-- Files: as step 3; `crates/tc-api/src/lib.rs` and `crates/tc-api/tests/endpoints.rs` (`PHASE_0`)
-  for the new rows.
-- Done when: as step 3, plus `dismiss_needs_the_shown_token` passes and
-  `cargo test -p tc-server --test routes` passes; `a_rename_keeps_both_files`,
-  `free_path_never_names_a_held_path`, `keep_this_one_removes_only_the_other_version` and
-  `keep_both_saves_the_second_version_under_a_free_name` pass.
-- Record: log line `step 6`; update `next`.
-
-### Step 7: Hold the screens to the signed-off packet
-
-- Do: Commit the signed-off captures as the reference for the rebuild-only rows. Add
-  `rebuild_only_screens_equal_their_signed_off_capture` to `crates/tc-ui/tests/screen_record.rs`:
-  each rebuild-only screen's DOM capture equals its signed-off one, or is explained in
-  `parity/app/residuals.json`.
-- Files: `crates/tc-ui/tests/screen_record.rs`, `parity/app/*`.
-- Done when: `cargo test -p tc-ui --test screen_record` passes, and fails when one signed-off DOM
-  file is edited by one attribute (temporary edit, reverted).
-- Record: log line `step 7`; update `next`.
-
-### Step 7b: Give J26's check-decision step an owner
-
-- Do: Run `python3 -I .audit/tools/board.py` and read E1a's state. If E1a is `done`: add the
-  check-decision conflict step to `parity/app/journeys/team-sync.test.mjs` (A resolves the
-  conflict between two check decisions, B and C sync and see the kept decision; PLAN P2 J26) and
-  delete the minor E1a step 6 filed for it from `.audit/minors.tsv`'s open list (append a row that
-  says it is closed; the file is append-only). If E1a is not `done`: append a `note` line to
-  E1a's log that C7b has landed and E1a step 6 must include the step, and say so in this card's
-  log. One of the two cards always writes the step.
-- Files: `parity/app/journeys/team-sync.test.mjs`, `.audit/minors.tsv` or `units/E1a.md`.
-- Done when: either `grep -n "check decision" parity/app/journeys/team-sync.test.mjs` prints the
-  new step and the journey passes three runs, or E1a's log holds the `note`.
-- Record: log line `step 7b`.
-
-### Step 8: Run the journeys and write down the differences
-
-- Do: Build and run the journeys three times. Add each new screen to `docs/PLAN.md` "Where the
-  rebuild differs from tC4 4.0 on purpose" and update `docs/TC4-ISSUES.md` rows #25 and #791 with
-  the test names.
-- Files: `docs/PLAN.md`, `docs/TC4-ISSUES.md`, `docs/APP-DESIGN.md` (C7b's row, line 3397).
-- Done when: after `cargo build -p tc4 --features test-hooks,fixture-backend`,
-  `cargo build -p tc-door43-fake` and `crates/tc-ui/build-app.sh`, the command
-  `TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake node --test parity/app/journeys/conflict-kinds.test.mjs parity/app/journeys/conflict-review.test.mjs`
-  prints `# fail 0` and `# skipped 0` three runs in a row.
-- Record: log line `step 8`; set `state: verifying`; update `next`.
+### Step 8: Journeys and declared differences
+- Do: `conflict-kinds.test.mjs` becomes newest wins (B and C see A's newer check and alignment;
+  History restores the older one); J26's check-decision step or E1a's note; PLAN.md's declared
+  differences. Three green runs.
+- Then: three verification lenses (no-loss card), and the tc-journal and tc-store diff to the
+  storage lane.
 
 ## Gates before merge
 
@@ -353,3 +185,28 @@ Plus:
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | Step 6 and the funnel card follow H19 (carried files stay) and H22 part 2 (*Keep both* is `jon_01-Juan.wav`); the STOP lines are gone | rulings/2026-10-22-H19.md, rulings/2026-10-22-H22.md
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | Step 7b gives PLAN P2 J26's check-decision step an owner whichever of C7b and E1a lands last; `later` names H5 from step 3 | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
+- 2026-10-24 15:03 EDT | shell lane (Claude Code e1bb3a0c) | claim | none | The orchestrator gave C7b to this lane (owner ruling 2026-10-24, finish in days); cut from origin/track-C7a d07d6612 with main 0189cee4 merged in, because C7a is in merge batch 1 and not on main yet (depends C7a: the merge waits for it). Kept to the review and conflict screens: the app lane does UI-1 meanwhile. One review, per the ruling | git log -2 track-C7b
+- 2026-10-24 15:32 EDT | shell lane (Claude Code e1bb3a0c) | step 1 | none | tc_api::test::ScriptedSync::Synced gains kinds: Vec<TeammatesKind> (serde default; Check, Comment, Alignment, Setting, Pins, BookPresence, CarriedFile, PathCase); Teammates::change_kind (test-hooks) has Teammates 1 and 2 change one record of each kind from its heads with tc-journal's encoder, as edit_verse does (a carried file: Teammate 1 adds it, both replace it, CF 3). cargo test -p tc-app --test app app::conflicts:: 13 passed, with every_kind_is_listed_on_its_tab and align_and_check_show_the_two_versions_marker; cargo test -p tc-api --test golden 9 passed (script.json regenerated). Proofs: Alignment moved to ReviewTab::Checks fails 'conflicts.rs:1042:5: left: [] right: [Alignment]'; the aligner's marker None fails 'conflicts.rs:1112:5: left: None right: Some(ConflictMarker { .., versions: 2 })'. The carried and path-case records arrive without their file contents (filling the git store is tc-store's), so the Notices tab also shows FileMissing notices; the tab test leaves Notices out and says why. Written by a subagent of this lane, reviewed here | cargo test -p tc-app --test app app::conflicts::
+- 2026-10-24 16:07 EDT | shell lane (Claude Code e1bb3a0c) | step 2 | none | The H5 packet: docs/evidence/q9-2026-10-24.md (20 screens, one line each, and '## Question for the owner') with 20 pictures and DOM files in docs/evidence/q9-2026-10-24/, captured by parity/app/q9-packet.mjs from the test-hooks page ?probe=q9&screen=<name> (crates/tc-ui/src/app/q9.rs, web/probe.rs) and the real app. Proposed: alignments, checks, checks-moved, checks-comment, settings-pins, -setting, -books, -book-removed, -last-book, -carried (Keep this one on each version, Keep both naming jon_01-Juan.wav, no Keep the other), -path-case, detached, notices, received; built earlier without a tC4 design: draft-offer, read-only, boot-error, bulk-keep, history, first-launch-failure; E2's USB screens follow E2. No choice wired. Gates: the four tc-ui wasm32 clippy runs, fmt, cargo test -p tc-ui --test app app::review (19 pass). The orchestrator asked to keep building while the owner looks, so the state stays building with H5 in needs_owner. Note: app::save tests fail in this worktree with or without this step (a_failure_keeps_the_text_and_the_error, save.rs:136): to look at before the merge | docs/evidence/q9-2026-10-24.md
+- 2026-10-24 18:10 EDT | shell lane (Claude Code e1bb3a0c) | ruling | none | H5 ruled (rulings/2026-10-24-H5.md, merged from track-RULING-H5 79e28c52): only verse text conflicts; everything else newest wins, the loser in History; carried files keep both. The card is rewritten to it: the choice tabs and cards go, the store and fold change. The step 3 work on check choices (WIP 7d04420d) is reverted (9ecb4c13). Steps 1 and 2 above stay as history: step 1's scripted kinds are reused; step 2's packet was the question
+- 2026-10-24 18:10 EDT | shell lane (Claude Code e1bb3a0c) | note | none | Design (a Plan agent of this lane): conflicts are computed by the fold, never stored (I1); losers are already heads that FoldState::history lists and Restore names, so old projects need no migration. Newest = ChangeMeta::order() (rank, at, id), the order of today's provisional head; only concurrent heads compare. Seven detail questions sent to the owner through the orchestrator with defaults: headings, chapter fronts, story base and reference stay text; the book restore race stays a conflict; book layout is newest-wins; a version from outside with no known base never wins; the whole newest version wins; the newest keeps the name in a case clash; a beside file with no person name uses the version's short id. Risks told: a wrong clock wins races (ClockAhead warns past 24 h only); builds before and after H5 must not be mixed on one team | side-session-notes C7b-newest-wins-design.md
+- 2026-10-24 18:11 EDT | shell lane (Claude Code e1bb3a0c) | ruling | none | The orchestrator accepted all seven defaults for the owner (they follow H5: what holds verse or story text still conflicts; an outside copy with no known base never wins; the rest is newest-wins on the whole version) and tells the owner of the clock risk; mixed builds do not matter, as no team uses the rebuild yet
+- 2026-10-25 08:14 EDT | shell lane (Claude Code e1bb3a0c) | step 1 | 75f7d386 | merge.rs newest_wins: Alignment, Check (moved too), Comment, Pins, ResourcesExtra, Setting, ProjectMeta, Versification, DeviceProfile, BookLayout settle as Local::ByRule { head: provisional (max (rank, at, id)), rule: AutoRule::Newest }, no conflict listed; equal values and merges by unit first; unreadable versions stay listed and the token never names one. Property tests newest_wins_converges, the_loser_stays_in_history, only_text_conflicts; heads_and_text_conflicts_read_no_clock replaces no_survival_by_time_or_identity; census, conservation, visibility and reachability tests updated. cargo test -p tc-journal -p tc-store: all pass (properties 345 passed). Mutation, the oldest head instead of the newest: 'newest_wins_converges panicked ... fold 0 settles Versification on another head at crates/tc-journal/tests/properties.rs:493'. Written by a subagent of this lane, rerun and checked here | cargo test -p tc-journal -p tc-store
+- 2026-10-25 08:14 EDT | shell lane (Claude Code e1bb3a0c) | step 4 | 75f7d386 | FoldState::moved_into lists the decisions a move left behind in the History of the check they moved to (cost: the moves into that check); tc-store's Restore writes such a version at the shown check; a_moved_checks_older_decision_is_restored passes | cargo test -p tc-store
+- 2026-10-25 08:35 EDT | shell lane (Claude Code e1bb3a0c) | step 2 | none | books.rs status_of: the newest of the removal heads and the present heads or the unseen edits decides (order (rank, at, id)), with no conflict: a newer removal removes the book, a newer edit keeps it (RemovedWhileEdited, projected); last_book keeps the book whose removal is newest (KeptAsLast) with no conflict; book_conflict removed. merge.rs: BookPresence heads settle newest-wins too, except the race of Restore the text against Start empty, which stays a conflict. Tests: a_newer_removal_removes_and_a_newer_edit_keeps replaces book_removal_hides_nothing_unseen (census: removed all seen, kept by a newer edit, removed over older unseen work; unseen work always in History); the_newest_of_a_removal_and_an_unseen_edit_decides (fold.rs) replaces removal_hides_nothing_unseen; loss L37, L55 and L67 assert the newest decides. cargo test -p tc-journal -p tc-store pass; clippy clean. Mutation, no last-book rule: 'a_newer_removal_removes_and_a_newer_edit_keeps panicked: no book projects: [(Ruth, Removed), (Titus, Removed)]' | cargo test -p tc-journal
+- 2026-10-25 09:12 EDT | shell lane (Claude Code e1bb3a0c) | step 3 | none | CarriedFile settles newest-wins (merge.rs) and its shown token names only the shown version (reads.rs), so an edit or removal of the file leaves the other version; project.rs carried_files places each older version beside the file as <stem>-<author>.<ext> (the Door43 user name or display name, letters, digits, _ and -; the version's short id without one), -2, -3 while the name collides with any carried file, case moves or an earlier copy, older versions in record then newest-first order so every computer agrees. Path case: the file whose newest present version is newest keeps its name, the other at its .case- path, no conflict. tc-store unchanged: a copy no longer placed stays in the folder as a foreign file (nothing a person put there is dropped). Tests: carried_keeps_both (property), a_kept_copy_never_takes_a_held_name, two_versions_of_a_file_are_both_kept_with_no_question, a_path_case_clash_keeps_the_newest_name_and_both_files, loss L44 (audio/01-Juan.mp3), L93, the placed-file edit; the two Keep both tests and the path-case Rename test test choices H5 removed and are deleted. cargo test -p tc-journal -p tc-store pass, clippy clean. Mutation, no free-path check: 'a_kept_copy_never_takes_a_held_name panicked: left: {audio/01-Juan.mp3: oid 3, audio/01.mp3: oid 2}' (Juan's copy over the held file); the random property alone did not catch it, so the targeted test holds it | cargo test -p tc-journal -p tc-store
+- 2026-10-25 09:14 EDT | shell lane (Claude Code e1bb3a0c) | step 5 | none | docs/STORAGE.md: I2 gains state (g), a head that lost to the newest (in History, or a kept copy beside a carried file); I3 names the newest-wins rule and its order; H5 paragraphs head §7.6, §8.1, §8.3, §8.5, §11.4 and §12; the test table names the renamed tests. TC4-ISSUES #27 names loss_check_two_ways_newest_wins. claims.test.mjs 4 of 4 | node --test .audit/tools/claims.test.mjs
+- 2026-10-25 10:52 EDT | storage lane (S2 session) | verify | 5c4f9d04 | Review of books and carried files: two majors, (1) on Windows and macOS a path-case swap (the newest keeping the name) made a case-insensitive read record the other file's bytes as a new version, hiding the newest recording; (2) kept copies under names no longer given stayed in every commit; three minors (a kept copy cannot be removed; a removed book's hidden count is dropped; last_book compared (at, id) not (rank, at, id)) | message to the shell lane, 2026-10-25
+- 2026-10-25 10:52 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Storage major 1: in a path-case clash the name stays by byte order, never by the newest version (attach.rs), so no newer version swaps names; a_path_case_clash_keeps_one_name_and_both_files saves a newer version of the moved one and the names stay; STORAGE.md says so. This departs from the accepted default 6 (the newest keeps the name): told to the orchestrator. Storage major 2: the commit-tree rule leaves out a stale entry only when its name is a kept copy's (<stem>-<who>[-n].<ext> beside a carried record) and its bytes a recorded version, so a teammate's same-bytes file under another name stays (checkpoint.rs kept_copy_name). Minor 5: last_book uses order() like status_of; L55 asserts Ruth's removal is the newer
+- 2026-10-25 10:52 EDT | shell lane (Claude Code e1bb3a0c) | step 6 | none | tc-api: SyncResultView.replaced, rows of ReplacedView { by, whose, kind (alignment, check, comment, setting, resources, book, file), place (the first), count }; kept_newest is their total, which tC4's own toast words already say ("{n} conflicts kept the newest version"). tc-app sync.rs replaced(): every newest-wins record a received change touched, won or lost (so a teammate's decision that lost to a move is a row, the orchestrator's condition), by who replaced whose. tab_of puts the book restore race on the Text tab. The conflict kinds stay in the API: an outside edit with no known base can still list one (the M1 fix). Tests: only_text_kinds_reach_the_review and received_says_what_was_replaced replace every_kind_is_listed_on_its_tab and align_and_check_show_the_two_versions_marker; the three upgrades tests over two versions of a decision or the pins now carry or adopt over the newest with the other in History; op_counts lint lists moved_into; the goldens follow. cargo test -p tc-api, tc-app's conflicts, upgrades and sync tests, op_counts lint and align pass | cargo test -p tc-app --test app -- conflicts:: upgrades:: sync::
+- 2026-10-25 10:57 EDT | shell lane (Claude Code e1bb3a0c) | step 7 | none | tc-ui: the 11 packet screens H5 dropped (the conflict cards of alignments, checks, moved checks, check comments, pins, settings, books, the removed and last book, carried files, path case) are gone from q9.rs and their view code from views/review.rs (510 lines removed); the kept six (detached, notices, received, draft offer, read-only, boot error) still draw on the probe page. No new screen: the sync toast says tC4's own '{n} conflicts kept the newest version' from step 6's count; the Received sheet's per-person rows wait for E2, which draws that sheet. The Alignments, Checks and Settings tabs stay, for the outside-edit conflicts the M1 fix keeps. the_packet_draws_every_screen_the_ruling_kept replaces the carried-card test. The four tc-ui wasm32 clippy runs and cargo test -p tc-ui pass | cargo test -p tc-ui --features tc-api/test-hooks
+- 2026-10-25 11:07 EDT | parity lens (subagent of shell lane (Claude Code e1bb3a0c)) | verify | cb7ccc7a | 1 Code: one predicate and one rule; missing structure, History and Restore keyed by conflict, not by record; 2 Checks: property tests fail without their fixes, none shows a translator can restore; 3 Reach: fine; 4 Siblings: tC4's sync count read; 5 No loss: blocker B1, no screen reaches History or Restore of a record that no longer conflicts (checks, alignments, comments, settings, pins), the data stays on disk; majors M1 the replaced rows are drawn nowhere until E2, M2 PLAN.md contradicts H5; minors: the count was per lost version, tC4 counts per record; the restore race on Text offers no choice; a sync never points to an outside-edit conflict; a path-case clash gives no row; STORAGE L35 wording | .audit/roadmap/evidence/2026-10-24/C7b-lens-parity.md
+- 2026-10-25 11:07 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Parity M2: docs/PLAN.md's declared differences follow H5 (only text conflicts; the review's other tabs hold only outside edits with no known base; the Received sheet's rows; kept copies jon_01-Juan.wav; the move wins at the old place; path case by byte order; an outside edit never wins by date alone; newer removal against newer edit). Minor: kept_newest counts records, as tC4 does. B1 and M1 sent to the orchestrator for scope (recommended: C7b gives a record-keyed History and Restore API with tests; a UI card adds the History buttons and draws the replaced rows)
+- 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | ruling | none | The orchestrator chose option (b) for the parity blocker: C7b gives the record-keyed calls and the restore logic with tests; a new card HIST-1 (depends on C7b) adds History and Restore on the Check screen, in the aligner and for settings and pins, and draws the Received sheet's replaced rows; C7b merges on its own
+- 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Parity B1, C7b's part: conflicts/history was already keyed by record; new command conflicts/restore { at, request, shown, from } restores a version of a record that is in no conflict, over every head the shown token names (StoreCommand::restore, tc-journal's Command::Restore); a_record_outside_a_conflict_restores_an_older_version_from_history (tc-app) restores Teammate 1's older decision after Teammate 2's newer one won. Endpoint lists and goldens follow; tc-api, tc-server routes and the tc-ui wasm32 clippy pass
+- 2026-10-25 11:18 EDT | shell lane (Claude Code e1bb3a0c) | step 8 | none | parity/app/journeys/conflict-kinds.test.mjs newest_version_wins_and_history_restores_the_older: a scripted sync brings two versions of a check and an alignment; the toast reads tC4's '2 conflicts kept the newest version', no Review link, jobs/get carries the replaced rows, the Alignments and Checks tabs list nothing, the Check screen and TIT.json hold Teammate 2's comment; 3 runs in a row pass, 0 skipped; with the expected comment changed it fails at conflict-kinds.test.mjs:102. The restore half through the UI waits for HIST-1's History buttons. Written by a subagent of this lane, reviewed here | node --test parity/app/journeys/conflict-kinds.test.mjs
+- 2026-10-25 11:30 EDT | races lens (subagent of shell lane (Claude Code e1bb3a0c)) | verify | cb7ccc7a | 1 Code: one rule, total order; 2 Checks: property tests sound, gaps noted; 3 Reach: M1 reachable once a real sync exists; 4 Siblings: upgrades, downloads and outside edits checked (PlanStale refuses a changed plan); 5 No loss: no blocker; M1 a teammate's newer removal of a book over unseen edits gave no Received row; 6 minors | .audit/roadmap/evidence/2026-10-24/C7b-lens-races.md
+- 2026-10-25 11:30 EDT | shell lane (Claude Code e1bb3a0c) | fix | none | Races M1: a received removal that removed a book is a Received row (by the remover, kind book, place the book); TeammatesKind::BookRemoved scripts it; received_says_a_teammate_removed_a_book. The minors of the three lenses and the storage reviews are in .audit/minors.tsv
+- 2026-10-25 11:30 EDT | shell lane (Claude Code e1bb3a0c) | note | none | Main 4956ac52 merged in (86920510; one PLAN.md conflict: kept main's removal of the aligner bullet and H5's bullet); HIST-1 card created and added to ROADMAP, REL-1's and DONE's depends
+- 2026-10-25 12:40 EDT | shell lane (Claude Code e1bb3a0c) | verify | none | After the merge of main: change_kind moved to its own test-hooks impl block (main's test_hook_branches lint), clippy borrow and single-match fixes; tc-journal, tc-store, tc-api, tc-app and tc-ui tests with test-hooks pass (tc-app app 698/698), workspace and tc-ui/tc-api wasm32 clippy clean, conflict-kinds.test.mjs 1/1, board.py --check 0 errors, claims 4/4 | cargo test -p tc-journal -p tc-store -p tc-api -p tc-app -p tc-ui --features tc-api/test-hooks; node --test parity/app/journeys/conflict-kinds.test.mjs
+- 2026-10-26 | shell lane (Claude Code e1bb3a0c) | fix | none | Integration lane's hand-back: INV-NEWEST-WINS-CONVERGES, INV-ONLY-TEXT-CONFLICTS and INV-THE-LOSER-STAYS-IN-HISTORY are in their tests' assert messages; docs/P-LEDGER.md P2 names C7b's tests. Main 1a0c8469 merged in; tc-journal, tc-store, tc-api, tc-app and tc-ui tests, clippy (workspace and wasm32), claims with C7b set to done, conflict-kinds, conflict-review and sync-button journeys pass | node --test .audit/tools/claims.test.mjs

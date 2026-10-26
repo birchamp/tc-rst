@@ -1586,7 +1586,22 @@ fn move_check(
 
 fn restore(ctx: &Ctx<'_>, shown: &ShownToken, from: ChangeId) -> R<Vec<PlannedChange>> {
     let shown = ctx.edit(shown)?;
-    let body = ctx.fold.body(&from).ok_or(refused(Refusal::Unreadable))?;
+    let mut body = ctx.fold.body(&from).ok_or(refused(Refusal::Unreadable))?;
+    // A decision a move left behind comes back at the check it moved to (ruling H5).
+    if let (
+        Record::Check {
+            key: from_key,
+            value: value @ CheckValue::Decision(_),
+        },
+        RecordKey::Check(to),
+    ) = (&body.record, shown.key())
+        && ctx.fold.moved_into(to).contains(from_key)
+    {
+        body.record = Record::Check {
+            key: to.clone(),
+            value: value.clone(),
+        };
+    }
     if body.record.key() != *shown.key() {
         return Err(refused(Refusal::WrongRecord("a version of this record")));
     }

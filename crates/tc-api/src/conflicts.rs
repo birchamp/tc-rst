@@ -412,6 +412,19 @@ pub struct Resolve {
     pub choice: KeepChoice,
 }
 
+/// `conflicts/restore`: *Restore this version* from the History of a record that is not in
+/// conflict (owner ruling H5: the newest version wins, the older stays in History). `shown` is
+/// the record's token as the screen shows it; `from` a version of its History.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Restore {
+    pub at: Scope,
+    pub request: RequestId,
+    pub shown: crate::ShownToken,
+    pub from: ChangeRef,
+}
+
 /// `conflicts/resolveBulk`: *Keep all of Maria's* (STORAGE §5.9 step 3): one batch that keeps
 /// `person`'s version in each listed conflict where their computers hold exactly one of its
 /// versions. A conflict whose versions changed since, that holds two versions from the

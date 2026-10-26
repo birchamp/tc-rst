@@ -86,15 +86,129 @@ pub fn synced_view(
             from.push(label);
         }
     }
+    let (replaced, records) = replaced(snapshot, received, &labels);
     SyncResultView {
         received: u32::try_from(received.len()).unwrap_or(u32::MAX),
         from,
-        kept_newest: tally.others,
+        // tC4's "{n} conflicts kept the newest version", one per record that held two
+        // versions (tC4 sync.mjs): under H5, each such record a newer version settled.
+        kept_newest: records,
         verse_conflicts: tally.verse,
         alignments: tally.alignments,
         restored,
         missing_pins: missing_pins(snapshot, installed),
+        replaced,
     }
+}
+
+/// Owner ruling H5: each received change that won as the newest over another version, by who
+/// replaced whose and of what kind ("yours" when the other version is this person's). Costs
+/// the changes received.
+fn replaced(
+    snapshot: &CountingSnapshot,
+    received: &[ChangeId],
+    labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+) -> (Vec<tc_api::jobs::ReplacedView>, u32) {
+    use tc_api::jobs::ReplacedKind;
+    use tc_journal::RecordKey;
+    use tc_journal::fold::{AutoRule, Resolved};
+    let mut rows: Vec<((DeviceId, DeviceId), tc_api::jobs::ReplacedView)> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut records = 0u32;
+    for id in received {
+        let Some(body) = snapshot.body(id) else {
+            continue;
+        };
+        let key = body.record.key();
+        let kind = match &key {
+            RecordKey::Alignment(..) => ReplacedKind::Alignment,
+            RecordKey::Check(_) => ReplacedKind::Check,
+            RecordKey::Comment(_) => ReplacedKind::Comment,
+            RecordKey::Setting(_)
+            | RecordKey::ProjectMeta(_)
+            | RecordKey::Versification
+            | RecordKey::BookLayout(_) => ReplacedKind::Setting,
+            RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => ReplacedKind::Resources,
+            RecordKey::BookPresence(_) => ReplacedKind::Book,
+            RecordKey::CarriedFile(_) => ReplacedKind::File,
+            _ => continue,
+        };
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        // A teammate's removal that removed a book: its verses and the rest stay in History, and
+        // the sheet says so even though no second version of the book's presence lost.
+        if let RecordKey::BookPresence(book) = &key
+            && matches!(
+                body.record,
+                tc_journal::Record::BookPresence {
+                    value: tc_journal::record::BookPresence::Removed { .. },
+                    ..
+                }
+            )
+            && snapshot.book(*book) == tc_journal::fold::BookView::Removed
+            && let Some(by) = labels.get(&body.device)
+            && labels.get(&body.device) != Some(&tc_journal::fold::PersonLabel::Mine)
+        {
+            rows.push((
+                (body.device, body.device),
+                tc_api::jobs::ReplacedView {
+                    by: crate::wire::scope::person_label(by),
+                    whose: crate::wire::scope::person_label(&tc_journal::fold::PersonLabel::Mine),
+                    kind,
+                    place: crate::conflicts::place_of(&key),
+                    count: 1,
+                },
+            ));
+            continue;
+        }
+        // Every record a received change touched that settled on its newest head: the received
+        // change won, or lost (a teammate's decision at a check that moved), never silently.
+        let Some(state) = snapshot.key_state(&key) else {
+            continue;
+        };
+        let Resolved::SettledByRule {
+            head: winner,
+            rule: AutoRule::Newest,
+        } = state.state
+        else {
+            continue;
+        };
+        let Some(winner_device) = snapshot.body(&winner).map(|b| b.device) else {
+            continue;
+        };
+        let Some(by) = labels.get(&winner_device) else {
+            continue;
+        };
+        if state.heads.len() > 1 {
+            records += 1;
+        }
+        for h in state.heads.iter().filter(|h| **h != winner) {
+            let Some(loser) = snapshot.body(h).map(|b| b.device) else {
+                continue;
+            };
+            let Some(whose) = labels.get(&loser) else {
+                continue;
+            };
+            match rows
+                .iter_mut()
+                .find(|(device, row)| *device == (winner_device, loser) && row.kind == kind)
+            {
+                Some((_, row)) => row.count += 1,
+                None => rows.push((
+                    (winner_device, loser),
+                    tc_api::jobs::ReplacedView {
+                        by: crate::wire::scope::person_label(by),
+                        whose: crate::wire::scope::person_label(whose),
+                        kind,
+                        place: crate::conflicts::place_of(&key),
+                        count: 1,
+                    },
+                )),
+            }
+        }
+    }
+    (rows.into_iter().map(|(_, row)| row).collect(), records)
 }
 
 /// tC4's `missingPinsAfterSync`: 0 when the pins cannot be read.
@@ -140,7 +254,7 @@ impl App {
     ) -> Result<SyncResultView, JobEnd> {
         use serde_json::json;
         use tc_api::test::ScriptedSync as Scripted;
-        let (teammates, joined, restored) = match outcome {
+        let (teammates, joined, kinds, restored) = match outcome {
             Scripted::Failed(failure) => {
                 return Err(JobEnd::Failed(ApiError::Refused(tc_api::Refusal::Sync(
                     failure,
@@ -149,8 +263,9 @@ impl App {
             Scripted::Synced {
                 teammates,
                 joined,
+                kinds,
                 restored,
-            } => (teammates, joined, restored),
+            } => (teammates, joined, kinds, restored),
         };
         let failed = |what: &str, reason: String| {
             JobEnd::Failed(self.internal(what, crate::reports::facts(json!({ "reason": reason }))))
@@ -201,6 +316,18 @@ impl App {
             received.extend(
                 written
                     .map_err(|e| failed("the teammates' join was not written", e.to_string()))?,
+            );
+        }
+        for kind in kinds {
+            let at = folder.clone();
+            let written = self
+                .with_store(move |store| store.teammates_change_kind(&at, kind))
+                .await
+                .map_err(JobEnd::Failed)?;
+            received.extend(
+                written.map_err(|e| {
+                    failed("the teammates' changes were not written", e.to_string())
+                })?,
             );
         }
         // Read the project again as a sync's intake does: the fold takes the received changes

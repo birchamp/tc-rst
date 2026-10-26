@@ -113,6 +113,7 @@ const PHASE_0: &[&str] = &[
     "conflicts/resolve",
     // C7a: the bulk keep.
     "conflicts/resolveBulk",
+    "conflicts/restore",
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",

@@ -22,6 +22,7 @@ use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
+use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
@@ -222,8 +223,12 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
         let actions = actions.clone();
         move || {
             view.with(|v| {
+                let on_tab = {
+                    let actions = actions.clone();
+                    Callback::new(move |tab| actions.choose_review_tab(tab))
+                };
                 v.as_ref()
-                    .map(|v| tab_strip(&actions, &tabs_shown(&v.tabs, tab), tab))
+                    .map(|v| tab_strip(on_tab, &tabs_shown(&v.tabs, tab), tab))
             })
         }
     };
@@ -401,7 +406,7 @@ fn navigator(
 }
 
 /// The tabs, drawn only while a kind tC4 does not review holds something (Q-9).
-fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<AnyView> {
+fn tab_strip(on_tab: Callback<ReviewTab>, tabs: &[TabCount], shown: ReviewTab) -> Option<AnyView> {
     if tabs.is_empty() {
         return None;
     }
@@ -418,7 +423,6 @@ fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<A
         .map(|count| {
             let (tab, n) = (count.tab, count.count);
             let selected = tab == shown;
-            let actions = actions.clone();
             let style = crate::css! {
                 "display": "inline-flex",
                 "align-items": "center",
@@ -437,7 +441,7 @@ fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<A
             view! {
                 <button type="button" role="tab" aria-selected=selected.to_string()
                     data-testid=format!("review-tab-{}", tab_id(tab)) data-count=n.to_string()
-                    style=style.to_style() on:click=move |_| actions.choose_review_tab(tab)>
+                    style=style.to_style() on:click=move |_| on_tab.run(tab)>
                     {tab_label(tab)}" · "{n.to_string()}
                 </button>
             }
@@ -1341,4 +1345,187 @@ fn notices(entries: &[NoticeEntry]) -> AnyView {
         .map(|e| (String::new(), notice_text(&e.notice)))
         .collect();
     list_box(rows, "review-notice", None)
+}
+
+/// One screen of the H5 packet (C7b step 2), drawn from its fixed data in the review's own
+/// style. Its buttons do nothing: the owner signs the screens off before any is wired. The
+/// boot error is the app's own component, which the probe page draws itself.
+pub fn q9_screen(screen: Q9Screen) -> AnyView {
+    match screen {
+        Q9Screen::Review(review) => q9_review(review),
+        Q9Screen::Received(sheet) => q9_sheet(sheet, "q9-received", true),
+        Q9Screen::DraftOffer(offer) => q9_sheet(offer, "q9-draft-offer", true),
+        Q9Screen::ReadOnly(banner) => q9_sheet(banner, "q9-read-only", false),
+        Q9Screen::BootError(_) => ().into_any(),
+    }
+}
+
+/// A packet button: `data-choice` carries its words, so the packet's JSON lists every choice.
+fn q9_choice(label: String, primary: bool, size: Size) -> AnyView {
+    let variant = if primary {
+        ButtonVariant::Primary
+    } else {
+        ButtonVariant::Secondary
+    };
+    view! {
+        <Button variant=variant size=size
+            attrs=Attrs::new().with("data-testid", "q9-choice").with("data-choice", label.clone())>
+            {label}
+        </Button>
+    }
+    .into_any()
+}
+
+/// A row of buttons, the last one primary when `primary_last`.
+fn q9_choices(labels: Vec<String>, primary_last: bool, size: Size) -> AnyView {
+    let last = labels.len().saturating_sub(1);
+    labels
+        .into_iter()
+        .enumerate()
+        .map(|(i, label)| q9_choice(label, primary_last && i == last, size))
+        .collect_view()
+        .into_any()
+}
+
+fn q9_review(review: Q9Review) -> AnyView {
+    let root = crate::css! {
+        "flex": 1,
+        "min-height": "100vh",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--surface-app)",
+    };
+    let bar = crate::css! {
+        "height": 53,
+        "flex": "none",
+        "box-sizing": "border-box",
+        "display": "flex",
+        "align-items": "center",
+        "gap": 14,
+        "padding": "0 24px",
+        "background": "var(--surface-card)",
+        "border-bottom": "var(--stroke-hair) solid var(--border)",
+    };
+    let h1 = crate::css! {
+        "margin": 0,
+        "font-size": "var(--fs-title)",
+        "letter-spacing": "var(--track-17)",
+        "font-weight": "var(--fw-heavy)",
+        "color": "var(--text-heading)",
+    };
+    let scroll = crate::css! {
+        "flex": 1,
+        "min-height": 0,
+        "overflow": "auto",
+        "padding": "22px 24px",
+    };
+    let tabs = tab_strip(
+        Callback::new(|_| ()),
+        &tabs_shown(&review.tabs, review.tab),
+        review.tab,
+    );
+    let Q9Body::Rows { about, rows } = review.body;
+    let body = q9_rows(about, rows);
+    let ghost = crate::css! { "padding": 0, "height": "auto", "font-size": "var(--fs-ui-sm)" };
+    let back = back_label(BackTo::Translate(Some(tc_core::BookId::Titus), 1));
+    view! {
+        <main data-testid="q9-review" data-tab=tab_id(review.tab) style=root.to_style()>
+            <div style=bar.to_style()>
+                <Button variant=ButtonVariant::Ghost style=ghost>
+                    {icon(&["M19 12H5", "M12 19l-7-7 7-7"], 16, "2")}{back}
+                </Button>
+                <span aria-hidden="true" style="width: 1px; height: 22px; background: var(--border);"></span>
+                <h1 style=h1.to_style()>{t(keys::conflicts::TITLE, &[])}</h1>
+                <span style="flex: 1;"></span>
+            </div>
+            {tabs}
+            <div style=scroll.to_style()>{body}</div>
+        </main>
+    }
+    .into_any()
+}
+
+/// The Detached and Notices tabs: `list_box`'s rows, each with its buttons.
+fn q9_rows(about: Option<String>, rows: Vec<Q9Row>) -> AnyView {
+    let style = measure().merge(&crate::css! {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": 10,
+    });
+    let about = about.map(|about| {
+        view! { <p style="margin: 0; font-size: var(--fs-ui-sm); color: var(--text-tertiary);">{about}</p> }
+    });
+    let rows = rows
+        .into_iter()
+        .map(|row| {
+            let head = (!row.head.is_empty()).then(|| {
+                view! { <strong style="font-size: var(--fs-ui-sm); color: var(--text-heading);">{row.head}</strong> }
+            });
+            view! {
+                <div data-testid="q9-row" style="padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-card); border: var(--stroke-hair) solid var(--border); display: flex; flex-direction: column; gap: 6px;">
+                    {head}
+                    <span style="font-size: var(--fs-ui-sm); color: var(--uw-ink);">{row.line}</span>
+                    <span style="display: flex; flex-wrap: wrap; gap: 8px;">{q9_choices(row.choices, false, Size::Sm)}</span>
+                </div>
+            }
+        })
+        .collect_view();
+    view! { <div style=style.to_style()>{about}{rows}</div> }.into_any()
+}
+
+/// A sentence with its buttons: the Received sheet and the draft offer as a card over the page,
+/// the read-only banner as a strip across its top.
+fn q9_sheet(question: Q9Question, test_id: &'static str, card: bool) -> AnyView {
+    let frame = if card {
+        crate::css! {
+            "box-sizing": "border-box",
+            "max-width": 560,
+            "margin": "48px auto",
+            "padding": "20px 24px",
+            "border-radius": "var(--radius-lg)",
+            "background": "var(--surface-card)",
+            "box-shadow": "var(--shadow-hover)",
+            "display": "flex",
+            "flex-direction": "column",
+            "gap": 12,
+        }
+    } else {
+        crate::css! {
+            "box-sizing": "border-box",
+            "padding": "12px 24px",
+            "background": "var(--uw-cream)",
+            "border-bottom": HAIR,
+            "display": "flex",
+            "align-items": "center",
+            "flex-wrap": "wrap",
+            "gap": 12,
+        }
+    };
+    let sentence = crate::css! {
+        "margin": 0,
+        "font-size": "var(--fs-ui)",
+        "line-height": 1.45,
+        "font-weight": "var(--fw-bold)",
+        "color": "var(--uw-ink)",
+        "flex": "1 1 320px",
+    };
+    let lines = question
+        .lines
+        .into_iter()
+        .map(|l| {
+            view! { <p style="margin: 0; font-size: var(--fs-ui-sm); color: var(--uw-slate);">{l}</p> }
+        })
+        .collect_view();
+    view! {
+        <div style="min-height: 100vh; background: var(--surface-app);">
+            <section data-testid=test_id role="region" style=frame.to_style()>
+                <p style=sentence.to_style()>{question.sentence}</p>
+                {lines}
+                <span style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;">
+                    {q9_choices(question.choices, true, Size::default())}
+                </span>
+            </section>
+        </div>
+    }
+    .into_any()
 }
