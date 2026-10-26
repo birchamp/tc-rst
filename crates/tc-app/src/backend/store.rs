@@ -1498,9 +1498,8 @@ impl ProjectHandle for StoreHandle {
                 }
                 report.recreated |= next.recreated;
                 report.restored += next.restored;
-                if !matches!(next.ended, tc_sync::machine::Ended::Synced { .. }) {
-                    report.ended = next.ended;
-                }
+                // A failed second sync takes nothing back from the first; the name goes out
+                // with the next sync instead.
             }
             Some(report)
         });
@@ -1603,27 +1602,35 @@ impl ProjectHandle for StoreHandle {
     }
 
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
-        let taken = {
-            let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
-            let taken = inner.take();
-            if let Some(handle) = &taken {
-                let _ = self.closed.set(Closed {
-                    snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
-                    facts: facts(&handle.facts()),
-                    counters: handle.counters(),
-                });
-            }
-            taken
-        };
-        let Some(handle) = taken else {
-            // A second close.
-            return Box::pin(async { Ok(()) });
-        };
-        // The relay waits for the replies already queued: the actor answers every command
-        // queued before its close.
-        lock(&self.relay).take();
-        let closed = close_off_thread(handle);
+        // The write lock waits for a sync that holds the read lock; waiting on a runtime worker
+        // could leave that sync no worker to drive its network calls (one-CPU machines).
+        let work = tokio::task::spawn_blocking(move || {
+            let taken = {
+                let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
+                let taken = inner.take();
+                if let Some(handle) = &taken {
+                    let _ = self.closed.set(Closed {
+                        snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
+                        facts: facts(&handle.facts()),
+                        counters: handle.counters(),
+                    });
+                }
+                taken
+            };
+            // A second close finds nothing to take.
+            let handle = taken?;
+            // The relay waits for the replies already queued: the actor answers every command
+            // queued before its close.
+            lock(&self.relay).take();
+            Some(close_off_thread(handle))
+        });
         Box::pin(async move {
+            let Some(closed) = work
+                .await
+                .map_err(|_| store_error("the close stopped without an outcome"))?
+            else {
+                return Ok(());
+            };
             closed
                 .await
                 .unwrap_or_else(|_| Err(store_error("the close stopped without an outcome")))
