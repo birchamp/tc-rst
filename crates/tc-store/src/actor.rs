@@ -336,6 +336,7 @@ impl Actor {
                     commit,
                     at: crate::appdata::rfc3339(self.project.clock.now()),
                 });
+                file.chain_failures = None;
                 file
             }
         };

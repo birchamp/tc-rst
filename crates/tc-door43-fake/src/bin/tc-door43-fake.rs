@@ -191,6 +191,7 @@ async fn add_fault(State(fake): Fake, body: axum::body::Bytes) -> Response {
         method: body.method,
         path_prefix: body.path,
         times: body.times,
+        skip: 0,
         fault,
     });
     axum::Json(json!({})).into_response()

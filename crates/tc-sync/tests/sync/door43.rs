@@ -1850,3 +1850,135 @@ async fn loss_door43_case_alias_never_recorded() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// Days of work made without a connection, one commit a day, on top of what Door43 holds.
+async fn offline_days(handle: &ProjectHandle, days: u16) {
+    for day in 1..=days {
+        save(handle, 1, day, &format!("day {day}"));
+        handle
+            .checkpoint(tc_store::CheckpointReason::Other(format!("day {day}")))
+            .await
+            .unwrap();
+    }
+}
+
+/// The pushes Door43 received for repository `name`.
+fn receive_packs(door43: &Door43, name: &str) -> usize {
+    let path = format!("/{}/{name}.git/git-receive-pack", seeded::USER);
+    door43
+        .fake
+        .requests()
+        .iter()
+        .filter(|r| r.method == "POST" && r.path == path)
+        .count()
+}
+
+/// §9.5, §15 L96: a large push is a chain of commits, each pushed and read back on its own.
+/// The connection drops in the second link's reply: the first link stays confirmed, the
+/// report names it, and the next sync goes on from what Door43 holds instead of sending
+/// everything again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sync_large_push_chain_resumes() {
+    let door43 = door43("titus-chain").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-chain");
+    synced(&sync(&a, &door43).await);
+    let shared = head(&a).unwrap();
+    // Every day's commit passes the bound, so each is a link.
+    ana.store.hooks().chain_after(1);
+    offline_days(&a, 3).await;
+    let tip = head(&a).unwrap();
+    let repo = git2::Repository::open(a.facts().git_dir.unwrap()).unwrap();
+    // The commits after what Door43 holds, oldest first.
+    let mut made = Vec::new();
+    let mut at = tip;
+    while at != shared {
+        made.push(at);
+        at = repo.find_commit(at).unwrap().parent_id(0).unwrap();
+    }
+    made.reverse();
+    assert!(made.len() >= 3, "{made:?}");
+    let first_link = made[0];
+
+    door43.fake.inject(tc_door43_fake::FaultRule::nth(
+        "POST",
+        &format!("/{}/titus-chain.git/git-receive-pack", seeded::USER),
+        2,
+        tc_door43_fake::Fault::BreakOff { after: 0 },
+    ));
+    let before = receive_packs(&door43, "titus-chain");
+    let report = sync(&a, &door43).await;
+    assert!(
+        matches!(
+            report.ended,
+            Ended::Failed(tc_api::refusal::SyncFailure::BeforeIntake(
+                tc_api::refusal::SyncRefusal::Unreachable
+            ))
+        ),
+        "the second link's answer never came: {report:?}"
+    );
+    assert_eq!(
+        report.confirmed,
+        Some(first_link.to_string()),
+        "the last link read back"
+    );
+    assert!(!report.offer_exchange);
+    assert_eq!(receive_packs(&door43, "titus-chain") - before, 2);
+    assert_eq!(
+        branch_on_door43(&door43, "titus-chain"),
+        Some(made[1]),
+        "the second link landed before its answer was cut"
+    );
+
+    let before = receive_packs(&door43, "titus-chain");
+    let again = sync(&a, &door43).await;
+    synced(&again);
+    assert_eq!(again.confirmed, Some(tip.to_string()));
+    assert_eq!(
+        receive_packs(&door43, "titus-chain") - before,
+        made.len() - 2,
+        "only the commits Door43 lacked are sent, one push each"
+    );
+    assert_eq!(branch_on_door43(&door43, "titus-chain"), Some(tip));
+    a.close().unwrap();
+}
+
+/// §9.5: after three failures of one chain for want of a connection, the report offers the
+/// exchange file; a sync that gets through forgets them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_large_push_that_keeps_breaking_offers_the_exchange_file() {
+    let door43 = door43("titus-weak").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-weak");
+    synced(&sync(&a, &door43).await);
+    ana.store.hooks().chain_after(1);
+    offline_days(&a, 5).await;
+    door43.fake.inject(tc_door43_fake::FaultRule {
+        times: Some(3),
+        ..tc_door43_fake::FaultRule::always(
+            "POST",
+            &format!("/{}/titus-weak.git/git-receive-pack", seeded::USER),
+            tc_door43_fake::Fault::BreakOff { after: 0 },
+        )
+    });
+    let offers: Vec<bool> = {
+        let mut offers = Vec::new();
+        for _ in 0..3 {
+            let report = sync(&a, &door43).await;
+            assert!(matches!(report.ended, Ended::Failed(_)), "{report:?}");
+            offers.push(report.offer_exchange);
+        }
+        offers
+    };
+    assert_eq!(offers, [false, false, true]);
+    synced(&sync(&a, &door43).await);
+    let file = a.sync_file().await.unwrap().unwrap();
+    assert_eq!(file.chain_failures, None);
+    a.close().unwrap();
+}

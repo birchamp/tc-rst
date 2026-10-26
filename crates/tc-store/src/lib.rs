@@ -69,8 +69,9 @@ pub use counters::StoreCounters;
 pub use drafts::OfferedDraft;
 pub use error::StoreError;
 pub use handle::{
-    BookRead, CheckpointReason, CheckpointReport, CheckpointSkip, Confirmed, IntakeReport, Leave,
-    Mode, Pending, ProjectFacts, ProjectHandle, ReceivedPack, Snapshot, StoreEvent, SyncFile, Work,
+    BookRead, ChainFailures, CheckpointReason, CheckpointReport, CheckpointSkip, Confirmed,
+    IntakeReport, Leave, Mode, Pending, ProjectFacts, ProjectHandle, ReceivedPack, Snapshot,
+    StoreEvent, SyncFile, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
 pub use notices::StoreNotice;

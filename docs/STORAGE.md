@@ -3932,15 +3932,29 @@ changed derived file and of `metadata.json`. Compact sidecars (§7.7) and a boun
 **Large pushes are a chain.** A push cannot resume after a dropped connection, so a resource
 upgrade over a checked Bible (one batch of about 150 MB, several packs and every decision sidecar)
 could fail forever on a poor link. When the new blobs of a merge or checkpoint commit exceed
-16 MiB, S7 (or C5) builds a chain of commits instead of one. Commit 1 to k−1 each add the next
-new packs, in seal order, up to 16 MiB of blobs or one pack, together with the derived files and
-`metadata.json` projected from the packs that commit holds; batch completeness keeps a partly
-included batch out of that projection, so these commits usually change only packs. Commit k
-adds the rest, sidecars included. Every commit of the chain is a valid burrito whose derived files
-equal the fold of its own packs, so readers and the intake check of §11.2 treat each one like any
-app commit. S8 pushes the chain one commit at a time; each confirmed push is progress that a
-dropped connection cannot undo, and the next sync continues from there. After three consecutive
-`sync.unreachable` failures of one chain, the report offers "Save an exchange file instead" (§10).
+16 MiB, S7 (or C5) builds a chain of commits instead of one. Each link before the last is the
+tree of the commit it grows from (HEAD for a checkpoint, Door43's commit R for a merge, so every
+link is a fast-forward of R) with more of the new packs, in path order, and the `metadata.json`
+that lists them; a link is cut once it adds 16 MiB, or one pack when a pack is larger. A link
+takes a pack only while its packs fold to the same changes as its base's (no batch with a change
+only the new packs hold is whole within them, and no release names one;
+`FoldState::completes_batch`), so it keeps its base's derived files, and they are the fold of its
+own packs. A pack that would make a batch whole waits for the last commit, which adds the rest:
+derived files, sidecars and every pack left. A base without the `Tc-Frontier` trailer (another
+tool's commit) gets no chain, since its derived files need not be the fold of its packs. In
+practice the chain splits an action that spans packs, such as a resource upgrade; new packs whose
+batches are each whole (an exchange file of many small saves) stay in one commit.
+Every commit of the chain is a valid burrito whose derived files equal the fold of its own packs,
+so readers and the intake check of §11.2 treat each one like any app commit; a link's trailers
+are its base's. S8 pushes the history between R and HEAD as links: on the way from R to HEAD
+(through the parent that descends from R), every commit whose new blobs bring the run since the
+last link to 16 MiB is pushed from the local ref `refs/tc/push-link`, then read back with
+`ls_remote` and set as `refs/remotes/origin/{b}`, before the next; a link read back elsewhere is a
+lost race. This also splits the first push of a long local history. Each confirmed link is
+progress that a dropped connection cannot undo, the report's `confirmed` names the last one, and
+the next sync continues from there. After three consecutive `sync.unreachable` failures of one
+chain (counted in `.tc/sync.json` `chainFailures` by the chain's tip, cleared by a confirmed
+push), the report's `offer_exchange` offers "Save an exchange file instead" (§10).
 
 ### 9.6 Share (J11), join (J17) and connecting a project
 
@@ -4979,7 +4993,7 @@ and the on-disk end state, not only what the fold returns.
 | L93 | An edit of a carried file's `.conflict-` copy cannot be recorded and is overwritten | it continues that version of the original record (§11.4) | `loss_conflict_copy_edit_kept` |
 | L94 | The working folder is an invalid burrito during seals and intakes for longer than I7 said | every write group ends with a `metadata.json` rewrite; I7 states the windows; the crash tests assert validity after each (§1 I7, §16.2) | `every_written_state_is_a_valid_burrito` |
 | L95 | A display name such as `Ana/Pedro` makes every USB export fail | the file name is cleaned and falls back to ids (§10.1 E4) | `a_display_name_never_makes_the_file_name_fail` |
-| L96 | A large push cannot resume, so an upgrade never reaches Door43 on a poor link | large pushes are a chain of valid commits pushed one at a time; the exchange file is offered after repeated failures (§9.5) | `sync_large_push_chain_resumes` (pending: PUSH-1) |
+| L96 | A large push cannot resume, so an upgrade never reaches Door43 on a poor link | large pushes are a chain of valid commits pushed one at a time; the exchange file is offered after repeated failures (§9.5) | `sync_large_push_chain_resumes`, `a_large_push_that_keeps_breaking_offers_the_exchange_file` (`crates/tc-sync/tests/sync/door43.rs`); `a_large_commit_is_a_chain_of_valid_commits` (`crates/tc-store/tests/store/intake.rs`) |
 
 ### 15.4 Cases found by the review of the fold
 

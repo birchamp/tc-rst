@@ -628,6 +628,17 @@ pub struct SyncFile {
     /// confirmed name never changes (first wins).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub username_device: Option<String>,
+    /// A large push (§9.5) that failed for want of a connection, until one confirms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_failures: Option<ChainFailures>,
+}
+
+/// §9.5: after three failures in a row of one chain, "Save an exchange file instead" (§10).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ChainFailures {
+    /// The commit the chain ends at.
+    pub tip: String,
+    pub count: u8,
 }
 
 /// "Your work up to 14:32 is on Door43" (§9.5).
@@ -1049,6 +1060,11 @@ impl ProjectHandle {
     /// Writes `.tc/sync.json` atomically: share, join and connect.
     pub fn set_sync_file(&self, file: SyncFile) -> Pending<Result<Option<SyncFile>, StoreError>> {
         self.sync_file_job(Some(SyncFileWrite::File(file)))
+    }
+
+    /// The new bytes past which a commit is a chain and a push sends a link (§9.5).
+    pub fn chain_bytes(&self) -> u64 {
+        self.shared.hooks.chain_threshold()
     }
 
     /// Records that Door43's branch was read back at `commit`, now (§9.5 Confirm).

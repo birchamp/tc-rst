@@ -162,6 +162,8 @@ pub struct FaultRule {
     pub path_prefix: String,
     /// How many matching requests get the fault; `None` is every one.
     pub times: Option<usize>,
+    /// How many matching requests pass untouched before the fault applies.
+    pub skip: usize,
     pub fault: Fault,
 }
 
@@ -171,7 +173,16 @@ impl FaultRule {
             method: Some(method.to_owned()),
             path_prefix: path_prefix.to_owned(),
             times: Some(1),
+            skip: 0,
             fault,
+        }
+    }
+
+    /// The fault for the `n`th matching request only, counted from 1.
+    pub fn nth(method: &str, path_prefix: &str, n: usize, fault: Fault) -> Self {
+        Self {
+            skip: n.saturating_sub(1),
+            ..Self::once(method, path_prefix, fault)
         }
     }
 
@@ -180,6 +191,7 @@ impl FaultRule {
             method: Some(method.to_owned()),
             path_prefix: path_prefix.to_owned(),
             times: None,
+            skip: 0,
             fault,
         }
     }
@@ -488,6 +500,10 @@ impl Shared {
                 && path.starts_with(&rule.path_prefix)
                 && rule.fault.answers_instead() == answers_instead;
             if !matches {
+                return true;
+            }
+            if rule.skip > 0 {
+                rule.skip -= 1;
                 return true;
             }
             taken.push(rule.fault.clone());

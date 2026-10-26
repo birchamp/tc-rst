@@ -61,6 +61,7 @@ pub async fn join(
             branch: branch.clone(),
             confirmed: None,
             username_device: None,
+            chain_failures: None,
         })
         .map_err(|e| JoinError::Io(e.to_string()))?;
         bytes.push(b'\n');
