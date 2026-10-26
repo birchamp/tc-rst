@@ -202,6 +202,12 @@ browserTest('j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged'
     ]);
     const stored = fs.readFileSync(path.join(project, 'ingredients', 'TIT.usfm'));
 
+    // The Burrito zip is the exchange file of "Save work for a teammate" (E2): the project's
+    // files as they are in its folder, the stored book among them.
+    const burrito = unzip((await download(page, en['cc.exportBurritoZip'])).bytes);
+    assert.ok(burrito['metadata.json'], Object.keys(burrito).join(','));
+    assert.ok(burrito['ingredients/TIT.usfm'].equals(stored), 'the zip holds the stored book');
+
     // Plain: the stored book, byte for byte (it holds no inline \zaln).
     assert.ok(plain.bytes.equals(stored), 'plain USFM is the stored book');
 
@@ -296,9 +302,11 @@ browserTest('J7 and J23: each export is named as tC4 names it', async () => {
     // shell names the PDF from the print page's title.
     const dated = (name) => name.replace(new RegExp(DATE), '<date>');
     await openTitusPreview(page);
+    const bible = JSON.parse(fs.readFileSync(path.join(env.projectsDir, BIBLE, 'metadata.json'), 'utf8')).identification.name.en;
     const got = {
       aligned: dated((await download(page, en['cc.exportUsfmAligned'])).name),
       plain: dated((await download(page, en['cc.exportUsfmPlain'])).name),
+      burrito: dated((await download(page, en['cc.exportBurritoZip'])).name),
       pdf: dated(`${(await printPdf(page, printed)).title}.pdf`),
     };
     await env.load(page, { locale: 'en' });
@@ -309,6 +317,7 @@ browserTest('J7 and J23: each export is named as tC4 names it', async () => {
     assert.deepEqual(got, {
       aligned: 'TIT-aligned-<date>.usfm',
       plain: 'TIT-<date>.usfm',
+      burrito: `${bible}-<date>.zip`,
       pdf: 'TIT-<date>.pdf',
       stories: `${name}-stories-<date>.zip`,
       storiesPdf: `${name}-<date>.pdf`,

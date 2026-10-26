@@ -205,6 +205,9 @@ pub enum Producer {
     StoryMarkdown,
     /// The print document `GET /print/{job}` serves for the PDF.
     PrintHtml,
+    /// The exchange file of "Save work for a teammate" (E2), as a download named
+    /// `<project>-<YYYY-MM-DD>.zip` (J7).
+    BurritoZip,
 }
 
 /// `export/run` (job `Export`): checkpoints, makes the file and registers it for download.

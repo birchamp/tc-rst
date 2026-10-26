@@ -17,7 +17,7 @@ use tc_door43_fake::FakeDoor43;
 use tc_journal::command::Command;
 use tc_journal::{BookId, ChapterNo, RecordKey, VerseNo};
 
-use super::common::{Parts, TestApp, post};
+use super::common::{Parts, TestApp, open_progress, post, rid};
 use super::port_contract::ExchangePortFixture;
 use super::store::{OnDisk, files_on_disk, make_project};
 use crate::store_world::assert_valid_burrito_files;
@@ -309,4 +309,56 @@ async fn the_received_sheet_reads_again_after_a_resync() {
     assert_eq!(view.received, 2);
     assert_eq!(view.hand_edited.len(), 1, "{view:?}");
     assert_eq!(view.hand_edited[0].path, path);
+}
+
+/// The export menu's Scripture Burrito zip (J7) is the exchange file of "Save work for a
+/// teammate", registered as a download under tC4's name for the project.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_burrito_zip_item_downloads_the_exchange_file() {
+    let w = Usb::world().await;
+    let downloads = super::export::give_downloads(&w.t.app);
+    let at =
+        w.t.app
+            .sessions()
+            .open_screen(&ProjectRef::parse(SAMPLE).unwrap(), open_progress())
+            .await
+            .unwrap()
+            .at;
+    let (_, state) = super::export::run(
+        &w.t.app,
+        &tc_api::export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
+            request: rid(90),
+            at,
+            producer: tc_api::export::Producer::BurritoZip,
+            subject: tc_api::export::Subject::Book {
+                book: BookId::Titus,
+            },
+            print: None,
+        },
+    )
+    .await;
+    let tc_api::export::ExportedFile::Download { file_name, .. } =
+        super::export::exported(state).file
+    else {
+        panic!("a download")
+    };
+    assert!(
+        file_name.starts_with("Sample translation-") && file_name.ends_with(".zip"),
+        "{file_name}"
+    );
+    let files = downloads.files.lock().unwrap();
+    let [(name, zip)] = files.as_slice() else {
+        panic!("one file")
+    };
+    assert_eq!(name, &file_name);
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip.clone())).unwrap();
+    let names: Vec<String> = (0..archive.len())
+        .map(|i| archive.by_index(i).unwrap().name().to_owned())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.ends_with("metadata.json"))
+            && names.iter().any(|n| n.ends_with("ingredients/TIT.usfm")),
+        "{names:?}"
+    );
 }
