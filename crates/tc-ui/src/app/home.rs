@@ -217,9 +217,10 @@ pub fn shared_names(cards: &[HomeCard]) -> Vec<String> {
 /// owner/repo" or "Only on this computer". `None` for a name no other card has.
 pub fn where_line(card: &HomeCard, shared: &[String]) -> Option<String> {
     shared.contains(&card.name).then(|| match &card.door43 {
-        Door43Card::Shared { place } => {
-            t(keys::home::WHERE_ON_DOOR43, &[("location", &location(place))])
-        }
+        Door43Card::Shared { place } => t(
+            keys::home::WHERE_ON_DOOR43,
+            &[("location", &location(place))],
+        ),
         Door43Card::Local => t(keys::home::ONLY_HERE, &[]),
     })
 }

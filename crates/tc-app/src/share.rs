@@ -250,9 +250,7 @@ impl Handle<OpenDoor43> for App {
             .jobs
             .start_typed::<OpenDoor43, _, _>(spec, move |_ctx| async move {
                 let port = app.inner.sync.clone();
-                port.open(app, req.repo, name)
-                    .await
-                    .map_err(JobEnd::Failed)
+                port.open(app, req.repo, name).await.map_err(JobEnd::Failed)
             }))
     }
 }

@@ -634,7 +634,9 @@ impl Message for ShareRefusal {
 pub enum OpenDoor43Refusal {
     /// The project of that repository is on this computer as `project` (ruling H14): there is
     /// never a second copy, and the dialog offers to open this one. Nothing was sent.
-    AlreadyHere { project: crate::ids::ProjectRef },
+    AlreadyHere {
+        project: crate::ids::ProjectRef,
+    },
     NameExists,
     NoJournal,
     /// An open that did not finish before the app closed; its part copy was removed at the

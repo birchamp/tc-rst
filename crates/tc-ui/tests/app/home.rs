@@ -275,5 +275,9 @@ fn two_cards_of_one_name_each_say_where_they_live() {
         where_line(&here, &shared).as_deref(),
         Some("Only on this computer")
     );
-    assert_eq!(where_line(&other, &shared), None, "a name of its own needs no line");
+    assert_eq!(
+        where_line(&other, &shared),
+        None,
+        "a name of its own needs no line"
+    );
 }

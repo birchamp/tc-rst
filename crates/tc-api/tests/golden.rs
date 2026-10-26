@@ -45,8 +45,7 @@ use tc_api::create::{
     UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
 use tc_api::door43::{
-    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
-    SyncProject,
+    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo, SyncProject,
 };
 use tc_api::editor::{
     AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,

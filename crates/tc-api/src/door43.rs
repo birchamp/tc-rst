@@ -293,11 +293,18 @@ pub fn default_project_name(repo: &str) -> String {
 
 /// The folder an open of `repo` gets (ruling H14): the repository's name as a folder name, with
 /// `-2`, `-3`… when a folder of `listing` has it, without letter case.
-pub fn open_folder<'a>(repo: &RepoSource, listing: impl IntoIterator<Item = &'a str>) -> ProjectName {
+pub fn open_folder<'a>(
+    repo: &RepoSource,
+    listing: impl IntoIterator<Item = &'a str>,
+) -> ProjectName {
     let listing: Vec<&str> = listing.into_iter().collect();
     let base = default_project_name(repo.name());
     // A repository named only of dots suggests nothing.
-    let base = if base.is_empty() { "project".to_owned() } else { base };
+    let base = if base.is_empty() {
+        "project".to_owned()
+    } else {
+        base
+    };
     (1..)
         .map(|n| match n {
             1 => base.clone(),

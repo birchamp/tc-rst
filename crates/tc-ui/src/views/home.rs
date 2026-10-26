@@ -662,7 +662,10 @@ fn header(
     let where_line = move || {
         let SharedNames(names) = shared?;
         let line = names.with(|names| {
-            card.with(|c| c.as_ref().and_then(|c| crate::app::home::where_line(c, names)))
+            card.with(|c| {
+                c.as_ref()
+                    .and_then(|c| crate::app::home::where_line(c, names))
+            })
         })?;
         Some(view! { <span data-testid=where_id.clone() style=META_STYLE>{line}</span> })
     };

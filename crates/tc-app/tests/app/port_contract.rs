@@ -5,8 +5,7 @@
 use tc_api::ApiError;
 use tc_api::account::WebUrl;
 use tc_api::door43::{
-    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
-    SyncProject,
+    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo, SyncProject,
 };
 use tc_api::editor::SaveVerse;
 use tc_api::endpoint::NetKind;

@@ -87,7 +87,8 @@ pub fn OpenFromDoor43() -> impl IntoView {
             let refusal = {
                 Memo::new(move |_| od.with(|od| od.as_ref().and_then(OpenForm::refusal).cloned()))
             };
-            let yours = Memo::new(move |_| od.with(|od| od.as_ref().and_then(|od| od.yours.clone())));
+            let yours =
+                Memo::new(move |_| od.with(|od| od.as_ref().and_then(|od| od.yours.clone())));
             let below = {
                 let actions = actions.clone();
                 move || {

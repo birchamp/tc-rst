@@ -3,9 +3,7 @@
 //! `test/share/recommend.test.ts` and of the server half of `test/openFromDoor43Dialog.test.tsx`.
 
 use tc_api::account::{OrgChoice, Orgs, RepoLink, ShareTargets, SignIn, WebUrl};
-use tc_api::door43::{
-    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
-};
+use tc_api::door43::{OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo};
 use tc_api::endpoint::NetKind;
 use tc_api::error::{Feature, SignInReason};
 use tc_api::ids::{ProjectRef, RequestId};
