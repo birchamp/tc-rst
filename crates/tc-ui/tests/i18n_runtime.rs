@@ -336,6 +336,65 @@ fn a_key_constant_and_its_text_give_the_same_message() {
     );
 }
 
+/// #833.3: every refusal of an import or of Update a book reads as a sentence that names the
+/// file, never as tC4's code or the catalog key in its place.
+#[test]
+fn an_import_refusal_shows_a_sentence_not_a_code() {
+    use tc_api::refusal::{ImportRefusal as R, Message, Refusal};
+    show_locale(LocaleId::ENGLISH);
+    let file = "cfm_fbt_tit_book.zip";
+    let refusals = [
+        R::WriteFailed,
+        R::NameExists,
+        R::NotZip { file: file.into() },
+        R::CorruptEntry {
+            file: file.into(),
+            entry: "manifest.json".into(),
+        },
+        R::NoManifest { file: file.into() },
+        R::NoText { file: file.into() },
+        R::Languages {
+            languages: vec!["cfm".into(), "en".into()],
+        },
+        R::Twice { code: "TIT".into() },
+        R::Unreadable {
+            file: file.into(),
+            problem: "chapter 2".into(),
+        },
+        R::TextChanged { book: "TIT".into() },
+        R::UpdateUnreadable {
+            file: file.into(),
+            line: 12,
+            problem: "a verse marker with no number".into(),
+        },
+        R::UpdateOtherBook {
+            file: file.into(),
+            named: "JUD".into(),
+            chosen: "TIT".into(),
+        },
+        R::UpdateNotWritten {
+            reason: "the disk is full".into(),
+        },
+        R::UpdateReviewNotWritten {
+            reason: "the disk is full".into(),
+        },
+    ];
+    for refusal in refusals {
+        let names_file = refusal.vars().iter().any(|(k, _)| *k == "file");
+        let refusal = Refusal::Import(refusal);
+        let text = tc_ui::i18n::refusal_text(&refusal);
+        assert_ne!(Some(text.as_str()), refusal.code(), "{refusal:?}");
+        assert_ne!(text, refusal.key(), "{refusal:?}");
+        assert!(
+            text.contains(' ') && !text.contains('{'),
+            "not a sentence: {refusal:?}: {text:?}"
+        );
+        if names_file {
+            assert!(text.contains(file), "{refusal:?}: {text:?}");
+        }
+    }
+}
+
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
 

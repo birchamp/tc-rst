@@ -380,9 +380,10 @@
     },
     "add-book-usfm-files": {
       "layers": [
-        "pixels"
+        "pixels",
+        "dom"
       ],
-      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md). Since F1 the refused row of 57-TIT.usfm says `addBook.usfmExistsUpdate` (\"…choose Update a book from USFM in the account menu\") in place of tC4's \"To replace an existing book, use Import.\": a declared difference (APP-DESIGN F1 row), so the row's text and its wrapping differ in the DOM and the pixels.",
       "until": null
     },
     "upgrade-set": {
@@ -606,6 +607,53 @@
         "dom"
       ],
       "why": "After the click on “Pictures wrapped”, React updates each layout chip's style in place, one changed property at a time: it sets the chip's new `border` shorthand, whose value holds a `var()`, and does not set the unchanged `borderWidth: 1` again after it, so tC4's DOM reads the four `border-*-width` longhands as pending (empty). The rebuild writes each chip's whole style again, so they read `1px`, as both DOMs do before the click (`cc-obs` is the same). `--stroke` is 1px, so every pixel is the same (0 differ). Unit B8."
+    },
+    "import-files": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case is the files step of the USFM kind with 57-TIT.usfm; this release imports the tC3 kind only (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 kind's files step with cfm_fbt_tit_book.zip: the title, the drop zone's words and the file row (name and size) are the tC3 kind's. The frame, the steps' words and the layout are tC4's.",
+      "until": null
+    },
+    "import-review-usfm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "A stand-in: the USFM kind has no review in this release (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 review with Use installed versions chosen. The row stays until the USFM importer lands; it shows the review frame, not the USFM review.",
+      "until": null
+    },
+    "import-review-tc3": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The tC3 review draws tC4's pixels. The DOM differs in two attributes: the dialog's Close button holds the focus, because the Rust dialog draws itself again for the review step and the modal focuses its first control when it opens; and the Back button carries `data-testid=\"import-review-back\"`, which the import journey presses.",
+      "until": null
+    },
+    "import-working": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The working step as tC4 draws it (spinner and \"Creating “name”…\") with the run's Cancel in the footer and a progress bar once the job names its steps, which tC4 has not: a declared difference (APP-DESIGN F1 row). The Rust case is the tC3 kind's, named Obra tC3; tC4's is the USFM review's.",
+      "until": null
+    },
+    "import-failed": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The failed step as tC4 draws it, from tC4's `import.write-failed` refusal; the line under the sentence is the code alone, because the refusal the Rust case answers carries no detail, where tC4's report carries the ops-record reason. The Rust case starts from the tC3 review.",
+      "until": null
+    },
+    "import-toast": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case patches the Bible sample as if it had just been imported; the Rust case runs a real tC3 import, so the toast and the Imported badge are on a new card, Tita tC3, at the top of Home, with its own name and book. The toast and the badge are tC4's.",
+      "until": null
     }
   }
 }

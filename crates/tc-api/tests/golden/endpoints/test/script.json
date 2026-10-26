@@ -26,6 +26,10 @@
               "first": 4,
               "last": 5
             },
+            "kinds": [
+              "check",
+              "carriedFile"
+            ],
             "restored": 0
           }
         }

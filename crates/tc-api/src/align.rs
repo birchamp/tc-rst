@@ -276,6 +276,8 @@ pub struct AlignerView {
     pub save: AlignSave,
     /// Present while the verse's alignment has two versions: "2 versions · Review" (#791).
     pub marker: Option<crate::shown::ConflictMarker>,
+    /// The alignment's token as last saved, for its History (owner ruling H5).
+    pub history: Option<crate::ShownToken>,
 }
 
 /// `align/index`: every verse of the book as the rail lists it, in order.

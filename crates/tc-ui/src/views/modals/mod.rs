@@ -13,4 +13,5 @@ pub mod project_settings;
 pub mod share;
 pub mod sign_in;
 pub mod source_texts;
+pub mod update_book;
 pub mod upgrade_set;

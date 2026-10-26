@@ -74,7 +74,11 @@ async fn catalog_search_applies_stage_history_owner_and_topic() {
     history.sort_by_key(|r| format!("{r:?}"));
     assert_eq!(
         history,
-        [CatalogRef::Tag(tag("v86")), CatalogRef::Tag(tag("v91"))]
+        [
+            CatalogRef::Tag(tag("v86")),
+            CatalogRef::Tag(tag("v87")),
+            CatalogRef::Tag(tag("v91"))
+        ]
     );
 
     let latest = client
@@ -83,7 +87,7 @@ async fn catalog_search_applies_stage_history_owner_and_topic() {
         .unwrap()
         .items;
     let latest = refs(latest);
-    assert_eq!(latest.len(), 4, "{latest:?}");
+    assert_eq!(latest.len(), 5, "{latest:?}");
     assert!(latest.contains(&CatalogRef::Branch("master".into())));
     assert!(latest.contains(&CatalogRef::Tag(tag("v92"))));
 
@@ -180,7 +184,7 @@ async fn tags_walk_every_page_even_when_the_server_clamps_the_limit() {
     let tags = tags.items;
     let mut names: Vec<String> = tags.iter().map(|t| t.name.to_string()).collect();
     names.sort();
-    assert_eq!(names, ["v86", "v91", "v92"]);
+    assert_eq!(names, ["v86", "v87", "v91", "v92"]);
     for t in &tags {
         let expected = fake
             .resolve("unfoldingWord", "en_tn", t.name.as_str())
@@ -193,7 +197,7 @@ async fn tags_walk_every_page_even_when_the_server_clamps_the_limit() {
         .into_iter()
         .filter(|r| r.path.ends_with("/tags"))
         .count();
-    assert_eq!(pages, 2, "a full page of 2, then a short page of 1");
+    assert_eq!(pages, 3, "two full pages of 2, then an empty page");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -229,6 +233,7 @@ async fn releases_and_the_latest_published_one() {
         [
             ("v92".to_owned(), ReleaseState::PreRelease),
             ("v91".to_owned(), ReleaseState::Published),
+            ("v87".to_owned(), ReleaseState::Published),
             ("v86".to_owned(), ReleaseState::Published),
         ]
     );

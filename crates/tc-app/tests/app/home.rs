@@ -932,3 +932,70 @@ fn a_story_card_has_stories_and_no_chip() {
     assert_eq!(stories.drafted, Known::Unknown);
     assert!(stories.stories.is_empty());
 }
+
+/// INV-AN-IMPORT-NEVER-LEAVES-A-HALF-PROJECT: an import a quit or a crash cut short leaves its
+/// part copy in a staging folder; the next start removes it, Home lists no half project, and the
+/// first listing after that cleanup says so (`home.importRemoved`). Once: a later listing, and the
+/// next launch, which removes only a create's staging folder, say nothing.
+#[tokio::test]
+async fn an_import_cut_short_is_removed_and_home_says_so_once() {
+    use super::store::{OnDisk, make_project};
+    use tc_app::reports::ReportOp;
+    const INV: &str = "INV-AN-IMPORT-NEVER-LEAVES-A-HALF-PROJECT";
+    let disk = OnDisk::new();
+    make_project(&disk.app_data(), &disk.projects, "titus_on_disk");
+    let import = disk.projects.join(".staging-import-0123456789abcdef");
+    std::fs::create_dir_all(import.join("ingredients")).unwrap();
+    std::fs::write(import.join("ingredients/TIT.usfm"), b"\\id TIT\n").unwrap();
+
+    // The listings until one names the cleanup, and the cleanup's own report.
+    async fn until_said(t: &TestApp, op: ReportOp) -> Vec<bool> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        let mut said = Vec::new();
+        loop {
+            let reported = t.app.reports().all().iter().any(|r| r.op == op);
+            said.push(list(&t.app).await.import_removed);
+            if (reported && said.contains(&true)) || std::time::Instant::now() > deadline {
+                return said;
+            }
+            if reported {
+                // The cleanup is over: a listing after it is the last word.
+                said.push(list(&t.app).await.import_removed);
+                return said;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    {
+        let t = disk.start().await;
+        let said = until_said(&t, ReportOp::Import).await;
+        assert_eq!(
+            said.iter().filter(|s| **s).count(),
+            1,
+            "{INV}: Home says the import did not finish in one listing: {said:?}"
+        );
+        assert!(
+            !list(&t.app).await.import_removed,
+            "{INV}: a later listing of the same launch says it again"
+        );
+        let cards: Vec<String> = list(&t.app)
+            .await
+            .cards
+            .iter()
+            .map(|c| c.project.to_string())
+            .collect();
+        assert_eq!(cards, ["titus_on_disk"], "{INV}: no half project is listed");
+        assert!(!import.exists(), "{INV}: the part copy is removed");
+        t.app.quit().await;
+    }
+
+    std::fs::create_dir(disk.projects.join(".staging-create-00000000deadbeef")).unwrap();
+    let t = disk.start().await;
+    let said = until_said(&t, ReportOp::StagingRemoved).await;
+    assert!(
+        !said.contains(&true),
+        "{INV}: the next launch, whose start removed no import, says it again: {said:?}"
+    );
+    t.app.quit().await;
+}

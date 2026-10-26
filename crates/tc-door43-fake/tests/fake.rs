@@ -170,7 +170,7 @@ async fn listings_clamp_the_page_size_and_report_the_total() {
         serde_json::from_slice::<Vec<Value>>(&body).unwrap().len(),
         2
     );
-    assert_eq!(headers["x-total-count"], "3");
+    assert_eq!(headers["x-total-count"], "4");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -277,7 +277,10 @@ async fn git_clones_over_smart_http() {
             .unwrap()
     );
     let tags = run(git(&work.path().join("en_tn"), work.path()).args(["tag", "--list"])).await;
-    assert_eq!(tags.lines().collect::<Vec<_>>(), ["v86", "v91", "v92"]);
+    assert_eq!(
+        tags.lines().collect::<Vec<_>>(),
+        ["v86", "v87", "v91", "v92"]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -633,7 +636,10 @@ async fn each_held_download_waits_for_a_release_of_its_own() {
     const AFTER: usize = 1000;
     let fake = FakeDoor43::start_seeded().await.unwrap();
     let url = format!("{}/unfoldingWord/en_tn/sb/v86.zip", fake.url());
-    let (_, _, whole) = get(&fake, "/unfoldingWord/en_tn/sb/v86.zip", None).await;
+    // Each export stamps its own moment into metadata.json, so each download has a length of
+    // its own: the one it announces.
+    let whole =
+        |response: &reqwest::Response| usize::try_from(response.content_length().unwrap()).unwrap();
     let held = || {
         FaultRule::once(
             "GET",
@@ -647,6 +653,7 @@ async fn each_held_download_waits_for_a_release_of_its_own() {
     fake.release_held();
     fake.inject(held());
     let mut first = http().get(&url).send().await.unwrap();
+    let first_whole = whole(&first);
     assert_eq!(read_until(&mut first, AFTER).await, AFTER);
     assert!(
         holds(&mut first).await,
@@ -655,16 +662,17 @@ async fn each_held_download_waits_for_a_release_of_its_own() {
 
     fake.inject(held());
     let mut second = http().get(&url).send().await.unwrap();
+    let second_whole = whole(&second);
     assert_eq!(read_until(&mut second, AFTER).await, AFTER);
 
     // One release frees the oldest held download only.
     fake.release_held();
     let rest = first.bytes().await.unwrap();
-    assert_eq!(AFTER + rest.len(), whole.len());
+    assert_eq!(AFTER + rest.len(), first_whole);
     assert!(holds(&mut second).await, "one release freed two downloads");
     fake.release_held();
     let rest = second.bytes().await.unwrap();
-    assert_eq!(AFTER + rest.len(), whole.len());
+    assert_eq!(AFTER + rest.len(), second_whole);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

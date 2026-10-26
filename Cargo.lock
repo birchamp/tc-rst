@@ -3344,6 +3344,7 @@ dependencies = [
  "tc-door43-fake",
  "tc-export",
  "tc-helps",
+ "tc-import",
  "tc-journal",
  "tc-obs",
  "tc-resources",

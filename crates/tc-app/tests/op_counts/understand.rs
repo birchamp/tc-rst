@@ -8,7 +8,7 @@ use tc_api::helps::Passage;
 use tc_app::App;
 
 use super::corpus::{PSALMS, corpora};
-use super::harness::{OnStore, Scale, costs_what_it_touches, opened};
+use super::harness::{OnStore, Scale, book_costs_what_it_touches, costs_what_it_touches, opened};
 
 async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
     match app.request(req).await.unwrap() {
@@ -34,7 +34,7 @@ fn book_records(project: &tc_app::backend::memory::MemoryProject) -> u64 {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn open_book_touches_one_book() {
-    let ((small, large), (store, _)) = costs_what_it_touches(
+    let ((small, large), (store, _)) = book_costs_what_it_touches(
         "opening a book",
         OnStore::Everything,
         opened,
@@ -89,13 +89,13 @@ fn translation_records(project: &tc_app::backend::memory::MemoryProject) -> u64 
 /// Translate's text of a book (B4a): one read of that book's verse records, whatever the
 /// project holds, so a chapter switch reads nothing (AD16). On the store a verse in conflict
 /// costs one more value read, its token's candidate: a cost of the book's conflicts, which the
-/// larger corpus's Psalms has one more of, never of the project's size.
+/// larger corpus's Psalms has more or fewer of than Psalms, so the fold's work there is held
+/// to that of its own Psalms alone.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn translate_text_touches_one_book() {
-    let marked = std::sync::Mutex::new(Vec::new());
-    let ((small, large), (store, store_large)) = costs_what_it_touches(
+    let ((small, large), (store, _)) = book_costs_what_it_touches(
         "Translate's text of a book",
-        OnStore::AppCounts,
+        OnStore::Everything,
         opened,
         async |s: &Scale| {
             let view = ok(
@@ -107,13 +107,6 @@ async fn translate_text_touches_one_book() {
             )
             .await;
             assert!(view.chapters.len() >= 150, "{}", view.chapters.len());
-            let n = view
-                .chapters
-                .iter()
-                .flat_map(|c| c.verses.iter())
-                .filter(|v| v.words.marker.is_some())
-                .count();
-            marked.lock().unwrap().push(u64::try_from(n).unwrap());
         },
     )
     .await;
@@ -135,18 +128,6 @@ async fn translate_text_touches_one_book() {
     assert_eq!(small.app.book_resource_loads, 0);
     assert_eq!(store.app, small.app, "the same reads on the store");
     assert_eq!(store.store.files_opened, 0, "{store:?}");
-    let marked = marked.lock().unwrap().clone();
-    let [_, _, store_small_marked, store_large_marked] = marked[..] else {
-        panic!("{marked:?}")
-    };
-    assert_eq!(
-        store_large.fold.values_read - store.fold.values_read,
-        store_large_marked - store_small_marked,
-        "only the conflicts' tokens read more"
-    );
-    let mut same = store_large.fold;
-    same.values_read = store.fold.values_read;
-    assert_eq!(same, store.fold, "nothing else of the fold grows");
 }
 
 /// On the store the row holds the app's counts: the one load reads the five pin groups and

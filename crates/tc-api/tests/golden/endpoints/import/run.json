@@ -1,0 +1,40 @@
+{
+  "path": "import/run",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+    "files": [
+      {
+        "upload": "00000000000000000000000000000007",
+        "name": "cfm_fbt_tit_book.zip"
+      }
+    ],
+    "details": {
+      "name": "Tita tC3",
+      "code": "cfm"
+    },
+    "found": [
+      {
+        "slot": "translationNotes",
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "tag": "v87",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
+      }
+    ],
+    "license": "CC BY-SA 4.0"
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

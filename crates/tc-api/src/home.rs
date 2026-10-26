@@ -70,6 +70,9 @@ pub struct HomeView {
     /// Home shows none of them, and a new project's name must not take one (B9b D5).
     pub others: Vec<String>,
     pub resume: Option<LastEditView>,
+    /// This launch's start removed the part copy of an import that did not finish
+    /// (`home.importRemoved`): true in the first listing after that cleanup, false after.
+    pub import_removed: bool,
 }
 
 /// `home/card`: one card, read by each card when it is drawn (`AppTopic::HomeCard`).

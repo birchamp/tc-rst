@@ -3,7 +3,7 @@
 //! and the typed notice of a job that cannot write (APP-DESIGN R16).
 
 use crate::common::*;
-use crate::corpus::{OnDisk, psalms, psalms_x10};
+use crate::corpus::{OnDisk, psalms, psalms_larger};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -108,7 +108,7 @@ fn psalms_leave(corpus: &OnDisk) -> LeaveCost {
 #[test]
 fn a_books_materialize_touches_only_that_books_files() {
     let mut costs = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let cost = psalms_leave(corpus);
         let c = &cost.counters;
         assert!(c.projected >= 1, "{c:?}");
@@ -160,7 +160,7 @@ fn a_books_materialize_touches_only_that_books_files() {
 /// B5: adding a book marks that book: one file projected, no other book's file read.
 #[test]
 fn a_book_change_marks_only_that_books_files() {
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         fs.advance(Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");
@@ -210,7 +210,7 @@ fn a_book_change_marks_only_that_books_files() {
 #[test]
 fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
     let mut counts = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         // Settle the entries: two opens, the clock past the time stamp's tick before each.
         for _ in 0..2 {
@@ -332,8 +332,10 @@ fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
         handle.close().unwrap();
     }
     assert_eq!(
-        counts[0], counts[1],
-        "ten times the project must not add operations"
+        counts[0],
+        counts[1],
+        "{} times the project must not add operations",
+        tc_corpus::Spec::test_factor()
     );
 }
 

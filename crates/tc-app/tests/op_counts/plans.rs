@@ -19,7 +19,7 @@ use tc_resources::{
 };
 
 use super::corpus::{PSALMS, corpora, store_corpora};
-use super::harness::{Backing, Scale, cost, costs_on_both, growth, scale};
+use super::harness::{Backing, Scale, cost, cost_alone, costs_on_both, growth, scale};
 use crate::common::rid;
 
 const FIXTURES: &str = "fixtures/tc4/test-fixtures/resources";
@@ -258,7 +258,17 @@ async fn plan_cost_follows_affected_books() {
         small.app.book_usfm > 0,
         "the plan reads what it affects: {small:?}"
     );
-    let grew = growth(&small, &large);
+    // Held to the larger corpus's own Psalms alone: Psalms holds a few more or fewer merged
+    // and conflicting records there.
+    let alone = cost_alone(
+        Backing::Store,
+        async |s: &Scale| with_package(s, &[PSALMS]).await,
+        async |s: &Scale| {
+            plan(s).await;
+        },
+    )
+    .await;
+    let grew = growth(&alone, &large);
     assert!(
         grew.is_empty(),
         "planning a change that affects one book grows with the project:\n{}",

@@ -145,7 +145,9 @@ browserTest('boot_adds_no_request: one hello, the nine catalogs, the stream and 
     const count = (p) => api.filter((a) => a === p).length;
     assert.deepEqual([count('/api/v1/app/hello'), count('/api/v1/events'), count('/api/v1/home/list')], [1, 1, 1], api.join(' '));
     assert.ok(count('/api/v1/home/card') <= 2, api.join(' '));
-    assert.deepEqual(api.filter((p) => !['/api/v1/app/hello', '/api/v1/events', '/api/v1/home/list', '/api/v1/home/card'].includes(p)), []);
+    // Each card's last sync, for its "replaced" link (HIST-1, ruling H5): one read per card.
+    assert.ok(count('/api/v1/door43/lastSync') <= count('/api/v1/home/card'), api.join(' '));
+    assert.deepEqual(api.filter((p) => !['/api/v1/app/hello', '/api/v1/events', '/api/v1/home/list', '/api/v1/home/card', '/api/v1/door43/lastSync'].includes(p)), []);
     assert.equal(paths.filter((p) => /\/i18n\/[^/]+\.json$/.test(p)).length, 9);
     assert.equal(paths.filter((p) => p.startsWith('/help/')).length, 0, 'help loads only when it opens');
   });

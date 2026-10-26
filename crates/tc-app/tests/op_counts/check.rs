@@ -21,7 +21,9 @@ use tc_journal::ids::{ChapterNo, VerseNo};
 use tc_journal::record::VerseValue;
 
 use super::corpus::{PSALMS, corpora, psalms_resources};
-use super::harness::{Backing, OnStore, Scale, cost, costs_what_it_touches, opened, scale};
+use super::harness::{
+    Backing, OnStore, Scale, book_costs_what_it_touches, cost, costs_what_it_touches, opened, scale,
+};
 use crate::common::rid;
 
 async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
@@ -60,7 +62,7 @@ fn full(view: &CheckSessionView) -> &[RailRow] {
 /// The first open of a tool derives its list, Psalms' alone, whatever else the project holds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn check_open_derives_one_unit() {
-    let ((small, large), (store, _)) = costs_what_it_touches(
+    let ((small, large), (store, _)) = book_costs_what_it_touches(
         "opening the Psalms notes",
         OnStore::AppCounts,
         opened,

@@ -179,6 +179,8 @@ impl Writer {
                 .history(&key)
                 .iter()
                 .filter_map(|id| self.fold.change(id))
+                // A check's History also lists checks moved into it: not this file's record.
+                .filter(|v| v.key == key)
                 .filter(|v| {
                     v.packs.iter().any(|p| {
                         let mut name = [0u8; 16];

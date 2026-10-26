@@ -399,7 +399,7 @@ fn keep_in_place(plan: &mut carry::Plan, in_conflict: &dyn Fn(&RecordKey) -> boo
 }
 
 /// The changes one unit's carry-over writes, one per record (STORAGE §5.8 step 2).
-fn carry_changes(
+pub(crate) fn carry_changes(
     heads: &dyn Fn(&RecordKey) -> Vec<ChangeId>,
     plan: &carry::Plan,
     items: &[CheckItem],
