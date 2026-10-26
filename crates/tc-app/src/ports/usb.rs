@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use tc_api::door43::ProjectName;
 use tc_api::error::{ApiError, Feature};
 use tc_api::exchange::{
     ExchangeFile, ExportedView, HandEditOutcome, HandEdited, IdentifyView, ReceivedView,
@@ -148,6 +149,42 @@ impl ExchangePort for UsbExchange {
                 app.remove_upload(id);
             }
             result
+        })
+    }
+
+    fn receive_new(
+        &self,
+        app: App,
+        file: ExchangeFile,
+        name: ProjectName,
+    ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
+        Box::pin(async move {
+            let path = app.exchange_path(&file);
+            let folder = name.as_str().to_owned();
+            let made = app
+                .with_store(move |store| store.receive_new(&path, &folder))
+                .await
+                .map_err(JobEnd::Failed);
+            if let ExchangeFile::Upload(id) = &file {
+                app.remove_upload(id);
+            }
+            match made? {
+                // No project.json in the file: nothing for this computer to become.
+                Err(ExchangeError::OtherProject) => Err(JobEnd::Failed(ApiError::Refused(
+                    Refusal::Exchange(ExchangeRefusal::NotTranslationCore),
+                ))),
+                Err(e) => Err(refused(e, false)),
+                Ok(()) => {
+                    let project = ProjectRef::parse(name.as_str()).map_err(|_| {
+                        JobEnd::Failed(ApiError::BadRequest {
+                            field: "name".to_owned(),
+                            reason: "not a folder name".to_owned(),
+                        })
+                    })?;
+                    app.inner.bus.publish(tc_api::event::Event::ProjectsChanged);
+                    Ok(project)
+                }
+            }
         })
     }
 }

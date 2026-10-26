@@ -126,6 +126,7 @@ macro_rules! endpoint_table {
             query "exchange/identify": $crate::exchange::Identify => $crate::exchange::IdentifyView;
             job "exchange/export": $crate::exchange::Export => $crate::ids::JobId;
             job "exchange/receive": $crate::exchange::Receive => $crate::ids::JobId;
+            job "exchange/receiveNew": $crate::exchange::ReceiveNew => $crate::ids::JobId;
 
             query "feedback/compose": $crate::feedback::Compose => $crate::feedback::FeedbackDraft;
 

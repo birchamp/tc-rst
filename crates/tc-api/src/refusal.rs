@@ -788,6 +788,11 @@ pub enum ExchangeRefusal {
     OtherProject {
         name: String,
     },
+    /// The file holds no translationCore project at all (R2's fourth case): nothing to
+    /// receive, and Import is the way in for other files.
+    NotTranslationCore,
+    /// A new project's name is in use on this computer; nothing was written.
+    NameExists,
     /// The intake failed after some of the file's packs were folded: what was received
     /// stays in the project (PLAN Q8), so the person is never told nothing changed.
     PartlyReceived {
@@ -811,6 +816,8 @@ impl Message for ExchangeRefusal {
             Self::NewerFormat { .. } => "exchange.error.newerFormat",
             Self::VerifyFailed => "exchange.error.verifyFailed",
             Self::OtherProject { .. } => "exchange.error.otherProject",
+            Self::NotTranslationCore => "exchange.error.notTranslationCore",
+            Self::NameExists => "exchange.error.nameExists",
             Self::PartlyReceived { .. } => "exchange.error.partlyReceived",
             Self::NotWritten { .. } => "exchange.error.notWritten",
             Self::Unreadable { .. } => "exchange.error.unreadable",
@@ -823,7 +830,9 @@ impl Message for ExchangeRefusal {
             Self::NotWritten { reason }
             | Self::Unreadable { reason }
             | Self::PartlyReceived { reason } => vec![("reason", reason.clone())],
-            Self::Damaged | Self::VerifyFailed => Vec::new(),
+            Self::Damaged | Self::VerifyFailed | Self::NotTranslationCore | Self::NameExists => {
+                Vec::new()
+            }
         }
     }
 }

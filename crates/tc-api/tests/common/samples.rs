@@ -193,6 +193,8 @@ pub fn exchange() -> Vec<ExchangeRefusal> {
         ExchangeRefusal::OtherProject {
             name: "Tito".into(),
         },
+        ExchangeRefusal::NotTranslationCore,
+        ExchangeRefusal::NameExists,
         ExchangeRefusal::PartlyReceived {
             reason: "disk full".into(),
         },

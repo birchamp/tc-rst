@@ -64,6 +64,15 @@ pub trait ExchangePort: Send + Sync {
         file: ExchangeFile,
     ) -> BoxFuture<Result<ReceivedView, JobEnd>>;
 
+    /// §10.2 for a project this computer lacks (E2 step 4b): the file becomes the project
+    /// `name`, whole or not at all, and the new project is answered.
+    fn receive_new(
+        &self,
+        app: App,
+        file: ExchangeFile,
+        name: ProjectName,
+    ) -> BoxFuture<Result<ProjectRef, JobEnd>>;
+
     #[cfg(feature = "test-hooks")]
     fn scripted(&self) -> Option<&scripted::ScriptedExchangePort> {
         None
@@ -118,6 +127,15 @@ impl ExchangePort for UnavailableExchange {
         _project: ProjectRef,
         _file: ExchangeFile,
     ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
+        Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))) })
+    }
+
+    fn receive_new(
+        &self,
+        _app: App,
+        _file: ExchangeFile,
+        _name: ProjectName,
+    ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
         Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))) })
     }
 }

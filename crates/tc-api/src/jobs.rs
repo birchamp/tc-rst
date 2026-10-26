@@ -259,6 +259,9 @@ starts_job! {
     crate::exchange::Receive => crate::exchange::ReceivedView {
         JobOutcome::Received(view) => view, view => JobOutcome::Received(view)
     }
+    crate::exchange::ReceiveNew => ProjectRef {
+        JobOutcome::Created { project } => project, project => JobOutcome::Created { project }
+    }
     crate::session::Open => Box<crate::session::OpenedProject> {
         JobOutcome::Opened(opened) => opened, opened => JobOutcome::Opened(opened)
     }

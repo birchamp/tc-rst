@@ -134,6 +134,9 @@ pub struct AppState {
     pub ex: ArcRwSignal<Option<crate::app::exchange::ExportForm>>,
     /// Receive work from a file (E2).
     pub rx: ArcRwSignal<Option<crate::app::exchange::ReceiveForm>>,
+    /// The last receive's end, kept when its dialog was closed while it ran, so the next
+    /// Receive dialog shows it (E2 step 4b).
+    pub rx_last: ArcRwSignal<Option<crate::app::exchange::ReceiveForm>>,
     /// Open a project from Door43's form (tC4 `od`, B9b).
     pub od: ArcRwSignal<Option<OpenForm>>,
     /// Project settings' form (tC4 `st`, B9a).
@@ -199,6 +202,7 @@ impl AppState {
             sh: ArcRwSignal::new(None),
             ex: ArcRwSignal::new(None),
             rx: ArcRwSignal::new(None),
+            rx_last: ArcRwSignal::new(None),
             od: ArcRwSignal::new(None),
             st: ArcRwSignal::new(None),
             src: ArcRwSignal::new(crate::app::sources::SourcesForm::default()),
@@ -855,7 +859,12 @@ impl Actions {
         s.im.try_set(None);
         s.sh.try_set(None);
         s.ex.try_set(None);
-        s.rx.try_set(None);
+        // A receive that runs on is kept aside: its end shows at the next Receive dialog.
+        if let Some(form) = s.rx.try_update(Option::take).flatten()
+            && matches!(form.step, crate::app::exchange::ReceiveStep::Working(_))
+        {
+            s.rx_last.try_set(Some(form));
+        }
         s.od.try_set(None);
         s.c.fix.try_set(None);
         s.st.try_set(None);

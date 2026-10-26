@@ -82,6 +82,7 @@ const PHASE_0: &[&str] = &[
     "exchange/identify",
     "exchange/export",
     "exchange/receive",
+    "exchange/receiveNew",
     // B6: the aligner's rail, its session and its save.
     "align/index",
     "align/open",

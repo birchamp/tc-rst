@@ -58,7 +58,7 @@ use tc_api::event::{
 };
 use tc_api::exchange::{
     ExchangeFile, Export, ExportedView, HandEditOutcome, HandEdited, Identify, IdentifyView,
-    Receive, ReceivedView,
+    Receive, ReceiveNew, ReceivedView,
 };
 use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
@@ -589,6 +589,16 @@ impl Example for Receive {
             file: ExchangeFile::Upload(
                 tc_api::ids::UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
             ),
+        }
+    }
+}
+
+impl Example for ReceiveNew {
+    fn example() -> Self {
+        ReceiveNew {
+            request: request(24),
+            file: ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
+            name: ProjectName::parse("tito_de_maria").unwrap(),
         }
     }
 }

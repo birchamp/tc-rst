@@ -805,6 +805,14 @@ impl ProjectStore for StoreBackend {
         }
     }
 
+    fn receive_new(
+        &self,
+        file: &std::path::Path,
+        name: &str,
+    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+        tc_sync::exchange::receive_new(&self.store, file, name).map(|_| ())
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         if let Some(beside) = self.beside_of(folder) {
             return beside.trust_lock(folder);

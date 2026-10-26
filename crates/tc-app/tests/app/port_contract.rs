@@ -6,7 +6,7 @@ use tc_api::ApiError;
 use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
 use tc_api::endpoint::NetKind;
 use tc_api::error::Flow;
-use tc_api::exchange::{ExchangeFile, Export, HandEditOutcome, HandEdited, Receive};
+use tc_api::exchange::{ExchangeFile, Export, HandEditOutcome, HandEdited, Receive, ReceiveNew};
 use tc_api::home::{HomeView, List};
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobOutcome, JobState};
@@ -209,6 +209,8 @@ pub(super) trait ExchangePortFixture {
     /// The next receive into the sample waits until `release_receive`.
     async fn hold_receive(w: &Self::World);
     async fn release_receive(w: &Self::World);
+    /// A receive of this file as the new project `name` succeeds; the project it adds.
+    async fn receive_new_succeeds(w: &Self::World, name: &str) -> (ExchangeFile, ProjectRef);
 }
 
 pub(super) struct ScriptedExchange;
@@ -280,6 +282,16 @@ impl ExchangePortFixture for ScriptedExchange {
     async fn release_receive(w: &World) {
         exchange_port(w).release_receive(&folder(SAMPLE));
     }
+
+    async fn receive_new_succeeds(w: &World, _name: &str) -> (ExchangeFile, ProjectRef) {
+        // The scripted port writes nothing: it answers a project the scenario holds.
+        let project = folder(SAMPLE);
+        exchange_port(w).script_receive_new(Ok(project.clone()));
+        (
+            ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
+            project,
+        )
+    }
 }
 
 fn exchange_port(w: &World) -> &tc_app::ports::scripted::ScriptedExchangePort {
@@ -293,6 +305,14 @@ pub(super) fn export(n: u8, destination: &str) -> Export {
         request: rid(n),
         project: folder(SAMPLE),
         destination: destination.to_owned(),
+    }
+}
+
+pub(super) fn receive_new(n: u8, file: ExchangeFile, name: &str) -> ReceiveNew {
+    ReceiveNew {
+        request: rid(n),
+        file,
+        name: ProjectName::parse(name).unwrap(),
     }
 }
 
@@ -411,6 +431,32 @@ macro_rules! exchange_port_contract {
                 let destination = <$fixture>::export_succeeds(&w).await;
                 let job = post(app, &export(8, &destination)).await.unwrap();
                 assert!(matches!(ended(app, job).await, JobState::Done(_)));
+            }
+
+            /// E2 step 4b: a file for a project this computer lacks becomes that project, and a
+            /// name in use is refused before anything is written.
+            #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+            async fn a_newcomers_receive_creates_the_project() {
+                let w = <$fixture>::world().await;
+                let app = <$fixture>::app(&w);
+                let name = "tito_de_juan";
+                let (file, project) = <$fixture>::receive_new_succeeds(&w, name).await;
+                let taken = post(app, &receive_new(10, file.clone(), SAMPLE)).await;
+                assert_eq!(
+                    taken,
+                    Err(ApiError::Refused(Refusal::Exchange(
+                        ExchangeRefusal::NameExists
+                    ))),
+                    "the sample's name is in use"
+                );
+                let job = post(app, &receive_new(11, file, name)).await.unwrap();
+                match ended(app, job).await {
+                    JobState::Done(JobOutcome::Created { project: added }) => {
+                        assert_eq!(added, project);
+                        assert!(listed(app).await.contains(&added), "{added:?} is listed");
+                    }
+                    other => panic!("{other:?}"),
+                }
             }
 
             /// INV-RECEIVE-TAKES-ONLY-PACKS: a file edited by hand inside the zip is listed as

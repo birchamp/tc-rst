@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use tc_api::ApiError;
 use tc_api::exchange::ExchangeFile;
-use tc_api::ids::RequestId;
+use tc_api::ids::{ProjectRef, RequestId};
 use tc_api::test::{Hold, HoldPoint, Release};
 use tc_app::App;
 use tc_app::StoreChoice;
@@ -108,6 +108,14 @@ impl ExchangePortFixture for Usb {
         )
         .await
         .unwrap();
+    }
+
+    async fn receive_new_succeeds(w: &UsbWorld, name: &str) -> (ExchangeFile, ProjectRef) {
+        let exported = juans_file(w).await;
+        (
+            ExchangeFile::Path(exported.to_string_lossy().into_owned()),
+            ProjectRef::parse(name).unwrap(),
+        )
     }
 
     async fn release_receive(w: &UsbWorld) {

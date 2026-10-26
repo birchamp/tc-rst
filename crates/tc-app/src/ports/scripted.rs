@@ -99,6 +99,8 @@ pub struct ScriptedExchangePort {
     exports: Mutex<HashMap<ProjectRef, Result<String, ExchangeRefusal>>>,
     receives: Mutex<HashMap<ProjectRef, ScriptedReceive>>,
     identify: Mutex<Option<Result<IdentifyView, ExchangeRefusal>>>,
+    /// The outcomes of the next receives into a new project, in order.
+    new: Mutex<VecDeque<Result<ProjectRef, ExchangeRefusal>>>,
     /// A receive of the project waits here before it runs, so a test can post a sync meanwhile.
     holds: Mutex<HashMap<ProjectRef, Arc<tokio::sync::Notify>>>,
     calls: AtomicUsize,
@@ -117,6 +119,12 @@ impl ScriptedExchangePort {
         *lock(&self.identify) = Some(outcome);
     }
 
+    /// The next `exchange/receiveNew` answers `outcome`; a project it answers must already be
+    /// one the scenario holds (the scripted port writes nothing).
+    pub fn script_receive_new(&self, outcome: Result<ProjectRef, ExchangeRefusal>) {
+        lock(&self.new).push_back(outcome);
+    }
+
     /// The next receive of `project` waits until [`Self::release_receive`].
     pub fn hold_receive(&self, project: ProjectRef) {
         lock(&self.holds).insert(project, Arc::new(tokio::sync::Notify::new()));
@@ -132,6 +140,7 @@ impl ScriptedExchangePort {
         lock(&self.exports).clear();
         lock(&self.receives).clear();
         *lock(&self.identify) = None;
+        lock(&self.new).clear();
         lock(&self.holds).clear();
     }
 
@@ -198,6 +207,23 @@ impl ExchangePort for ScriptedExchangePort {
                     hand_edited,
                 }) => app.scripted_receive(project, changes, hand_edited).await,
                 Some(ScriptedReceive::Failed(refusal)) => Err(refused(refusal)),
+                None => Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))),
+            }
+        })
+    }
+
+    fn receive_new(
+        &self,
+        _app: App,
+        _file: ExchangeFile,
+        _name: ProjectName,
+    ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let next = lock(&self.new).pop_front();
+        Box::pin(async move {
+            match next {
+                Some(Ok(project)) => Ok(project),
+                Some(Err(refusal)) => Err(refused(refusal)),
                 None => Err(JobEnd::Failed(ApiError::Unavailable(Feature::Exchange))),
             }
         })

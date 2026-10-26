@@ -210,6 +210,7 @@ unscoped!(
     crate::door43::SyncProject,
     crate::exchange::Export,
     crate::exchange::Receive,
+    crate::exchange::ReceiveNew,
     crate::settings::Save,
     crate::create::Bible,
     crate::create::Obs,

@@ -8,7 +8,9 @@ use leptos::prelude::*;
 
 use crate::app::exchange::{ExportForm, ExportStep, ReceiveForm, ReceiveStep};
 use crate::app::web::{AppCtx, use_app};
-use crate::ds::{Attrs, Button, ButtonVariant, Callout, CalloutTone, Spinner, Text, TextRole};
+use crate::ds::{
+    Attrs, Button, ButtonVariant, Callout, CalloutTone, Spinner, Text, TextField, TextRole,
+};
 use crate::i18n::{keys, t};
 
 fn callout(testid: &'static str, tone: CalloutTone, text: String) -> impl IntoView {
@@ -178,7 +180,7 @@ pub fn ReceiveWork() -> impl IntoView {
     let busy = Signal::derive(move || form.get().is_some_and(|f| f.busy()));
     let received = Signal::derive(move || {
         form.get()
-            .is_some_and(|f| matches!(f.step, ReceiveStep::Received(_)))
+            .is_some_and(|f| matches!(f.step, ReceiveStep::Received(_) | ReceiveStep::Added(_)))
     });
     let footer: ChildrenFn = {
         let actions = actions.clone();
@@ -197,7 +199,10 @@ pub fn ReceiveWork() -> impl IntoView {
                             disabled=Signal::derive(move || !can_receive.get())
                             on_click=Callback::new(move |_| actions.receive_work())
                         >
-                            {move || t(keys::exchange::receive::BUTTON, &[])}
+                            {move || {
+                                let adding = form.get().is_some_and(|f| matches!(f.step, ReceiveStep::ConfirmNew { .. }));
+                                t(if adding { keys::exchange::receive::ADD_BUTTON } else { keys::exchange::receive::BUTTON }, &[])
+                            }}
                         </Button>
                     }
                 })}
@@ -241,7 +246,7 @@ pub fn ReceiveWork() -> impl IntoView {
                     on:change=on_change
                 />
                 {move || form.get().map(|f: ReceiveForm| {
-                    let project = f.project.name.clone();
+                    let project = f.project.as_ref().map(|p| p.name.clone()).unwrap_or_default();
                     let choosing = f.choosing();
                     let uploading = f.step == ReceiveStep::Uploading;
                     let identifying = f.step == ReceiveStep::Identifying;
@@ -250,7 +255,28 @@ pub fn ReceiveWork() -> impl IntoView {
                             keys::exchange::receive::CONFIRM,
                             &[("name", &view.name), ("project", &project)],
                         )),
+                        ReceiveStep::ConfirmNew { view, .. } => Some(t(
+                            keys::exchange::receive::NEW_PROJECT,
+                            &[("name", &view.name)],
+                        )),
                         _ => None,
+                    };
+                    let new_name = match &f.step {
+                        ReceiveStep::ConfirmNew { name, .. } => Some((name.clone(), f.new_name_bad())),
+                        _ => None,
+                    };
+                    let added = match &f.step {
+                        ReceiveStep::Added(project) => Some(t(
+                            keys::exchange::receive::ADDED,
+                            &[("name", &project.as_str())],
+                        )),
+                        _ => None,
+                    };
+                    let on_name = {
+                        let actions = actions.clone();
+                        Callback::new(move |e: web_sys::Event| {
+                            actions.type_new_project_name(event_target_value(&e));
+                        })
                     };
                     let working_line = match &f.step {
                         ReceiveStep::Working(phase) => Some(t(
@@ -284,6 +310,18 @@ pub fn ReceiveWork() -> impl IntoView {
                                 {text}
                             </Text>
                         })}
+                        {new_name.map(|(name, bad)| view! {
+                            <TextField
+                                id="receive-work-name"
+                                label=Signal::derive(|| t(keys::exchange::receive::NEW_NAME, &[]))
+                                hint=Signal::derive(|| t(keys::open_door43::NAME_BAD, &[]))
+                                value=Signal::derive(move || name.clone())
+                                invalid=bad
+                                attrs=Attrs::from([("data-testid", "receive-work-name")])
+                                on_change=on_name
+                            />
+                        })}
+                        {added.map(|text| callout("receive-work-added", CalloutTone::Info, text))}
                         {working_line.map(|line| working("receive-work-working", line))}
                         {(!lines.is_empty()).then(|| view! {
                             <div data-testid="receive-work-received" style="display: flex; flex-direction: column; gap: 8px;">
@@ -304,9 +342,9 @@ pub fn ReceiveWork() -> impl IntoView {
         title: Some((move || move || t(keys::exchange::receive::TITLE, &[])).into()),
         subtitle: Some(
             (move || {
-                move || {
-                    let name = form.get().map(|f| f.project.name).unwrap_or_default();
-                    t(keys::exchange::receive::SUBTITLE, &[("name", &name)])
+                move || match form.get().and_then(|f| f.project.map(|p| p.name)) {
+                    Some(name) => t(keys::exchange::receive::SUBTITLE, &[("name", &name)]),
+                    None => t(keys::add_project::RECEIVE_DESC, &[]),
                 }
             })
             .into(),

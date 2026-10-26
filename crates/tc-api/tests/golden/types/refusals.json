@@ -1027,6 +1027,64 @@
     "wire": {
       "type": "exchange",
       "value": {
+        "type": "otherProject",
+        "value": {
+          "name": "Tito"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.otherProject",
+    "vars": {
+      "name": "Tito"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "notTranslationCore"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.notTranslationCore",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "nameExists"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.nameExists",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "partlyReceived",
+        "value": {
+          "reason": "disk full"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.partlyReceived",
+    "vars": {
+      "reason": "disk full"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
         "type": "notWritten",
         "value": {
           "reason": "the drive is full"

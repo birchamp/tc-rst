@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::door43::ProjectName;
 use crate::ids::{ProjectRef, RequestId, UploadId};
 use crate::shown::PersonLabel;
 
@@ -108,4 +109,18 @@ pub struct HandEdited {
 #[serde(rename_all = "camelCase")]
 pub enum HandEditOutcome {
     NotTakenIn,
+}
+
+/// `exchange/receiveNew` (job `ExchangeReceive`): a file for a project this computer does not
+/// have yet becomes the project `name`, built from the file's packs in a staging folder and
+/// placed whole or not at all (STORAGE §10.2; a new teammate on USB starts here). The name is
+/// checked against the projects on this computer first, without letter case, and a name in use
+/// is refused before anything is written. The job ends with `JobOutcome::Created`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReceiveNew {
+    pub request: RequestId,
+    pub file: ExchangeFile,
+    pub name: ProjectName,
 }

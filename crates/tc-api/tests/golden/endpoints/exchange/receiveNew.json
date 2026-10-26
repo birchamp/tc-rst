@@ -1,0 +1,26 @@
+{
+  "path": "exchange/receiveNew",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "18181818181818181818181818181818",
+    "file": {
+      "type": "path",
+      "value": "/media/stick/tit-2026-10-25-maria.zip"
+    },
+    "name": "tito_de_maria"
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

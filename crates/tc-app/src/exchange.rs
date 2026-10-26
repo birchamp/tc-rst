@@ -8,9 +8,11 @@ use std::path::PathBuf;
 use tc_api::ApiError;
 #[cfg(feature = "test-hooks")]
 use tc_api::exchange::ReceivedView;
-use tc_api::exchange::{Export, Identify, IdentifyView, Receive};
+use tc_api::exchange::{Export, Identify, IdentifyView, Receive, ReceiveNew};
 use tc_api::ids::JobId;
+use tc_api::ids::ProjectRef;
 use tc_api::jobs::{ExchangePhase, JobKind, Phase};
+use tc_api::refusal::{ExchangeRefusal, Refusal};
 
 use crate::app::App;
 use crate::dispatch::Handle;
@@ -74,6 +76,40 @@ impl Handle<Receive> for App {
                 app.inner
                     .exchange
                     .receive(app.clone(), req.project, req.file)
+                    .await
+            }))
+    }
+}
+
+impl Handle<ReceiveNew> for App {
+    /// "Receive work from a file" for a project this computer does not have yet: the name is
+    /// checked first, as Open from Door43 checks its own, then the job, one import at a time.
+    async fn handle(&self, req: ReceiveNew) -> Result<JobId, ApiError> {
+        if self.project_name_in_use(&req.name).await? {
+            return Err(ApiError::Refused(Refusal::Exchange(
+                ExchangeRefusal::NameExists,
+            )));
+        }
+        let pass = self.inner.flows.enter(FlowRequest::Import)?;
+        let spec = JobSpec::new(
+            JobKind::ExchangeReceive,
+            Phase::Exchange(ExchangePhase::Read),
+        )
+        .project(
+            ProjectRef::parse(req.name.as_str()).map_err(|_| ApiError::BadRequest {
+                field: "name".to_owned(),
+                reason: "not a folder name".to_owned(),
+            })?,
+        )
+        .pass(pass);
+        let app = self.clone();
+        Ok(self
+            .inner
+            .jobs
+            .start_typed::<ReceiveNew, _, _>(spec, move |_ctx| async move {
+                app.inner
+                    .exchange
+                    .receive_new(app.clone(), req.file, req.name)
                     .await
             }))
     }

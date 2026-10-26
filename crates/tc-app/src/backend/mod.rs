@@ -1106,6 +1106,20 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(CreateFailure::Unavailable)
     }
 
+    /// A project this computer lacks, built from an exchange file (STORAGE §10.2, E2 step 4b):
+    /// the file's entries into a staging folder, placed whole or not at all. Blocking. Only
+    /// the store on disk creates projects.
+    fn receive_new(
+        &self,
+        file: &std::path::Path,
+        name: &str,
+    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+        let _ = (file, name);
+        Err(tc_sync::exchange::ExchangeError::NotCommitted(
+            "this store cannot create projects".to_owned(),
+        ))
+    }
+
     /// The person said that the computer `folder`'s lock names is closed (STORAGE §5.0): the
     /// next open of `folder` takes the lock and opens writable, where it would otherwise open
     /// read-only with `OpenOnAnotherComputer`.
