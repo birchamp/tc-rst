@@ -28,17 +28,15 @@
 //! runtime hooks disabled, including the store's fsync before Ack. These local measurements
 //! are compared with the 25 ms budget; the Windows reference laptop requires its own run.
 
-// A benchmark stops at its first failure, with the reason: nothing to keep going for.
 #![allow(
     clippy::expect_used,
     clippy::unwrap_used,
     clippy::panic,
-    reason = "test code: a failed unwrap is a failed test"
+    reason = "a benchmark stops at its first failure, with the reason"
 )]
-// The direct runs time tc-store's own handle, minting as its bench does.
 #![allow(
     clippy::disallowed_methods,
-    reason = "a benchmark stops at its first failure, with the reason"
+    reason = "the direct runs time tc-store's own handle, minting as its bench does"
 )]
 
 use std::path::{Path, PathBuf};

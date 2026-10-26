@@ -22,7 +22,7 @@
     clippy::expect_used,
     clippy::unwrap_used,
     clippy::panic,
-    reason = "test code: a failed unwrap is a failed test"
+    reason = "a benchmark stops at its first failure, with the reason"
 )]
 #![allow(
     clippy::disallowed_methods,
