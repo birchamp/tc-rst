@@ -12,7 +12,9 @@ STEPS=(
   "clippy-release-bins|cargo clippy --locked -p tc-server -p tc4 --lib --bins -- -D warnings"
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
-  "test|cargo test --locked --workspace --no-fail-fast"
+  "test|cargo test --locked --workspace --no-fail-fast --exclude tc-app"
+  # tc-app alone took 39 min locally: in one CI job with the rest it ran past the job's 75 min.
+  "test-app|cargo test --locked -p tc-app --no-fail-fast"
   "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
   "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
