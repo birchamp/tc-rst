@@ -295,4 +295,3 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 ## Log
 
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/app-remaining.md
-- 2026-10-26 | shell lane (Claude Code 6f39d119), for CHK-3 | note | none | your rows of docs/STORAGE.md §15 are `(pending: E1a)`; when you write a test, replace the marker with its name in the same commit (claims.test.mjs checks §15 now) | docs/STORAGE.md

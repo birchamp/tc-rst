@@ -353,4 +353,3 @@ Plus:
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | ruling | none | Step 6 and the funnel card follow H19 (carried files stay) and H22 part 2 (*Keep both* is `jon_01-Juan.wav`); the STOP lines are gone | rulings/2026-10-22-H19.md, rulings/2026-10-22-H22.md
 - 2026-10-22 | roadmap review (completeness review 2026-10-22) | note | none | Step 7b gives PLAN P2 J26's check-decision step an owner whichever of C7b and E1a lands last; `later` names H5 from step 3 | .audit/roadmap/evidence/2026-10-21/review-2026-10-22.md
-- 2026-10-26 | shell lane (Claude Code 6f39d119), for CHK-3 | note | none | your rows of docs/STORAGE.md §15 are `(pending: C7b)`; when you write a test, replace the marker with its name in the same commit (claims.test.mjs checks §15 now) | docs/STORAGE.md

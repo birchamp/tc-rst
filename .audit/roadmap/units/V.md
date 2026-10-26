@@ -346,4 +346,3 @@ Plus the `format-older-reader` job, and the capsule tests on the Windows VM gate
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
-- 2026-10-26 | shell lane (Claude Code 6f39d119), for CHK-3 | note | none | your rows of docs/STORAGE.md §15 are `(pending: V)`; when you write a test, replace the marker with its name in the same commit (claims.test.mjs checks §15 now) | docs/STORAGE.md
