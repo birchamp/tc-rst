@@ -20,10 +20,15 @@ filter = 'binary_id(tc-api::roundtrip)'
 slow-timeout = { period = "60s", terminate-after = 15 }
 
 # tc-store's op-count tests build the Psalms corpus (and its 10x) in each test's process, where
-# libtest built it once per binary: 132 to 281 s each locally.
+# libtest built it once per binary: 132 to 281 s each locally. Four at once with the rest reached
+# 19.4 GB, past a CI runner's 16 GB, so two at a time.
 [[profile.default.overrides]]
 filter = 'binary_id(tc-store::store) & test(/^(opcount|groups|outside|checkpoint|commands)::/)'
+test-group = 'store-corpora'
 slow-timeout = { period = "60s", terminate-after = 10 }
+
+[test-groups]
+store-corpora = { max-threads = 2 }
 
 # A crash at every write of a scenario project: 277 s locally.
 [[profile.default.overrides]]
