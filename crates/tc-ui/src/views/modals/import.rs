@@ -25,7 +25,7 @@ pub fn Import() -> impl IntoView {
         return ().into_any();
     };
     let step = {
-        let im = s.im.clone();
+        let im = s.import_form();
         Memo::new(move |_| im.with(|im| im.as_ref().map_or(ImportStep::Kind, |im| im.step)))
     };
     let footer: ChildrenFn = {
@@ -56,7 +56,7 @@ pub fn Import() -> impl IntoView {
         })
     };
     let children: ChildrenFn = {
-        let (actions, im) = (actions.clone(), s.im.clone());
+        let (actions, im) = (actions.clone(), s.import_form());
         Arc::new(move || {
             let kinds = move |actions: &crate::app::web::Actions| {
                 ImportKind::ALL
@@ -77,7 +77,6 @@ pub fn Import() -> impl IntoView {
                     .collect_view()
             };
             let error = {
-                let im = im.clone();
                 move || {
                     im.with(|im| im.as_ref().and_then(|im: &ImportForm| im.error.clone())).map(|error| {
                         view! {

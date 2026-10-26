@@ -1,0 +1,33 @@
+{
+  "path": "export/preflight",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "subject": {
+      "type": "book",
+      "value": {
+        "book": "TIT"
+      }
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "conflicts": 4,
+      "verses": 3
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

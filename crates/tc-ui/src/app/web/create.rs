@@ -65,7 +65,7 @@ impl Actions {
     fn create_project(&self, kind: NewKind) {
         let pressed = self
             .s()
-            .np
+            .np_slot()
             .try_update(|np| {
                 let np = np.as_mut()?;
                 let versification = np.versification.clone();
@@ -79,7 +79,7 @@ impl Actions {
             None => return,
             Some(Err(problem)) => {
                 let error = words(&Refusal::Create(problem));
-                self.s().np.try_update(|np| {
+                self.s().np_slot().try_update(|np| {
                     if let Some(np) = np {
                         np.error = Some(error);
                     }
@@ -105,21 +105,23 @@ impl Actions {
             };
             match made {
                 Ok(created) => {
-                    let open = this.s().np.with_untracked(Option::is_some);
+                    let open = this.s().np_slot().with_untracked(|np| {
+                        np.as_ref().is_some_and(|np| np.awaits(kind, request))
+                    });
                     this.refresh_projects();
                     if open && kind == NewKind::Bible {
                         // "You'll add books next" (tC4): Add a book opens for the new project.
-                        let s = this.s();
-                        s.np.try_set(None);
-                        s.ab.try_set(Some(AddBookForm::of_new(created.project, name)));
-                        s.layers.dialog.try_set(Some(Dialog::AddBook));
+                        let form = AddBookForm::of_new(created.project, name);
+                        this.s().layers.dialog.try_set(Some(Dialog::AddBook(form)));
                     } else if open {
                         this.close_modal();
                     }
                 }
                 Err(error) => {
-                    this.s().np.try_update(|np| {
-                        let Some(np) = np else { return };
+                    this.s().np_slot().try_update(|np| {
+                        let Some(np) = np.as_mut().filter(|np| np.awaits(kind, request)) else {
+                            return;
+                        };
                         match said(error) {
                             Said::Answered(error) => np.answered(Some(error)),
                             Said::Lost(error) => np.lost(error),
@@ -169,7 +171,7 @@ impl Actions {
     pub fn add_books(&self) {
         let pressed = self
             .s()
-            .ab
+            .ab_slot()
             .try_update(|ab| {
                 let ab = ab.as_mut()?;
                 let project = ab.project.clone();
@@ -194,9 +196,13 @@ impl Actions {
                 project: project.clone(),
                 books,
             };
+            let mine = |ab: &AddBookForm| ab.project == project;
             match this.runtime().api().call(&asked).await {
                 Ok(added) => {
-                    let open = this.s().ab.with_untracked(Option::is_some);
+                    let open = this
+                        .s()
+                        .ab_slot()
+                        .with_untracked(|ab| ab.as_ref().is_some_and(mine));
                     this.refresh_projects();
                     if open {
                         this.close_modal();
@@ -205,9 +211,13 @@ impl Actions {
                         }
                     }
                 }
-                Err(error) => this.patch_ab(|ab| match said(error) {
-                    Said::Answered(error) => ab.added(&[], Some(error)),
-                    Said::Lost(error) => ab.lost(error),
+                Err(error) => this.patch_ab(|ab| {
+                    if mine(ab) {
+                        match said(error) {
+                            Said::Answered(error) => ab.added(&[], Some(error)),
+                            Said::Lost(error) => ab.lost(error),
+                        }
+                    }
                 }),
             }
         });
@@ -221,7 +231,7 @@ impl Actions {
             let name = file.name();
             let added = self
                 .s()
-                .ab
+                .ab_slot()
                 .try_update(|ab| ab.as_mut().map(|ab| ab.add_file(name.clone())))
                 .flatten();
             let Some(id) = added else { return };
@@ -268,7 +278,7 @@ impl Actions {
     pub fn add_usfm_books(&self) {
         let pressed = self
             .s()
-            .ab
+            .ab_slot()
             .try_update(|ab| {
                 let ab = ab.as_mut()?;
                 let project = ab.project.clone();
@@ -283,9 +293,10 @@ impl Actions {
         spawn_local(async move {
             let asked = AddUsfmBooks {
                 request,
-                project,
+                project: project.clone(),
                 files,
             };
+            let mine = |ab: &AddBookForm| ab.project == project;
             match this.runtime().api().call(&asked).await {
                 Ok(done) => {
                     this.refresh_projects();
@@ -308,17 +319,28 @@ impl Actions {
                             }
                         }
                     }
-                    let open = this.s().ab.with_untracked(Option::is_some);
+                    let open = this
+                        .s()
+                        .ab_slot()
+                        .with_untracked(|ab| ab.as_ref().is_some_and(mine));
                     if open && problems.is_empty() {
                         this.close_modal();
                     } else {
                         let error = (!problems.is_empty()).then(|| problems.join(" "));
-                        this.patch_ab(|ab| ab.added(&added, error));
+                        this.patch_ab(|ab| {
+                            if mine(ab) {
+                                ab.added(&added, error);
+                            }
+                        });
                     }
                 }
-                Err(error) => this.patch_ab(|ab| match said(error) {
-                    Said::Answered(error) => ab.added(&[], Some(error)),
-                    Said::Lost(error) => ab.lost(error),
+                Err(error) => this.patch_ab(|ab| {
+                    if mine(ab) {
+                        match said(error) {
+                            Said::Answered(error) => ab.added(&[], Some(error)),
+                            Said::Lost(error) => ab.lost(error),
+                        }
+                    }
                 }),
             }
         });
@@ -331,7 +353,7 @@ impl Actions {
     pub fn save_settings(&self) {
         let pressed = self
             .s()
-            .st
+            .st_slot()
             .try_update(|st| st.as_mut()?.press_save(js::random_request_id))
             .flatten();
         let Some(save) = pressed else { return };
@@ -344,14 +366,14 @@ impl Actions {
                     // Another project's dialog opened meanwhile stays (tC4 #641).
                     let same = this
                         .s()
-                        .st
+                        .st_slot()
                         .with_untracked(|st| st.as_ref().is_some_and(|st| st.project == project));
                     if same {
                         this.close_modal();
                     }
                 }
                 Err(error) => {
-                    this.s().st.try_update(|st| {
+                    this.s().st_slot().try_update(|st| {
                         let Some(st) = st else { return };
                         match said(error) {
                             Said::Answered(error) => st.answered(&project, Some(error)),

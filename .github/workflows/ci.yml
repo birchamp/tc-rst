@@ -83,8 +83,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # The old single job took 26 min; the test binaries sum to about 15 min locally.
-    timeout-minutes: 75
+    # Until CHK-7c runs the scale tests at 2, the 10x corpora outrun 75 minutes on a hosted runner.
+    timeout-minutes: 150
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
     if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
@@ -97,6 +97,22 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step test
       - run: scripts/gates.sh --step ignored
+
+  test-app:
+    runs-on: ubuntu-latest
+    # tc-app's tests, on their own runner: with the rest they ran past 75 min (batch 7).
+    timeout-minutes: 150
+    # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
+    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+      # The runner image leaves too little disk for this workspace ("No space left on device",
+      # runs 39305042134 and 39317068070); these three trees are not needed here.
+      - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+      # With no name, rustup installs the toolchain rust-toolchain.toml names: the one pin.
+      - run: rustup toolchain install && rustc --version
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/gates.sh --step test-app
 
   # The Windows tests, nightly or on request, until CHK-5 makes them a push gate.
   nightly-windows:

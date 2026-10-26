@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use serde_json::Value;
+use tc_api::model::print::{ChapterOpening, ObsLayout, PageSetup, Pictures, VerseNumbers};
 use tc_export::Direction;
 use tc_export::book::{BookChapter, BookVerse};
-use tc_export::page::{ChapterOpening, ObsLayout, PageSetup, Pictures, VerseNumbers};
 use tc_helps::obs::{ObsFrame, ObsImage, ObsStory};
 
 pub fn repo_path(rel: &str) -> PathBuf {

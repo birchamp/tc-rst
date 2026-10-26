@@ -62,13 +62,12 @@ fn new_project(kind: NewKind) -> AnyView {
         return ().into_any();
     };
     let bible = kind == NewKind::Bible;
-    let np = s.np.clone();
+    let np = s.new_project_form();
     let read = move |get: fn(&NewProjectForm) -> String| {
-        let np = np.clone();
         Signal::derive(move || np.with(|np| np.as_ref().map(get).unwrap_or_default()))
     };
     let busy = {
-        let np = s.np.clone();
+        let np = s.new_project_form();
         Signal::derive(move || np.with(|np| np.as_ref().is_some_and(|np| np.busy)))
     };
     let footer: ChildrenFn = {
@@ -90,12 +89,12 @@ fn new_project(kind: NewKind) -> AnyView {
         })
     };
     let children: ChildrenFn = {
-        let (actions, np) = (actions.clone(), s.np.clone());
+        let (actions, np) = (actions.clone(), s.new_project_form());
         let name = read(|np| np.name.clone());
         let code = read(|np| np.code.clone());
         let font = read(|np| np.font.clone());
         Arc::new(move || {
-            let (actions, np) = (actions.clone(), np.clone());
+            let (actions, np) = (actions.clone(), np);
             let id = |part: &str| format!("{}-{part}", if bible { "nb" } else { "no" });
             let on_name = {
                 let actions = actions.clone();
@@ -116,7 +115,6 @@ fn new_project(kind: NewKind) -> AnyView {
                 Callback::new(move |value: String| actions.patch_np(|np| np.font = value))
             };
             let offer = {
-                let np = np.clone();
                 move || {
                     np.with(|np| {
                         let np = np.as_ref()?;
@@ -144,7 +142,6 @@ fn new_project(kind: NewKind) -> AnyView {
                 .collect();
             let versification = bible.then(|| versification(&actions, &np));
             let error = {
-                let np = np.clone();
                 move || {
                     np.with(|np| np.as_ref().and_then(|np| np.error.clone())).map(|error| {
                         view! { <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert")])>{error}</Callout> }
@@ -210,9 +207,9 @@ fn new_project(kind: NewKind) -> AnyView {
 }
 
 /// The direction chips.
-fn direction(actions: &Actions, np: &ArcRwSignal<Option<NewProjectForm>>) -> impl IntoView + use<> {
+fn direction(actions: &Actions, np: &Signal<Option<NewProjectForm>>) -> impl IntoView + use<> {
     let chip = |dir: Direction, label: crate::i18n::Key| {
-        let (actions, np) = (actions.clone(), np.clone());
+        let (actions, np) = (actions.clone(), *np);
         let selected =
             Signal::derive(move || np.with(|np| np.as_ref().is_some_and(|np| np.dir == dir)));
         view! {
@@ -239,12 +236,9 @@ fn direction(actions: &Actions, np: &ArcRwSignal<Option<NewProjectForm>>) -> imp
 }
 
 /// The versification disclosure: available but out of the way (tC4 D25).
-fn versification(
-    actions: &Actions,
-    np: &ArcRwSignal<Option<NewProjectForm>>,
-) -> impl IntoView + use<> {
+fn versification(actions: &Actions, np: &Signal<Option<NewProjectForm>>) -> impl IntoView + use<> {
     let open = {
-        let np = np.clone();
+        let np = *np;
         Memo::new(move |_| np.with(|np| np.as_ref().is_some_and(|np| np.show_advanced)))
     };
     let toggle = {
@@ -252,7 +246,7 @@ fn versification(
         Callback::new(move |_| actions.patch_np(|np| np.show_advanced = !np.show_advanced))
     };
     let body = {
-        let (actions, np) = (actions.clone(), np.clone());
+        let (actions, np) = (actions.clone(), *np);
         move || {
             open.get().then(|| {
                 let names = np.with_untracked(|np| np.as_ref().map(|np| np.versifications.clone()).unwrap_or_default());
@@ -269,7 +263,6 @@ fn versification(
                     })
                     .collect();
                 let value = {
-                    let np = np.clone();
                     Signal::derive(move || np.with(|np| np.as_ref().map(|np| np.versification.clone())))
                 };
                 let failed = np.with_untracked(|np| np.as_ref().is_some_and(|np| np.versifications_error.is_some()));

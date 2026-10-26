@@ -90,6 +90,7 @@ macro_rules! endpoint_table {
             command "prefs/setLocale": $crate::prefs::SetLocale => ();
             command "prefs/setDraftUnit": $crate::prefs::SetDraftUnit => ();
             command "prefs/setAlignSuggestions": $crate::prefs::SetAlignSuggestions => ();
+            command "prefs/setRailFolded": $crate::prefs::SetRailFolded => ();
             command "prefs/recordPlace": $crate::prefs::RecordPlace => ();
 
             command "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;
@@ -207,6 +208,9 @@ macro_rules! endpoint_table {
 
             query "export/book": $crate::export::Book => $crate::export::BookPrint;
             query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
+            query "export/preflight": $crate::export::Preflight
+                => $crate::export::PreflightView;
+            job "export/run": $crate::export::RunExport => $crate::ids::JobId;
         }
     };
 }

@@ -1,0 +1,58 @@
+{
+  "path": "export/run",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "29292929292929292929292929292929",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "producer": "printHtml",
+    "subject": {
+      "type": "book",
+      "value": {
+        "book": "TIT"
+      }
+    },
+    "print": {
+      "setup": {
+        "columns": "two",
+        "chapterOpening": "heading",
+        "verseNumbers": "shown",
+        "spacing": "single",
+        "paper": "a4",
+        "pictures": "shown",
+        "obsLayout": "above"
+      },
+      "title": "Tito",
+      "words": {
+        "chapterHeading": "Capítulo {n}",
+        "chapterNotDrafted": "[ capítulo {n} sin borrador ]",
+        "chaptersNotDrafted": "[ capítulos {from}–{to} sin borrador ]",
+        "notYetDrafted": "[ versículo sin borrador ]",
+        "frameNotDrafted": "[ cuadro {n} sin borrador ]",
+        "framesNotDrafted": "[ cuadros {from}–{to} sin borrador ]",
+        "storyNotDrafted": "[ historia {n} sin borrador ]",
+        "storiesNotDrafted": "[ historias {from}–{to} sin borrador ]",
+        "storyNumber": "Historia {n}",
+        "imageAlt": "Cuadro de la historia {n}",
+        "nothingDraftedObs": "Nada tiene borrador en este proyecto."
+      }
+    },
+    "utcOffset": 180
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
