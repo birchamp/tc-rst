@@ -21,7 +21,7 @@ use tc_app::{App, AppDeps};
 use tc_server::{AppLock, AppLockError, Server, ServerConfig, Stdio};
 
 use args::{Args, USAGE};
-use join::{AppBackend, ServerUploads};
+use join::{AppBackend, ServerDownloads, ServerUploads};
 
 /// How long a new `tc4` waits for an old one that is still closing (AD39).
 const LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -229,8 +229,13 @@ fn serve(args: &Args) -> ExitCode {
         AppDeps {
             keychain: keychain.clone(),
             test_keychain: Some(keychain),
-            // The journeys script how a sync or an open from Door43 ends (UI-2).
-            sync: Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default()),
+            // The journeys script how a sync or an open from Door43 ends (UI-2), or, with
+            // `--real-sync`, sync with the fake Door43 for real (E1a).
+            sync: if args.real_sync {
+                Arc::new(tc_app::ports::door43::Door43Sync)
+            } else {
+                Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default())
+            },
             ..deps
         }
     } else {
@@ -246,6 +251,10 @@ fn serve(args: &Args) -> ExitCode {
     // The guided fix installs a file the person chose, which the server stored.
     app.provide_uploads(Arc::new(ServerUploads(Arc::clone(
         server.handle().uploads(),
+    ))));
+    // An export registers its file with the server's downloads (D2).
+    app.provide_downloads(Arc::new(ServerDownloads(Arc::clone(
+        server.handle().downloads(),
     ))));
     // Nothing else may be on stdout before this line, and the token is in no other place.
     if say(&serde_json::json!({"url": server.address().url, "token": server.address().token}))

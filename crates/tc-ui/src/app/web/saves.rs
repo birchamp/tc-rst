@@ -111,10 +111,19 @@ pub(super) struct RuntimeHooks {
     pub read_sessions: Box<dyn Fn()>,
 }
 
-/// Proof that the open is writable (6.4): editors take `Option<WriteCap>`, and their edit
-/// controls are off without one.
+/// Proof that the open was writable when the person acted (6.4). `Actions::align_edit`,
+/// `keep_align_reflow` and `mark` take one; views get `Option<WriteCap>` from
+/// `Actions::write_cap` and draw their edit controls off without one. It gates the click, not
+/// the send: an edit queued before the switch still goes, and the server refuses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteCap(());
+
+fn writable(sessions: &[OpenSession], at: &Scope) -> Option<WriteCap> {
+    sessions
+        .iter()
+        .any(|s| s.at == *at && s.mode == SessionMode::Writable)
+        .then_some(WriteCap(()))
+}
 
 #[derive(Default)]
 struct DraftLane {
@@ -447,12 +456,31 @@ impl Saves {
 
     /// `Some` only while the open `at` is writable (6.4).
     pub fn write_cap(&self, at: &Scope) -> Option<WriteCap> {
-        self.0.state.sessions.with_untracked(|sessions| {
+        self.0
+            .state
+            .sessions
+            .with_untracked(|sessions| writable(sessions, at))
+    }
+
+    /// Why the open `at` is read-only, tracked; `None` while it is writable or not open.
+    pub fn watch_read_only(&self, at: &Scope) -> Option<tc_api::write::ReadOnlyReason> {
+        self.0.state.sessions.with(|sessions| {
             sessions
                 .iter()
-                .any(|s| s.at == *at && s.mode == SessionMode::Writable)
-                .then_some(WriteCap(()))
+                .find(|s| s.at == *at)
+                .and_then(|s| match s.mode {
+                    SessionMode::ReadOnly(reason) => Some(reason),
+                    SessionMode::Writable => None,
+                })
         })
+    }
+
+    /// `write_cap`, tracked: a view that reads it redraws when the open turns read-only.
+    pub fn watch_write_cap(&self, at: &Scope) -> Option<WriteCap> {
+        self.0
+            .state
+            .sessions
+            .with(|sessions| writable(sessions, at))
     }
 
     pub fn add_gate_hook(&self, hook: GateHook) -> GateHookId {

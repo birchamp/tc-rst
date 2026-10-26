@@ -116,14 +116,21 @@ impl SyncToast {
         Some(t(keys::sync_result::FROM, &[("names", &names.join(" · "))]))
     }
 
-    /// The sentences under the line, each only when its count is not 0: changes sent again,
-    /// verses with two alignments (#791), and resource versions this computer lacks.
+    /// The sentences under the line, each only when its count is not 0: the project put back
+    /// on Door43, changes sent again, verses with two alignments (#791), and resource versions
+    /// this computer lacks.
     pub fn notes(&self) -> Vec<Counted> {
         let Some(view) = self.synced() else {
             return Vec::new();
         };
         use keys::sync_result as k;
         [
+            counted(
+                "sync-recreated",
+                u32::from(view.recreated),
+                k::RECREATED,
+                k::RECREATED,
+            ),
             counted(
                 "sync-restored",
                 view.restored,
@@ -172,7 +179,7 @@ impl SyncToast {
     pub fn dot(&self) -> Dot {
         match self.synced() {
             None => Dot::Invalid,
-            Some(_) if self.review() || self.download() => Dot::Kindle,
+            Some(v) if self.review() || self.download() || v.recreated => Dot::Kindle,
             Some(_) => Dot::Valid,
         }
     }

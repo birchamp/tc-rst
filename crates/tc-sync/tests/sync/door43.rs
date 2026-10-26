@@ -1982,3 +1982,54 @@ async fn a_large_push_that_keeps_breaking_offers_the_exchange_file() {
     assert_eq!(file.chain_failures, None);
     a.close().unwrap();
 }
+
+/// §9.7 `restored`: Door43's branch moved back behind a teammate's push (tC4's
+/// sync-ok-restored), so the next sync sends the teammate's change again and says so; a
+/// device's profile record is bookkeeping and never counts as received work (Q7).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sync_sends_again_what_door43_lost_and_never_counts_a_profile() {
+    let door43 = door43("titus-restored").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-restored");
+    synced(&sync(&a, &door43).await);
+    tc_sync::record_username(&a, &door43.session).await.unwrap();
+    synced(&sync(&a, &door43).await);
+    let before_juan = on_door43_tip(&door43, "titus-restored");
+    a.close().unwrap();
+
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    save(&b, 1, 2, "in hope, as Juan has it");
+    let report = sync(&b, &door43).await;
+    synced(&report);
+    assert_eq!(
+        report.received_by.values().sum::<u32>(),
+        0,
+        "Ana's profile record is not received work: {report:?}"
+    );
+    let a = open(&ana, &folder_a);
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.received_by.values().sum::<u32>(), 1, "{report:?}");
+    assert_eq!(report.restored, 0, "{report:?}");
+    // Door43 loses Juan's push.
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-restored")).unwrap();
+    bare.reference("refs/heads/main", before_juan, true, "moved back")
+        .unwrap();
+    save(&a, 1, 3, "in his time, as Ana has it");
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(
+        report.restored, 1,
+        "Juan's change was sent again: {report:?}"
+    );
+    assert_eq!(report.received_by.values().sum::<u32>(), 0, "{report:?}");
+    let again = sync(&a, &door43).await;
+    assert_eq!(again.restored, 0, "{again:?}");
+    a.close().unwrap();
+    b.close().unwrap();
+}

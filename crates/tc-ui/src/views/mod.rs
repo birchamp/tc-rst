@@ -34,6 +34,12 @@ pub mod understand;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+/// The look of an edit control a read-only open turns off (tC4 `Check.jsx`'s disabled button):
+/// its colours stay, faded, and it no longer reads as clickable.
+pub(crate) fn off_look() -> crate::css::Css {
+    crate::css! { "cursor": "default", "opacity": 0.55 }
+}
+
 use leptos::prelude::{
     AnimationFrameRequestHandle, on_cleanup, request_animation_frame_with_handle,
 };

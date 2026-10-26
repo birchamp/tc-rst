@@ -8,7 +8,7 @@ use tc_api::app::{AppPrefsView, ClientError, Hello, HelloView, Quit};
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::jobs::{Cancel, Get, JobView};
 use tc_api::net::{NetView, Set};
-use tc_api::prefs::{RecordPlace, SetAlignSuggestions, SetDraftUnit, SetLocale};
+use tc_api::prefs::{RecordPlace, SetAlignSuggestions, SetDraftUnit, SetLocale, SetRailFolded};
 use tc_api::refusal::PrefsRefusal;
 use tc_api::{API_VERSION, ApiError, NotSaved, Refusal};
 
@@ -130,6 +130,17 @@ impl Handle<SetAlignSuggestions> for App {
             .prefs
             .set_align_suggestions(session.project, req.on);
         self.suggestions_switched(&req.at, req.on).await?;
+        Ok(())
+    }
+}
+
+impl Handle<SetRailFolded> for App {
+    async fn handle(&self, req: SetRailFolded) -> Result<(), ApiError> {
+        // A scope that names no open session is refused; the setting is the computer's.
+        self.session_of(&req.at)?;
+        self.inner
+            .prefs
+            .set_rail_folded(req.tool, &req.groups, req.folded);
         Ok(())
     }
 }

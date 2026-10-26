@@ -12,8 +12,7 @@ use std::path::Path;
 
 use tc_app::bundle::BundleManifest;
 use tc_resources::{
-    FetchedLock, LexiconInstall, ResourcePin, ResourceStore, Sha256, install_dcs_zip,
-    install_lexicon_zip, suite,
+    FetchedLock, ResourcePin, ResourceStore, Sha256, install_archive_zip, install_dcs_zip, suite,
 };
 
 /// What a build of the bundled store did.
@@ -29,9 +28,10 @@ pub struct Built {
 
 /// Builds the bundled store in `out` from the archives in `from` (`bundle/en`), for each
 /// bundled pin that `wanted` keeps. A pin whose file is not in `from` (the OBS pictures,
-/// fetched when the app is packaged) is skipped and named. Installing is idempotent: an
-/// install already in `out` is kept. The build ends by writing `BUNDLE-MANIFEST.json`, naming
-/// the installs this run made or kept: the list a start compares the folders with.
+/// until `scripts/release/fetch-pinned.mjs` adds them) is skipped and named. Installing is
+/// idempotent: an install already in `out` is kept. The build ends by writing
+/// `BUNDLE-MANIFEST.json`, naming the installs this run made or kept: the list a start
+/// compares the folders with.
 pub fn build_bundle(
     from: &Path,
     out: &Path,
@@ -68,27 +68,28 @@ pub fn build_bundle(
             }
             install_dcs_zip(&store, pin, &zip, max_unpacked).map_err(|e| format!("{name}: {e}"))?
         } else {
-            // A commit-only pin: the lexicons ship as the archive `fetched.lock` names, the
-            // picture pack is downloaded when the app is packaged.
-            let file = lock
-                .entry(pin.repo.repo(), &pin.sha)
-                .and_then(|entry| entry.file.clone());
-            let Some(file) = file else {
-                built.skipped.push((
-                    name,
-                    "fetched.lock names no file: it is downloaded when the app is packaged"
-                        .to_owned(),
-                ));
+            // A commit-only pin. The lexicons ship in `from` under the name `fetched.lock`
+            // gives; an archive the lock names no file for (the OBS pictures) is downloaded
+            // into `from` when the app is packaged (`scripts/release/fetch-pinned.mjs`), under
+            // the same `<repository>-<commit>.zip`.
+            let Some(entry) = lock.entry(pin.repo.repo(), &pin.sha) else {
+                built
+                    .skipped
+                    .push((name, "fetched.lock holds no entry for it".to_owned()));
                 continue;
             };
+            let file = entry
+                .file
+                .clone()
+                .unwrap_or_else(|| format!("{}-{}.zip", pin.repo.name().as_str(), pin.sha));
             let Some(zip) = read_archive(from, &file, &mut built, &name)? else {
                 continue;
             };
-            match install_lexicon_zip(&store, pin, &lock, &zip, max_unpacked)
+            match install_archive_zip(&store, pin, &lock, &zip, max_unpacked)
                 .map_err(|e| format!("{name}: {e}"))?
             {
-                LexiconInstall::Installed(installed) => installed,
-                LexiconInstall::Unconfirmed => {
+                Some(installed) => installed,
+                None => {
                     built.skipped.push((
                         name,
                         "fetched.lock holds no entry that confirms the archive".to_owned(),

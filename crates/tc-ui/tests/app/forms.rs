@@ -8,8 +8,8 @@ use tc_api::refusal::CreateRefusal;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 use tc_ui::app::forms::{
-    AddBookForm, AddBookStep, CodeOffer, NewProjectForm, RowState, UsfmState, book_info_key,
-    chapters, code_offer,
+    AddBookForm, AddBookStep, CodeOffer, NewKind, NewProjectForm, RowState, UsfmState,
+    book_info_key, chapters, code_offer,
 };
 
 fn suggestion(
@@ -397,4 +397,30 @@ fn removing_rows_from_25_aligned_books_removes_the_intended_rows() {
             .all(|row| matches!(row.state, RowState::Adds(_)))
     );
     assert_eq!(form.addable(), 21);
+}
+
+/// A Create's late answer belongs only to the form that sent it: not to a form of the other kind
+/// or one opened after a Cancel, and still to its own form after an edit while it waits.
+#[test]
+fn a_late_create_answer_belongs_only_to_the_form_that_sent_it() {
+    let mut form = filled();
+    let (sent, _) = form.press(|| rid(1)).unwrap().unwrap();
+    assert!(form.awaits(NewKind::Bible, sent));
+    assert!(!form.awaits(NewKind::Stories, sent));
+    form.edited();
+    assert!(
+        form.awaits(NewKind::Bible, sent),
+        "an edit while it waits keeps the answer its own"
+    );
+
+    let mut reopened = filled();
+    assert!(
+        !reopened.awaits(NewKind::Bible, sent),
+        "a form opened after Cancel waits for nothing"
+    );
+    reopened.press(|| rid(2)).unwrap().unwrap();
+    assert!(
+        !reopened.awaits(NewKind::Bible, sent),
+        "its own press is another attempt"
+    );
 }

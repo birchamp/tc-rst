@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { REPO, newRequestId, startDoor43Fake, startRustEnv } from '../env-rust.mjs';
+import { REPO, newRequestId, startDoor43Fake, startRustEnv, startTeammate } from '../env-rust.mjs';
 import { CHROMIUM_ARGS, domSnapshot } from '../observe.mjs';
 
 function browserSetup() {
@@ -92,18 +92,20 @@ export const LABEL = Object.fromEntries(LOCALES.map((l) => [l.id, l.label]));
  * `body({ env, page, context, errors, allow })`; `scenario` names another parity scenario
  * (`en-pins` for B3, `shared` for B10). `init(context, env)` runs before the page
  * exists (routes, init scripts). `allow(re)` lets a console error matching `re` pass. With
- * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`). With `hooks`, the page is the
+ * `door43`, tc4 signs in to a fake Door43 of its own (`env.door43`); with `realSync` too, sync
+ * and open from Door43 go to it for real (E1a). With `hooks`, the page is the
  * test build's (`TC4_UI_HOOKS`), which also includes the no-loss probe. Translate saves use production endpoints in either build.
  * After `body`, every project folder must be a valid Scripture Burrito (P5);
  * `invalidOnPurpose: { folder, why }` excuses the one folder a journey leaves invalid on purpose.
  */
-export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, scenario: named = 'sample', invalidOnPurpose } = {}) {
+export async function withApp(body, { locale = 'en', probe = false, hooks = false, init, seed, door43: fake = false, realSync = false, scenario: named = 'sample', invalidOnPurpose } = {}) {
   const browser = await setup.chromium.launch({ args: CHROMIUM_ARGS });
   const door43 = fake ? await startDoor43Fake(setup.door43) : undefined;
   const scenario = seed ? 'store' : named;
+  const teammates = [];
   let env;
   try {
-    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe || hooks ? setup.hooks : setup.ui, door43 });
+    env = await startRustEnv({ scenario, seed, tc4: setup.tc4, ui: probe || hooks ? setup.hooks : setup.ui, door43, realSync });
   } catch (error) {
     await door43?.close();
     await browser.close();
@@ -120,7 +122,14 @@ export async function withApp(body, { locale = 'en', probe = false, hooks = fals
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
     if (probe) await loadProbe(page, env);
     else await loadHome(page, env, locale);
-    const result = await body({ env, page, context, errors, allow: (re) => allowed.push(re) });
+    // E1a: another computer on the same fake Door43, driven through its API (`startTeammate`).
+    const teammate = async (name) => {
+      if (!door43) throw new Error('a teammate needs the fake Door43 (door43: true)');
+      const t = await startTeammate({ tc4: setup.tc4, ui: setup.ui, door43, name });
+      teammates.push(t);
+      return t;
+    };
+    const result = await body({ env, page, context, errors, allow: (re) => allowed.push(re), teammate });
     const unexpected = errors.filter((e) => !allowed.some((re) => re.test(e)));
     assert.deepEqual(unexpected, [], 'no page error and no console error');
     const failures = await page.locator('[data-testid="view-error"], [data-testid="boot-error"]').count();
@@ -128,6 +137,7 @@ export async function withApp(body, { locale = 'en', probe = false, hooks = fals
     await assertValidProjects(env, { seeded: Boolean(seed), excused: invalidOnPurpose });
     return result;
   } finally {
+    for (const t of teammates) await t.close();
     await env.close();
     await door43?.close();
     await browser.close();

@@ -43,13 +43,18 @@ pub(super) struct World {
     pub(super) t: TestApp,
     /// The store under the app, for teammates' changes a scripted sync has no words for.
     pub(super) store: Arc<ScenarioStore>,
-    _fake: FakeDoor43,
+    pub(super) fake: FakeDoor43,
     _dir: tempfile::TempDir,
 }
 
 /// The `shared` scenario on the store, its sideloaded resources installed as `tc4 serve
 /// --scenario` installs them, and the app's Door43 the fake.
 pub(super) async fn shared() -> World {
+    shared_with(None).await
+}
+
+/// [`shared`] on another sync port than the tests' scripted one.
+pub(super) async fn shared_with(port: Option<Arc<dyn tc_app::ports::SyncPort>>) -> World {
     let fake = FakeDoor43::start().await.unwrap();
     tc_door43_fake::seeded::parity_account(&fake).await.unwrap();
     let fs = FaultFs::new();
@@ -59,17 +64,22 @@ pub(super) async fn shared() -> World {
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
     let store = Arc::new(store);
-    let mut t = app_over(dir.path(), store.clone(), fake.url()).await;
+    let mut t = app_over(dir.path(), store.clone(), fake.url(), port).await;
     t.watch = Some(watch);
     World {
         t,
         store,
-        _fake: fake,
+        fake,
         _dir: dir,
     }
 }
 
-async fn app_over(dir: &Path, store: Arc<ScenarioStore>, door43: &str) -> TestApp {
+async fn app_over(
+    dir: &Path,
+    store: Arc<ScenarioStore>,
+    door43: &str,
+    port: Option<Arc<dyn tc_app::ports::SyncPort>>,
+) -> TestApp {
     let projects = dir.join("projects");
     std::fs::create_dir_all(&projects).unwrap();
     let url = door43.to_owned();
@@ -77,6 +87,9 @@ async fn app_over(dir: &Path, store: Arc<ScenarioStore>, door43: &str) -> TestAp
         config.projects = ProjectsFolder::Given(projects.clone());
         config.door43 = url.parse().unwrap();
         deps.store = StoreChoice::Given(store);
+        if let Some(port) = port {
+            deps.sync = port;
+        }
     })
     .await
 }
@@ -262,6 +275,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
             alignments: 0,
             restored: 0,
             missing_pins: 5,
+            recreated: false,
         }
     );
 
@@ -277,6 +291,7 @@ async fn teammates_a_sync_receives_stand_as_one_verse_conflict_on_the_toast_the_
             alignments: 0,
             restored: 0,
             missing_pins: 5,
+            recreated: false,
         }
     );
     let card = card_with_counts(app).await;

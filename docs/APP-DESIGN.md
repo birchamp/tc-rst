@@ -625,7 +625,7 @@ pub enum Phase {
 ```
 
 `JobOutcome` is typed per kind: `Opened(OpenedSession)`, `Synced(SyncResultView)`,
-`ExportReady { download, file_name }`, `PlanReady { plan, consequences }`, `Created { project }`.
+`ExportReady(Exported { file: ExportedFile::{Download { download, file_name } | Print { file_name }}, facts })`, `PlanReady { plan, consequences }`, `Created { project }`.
 A final outcome stays readable through `jobs/get` for 10 minutes.
 
 *(B1b: `tc_app::wire::scope::change_scope` builds `ChangeParts` from a fold `Delta`. tc-journal
@@ -721,6 +721,8 @@ pub struct CheckSessionView { pub session: CheckSessionId, pub tool: Tool, pub u
                               pub view: ViewSeq,                 // `check/rows { since: view }` patches from here *(A-12)*
                               pub rows: RailRows,                // Full(Vec<RailRow>) | Since(Vec<RailRowPatch>) *(A-12)*
                               pub terms: Vec<String>,            // tW terms in locale order (ByWord)
+                              pub group_titles: Vec<String>,      // a By figure heading's tA title *(REF1c)*
+                              pub folded: Vec<String>,            // this computer's folded groups *(REF1c)*
                               pub progress: RailProgress, pub citation: Option<ResourceCitation>,  // *(B5a D5)*
                               pub dropped: u32, pub empty: Option<CheckEmpty>, pub start: u32 }
 pub struct RailRow { pub index: u32, pub check_id: String, pub place: CheckPlace, pub title: String,   // *(A1, B5a D5)*
@@ -803,7 +805,8 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `SectionBuffer`: parse, serialize, can drop, drop pin | `tC4:src/views/sectionDraft.js:147,244,263,282` | `tc-app` turns the buffer into `SectionValue`s with the same code; proptest `parse(serialize(b)) == b` |
 | `drag_range(base, from, to)` | `tC4:src/views/Check.jsx:567-666` (#737) | `tc_check::selection::from_indices` on the saved indices |
 | `ArticleBlock::take_spans` | `tC4:src/data/articles.ts:127-136` | tc-helps' block renderer |
-| `rail::mask` and `rail::groups` | `tC4:src/views/checkFilters.js:15-28`, `Check.jsx:889-905`, with the same output but not the same algorithm: rows go into buckets by `term` index (or category) in one pass over the masked rows, which already arrive in verse order *(A-13)* | `tc_check::rail::groups` for every filter and mode on Titus and Psalms tN and tW; `rail_groups_visit_each_row_once` counts rows visited on Psalms TWL (7,683 rows, 485 terms) |
+| `rail::mask` and `rail::groups` | `tC4:src/views/checkFilters.js:15-28`, `Check.jsx:889-905`, with the same output but not the same algorithm: rows go into buckets by `term` index (By word), or by figure, the term of a tN row, in order of first appearance (By figure, tC4 #769), in one pass over the masked rows, which already arrive in verse order *(A-13)* | `tc_check::rail::groups` for every filter and mode on Titus and Psalms tN and tW; `rail_groups_visit_each_row_once` counts rows visited on Psalms TWL (7,683 rows, 485 terms) |
+| `rail::folds`, `rail::open_groups`, `rail::fold_all`, `rail::term_progress` | `tC4:src/views/Check.jsx` `FOLDING_SORTS`, `isOpen`, `foldAll`, `groupStatsOf` (#769): By word and By figure groups fold, the active check's group stays open, Fold all leaves it open, a heading counts every check of its group | `the_active_group_is_open_whatever_was_folded`, `fold_all_keeps_the_active_group_open`, `term_counts_cover_every_row_whatever_the_filter`; journeys `tn_by_figure_headings_fold_and_count`, `j22_a_storys_notes_by_figure_head_other_notes_and_fold` |
 | `rail::patch` | — | applying `RailRowPatch`es equals a fresh rail, as a proptest over random decisions *(A-12)* |
 | `print_parts`: a page's print parts under the page setup (drop cap or heading, verse numbers, a verse split by a page break) | `tC4:src/views/print/PrintBook.jsx:44-58`; the preview splits the pages in the UI (`PrintPages.jsx`) | `tc_export::book::print_parts` on every preview page of `fixtures/export/print-vectors.json` (B8) |
 | `QueryKey::depends_on` | — | the server's own invalidation tests |
@@ -1557,7 +1560,7 @@ The shell's `drafts-buffer.log` is not among them: the shell writes it (AD21).
 
 | File | Content |
 |---|---|
-| `prefs/app.json` (not in STORAGE §3.7, STORAGE:1093-1103) | `schemaVersion`, `appLocale`, `lastUsed`, `lastEdit`, `alignSuggestions` |
+| `prefs/app.json` (not in STORAGE §3.7, STORAGE:1093-1103) | `schemaVersion`, `appLocale`, `lastUsed`, `lastEdit`, `alignSuggestions`, `railFolded` (`"<tool>\|<groupId>": bool`, a Check rail's folded groups, tC4 #769) |
 | `prefs/<projectId>.json` | place per book or story, `draftUnit`, OBS story and recency |
 | `summaries/<folder hash>.json` | §4.5 |
 | `reports.json` | the last 50 operation reports, for Feedback and the dev Inspector, kept across launches *(C1a, D5: read before the launch's first report, so ids go on from the highest one the file named; written a second after the first change and at once at quit, leave and `test/reset`. Declared difference from tC4, which keeps its reports in memory only, so after a crash and a relaunch its "Ask for help" attaches nothing of what went wrong)* |
@@ -1818,7 +1821,8 @@ in Chromium against the real `tc4`, with the request filter of AD11
   file) is capped at 512 MiB. *(A-28)* Parsing happens on the server.
 - **Receive work from a file.** In the shell, `tc4Shell.chooseFile()` gives a path and the server
   reads the file in place. In a browser, an upload.
-- **Downloads.** An `Export` job ends with `ExportReady { download, file_name }`. The UI clicks an
+- **Downloads.** An `Export` job ends with `ExportReady(Exported { file: ExportedFile::{Download { download, file_name } | Print { file_name }}, facts })`; `facts` names the verses
+  an aligned export kept as stored (at most 20, with the total). For a `Download` the UI clicks an
   `<a download href="/download/<id>/<name>">`, as tC4's `deliverFile` does
   (`tC4:src/data/export/kernel.ts:38-57`). Electronite shows the save dialog and reports saved or
   cancelled through `onDownloadDone`, which drives "Saved {file}" (`tC4:src/views/ExportMenu.jsx:26-34`).
@@ -1828,10 +1832,15 @@ in Chromium against the real `tc4`, with the request filter of AD11
 - **USB export** is not a download. `tc4Shell.chooseFolder()` gives the destination; the job
   writes, then verifies from the device; "You can remove the stick" shows only after the verify
   (STORAGE:3010-3017).
-- **PDF.** `export/run { producer: Pdf }` makes print HTML with OBS pictures inlined as `data:`
-  URLs (`tC4:src/data/export/pdf.ts:76-87`) and returns `/print/<job>`. The UI calls
-  `tc4Shell.printPdf(url)`. The menu item exists only with the bridge, as in tC4
-  (`tC4:src/data/export/pdf.ts:120`). Tests use `page.pdf()` on the same URL (ARCH:108-112).
+- **PDF.** `export/run { producer: PrintHtml, print: { setup, title, words } }` makes print HTML
+  with OBS pictures inlined as `data:` URLs (`tC4:src/data/export/pdf.ts:76-87`) and ends with
+  `Print { file_name }`; `GET /print/<job>` serves that document once the job is done. Its
+  `<title>` is the file name without `.pdf`, since the shell names the saved PDF from it. The UI
+  calls `tc4Shell.printPdf("/print/<job>")`, which answers `{ok: true, file}` ("Saved {file}"),
+  or `{ok: false, reason}`: nothing for `cancelled`, the print-failed words for `failed` and
+  `refused`. The menu item exists only with the bridge, as in tC4
+  (`tC4:src/data/export/pdf.ts:120`). Tests use `page.pdf()` on the same URL (ARCH:108-112;
+  journey `j07-export`).
 
 ### 5.6 The internet switch and Door43 sign-in
 
@@ -2559,7 +2568,12 @@ which opens M12 and runs `then` once signed in; A8 exercises it with the profile
 keeps from changing; `LinkKind::Repo` is `account/repoLink`. The forms are `ShareForm` (tC4's
 `sh`, its target and check steps; E1b adds the run's) and `OpenForm` (tC4's `od`), pure, in
 `tc_ui::app::{share, open_door43}`; the repository and project-name rules are `tc_api::door43`'s,
-which the server applies again.)* `View` is `Home | Read | Draft | Check |
+which the server applies again.)* *(UI-3b: each dialog holds its form in its `Dialog` variant,
+and the sign-in step holds the dialog it covers (`Dialog::SignIn { under }`), which shows again
+as the person left it after Sign in and after Cancel; a step over a step keeps the one dialog
+under both. Declared difference: tC4's Cancel is `closeModal`, which drops the covered form (an
+Open from Door43 address and name, or a New Bible typed while a sync asked for the sign-in);
+the rebuild gives it back, since the person typed it and meant to go on.)* `View` is `Home | Read | Draft | Check |
 Publish` with tC4's string values; `MainView` is a port of `tC4:src/App.jsx:192-209`.
 
 ### 6.8 Panics and view errors
@@ -3414,7 +3428,7 @@ cut from the integration branch `app` after unit C had merged, like every other 
 | Unit | Scope | Depends on | Waits for | Tests | Done when |
 |---|---|---|---|---|---|
 | D1 Checkpoints and outside edits | leave triggers; the checkpoint at Home *(A-25)*, and its failure's banner on Home (`s.commit_error`; the gallery's `home-checkpoint` case, B2 D10); mode-switch checkpoints by Q-5's ruling *(A-11)*; "Checkpoint not saved" with Retry; materialize-blocked message; the last checkpoint outcome and the blocked paths in `OpenSession`, so a `Resync` restores both (§5.4); outside-edit toast with Undo and grouped rows; held-file actions as R7 allows; window focus check; quit flow (aligner links, then checkpoints) | S2, C2, C5 | R9's numbers and Q-5 (fallback: STORAGE's rule today); R17, R21 | J8; no commit when nothing changed; `save_latency_while_a_checkpoint_runs` within 25 ms, or Q-5's limit applies; a `Resync` after a failed checkpoint and after a blocked file shows both again | green |
-| D2 Exports | tc-export producers on A10's model: aligned and plain USFM, OBS Markdown, print HTML; export jobs; `/download`, `/print`; PDF through the shell; conflict warning; checkpoint first | S2, B8 | — | J7, J23 except the Burrito zip; every Burrito output validated | green |
+| D2 Exports | tc-export producers on A10's model: aligned and plain USFM, OBS Markdown, print HTML; export jobs; `/download`, `/print`; PDF through the shell; conflict warning; checkpoint first *(D2: built as the row says, on tc-api's one print model (tc-export's twin of `print_parts` is gone; the preview and the print HTML build their items with one function). One entry point, `tc_export::produce(producer, &ExportInput)`, answers the bytes and `ExportFacts`; tc-export reads and writes no file. Aligned USFM weaves a verse with `tc_align::usfm::weave_verse` only when `tc_align::needs_review` is false; a verse that needs review, holds inline `\zaln` or whose weave is refused keeps its stored bytes and is named (at most 20, then the total), and a record placing nothing keeps its bytes unnamed; nothing writes `x-ref` (#409). `export/preflight` counts the conflicts and verses in conflict of the book or the stories, and the menu asks STORAGE §8.5's question inline before it runs; `export/run` is a job that checkpoints first (`BeforeExport`, through the handle while D1 is not done), then produces, then registers the file in the downloads folder (`DownloadFiles`, which tc4 provides), and a print job keeps its document for `GET /print/{job}`. OBS Markdown zips every carried `content/` file, front and back matter included (tc-store `read_carried`, read-only). File names follow tC4's `exportFilename`: the book's code (`TIT-aligned-<date>.usfm`) or the project's name as Home shows it, dated by the translator's own day: the page sends its offset from UTC with `export/run`, as tC4 dates a file in its window. With the shell's `onDownloadDone`, the menu says "Saved {filename}" for a completed download and tC4's `cc.exportInterrupted` for an interrupted one, and nothing for a cancel; without it, "Export ready". The PDF item shows only with `tc4Shell.printPdf` and gives it `/print/{job}`; the print page's `<title>` is the file name without `.pdf`. Declared differences (PLAN): the #796 export rule (tC4 e2bfd8c3, in v4.0.0-rc.2 through #814, both newer than d310bf3); the `\add` span kept around an aligned word (#420); plain USFM is the aligned book with its alignment taken out, where tC4 exports the stored file, so a verse imported with inline `\zaln` loses that markup; the print page's title; the conflicts question (STORAGE §8.5). The toast has tC4's Dismiss only (the browser has the file already). A failed export says tC4's diagnosis, then the recovery sentence (`failureText`); a failed print says to set Pictures off only for stories (tC4 `pdf.ts`). Tests: tc-export `tests/usfm.rs` (five rules), `properties.rs` (an aligned export reads back to its records, and stripping it gives the plain export); tc-app `an_export_never_writes_the_project`, `every_export_validates`, `preflight_counts_open_conflicts`, op count `an_export_run_touches_one_book` on Psalms and ten times; tc-server the `/print` route; tc-ui host tests of the menu, the toast and the shell's print and download reports; journeys `j07-export` (J7, J23, #420), each hashing every project file but `.git/` before and after. Left open: the Burrito zip item stays off for E2; x-ref waits for tC4 (#409).)* | S2, B8 | — | J7, J23 except the Burrito zip; every Burrito output validated | green |
 
 ### Phase 4: after X
 

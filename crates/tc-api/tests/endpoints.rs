@@ -18,6 +18,7 @@ const PHASE_0: &[&str] = &[
     "prefs/setDraftUnit",
     "prefs/setAlignSuggestions",
     "prefs/recordPlace",
+    "prefs/setRailFolded",
     "net/state",
     "net/set",
     "jobs/get",
@@ -115,6 +116,9 @@ const PHASE_0: &[&str] = &[
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",
+    // D2: the export's conflict check and its job.
+    "export/preflight",
+    "export/run",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -127,6 +131,7 @@ const PHASE_0: &[&str] = &[
     "test/reset",
     "test/lastEdit",
     "test/script",
+    "test/connectDoor43",
     "test/validate",
 ];
 

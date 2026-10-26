@@ -711,6 +711,30 @@ impl Doc {
             .insert(folder.as_str().to_owned(), Value::from(on));
     }
 
+    /// The groups `tool`'s rail has folded (tC4 `railFolded`, keys `"<tool>|<groupId>"`).
+    fn rail_folded(&self, tool: &str) -> Vec<String> {
+        let prefix = format!("{tool}|");
+        self.members
+            .get("railFolded")
+            .and_then(Value::as_object)
+            .map(|folded| {
+                folded
+                    .iter()
+                    .filter(|(_, on)| on.as_bool() == Some(true))
+                    .filter_map(|(key, _)| key.strip_prefix(&prefix).map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// An unfold is kept as `false`, as tC4 writes it.
+    fn set_rail_folded(&mut self, tool: &str, groups: &[String], folded: bool) {
+        let map = self.object_mut("railFolded");
+        for group in groups {
+            map.insert(format!("{tool}|{group}"), Value::from(folded));
+        }
+    }
+
     fn last_edit(&self) -> Option<LastEdit> {
         serde_json::from_value(self.members.get("lastEdit")?.clone()).ok()
     }
@@ -874,6 +898,14 @@ impl Target {
     }
 }
 
+/// A tool as tC4's `railFolded` keys name it.
+fn rail_tool(tool: tc_api::check::Tool) -> &'static str {
+    match tool {
+        tc_api::check::Tool::TranslationNotes => "translationNotes",
+        tc_api::check::Tool::TranslationWords => "translationWords",
+    }
+}
+
 enum Msg {
     SetLocale {
         locale: LocaleId,
@@ -883,7 +915,8 @@ enum Msg {
         project: ProjectId,
         unit: DraftUnit,
     },
-    AlignSuggestions,
+    /// A member of the app document changed in place: write it at once.
+    WriteApp,
     LastUsed {
         folder: ProjectRef,
         at: WallMs,
@@ -974,7 +1007,16 @@ impl PrefsWriter {
         lock(&self.shared.docs)
             .app
             .set_align_suggestions(&folder, on);
-        self.send(Msg::AlignSuggestions);
+        self.send(Msg::WriteApp);
+    }
+
+    /// Groups of a Check tool's rail folded or unfolded: readers see it now, and it is
+    /// written at once.
+    pub fn set_rail_folded(&self, tool: tc_api::check::Tool, groups: &[String], folded: bool) {
+        lock(&self.shared.docs)
+            .app
+            .set_rail_folded(rail_tool(tool), groups, folded);
+        self.send(Msg::WriteApp);
     }
 
     /// When a folder was last used, written at once.
@@ -1033,6 +1075,10 @@ impl PrefsWriter {
 
     pub fn align_suggestions(&self, folder: &ProjectRef) -> Option<bool> {
         lock(&self.shared.docs).app.align_suggestions(folder)
+    }
+
+    pub fn rail_folded(&self, tool: tc_api::check::Tool) -> Vec<String> {
+        lock(&self.shared.docs).app.rail_folded(rail_tool(tool))
     }
 
     /// The summary kept for `folder`, read on the first ask (a file of a few hundred bytes);
@@ -1099,7 +1145,7 @@ impl Task {
                     .with_project(&project, |doc| doc.set_draft_unit(unit));
                 self.write_now(&Target::Project(project)).await;
             }
-            Msg::AlignSuggestions => {
+            Msg::WriteApp => {
                 self.write_now(&Target::App).await;
             }
             Msg::LastUsed { folder, at } => {

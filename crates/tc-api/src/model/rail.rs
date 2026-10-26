@@ -2,12 +2,12 @@
 //! `checkFilters.js` and `railGroupsOf`, APP-DESIGN §3.8, AD17).
 //!
 //! The rows arrive in the order By verse lists them, so a filter keeps that order and a
-//! grouping needs no sort: rows go into buckets by term index (By word) or by category in
-//! order of first appearance among the rows shown (By category), in one pass over the rows
+//! grouping needs no sort: rows go into buckets by term index (By word), or by figure in
+//! order of first appearance among the rows shown (By figure, tC4 #769), in one pass over the rows
 //! the filter keeps (A-13). tc-app holds this to `tc_check::rail::groups`, which filters,
 //! sorts and groups as tC4 does, for every filter and mode on Titus and Psalms.
 
-use crate::check::{Category, Dot, RailRow, RailRowPatch, RowFlags, Tool};
+use crate::check::{Dot, RailRow, RailRowPatch, RowFlags, Tool};
 
 /// The rail's filter chips, in the order they appear.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -74,8 +74,9 @@ pub enum SortMode {
     ByVerse,
     /// Grouped by term, terms in the order of the session's `terms` (tW).
     ByWord,
-    /// Grouped by category, in order of first appearance among the rows shown (tN).
-    ByCategory,
+    /// Grouped by figure (the note's Translation Academy article, its term), in order of
+    /// first appearance among the rows shown (tN, tC4 #769).
+    ByFigure,
 }
 
 impl SortMode {
@@ -83,7 +84,7 @@ impl SortMode {
     pub fn modes(tool: Tool) -> &'static [SortMode] {
         match tool {
             Tool::TranslationWords => &[SortMode::ByWord, SortMode::ByVerse],
-            Tool::TranslationNotes => &[SortMode::ByVerse, SortMode::ByCategory],
+            Tool::TranslationNotes => &[SortMode::ByVerse, SortMode::ByFigure],
         }
     }
 
@@ -96,7 +97,7 @@ impl SortMode {
         match self {
             Self::ByVerse => "byVerse",
             Self::ByWord => "byWord",
-            Self::ByCategory => "byCategory",
+            Self::ByFigure => "byFigure",
         }
     }
 }
@@ -109,7 +110,9 @@ pub enum GroupLabel {
     Unit,
     /// A tW term: an index into the session's terms.
     Term(u32),
-    Category(Category),
+    /// A tN figure: an index into the session's terms, which hold each note's article slug
+    /// (empty for notes with none, "Other notes").
+    Figure(u32),
 }
 
 /// A group of the rail: positions into the rows it was made from, in rail order.
@@ -166,22 +169,97 @@ pub fn groups<'a>(
             }
             out
         }
-        SortMode::ByCategory => {
+        SortMode::ByFigure => {
             let mut out: Vec<RailGroup> = Vec::new();
-            for (at, row) in kept {
-                let label = row.category.map_or(GroupLabel::Unit, GroupLabel::Category);
-                // Six tN categories at most, so finding a group is a walk of six.
-                match out.iter_mut().find(|g| g.label == label) {
-                    Some(group) => group.rows.push(at),
-                    None => out.push(RailGroup {
-                        label,
-                        rows: vec![at],
-                    }),
+            let mut at: std::collections::HashMap<Option<u32>, usize> =
+                std::collections::HashMap::new();
+            for (row_at, row) in kept {
+                match at.get(&row.term).copied().and_then(|g| out.get_mut(g)) {
+                    Some(group) => group.rows.push(row_at),
+                    None => {
+                        at.insert(row.term, out.len());
+                        out.push(RailGroup {
+                            label: row.term.map_or(GroupLabel::Unit, GroupLabel::Figure),
+                            rows: vec![row_at],
+                        });
+                    }
                 }
             }
             out
         }
     }
+}
+
+/// Whether a sort's groups fold (tC4 `FOLDING_SORTS`): By word and By figure.
+pub fn folds(mode: SortMode) -> bool {
+    matches!(mode, SortMode::ByWord | SortMode::ByFigure)
+}
+
+/// The id a group folds by: its term's slug (`terms`), for the groups of a folding sort.
+pub fn group_id(label: GroupLabel, terms: &[String]) -> Option<&str> {
+    match label {
+        GroupLabel::Term(t) | GroupLabel::Figure(t) => {
+            terms.get(usize::try_from(t).ok()?).map(String::as_str)
+        }
+        GroupLabel::Unit => None,
+    }
+}
+
+/// Which of `groups` are open: under a folding sort, a group is open unless its id is in
+/// `folded`, and the group of the active check (`active`, its group id) always is (tC4 #769,
+/// INV-THE-ACTIVE-GROUP-IS-OPEN). Costs the groups, not the rows.
+pub fn open_groups(
+    groups: &[RailGroup],
+    terms: &[String],
+    folded: &std::collections::BTreeSet<String>,
+    active: Option<&str>,
+    mode: SortMode,
+) -> Vec<bool> {
+    groups
+        .iter()
+        .map(|g| {
+            !folds(mode)
+                || group_id(g.label, terms)
+                    .is_none_or(|id| !folded.contains(id) || Some(id) == active)
+        })
+        .collect()
+}
+
+/// Fold all, or Unfold all once every other shown group is folded (tC4 `foldAll`): the ids to
+/// set and whether they fold. Fold all leaves the active check's group (`active`) open.
+pub fn fold_all(
+    groups: &[RailGroup],
+    terms: &[String],
+    folded: &std::collections::BTreeSet<String>,
+    active: Option<&str>,
+) -> (Vec<String>, bool) {
+    let ids: Vec<&str> = groups
+        .iter()
+        .filter_map(|g| group_id(g.label, terms))
+        .collect();
+    let others: Vec<String> = ids
+        .iter()
+        .filter(|id| Some(**id) != active)
+        .map(|id| (*id).to_owned())
+        .collect();
+    if others.iter().all(|id| folded.contains(id)) {
+        (ids.into_iter().map(str::to_owned).collect(), false)
+    } else {
+        (others, true)
+    }
+}
+
+/// Each term's decided and total rows over the whole rail, whatever the filter shows: the
+/// counts a folding heading shows (tC4 `groupStatsOf`). One pass over the rows.
+pub fn term_progress(rows: &[RailRow], terms: usize) -> Vec<(u32, u32)> {
+    let mut out = vec![(0u32, 0u32); terms];
+    for row in rows {
+        if let Some(slot) = row.term.and_then(|t| out.get_mut(usize::try_from(t).ok()?)) {
+            slot.1 += 1;
+            slot.0 += u32::from(row.flags.decided);
+        }
+    }
+    out
 }
 
 /// Replaces each row a patch names, by its index. False when a patch names a row the rail

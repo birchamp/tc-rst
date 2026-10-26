@@ -36,8 +36,6 @@ tc-api = { path = ".", features = ["server", "test-hooks", "proptest"] }
 # A check's place on the wire is the text tc-check prints for its target (tests/check.rs).
 tc-check = { path = "../tc-check" }
 tc-helps = { path = "../tc-helps" }
-# The preview's print parts are tc-export's (tests/print.rs, APP-DESIGN 3.8).
-tc-export = { path = "../tc-export" }
 proptest.workspace = true
 serde_json.workspace = true
 

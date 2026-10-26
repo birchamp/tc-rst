@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::error::ApiError;
-use crate::ids::{DownloadId, JobId, ProjectRef, RequestId};
+use crate::ids::{JobId, ProjectRef, RequestId};
 use crate::shown::PersonLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +105,7 @@ pub enum Phase {
     Train,
     Seed,
     Summary,
+    Export,
 }
 
 /// The phases of an open (STORAGE §6.1, "Progress"); tc-store reports them (AD8).
@@ -154,10 +155,8 @@ pub enum JobOutcome {
     Created {
         project: ProjectRef,
     },
-    ExportReady {
-        download: DownloadId,
-        file_name: String,
-    },
+    /// An export's file, ready to download (D2).
+    ExportReady(crate::export::Exported),
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
     /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
@@ -187,6 +186,9 @@ pub struct SyncResultView {
     pub restored: u32,
     /// The project's pinned resource versions that this computer does not have (D88 point 6).
     pub missing_pins: u32,
+    /// Door43 no longer had the project's branch, and this sync put this computer's copy back
+    /// (owner ruling of 2026-10-24; tC4 says nothing).
+    pub recreated: bool,
 }
 
 /// `jobs/get`: a job's state, or `None` when no job has this id or its outcome expired.
@@ -249,5 +251,8 @@ starts_job! {
     }
     crate::resources::FixFetch => () {
         JobOutcome::Finished => (), _done => JobOutcome::Finished
+    }
+    crate::export::RunExport => crate::export::Exported {
+        JobOutcome::ExportReady(done) => done, done => JobOutcome::ExportReady(done)
     }
 }

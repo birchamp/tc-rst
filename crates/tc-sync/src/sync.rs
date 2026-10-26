@@ -48,6 +48,10 @@ pub struct SyncReport {
     /// A large push failed for want of a connection three times in a row (§9.5): the report
     /// offers "Save an exchange file instead" (§10).
     pub offer_exchange: bool,
+    /// Changes of teammates this sync pushed again because Door43's branch had lost them
+    /// (moved back behind a teammate's push; §9.7 `restored`): "Door43 did not have 1 change
+    /// from a teammate. tC4 sent it again."
+    pub restored: u32,
 }
 
 /// One commit made on Door43 by another tool (§9.2 N4): "Titus was changed on Door43 by jdoe
@@ -124,6 +128,7 @@ pub async fn sync(
             new_conflicts: Vec::new(),
             recreated: false,
             offer_exchange: false,
+            restored: 0,
         },
         conflicts_before: project
             .snapshot()
@@ -209,7 +214,14 @@ impl Run<'_> {
         for pack in packs {
             for change in tc_store::read_received_pack(&pack.path, &pack.bytes, project).changes {
                 if snapshot.fold().change(&change.id()).is_none() {
-                    *self.received_from.entry(change.body().device).or_insert(0) += 1;
+                    // A device's profile (its Door43 username, Q7) is bookkeeping a sync
+                    // writes, not work a translator made: the toast never counts it.
+                    if !matches!(
+                        change.body().record,
+                        tc_journal::Record::DeviceProfile { .. }
+                    ) {
+                        *self.received_from.entry(change.body().device).or_insert(0) += 1;
+                    }
                     self.received_ids.push(change.id());
                 }
             }
@@ -453,9 +465,11 @@ impl Run<'_> {
         let http = self.client.http().clone();
         let remote = self.fetched;
         let bound = self.project.chain_bytes();
+        let facts = self.project.facts();
+        let (device, project) = (facts.device, facts.id);
         let pushed = tokio::task::spawn_blocking(move || {
             let mut chain = Chain::default();
-            let result = push_chain(&http, &target, remote, bound, &mut chain);
+            let result = push_chain(&http, &target, remote, bound, (device, project), &mut chain);
             (result, chain)
         })
         .await;
@@ -471,8 +485,13 @@ impl Run<'_> {
             self.report.confirmed = Some(link.to_string());
         }
         match result {
-            Ok(()) | Err(Pushed::Nothing) => {
+            Ok(restored) => {
                 // Said only once the push made the branch again (tC4 reports it after the push).
+                self.report.recreated = self.branch_gone;
+                self.report.restored += restored;
+                SyncEvent::Pushed
+            }
+            Err(Pushed::Nothing) => {
                 self.report.recreated = self.branch_gone;
                 SyncEvent::Pushed
             }
@@ -563,8 +582,9 @@ fn push_chain(
     target: &Target,
     remote: Option<git2::Oid>,
     bound: u64,
+    (device, project): (tc_journal::DeviceId, tc_journal::ProjectId),
     chain: &mut Chain,
-) -> Result<(), Pushed> {
+) -> Result<u32, Pushed> {
     let repo = open(&target.git_dir).map_err(Pushed::Failed)?;
     let head = repo
         .head()
@@ -572,6 +592,12 @@ fn push_chain(
         .and_then(|h| h.target())
         .ok_or(Pushed::Nothing)?;
     chain.tip = Some(head);
+    // Door43's branch behind ours holds fewer packs than HEAD: the teammates' changes in the
+    // packs it lacks are sent again (§9.7 `restored`); our own are new work.
+    let restored = match remote {
+        Some(remote) if remote != head => restored_changes(&repo, head, remote, device, project),
+        _ => 0,
+    };
     let local = repo
         .head()
         .ok()
@@ -609,7 +635,8 @@ fn push_chain(
     sent?;
     let refspec = FastForwardRefspec::onto(&local, &target.branch)
         .map_err(|e| Pushed::Failed(refusal_of(&e)))?;
-    send(http, &repo, &target.remote, &refspec)
+    send(http, &repo, &target.remote, &refspec)?;
+    Ok(restored)
 }
 
 fn send(
@@ -759,6 +786,47 @@ fn repo_of(client: &Door43Client, url: &str) -> Option<tc_door43::RepoRef> {
 }
 
 /// §9.2 N1 to N3 over the fetched commit's tree.
+/// The changes of other devices in the packs HEAD holds and `remote` does not. Zero when the
+/// trees cannot be read: a count is never a reason to stop a push.
+fn restored_changes(
+    repo: &git2::Repository,
+    head: git2::Oid,
+    remote: git2::Oid,
+    device: tc_journal::DeviceId,
+    project: tc_journal::ProjectId,
+) -> u32 {
+    let packs_of = |commit: git2::Oid| -> Option<std::collections::BTreeMap<String, git2::Oid>> {
+        let tree = repo.find_commit(commit).ok()?.tree().ok()?;
+        let mut packs = std::collections::BTreeMap::new();
+        let _ = tree.walk(git2::TreeWalkMode::PreOrder, |root, entry| {
+            let path = format!("{root}{}", entry.name().unwrap_or_default());
+            if entry.kind() == Some(git2::ObjectType::Blob) && path.starts_with(PACKS) {
+                packs.insert(path, entry.id());
+            }
+            git2::TreeWalkResult::Ok
+        });
+        Some(packs)
+    };
+    let (Some(ours), Some(theirs)) = (packs_of(head), packs_of(remote)) else {
+        return 0;
+    };
+    ours.iter()
+        .filter(|(path, _)| !theirs.contains_key(*path))
+        .filter(|(path, _)| tc_store::pack_sealer(path).is_some_and(|sealer| sealer != device))
+        .filter_map(|(path, oid)| {
+            let blob = repo.find_blob(*oid).ok()?;
+            let read = tc_store::read_received_pack(path, blob.content(), project);
+            // A device's profile is bookkeeping, as in `count_received`.
+            let work = read
+                .changes
+                .iter()
+                .filter(|c| !matches!(c.body().record, tc_journal::Record::DeviceProfile { .. }))
+                .count();
+            Some(work as u32)
+        })
+        .sum()
+}
+
 fn read_tree(git_dir: &std::path::Path, remote: git2::Oid) -> Result<Intake, String> {
     let repo = git2::Repository::open(git_dir).map_err(|e| e.message().to_owned())?;
     let theirs = repo
