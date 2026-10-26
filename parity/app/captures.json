@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "766046edeaa48eb2",
+    "ui": "40e6965642d41c77",
     "commit": "dev",
     "api": 1
   },
@@ -808,7 +808,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "layers": [
         "pixels",
@@ -826,22 +826,22 @@
       "maskRects": {
         "q3-where": {
           "x": 417,
-          "y": 253,
+          "y": 311,
           "width": 234,
           "height": 17
         }
       },
       "png": "screens/open-door43.png",
-      "sha256": "7aca7cc178fff288f4af9d854ddac78dc46103a43ba34558a7cb0b851a8eef5e",
+      "sha256": "d11aa0e243f1b507dff6ae0138eab12462c746ae2cda885420d941f98f7ce44b",
       "dom": "dom/open-door43.json",
-      "domSha256": "ea97f33956f0cc98dfb2a9f9df8bff0dede1aa5cdb7d64ded109b7933155e460"
+      "domSha256": "517dee290eb3070c32d2303b75bed5910172b40a4fd01afaa039c499f2429db1"
     },
     {
       "name": "open-door43-internet-consent",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "layers": [
         "pixels",
@@ -859,15 +859,15 @@
       "maskRects": {
         "q3-where": {
           "x": 417,
-          "y": 253,
+          "y": 311,
           "width": 234,
           "height": 17
         }
       },
       "png": "screens/open-door43-internet-consent.png",
-      "sha256": "a0f086503f8e4108d2bb04a37bb11a7fe69134ba7f73a8e329564bb859d506ed",
+      "sha256": "c2ff3f0b02a79a080f49cf7973a05c45e6f8a5b003f627d8cb93faed29432ebe",
       "dom": "dom/open-door43-internet-consent.json",
-      "domSha256": "66656dc813008a86c9e48ae94b8ed6182b961a4d105b3bc3e3de5396a2ab221f"
+      "domSha256": "e37cb1fee32a91df12ab9a05e6dc5be39c213184e08342b4c3f2fecc89f22cf9"
     },
     {
       "name": "open-door43-refused",
@@ -892,21 +892,21 @@
       "maskRects": {
         "q3-where": {
           "x": 417,
-          "y": 196,
+          "y": 254,
           "width": 234,
           "height": 17
         },
         "q3-refused": {
           "x": 417,
-          "y": 498,
+          "y": 440,
           "width": 446,
-          "height": 38
+          "height": 37
         }
       },
       "png": "screens/open-door43-refused.png",
-      "sha256": "0bc6c604ea4b4a2ecee43eed575efe623218828790ce1e102ce59212308a4064",
+      "sha256": "ba6685a722c0bf2ff410d7e9e71ef516e7890dc70358cb2a83ba840eb75babe6",
       "dom": "dom/open-door43-refused.json",
-      "domSha256": "9c75c9f5ef18a982ae0c0db9098e63df2872c391192cd429f0b64e14acb6e4d6"
+      "domSha256": "2a54c6d0a0d825f1ea94e5be2a6881bdb714f0a337d98c58cfa7c1b7d1e4e831"
     },
     {
       "name": "en-understand-tit1",
@@ -2161,6 +2161,106 @@
       "domSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9"
     },
     {
+      "name": "share-progress-preparing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-preparing.png",
+      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+      "dom": "dom/share-progress-preparing.json",
+      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
+    },
+    {
+      "name": "share-progress-create",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-create.png",
+      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+      "dom": "dom/share-progress-create.json",
+      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
+    },
+    {
+      "name": "share-progress-push",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-push.png",
+      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+      "dom": "dom/share-progress-push.json",
+      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
+    },
+    {
+      "name": "share-done",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-done.png",
+      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+      "dom": "dom/share-done.json",
+      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
+    },
+    {
       "name": "import-files",
       "kind": "case",
       "scenario": "sample",
@@ -2961,106 +3061,6 @@
       "sha256": "dbe49f873f3567081862f76a8740014f98b6a41da9327e20bba5fea59fa2ad50",
       "dom": "dom/import-toast.json",
       "domSha256": "424b0aa7d3fbd6334ede6a0b677caf03ef3b8f8338e3a852505e38240f1492f0"
-    },
-    {
-      "name": "share-progress-preparing",
-      "kind": "case",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "E1b",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/share-progress-preparing.png",
-      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
-      "dom": "dom/share-progress-preparing.json",
-      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
-    },
-    {
-      "name": "share-progress-create",
-      "kind": "case",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "E1b",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/share-progress-create.png",
-      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
-      "dom": "dom/share-progress-create.json",
-      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
-    },
-    {
-      "name": "share-progress-push",
-      "kind": "case",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "E1b",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/share-progress-push.png",
-      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
-      "dom": "dom/share-progress-push.json",
-      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
-    },
-    {
-      "name": "share-done",
-      "kind": "case",
-      "scenario": "sample",
-      "locale": "en",
-      "by": "E1b",
-      "backend": "store",
-      "layers": [
-        "pixels",
-        "dom"
-      ],
-      "error": null,
-      "pageErrors": [],
-      "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
-      "syncToast": null,
-      "maskRects": {},
-      "png": "screens/share-done.png",
-      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
-      "dom": "dom/share-done.json",
-      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
     }
   ]
 }

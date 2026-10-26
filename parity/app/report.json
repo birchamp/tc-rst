@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "766046edeaa48eb2",
+      "ui": "40e6965642d41c77",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 36,
     "declared": 0,
-    "differs": 83,
-    "unported": 11,
+    "differs": 87,
+    "unported": 7,
     "failed": 0
   },
   "rows": [
@@ -600,7 +600,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "6ba06b02b5c5f13a0cc1a645aa328d749d8f6178aa8c27be86b45162d2bc4e45",
@@ -612,7 +612,7 @@
       },
       "dom": {
         "tc4Sha256": "80a6868148bd3e8c8647c47dcf157a0dd465fde6708f698f1271bda589a55985",
-        "rustSha256": "27c89f926269106ca38c7a537a4a1204e90b2ddf9114ac4a8a238be357e97476",
+        "rustSha256": "06a5f9fb1e469175ad1195a92a3b687ec3ed27c2f9160c52eaf550cfd5f6245d",
         "scope": null,
         "same": true,
         "declared": [],
@@ -630,7 +630,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
@@ -642,7 +642,7 @@
       },
       "dom": {
         "tc4Sha256": "04d557e1d9c81afec3c21a68eec9eb4302eea5081dd5a348486a7a7d5c6b6a4e",
-        "rustSha256": "a6130dc0bbdea91d685de14c6646ad2b4b5bb272a8cdc44b46bbe108b0041264",
+        "rustSha256": "9a4d13d08153294d0d66488996f8e45fdcf93b433ce64d76d40daefa4c9144a5",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1062,13 +1062,13 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "1421eac5e9fd29f49483be96419df6f283cc1d3c9096faae1b11d21a5d6a9f0a",
-        "rustSha256": "7aca7cc178fff288f4af9d854ddac78dc46103a43ba34558a7cb0b851a8eef5e",
-        "mismatched": 153052,
-        "outsideMasks": 149943,
+        "rustSha256": "d11aa0e243f1b507dff6ae0138eab12462c746ae2cda885420d941f98f7ce44b",
+        "mismatched": 262604,
+        "outsideMasks": 228609,
         "masks": [
           "q3-where"
         ],
@@ -1076,13 +1076,17 @@
       },
       "dom": {
         "tc4Sha256": "5808df23eb8b8b090db57f1844bea635a6bfd974f3a6b1b2d522c88fe0052b43",
-        "rustSha256": "ea97f33956f0cc98dfb2a9f9df8bff0dede1aa5cdb7d64ded109b7933155e460",
+        "rustSha256": "517dee290eb3070c32d2303b75bed5910172b40a4fd01afaa039c499f2429db1",
         "scope": null,
         "same": false,
-        "declared": [
-          "q3-where"
-        ],
-        "firstDiffs": []
+        "declared": [],
+        "firstDiffs": [
+          "line 150: tC4                 <div data-testid=\"open-door43-name-field\" style=\"column-gap: 6px; display: flex; flex-direction: column; min-width: 0px; row-gap: 6px\"> | rust                 <p  style=\"color: var(--fg-muted); font-family: var(--font-ui); font-size: var(--fs-caption-lg); font-weight: var(--fw-regular); letter-spacing: var(--track-12-5); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px\">",
+          "line 151: tC4                   <label for=\"tc-f#2\" style=\"color: var(--fg-muted); cursor: pointer; font-family: var(--font-ui); font-size: var(--fs-label); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-overline); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; m… | rust                   \"tC4 checks every file before it adds the project to this computer. After the project opens, use Sync with Door43 to get your team’s work and send yours.\"",
+          "line 152: tC4                     \"Project name\" | rust             <div  style=\"column-gap: 10px; display: flex; flex-direction: row; justify-content: flex-end; min-width: 0px; padding-bottom: 22px; padding-left: 24px; padding-right: 24px; padding-top: 18px; row-gap: 10px\">",
+          "line 153: tC4                   <div data-i=\"field\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: rgb(255, 255, 255); background-image: initial; background-origin: initial; background-position-x: initial; background-position-y: initial; background-repeat: … | rust               <button data-i=\"quiet\" data-testid=\"open-door43-cancel\" data-tone=\"neutral\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
+          "line 154: tC4                     <input aria-describedby=\"tc-f#2-hint\" data-testid=\"open-door43-name\" id=\"tc-f#2\" value=\"\" style=\"appearance: none; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-x… | rust                 \"Cancel\""
+        ]
       },
       "meaning": {
         "same": true,
@@ -1096,13 +1100,13 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "46d3c864d5315b453fb3a6e6059ca9582a46eea96789f41c06e7555b0486ef56",
-        "rustSha256": "a0f086503f8e4108d2bb04a37bb11a7fe69134ba7f73a8e329564bb859d506ed",
-        "mismatched": 120726,
-        "outsideMasks": 117617,
+        "rustSha256": "c2ff3f0b02a79a080f49cf7973a05c45e6f8a5b003f627d8cb93faed29432ebe",
+        "mismatched": 216175,
+        "outsideMasks": 200975,
         "masks": [
           "q3-where"
         ],
@@ -1110,13 +1114,17 @@
       },
       "dom": {
         "tc4Sha256": "dd82cf8507f9522d1bf0e77e2cb2b6b1ecd9963f82076db69e92c102fd2e7473",
-        "rustSha256": "66656dc813008a86c9e48ae94b8ed6182b961a4d105b3bc3e3de5396a2ab221f",
+        "rustSha256": "e37cb1fee32a91df12ab9a05e6dc5be39c213184e08342b4c3f2fecc89f22cf9",
         "scope": null,
         "same": false,
-        "declared": [
-          "q3-where"
-        ],
-        "firstDiffs": []
+        "declared": [],
+        "firstDiffs": [
+          "line 148: tC4                 <div data-testid=\"open-door43-name-field\" style=\"column-gap: 6px; display: flex; flex-direction: column; min-width: 0px; row-gap: 6px\"> | rust                 <p  style=\"color: var(--fg-muted); font-family: var(--font-ui); font-size: var(--fs-caption-lg); font-weight: var(--fw-regular); letter-spacing: var(--track-12-5); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px\">",
+          "line 149: tC4                   <label for=\"tc-f#2\" style=\"color: var(--fg-muted); cursor: pointer; font-family: var(--font-ui); font-size: var(--fs-label); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-overline); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; m… | rust                   \"tC4 checks every file before it adds the project to this computer. After the project opens, use Sync with Door43 to get your team’s work and send yours.\"",
+          "line 150: tC4                     \"Project name\" | rust             <div  style=\"column-gap: 10px; display: flex; flex-direction: row; justify-content: flex-end; min-width: 0px; padding-bottom: 22px; padding-left: 24px; padding-right: 24px; padding-top: 18px; row-gap: 10px\">",
+          "line 151: tC4                   <div  style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; b… | rust               <button data-testid=\"open-door43-cancel\" data-tone=\"neutral\" data-trim=\"cap\" disabled=\"\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; …",
+          "line 152: tC4                     <input aria-describedby=\"tc-f#2-hint\" data-testid=\"open-door43-name\" disabled=\"\" id=\"tc-f#2\" value=\"es-419_tit_equipo\" style=\"appearance: none; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: i… | rust                 \"Cancel\""
+        ]
       },
       "meaning": {
         "same": true,
@@ -1130,13 +1138,13 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
-        "rustSha256": "bbb80a328c02a5597d0cc6328817a1acf5b587fe597a35fa1785ec17b2f221c5",
-        "mismatched": 175240,
-        "outsideMasks": 164851,
+        "rustSha256": "ba6685a722c0bf2ff410d7e9e71ef516e7890dc70358cb2a83ba840eb75babe6",
+        "mismatched": 324855,
+        "outsideMasks": 268055,
         "masks": [
           "q3-where",
           "q3-refused"
@@ -1145,14 +1153,17 @@
       },
       "dom": {
         "tc4Sha256": "a50f3ad3c432027882810e2693c29df35fa8020b6d9ea742789704d86f77325f",
-        "rustSha256": "a583daa240526ed0ae44725d0d6279b3820b1d611bdabafd4bc6cf875be19af0",
+        "rustSha256": "2a54c6d0a0d825f1ea94e5be2a6881bdb714f0a337d98c58cfa7c1b7d1e4e831",
         "scope": null,
         "same": false,
-        "declared": [
-          "q3-where",
-          "q3-refused"
-        ],
-        "firstDiffs": []
+        "declared": [],
+        "firstDiffs": [
+          "line 17: tC4             <button aria-expanded=\"false\" aria-haspopup=\"menu\" aria-label=\"Door43 account: not signed in. The internet is on. Click to turn it off.\" data-internet=\"on\" data-state=\"out\" data-testid=\"account-menu\" title=\"The internet is on. Click to turn it off.\" type=\"button\" style=\"align-items: cent… | rust             <button aria-expanded=\"false\" aria-haspopup=\"menu\" aria-label=\"Door43 account: @facilitator-zq. The internet is on. Click to turn it off.\" data-internet=\"on\" data-state=\"in\" data-testid=\"account-menu\" title=\"The internet is on. Click to turn it off.\" type=\"button\" style=\"align-items: cen…",
+          "line 18: tC4               <svg aria-hidden=\"true\" fill=\"none\" height=\"18\" stroke-width=\"2\" stroke=\"currentColor\" viewBox=\"0 0 24 24\" width=\"18\"> | rust               \"FA\"",
+          "line 19: tC4                 <circle cx=\"12\" cy=\"8\" r=\"4\"> | rust             <span aria-hidden=\"true\" data-testid=\"internet-indicator\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: rgb(255…",
+          "line 20: tC4                 <path d=\"M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7\"> | rust     <main  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; flex-basis: 0%; flex-grow: 1; flex-shrink: 1; overflow-x: auto; overflow-y: auto; paddi…",
+          "line 21: tC4             <span aria-hidden=\"true\" data-testid=\"internet-indicator\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: rgb(255… | rust       <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: var(--measure-page)\">"
+        ]
       },
       "meaning": {
         "same": true,
@@ -2729,10 +2740,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e4c866e608abad5fe8a503c2f0f6f4ac84fe49b6d11948e4fcb61e18ea78e12b",
+        "rustSha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+        "mismatched": 388,
+        "outsideMasks": 388,
+        "masks": [],
+        "diff": "diffs/share-progress-preparing.png"
+      },
+      "dom": {
+        "tc4Sha256": "ceb17d67d5508b6167366f9407a135e2e2d76d3b2f9621e0ec38302f84e9e76f",
+        "rustSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2740,10 +2765,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "8940d6f5fed629c4f53048d3c5e3bc12917d16bced0e3dbea688f38b6c93bdde",
+        "rustSha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/share-progress-create.png"
+      },
+      "dom": {
+        "tc4Sha256": "f60e48fe236a13767a13d20619670ad30bc97020b95180120352f34c3d8526f7",
+        "rustSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2751,10 +2790,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "1de467f62170f6ba47aee055082a41c6ed8920706a12a9de1c7116e8ded1644c",
+        "rustSha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+        "mismatched": 384,
+        "outsideMasks": 384,
+        "masks": [],
+        "diff": "diffs/share-progress-push.png"
+      },
+      "dom": {
+        "tc4Sha256": "8c137b2e37130950512e10496caf2608a95a3b573872420d8a36ac48e66d5c76",
+        "rustSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
@@ -2762,10 +2815,24 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "E1b",
-        "dom": "E1b"
+      "status": "differs",
+      "by": "E1b",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "7f47cb22d367cfdaea16490a65679cb141a9c2e28fd0731fdb0208b7fd430533",
+        "rustSha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+        "mismatched": 69,
+        "outsideMasks": 69,
+        "masks": [],
+        "diff": "diffs/share-done.png"
+      },
+      "dom": {
+        "tc4Sha256": "6489b79f5ac8db58a6f4fc8b0c9360be4ccb91304cf185d441748ecfaa436cab",
+        "rustSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be",
+        "scope": null,
+        "same": true,
+        "declared": [],
+        "firstDiffs": []
       }
     },
     {
