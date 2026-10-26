@@ -56,13 +56,13 @@ checks: it can break and no gate fails.
   - `loss_f7_restored_backup_warns` (L16); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_f8_secret_lost_pending_survives` (L17); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_f10_nothing_can_lock_open` (L19); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `sync_f11_rejected_ref_not_success` (L20); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `sync_protected_branch_reported` (L20, with L34); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_bad_pack_from_teammate_sync_continues` (L22); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `loss_quarantined_pack_kept_on_tip` (L22, L45); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree` (L22, L45; found under that name in step 1); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_f14_edits_during_sync_kept` (L23); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_newer_major_refused_before_write` (L25); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `sync_contention_three_devices_converge` (L26); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `share_no_username_without_consent` (L28); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `username_written_once_after_first_successful_fetch` (L28; found under that name in step 1); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_carried_file_travels` (L29); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `sync_master_branch` (L30); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `sync_private_repository` (L31); kind: unit or model test; runs in: CI `cargo test --workspace`
@@ -70,15 +70,15 @@ checks: it can break and no gate fails.
   - `sync_protected_branch_reported` (L34); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `crash_seal_verifies_before_delete` (L47); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `review_has_no_keep_newest` (L59); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `import_tc4_hidden_work_surfaces` (L60); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `import_tc4_hidden_work_surfaces` (L60) (retired by rulings/2026-10-24-H3-H4-H7-fast-release.md: the tC4 4.0 import waits); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_all_copies_damaged_union_salvaged` (L66); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `door43_ingest_written_verbatim` (L77); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `door43_ingest_written_verbatim` (L77) (retired by rulings/2026-10-22-H18.md: no Door43 edit is taken in); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `salvage_keeps_original_batch_ref` (L77); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_door43_case_alias_never_recorded` (L79); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `loss_usb_damaged_carried_entry_not_recorded` (L83); kind: unit or model test; runs in: CI `cargo test --workspace`
   - `sync_project_json_deleted_on_door43_restored` (L89); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `usb_export_name_sanitized` (L95); kind: unit or model test; runs in: CI `cargo test --workspace`
-  - `sync_large_push_chain_resumes` (L96); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `a_display_name_never_makes_the_file_name_fail` (L95; found under that name in step 1); kind: unit or model test; runs in: CI `cargo test --workspace`
+  - `sync_large_push_chain_resumes` (L96) (not in code: PUSH-1 writes it with the push chain); kind: unit or model test; runs in: CI `cargo test --workspace`
   - Proof it can fail: for each, break the protection on purpose, paste the failing line into
     the log, revert.
 - **Prose**: `docs/STORAGE.md` §15 test cells.
@@ -130,3 +130,4 @@ checks: it can break and no gate fails.
 - 2026-10-26 14:20 EDT | races lens (subagent of Claude Code d63a7912) | verify | 9131c36d | one major, two minors. 1 Code: tests only. 2 Checks: F14, contention and protected-ref each passed 45/45, three at once, on a frozen binary; the full suite passed 3 of 5 there, the 2 failures being the older `a_push_that_loses_a_race_fetches_again_and_keeps_both` (fake Hold) hanging past 60 s, 8 of 15 runs alone (major); hook waits had no bound (minor). 3 Reach: saving during a sync, three computers at once, a protected branch. 4 Siblings: the Hold pattern was left in that older test (the major). 5 No loss: both sides checked. 6 Prose: comments give reasons. Minor: tc-obs was a normal dependency | subagent report
 - 2026-10-26 14:20 EDT | parity lens (subagent of Claude Code d63a7912) | verify | 9131c36d | no blocker, no major, two minors. Browser drive not applicable: `git diff --name-only e36f49d2..HEAD | grep -E '^(crates/[^/]+/src|crates/tc-ui|shell/|parity/)'` prints nothing, and the app wires `UnavailableSync` (crates/tc-app/src/app.rs:110). The six tests that differ from tC4 (master branch, private repository, OBS sync, refused ref, no bulk keep-newest, carried audio) are each declared in STORAGE §15's tC4 column or APP-DESIGN (syncOperation.ts:40-42, 170-181, 253-256, 277, 340-345 at d310bf3). Minors: PUSH-1 overstated reach today (fixed: reachable once E1a wires sync; depends gains E1a); tc-obs belonged in dev-dependencies (fixed) | subagent report
 - 2026-10-26 14:25 EDT | LOSS-1 lane (Claude Code d63a7912) | fix | (this commit) | the races major: `a_push_that_loses_a_race_fetches_again_and_keeps_both` holds Ana's store at its merge commit (BeforeHeadUpdate, after the fetch; a README edit on Door43 makes the merge) instead of the fake's Hold of the push: 0 of 15 runs alone and 0 of 5 full-suite runs failed, and MAX_ATTEMPTS 1 fails it (Busy { attempts: 1 }); the X row of .audit/minors.tsv goes. Hook waits give up after 60 s (`held_at`), and F14's saves run beside a timeout, so a regression fails instead of hanging; tc-obs is a dev-dependency | cargo test -p tc-sync
+- 2026-10-26 15:30 EDT | LOSS-1 lane (Claude Code d63a7912) | fix | none | the integration lane held the card from batch 14: with it done, claims.test.mjs failed on seven Checks names that exist nowhere. Four point at the tests step 1 found or step 2 wrote; L60 and L77's ingest are marked retired by their rulings, L96 not in code (PUSH-1). claims passes with the card set done | node --test .audit/tools/claims.test.mjs
