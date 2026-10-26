@@ -127,6 +127,13 @@ impl Actions {
         else {
             return;
         };
+        // The sync toast whose Download asked for this closes now that it is open (#724).
+        if s.sync_result
+            .with_untracked(|t| t.as_ref().map(|t| t.project.clone()))
+            .is_some_and(|p| p == at.project)
+        {
+            s.sync_result.try_set(None);
+        }
         let this = self.clone();
         spawn_local(async move {
             if let Ok(view) = this.runtime().api().call(&Sources { at }).await {

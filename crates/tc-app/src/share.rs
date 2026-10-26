@@ -298,6 +298,10 @@ impl App {
             tc_sync::JoinError::Refused(refusal) => ApiError::Refused(Refusal::Sync(
                 tc_api::refusal::SyncFailure::BeforeIntake(refusal),
             )),
+            // Taken since the handler's check: the same answer the check gives, nothing touched.
+            tc_sync::JoinError::Create(tc_store::CreateError::NameExists(_)) => {
+                ApiError::Refused(Refusal::OpenDoor43(OpenDoor43Refusal::NameExists))
+            }
             other => self.internal(
                 "the project from Door43 could not be placed",
                 facts(json!({ "reason": other.to_string() })),

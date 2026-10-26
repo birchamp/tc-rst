@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { FAKE_USER } from '../../tc4-baseline/mock-server/fake-door43.mjs';
-import { DOOR43_TEAM, REPO, newRequestId } from '../env-rust.mjs';
+import { DOOR43_OWNER, REPO, newRequestId } from '../env-rust.mjs';
 import { BIBLE } from '../screens.mjs';
 import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
@@ -132,10 +132,30 @@ browserTest('E1a. A real sync pushes the project to Door43; a cut connection fai
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '1', 'a second sync with nothing new');
     await dismiss(page);
-    await env.door43.fault({ method: 'GET', path: `/${DOOR43_TEAM}/${env.door43Repo(BIBLE)}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
+    await env.door43.fault({ method: 'GET', path: `/${DOOR43_OWNER}/${env.door43Repo(BIBLE)}.git/info/refs`, times: 1, fault: { type: 'breakOff', after: 0 } });
     await button(page).click();
     await toast(page).waitFor();
     assert.equal(await toast(page).getAttribute('data-ok'), '0', 'the cut sync failed');
     assert.notEqual(await page.getByTestId('sync-message').textContent(), en['syncResult.error.keptStopped'], 'nothing came in, so nothing is said to be kept');
+  }, { ...opts, realSync: true });
+});
+
+// D88 point 6, #724: a sync whose project now pins versions this computer lacks offers Download;
+// it opens the project and its Source texts, and the toast closes once they are open.
+browserTest('E1a. Download on the sync toast opens the project\'s Source texts and then closes the toast', async () => {
+  await withApp(async ({ page, env }) => {
+    await button(page).waitFor();
+    await env.pushToDoor43(BIBLE);
+    await syncSignedIn(page);
+    await toast(page).waitFor();
+    assert.equal(await page.getByTestId('sync-download').count(), 1, 'Download is offered');
+    await page.getByTestId('sync-download').click();
+    await page.getByTestId('sources-modal').waitFor();
+    // The toast is drawn only on Home: back there, it is gone.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('sources-modal').waitFor({ state: 'detached' });
+    await page.getByTestId('project-switch').click();
+    await button(page).waitFor();
+    assert.equal(await toast(page).count(), 0, 'the toast closed once Source texts opened');
   }, { ...opts, realSync: true });
 });

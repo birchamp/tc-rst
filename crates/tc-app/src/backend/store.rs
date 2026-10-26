@@ -1503,9 +1503,9 @@ impl ProjectHandle for StoreHandle {
                     *report.received_by.entry(person).or_default() += n;
                 }
                 report.recreated |= next.recreated;
-                if !matches!(next.ended, tc_sync::machine::Ended::Synced { .. }) {
-                    report.ended = next.ended;
-                }
+                report.restored += next.restored;
+                // A failed second sync takes nothing back from the first; the name goes out
+                // with the next sync instead.
             }
             Some(report)
         });
@@ -1637,27 +1637,43 @@ impl ProjectHandle for StoreHandle {
     }
 
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
-        let taken = {
-            let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
-            let taken = inner.take();
-            if let Some(handle) = &taken {
-                let _ = self.closed.set(Closed {
-                    snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
-                    facts: facts(&handle.facts()),
-                    counters: handle.counters(),
-                });
-            }
-            taken
+        // The write lock waits for a sync that holds the read lock; waiting on a runtime worker
+        // could leave that sync no worker to drive its network calls (one-CPU machines).
+        let take = move || {
+            let taken = {
+                let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
+                let taken = inner.take();
+                if let Some(handle) = &taken {
+                    let _ = self.closed.set(Closed {
+                        snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
+                        facts: facts(&handle.facts()),
+                        counters: handle.counters(),
+                    });
+                }
+                taken
+            };
+            // A second close finds nothing to take.
+            let handle = taken?;
+            // The relay waits for the replies already queued: the actor answers every command
+            // queued before its close.
+            lock(&self.relay).take();
+            Some(close_off_thread(handle))
         };
-        let Some(handle) = taken else {
-            // A second close.
-            return Box::pin(async { Ok(()) });
+        // Outside a runtime (the store's own unit tests) no sync can be running: take it here.
+        let work = match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => Ok(runtime.spawn_blocking(take)),
+            Err(_) => Err(take()),
         };
-        // The relay waits for the replies already queued: the actor answers every command
-        // queued before its close.
-        lock(&self.relay).take();
-        let closed = close_off_thread(handle);
         Box::pin(async move {
+            let taken = match work {
+                Ok(work) => work
+                    .await
+                    .map_err(|_| store_error("the close stopped without an outcome"))?,
+                Err(taken) => taken,
+            };
+            let Some(closed) = taken else {
+                return Ok(());
+            };
             closed
                 .await
                 .unwrap_or_else(|_| Err(store_error("the close stopped without an outcome")))

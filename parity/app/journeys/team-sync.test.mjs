@@ -69,7 +69,7 @@ browserTest('J26 [G1]. Three computers: B and C change verses, A takes their wor
   }, opts);
 });
 
-browserTest('J26 [G6]. A and B change the same verse: both versions are kept, and A\'s sync counts one verse conflict to review', async () => {
+browserTest('J26 [G6]. A and B change the same verse: both versions are kept, and the sync on A counts one verse conflict to review', async () => {
   await withApp(async ({ page, env, teammate }) => {
     await button(page).waitFor();
     await env.pushToDoor43(BIBLE);
