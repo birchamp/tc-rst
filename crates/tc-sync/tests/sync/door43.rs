@@ -483,41 +483,24 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     let a = open(&ana, &folder_a);
     save(&a, 1, 1, "Paul, as Ana has it");
     save(&b, 1, 2, "in hope, as Juan has it");
-    let receive = format!("/{}/titus-race.git/git-receive-pack", seeded::USER);
-    door43.fake.inject(tc_door43_fake::FaultRule::once(
-        "POST",
-        &receive,
-        tc_door43_fake::Fault::Hold,
-    ));
-    let ana_done = std::sync::atomic::AtomicBool::new(false);
+    // Ana's work is committed already and Door43 has something new for her (an edit of a
+    // file the app does not own), so the one commit her sync makes is its merge, after the
+    // fetch. It waits there while Juan pushes, so Ana's push loses the race. The store's hold
+    // stops a known step; the fake's Hold of the push hung under load.
+    a.checkpoint(tc_store::CheckpointReason::Other("before the sync".into()))
+        .await
+        .unwrap();
+    door43_commit(&door43, "titus-race", "README.md", Some(b"# Titus\n"));
+    let hooks = ana.store.hooks();
+    let point = tc_store::Point::BeforeHeadUpdate;
+    hooks.hold(point);
     let teammate = async {
-        // Ana's push is held: Juan's goes first.
-        loop {
-            if door43
-                .fake
-                .requests()
-                .iter()
-                .any(|r| r.method == "POST" && r.path == receive)
-            {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
+        held_at(hooks, point, 1).await;
         let report = sync(&b, &door43).await;
-        // The fake records a request before it holds it: a release that comes between is
-        // lost, so it is sent until Ana's sync ends.
-        while !ana_done.load(std::sync::atomic::Ordering::Acquire) {
-            door43.fake.release_held();
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
+        hooks.release(point);
         report
     };
-    let ana_sync = async {
-        let report = sync(&a, &door43).await;
-        ana_done.store(true, std::sync::atomic::Ordering::Release);
-        report
-    };
-    let (ana_report, juan_report) = tokio::join!(ana_sync, teammate);
+    let (ana_report, juan_report) = tokio::join!(sync(&a, &door43), teammate);
     synced(&juan_report);
     synced(&ana_report);
     assert!(ana_report.raced >= 1, "{ana_report:?}");
@@ -1220,6 +1203,19 @@ fn ref_on_door43(door43: &Door43, name: &str, refname: &str) -> Option<git2::Oid
     bare.refname_to_id(refname).ok()
 }
 
+/// Waits until the store's threads have stopped at `point` `n` times while it was held. A sync
+/// that never gets there fails the test instead of hanging it.
+async fn held_at(hooks: &tc_store::Hooks, point: tc_store::Point, n: u64) {
+    let start = std::time::Instant::now();
+    while hooks.reached(point) < n {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(60),
+            "the sync never stopped at {point:?}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
 /// Runs a store command that waits for its reply from inside a test's runtime.
 fn blocking<T>(f: impl FnOnce() -> T) -> T {
     tokio::task::block_in_place(f)
@@ -1408,13 +1404,22 @@ async fn loss_f14_edits_during_sync_kept() {
     let hooks = ana.store.hooks();
     hooks.hold(tc_store::Point::BeforeHeadUpdate);
     let editor = async {
-        while hooks.reached(tc_store::Point::BeforeHeadUpdate) == 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        held_at(hooks, tc_store::Point::BeforeHeadUpdate, 1).await;
+        // The saves run beside this thread, so a save that waits for the sync fails the test
+        // instead of hanging it.
         blocking(|| {
-            save(&a, 1, 2, "saved while the sync ran");
-            save(&a, 1, 1, "Paul, changed while the sync ran");
-            hooks.release(tc_store::Point::BeforeHeadUpdate);
+            std::thread::scope(|scope| {
+                let (done, saved) = std::sync::mpsc::channel();
+                let a = &a;
+                scope.spawn(move || {
+                    save(a, 1, 2, "saved while the sync ran");
+                    save(a, 1, 1, "Paul, changed while the sync ran");
+                    let _ = done.send(());
+                });
+                let in_time = saved.recv_timeout(std::time::Duration::from_secs(60));
+                hooks.release(tc_store::Point::BeforeHeadUpdate);
+                assert!(in_time.is_ok(), "a save waited for the sync");
+            });
         });
     };
     let (report, ()) = tokio::join!(sync(&a, &door43), editor);
@@ -1727,9 +1732,7 @@ async fn sync_contention_three_devices_converge() {
     let point = tc_store::Point::BeforeHeadUpdate;
     hooks.hold(point);
     let maria = async {
-        while hooks.reached(point) < 1 {
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
+        held_at(hooks, point, 1).await;
         let report = sync(&c, &door43).await;
         hooks.release(point);
         report
