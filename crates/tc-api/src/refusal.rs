@@ -296,30 +296,159 @@ impl Message for SettingsRefusal {
     }
 }
 
-/// Importing a project (unit F1 adds the importer's refusals).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Importing a project and Update a book (unit F1). The tC3 refusals are tc-import's, one
+/// variant each, in tC4's `importer.tc3.*` words; tC4 gives a code to three of them only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ImportRefusal {
     WriteFailed,
     NameExists,
+    /// The zip ends partway (tC4 `import.damaged.truncated`).
+    NotZip {
+        file: String,
+    },
+    /// A part of the zip does not match its checksum.
+    CorruptEntry {
+        file: String,
+        entry: String,
+    },
+    NoManifest {
+        file: String,
+    },
+    NoText {
+        file: String,
+    },
+    /// The projects are in different languages.
+    Languages {
+        languages: Vec<String>,
+    },
+    /// Two files hold one book.
+    Twice {
+        code: String,
+    },
+    /// A part of a project does not read; `problem` says where.
+    Unreadable {
+        file: String,
+        problem: String,
+    },
+    /// The imported text would not be the source's byte for byte (P9).
+    TextChanged {
+        book: String,
+    },
+    /// Update a book: the file does not read at `line`.
+    UpdateUnreadable {
+        file: String,
+        line: u32,
+        problem: String,
+    },
+    /// Update a book: the file's `\id` names another book than the one chosen.
+    UpdateOtherBook {
+        file: String,
+        named: String,
+        chosen: String,
+    },
+    /// Update a book wrote nothing.
+    UpdateNotWritten {
+        reason: String,
+    },
+    /// Update a book wrote what comes in with no question, and not the changes to review. A
+    /// second run with the same file finishes it.
+    UpdateReviewNotWritten {
+        reason: String,
+    },
 }
 
 impl Message for ImportRefusal {
     fn code(&self) -> Option<&'static str> {
-        Some(match self {
-            Self::WriteFailed => "import.write-failed",
-            Self::NameExists => "import.name-exists",
-        })
+        match self {
+            Self::WriteFailed => Some("import.write-failed"),
+            Self::NameExists => Some("import.name-exists"),
+            Self::NotZip { .. } => Some("import.damaged.truncated"),
+            Self::CorruptEntry { .. } => Some("import.damaged.corrupt-entry"),
+            Self::NoManifest { .. } => Some("import.damaged.no-manifest"),
+            Self::NoText { .. }
+            | Self::Languages { .. }
+            | Self::Twice { .. }
+            | Self::Unreadable { .. }
+            | Self::TextChanged { .. }
+            | Self::UpdateUnreadable { .. }
+            | Self::UpdateOtherBook { .. }
+            | Self::UpdateNotWritten { .. }
+            | Self::UpdateReviewNotWritten { .. } => None,
+        }
     }
     fn key(&self) -> &'static str {
         match self {
             Self::WriteFailed => "refusal.import.write-failed",
             Self::NameExists => "refusal.import.name-exists",
+            Self::NotZip { .. } => "importer.tc3.notZip",
+            Self::CorruptEntry { .. } => "importer.tc3.corruptEntry",
+            Self::NoManifest { .. } => "importer.tc3.noManifest",
+            Self::NoText { .. } => "importer.tc3.noText",
+            Self::Languages { .. } => "importer.tc3.languages",
+            Self::Twice { .. } => "importer.tc3.twice",
+            Self::Unreadable { .. } => "importer.tc3.unreadable",
+            Self::TextChanged { .. } => "importer.tc3.textChanged",
+            Self::UpdateUnreadable { .. } => "updateBook.unreadable",
+            Self::UpdateOtherBook { .. } => "updateBook.otherBook",
+            Self::UpdateNotWritten { .. } => "updateBook.notWritten",
+            Self::UpdateReviewNotWritten { .. } => "updateBook.reviewNotWritten",
         }
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
-        Vec::new()
+        let file = |file: &String| ("file", file.clone());
+        match self {
+            Self::NotZip { file: f } | Self::NoManifest { file: f } | Self::NoText { file: f } => {
+                vec![file(f)]
+            }
+            Self::CorruptEntry { file: f, entry } => vec![file(f), ("entry", entry.clone())],
+            Self::Languages { languages } => vec![("languages", languages.join(", "))],
+            Self::Twice { code } => vec![("code", code.clone())],
+            Self::Unreadable { file: f, .. } => vec![file(f)],
+            Self::TextChanged { book } => vec![("book", book.clone())],
+            Self::UpdateUnreadable { file: f, line, .. } => {
+                vec![file(f), ("line", line.to_string())]
+            }
+            Self::UpdateOtherBook {
+                file: f,
+                named,
+                chosen,
+            } => vec![
+                file(f),
+                ("named", named.clone()),
+                ("chosen", chosen.clone()),
+            ],
+            Self::WriteFailed
+            | Self::NameExists
+            | Self::UpdateNotWritten { .. }
+            | Self::UpdateReviewNotWritten { .. } => Vec::new(),
+        }
+    }
+    fn detail(&self) -> Option<&str> {
+        match self {
+            Self::Unreadable { problem, .. } | Self::UpdateUnreadable { problem, .. } => {
+                Some(problem)
+            }
+            Self::UpdateNotWritten { reason } | Self::UpdateReviewNotWritten { reason } => {
+                Some(reason)
+            }
+            Self::WriteFailed
+            | Self::NameExists
+            | Self::NotZip { .. }
+            | Self::CorruptEntry { .. }
+            | Self::NoManifest { .. }
+            | Self::NoText { .. }
+            | Self::Languages { .. }
+            | Self::Twice { .. }
+            | Self::TextChanged { .. }
+            | Self::UpdateOtherBook { .. } => None,
+        }
     }
 }
 

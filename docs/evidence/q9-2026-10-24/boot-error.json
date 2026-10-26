@@ -1,0 +1,26 @@
+{
+  "screen": "boot-error",
+  "choices": [],
+  "dom": {
+    "html": "<html dir=\"ltr\" lang=\"en\">",
+    "outside": [],
+    "root": [
+      "<div id=\"root\">",
+      "  <div data-screen=\"boot-error\" data-testid=\"q9\">",
+      "    <div  style=@fd9ee69043df>",
+      "      <div data-testid=\"boot-error\" data-tone=\"warn\" role=\"alert\" style=@16c9afcb69a5>",
+      "        <div  style=@2f07f1fad77f>",
+      "          <strong >",
+      "            \"This screen could not be shown.\"",
+      "          \" this page is from build 4a1c2e9 (API 1), but the app's server is build 77e5b11 (API 2) \"",
+      "          <button data-i=\"outline\" data-testid=\"boot-error-retry\" data-tone=\"ocean\" data-trim=\"cap\" type=\"button\" style=@54ea7da48644>",
+      "            \"Retry\""
+    ],
+    "styles": {
+      "16c9afcb69a5": "background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-bottom-style: ; border-bottom-width: ; border-image-outset: ; border-image-repeat: ; border-image-slice: ; border-image-source: ; border-image-width: ; border-left-color: ; border-left-style: ; border-left-width: ; border-right-color: ; border-right-style: ; border-right-width: ; border-top-color: ; border-top-left-radius: ; border-top-right-radius: ; border-top-style: ; border-top-width: ; box-shadow: none; box-sizing: border-box; color: var(--tone-on-soft); overflow-wrap: anywhere; padding-bottom: 12px; padding-left: 12px; padding-right: 12px; padding-top: 12px",
+      "2f07f1fad77f": "color: var(--tone-text); display: contents; font-family: var(--font-ui); font-size: var(--fs-caption-lg); font-weight: var(--fw-regular); letter-spacing: var(--track-12-5); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px",
+      "54ea7da48644": "align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-bottom-style: ; border-bottom-width: ; border-image-outset: ; border-image-repeat: ; border-image-slice: ; border-image-source: ; border-image-width: ; border-left-color: ; border-left-style: ; border-left-width: ; border-right-color: ; border-right-style: ; border-right-width: ; border-top-color: ; border-top-left-radius: ; border-top-right-radius: ; border-top-style: ; border-top-width: ; box-sizing: border-box; color: var(--tone-text); column-gap: ; cursor: pointer; display: inline-flex; flex-basis: auto; flex-grow: 0; flex-shrink: 0; font-family: var(--font-ui); font-size: var(--control-fs-sm); font-weight: var(--fw-heavy); height: var(--control-h-sm); justify-content: center; letter-spacing: var(--track-12-5); line-height: 1.2; padding-block-end: 0px; padding-block-start: 0px; padding-inline-end: ; padding-inline-start: ; row-gap: ; text-align: center; text-decoration-color: initial; text-decoration-line: none; text-decoration-style: initial; text-decoration-thickness: initial; text-wrap-mode: nowrap; white-space-collapse: collapse",
+      "fd9ee69043df": "flex-basis: 0%; flex-grow: 1; flex-shrink: 1; padding-bottom: 24px; padding-left: 24px; padding-right: 24px; padding-top: 24px"
+    }
+  }
+}

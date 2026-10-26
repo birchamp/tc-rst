@@ -169,7 +169,7 @@ browserTest('Add a book from USFM files: each file shows what it is, a held book
     const rows = page.getByTestId('ab-usfm-file');
     await until('both files are read', async () => (await rows.count()) === 2 && !(await page.getByText(rebuilt['addBook.usfmReading']).count()));
     assert.equal(await rows.nth(0).getAttribute('data-status'), 'refused');
-    assert.equal(await rows.nth(0).textContent(), `TIT.usfm${en['addBook.usfmExists'].replace('{name}', 'Titus')}✕`);
+    assert.equal(await rows.nth(0).textContent(), `TIT.usfm${rebuilt['addBook.usfmExistsUpdate'].replace('{name}', 'Titus')}✕`);
     assert.equal(await rows.nth(1).getAttribute('data-status'), 'valid');
     // The label stays "Add book" with one valid file; a removed file leaves the list.
     const add = page.getByTestId('ab-usfm-add');

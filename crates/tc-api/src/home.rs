@@ -72,6 +72,9 @@ pub struct HomeView {
     pub resume: Option<LastEditView>,
     /// What this launch's start did to work that did not finish, for Home to say once.
     pub notices: Vec<StartNotice>,
+    /// This launch's start removed the part copy of an import that did not finish
+    /// (`home.importRemoved`): true in the first listing after that cleanup, false after.
+    pub import_removed: bool,
 }
 
 /// Work cut short in an earlier run that this launch's start removed (STORAGE §6.4 N1).

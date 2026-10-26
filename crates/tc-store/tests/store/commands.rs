@@ -1361,6 +1361,69 @@ fn a_moved_check_keeps_its_decision_under_the_new_key() {
     handle.close().unwrap();
 }
 
+/// Ruling H5: the newest version wins, and an older one comes back from History. A decision
+/// made before its check moved is listed in the History of the check it moved to, and
+/// restoring it writes it there.
+#[test]
+fn a_moved_checks_older_decision_is_restored() {
+    let (fs, folder) = rich();
+    let (_rig, handle) = open(&fs, &folder);
+    let old = RecordKey::Check(tn_key(1, 2, 1));
+    let new = RecordKey::Check(tn_key(1, 2, 2));
+    let older = handle.snapshot().fold().projected_change(&old).unwrap();
+    let Some(Record::Check {
+        value: older_value, ..
+    }) = projected(&handle, &old)
+    else {
+        panic!("a decision");
+    };
+    submit(
+        &handle,
+        Command::SaveDecision {
+            shown: token(&handle, &old),
+            verse_shown: token(&handle, &verse(1, 2)),
+            value: decision_edit(vec![DecisionChange::Status(Some(UserStatus::Todo))]),
+        },
+    )
+    .unwrap();
+    submit(
+        &handle,
+        Command::MoveCheck {
+            shown: token(&handle, &old),
+            to: tn_key(1, 2, 2),
+            to_shown: token(&handle, &new),
+        },
+    )
+    .unwrap();
+    let fold = handle.snapshot().fold().clone();
+    assert_eq!(fold.moved_into(&tn_key(1, 2, 2)), vec![tn_key(1, 2, 1)]);
+    assert!(fold.history(&new).contains(&older));
+    submit(
+        &handle,
+        Command::Restore {
+            shown: token(&handle, &new),
+            from: older,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        projected(&handle, &new),
+        Some(Record::Check {
+            key: tn_key(1, 2, 2),
+            value: older_value,
+        })
+    );
+    // The check it moved from still says where it went.
+    assert!(matches!(
+        projected(&handle, &old),
+        Some(Record::Check {
+            value: CheckValue::MovedTo { .. },
+            ..
+        })
+    ));
+    handle.close().unwrap();
+}
+
 #[test]
 fn a_restored_version_continues_what_was_shown() {
     let (fs, folder) = rich();
@@ -1780,12 +1843,10 @@ fn pin(sha: u8) -> PinGroupValue {
     )]))
 }
 
-/// Two computers pinned the lexicon differently. Choosing one pin and moving a decision to the
-/// check the other pin's resource makes of it is one batch, one pending file: the conflict is
-/// gone and the decision is where the choice put it. A plan that leaves a pin group of the
-/// conflict out, or was made from heads that moved, writes nothing.
+/// Ruling H5: two computers pinned the lexicon differently. The newest pin wins with no
+/// conflict listed, and the other stays in History, where Restore brings it back.
 #[test]
-fn a_pins_choice_and_its_carry_over_are_one_batch() {
+fn of_two_pins_the_newest_wins_and_the_other_is_restored() {
     let (fs, folder) = rich();
     let group = RecordKey::Pins(PinGroup::Lexicon);
     let (rig, handle) = open(&fs, &folder);
@@ -1813,112 +1874,36 @@ fn a_pins_choice_and_its_carry_over_are_one_batch() {
             before_heads,
         )],
     );
-    let (rig, handle) = open(&rig.fs, &folder);
-    let conflict = handle
-        .snapshot()
-        .fold()
-        .conflicts_of(tc_journal::fold::ConflictKind::Pins)
-        .next()
-        .cloned()
-        .expect("two pins of one group");
-    let heads = handle.snapshot().fold().heads(&group);
-    assert_eq!(heads.len(), 2);
-
-    // The carry-over: the decision on 1:2 moves to the check the chosen pin gives it.
-    let (from, to) = (tn_key(1, 2, 1), tn_key(1, 2, 2));
-    let Some(Record::Check {
-        value: CheckValue::Decision(decision),
-        ..
-    }) = projected(&handle, &RecordKey::Check(from.clone()))
-    else {
-        panic!("1:2 has a decision");
-    };
+    let (_rig, handle) = open(&rig.fs, &folder);
     let fold = handle.snapshot().fold().clone();
-    let plan = |parents_of_from: Vec<ChangeId>| UpgradePlan {
-        changes: vec![
-            PlannedChange {
-                record: Record::Pins {
-                    group: PinGroup::Lexicon,
-                    value: pin(2),
-                },
-                parents: heads.clone(),
-                cause: Cause::Resolve,
-            },
-            PlannedChange {
-                record: Record::Check {
-                    key: from.clone(),
-                    value: CheckValue::MovedTo { to: to.clone() },
-                },
-                parents: parents_of_from,
-                cause: Cause::Edit,
-            },
-            PlannedChange {
-                record: Record::Check {
-                    key: to.clone(),
-                    value: CheckValue::Decision(decision.clone()),
-                },
-                parents: fold.heads(&RecordKey::Check(to.clone())),
-                cause: Cause::Edit,
-            },
-        ],
-    };
-    let files_before = pending_files(&rig.fs, &folder).len();
-    // Made from heads that moved: stale, nothing written.
-    let stale = submit(
-        &handle,
-        Command::ResolvePins {
-            conflict: conflict.id,
-            shown: vec![review(&handle, &group)],
-            plan: plan(vec![ChangeId::of(b"not a head of the decision")]),
-        },
+    assert!(fold.conflicts().all(|c| c.key != group), "no pins conflict");
+    let heads = fold.heads(&group);
+    assert_eq!(heads.len(), 2);
+    let newest = heads
+        .iter()
+        .copied()
+        .max_by_key(|h| (fold.body(h).unwrap().at, *h))
+        .unwrap();
+    let older = heads.iter().copied().find(|h| *h != newest).unwrap();
+    assert_eq!(
+        fold.key_state(&group).map(|k| k.state),
+        Some(tc_journal::fold::Resolved::SettledByRule {
+            head: newest,
+            rule: tc_journal::fold::AutoRule::Newest,
+        })
     );
-    assert!(matches!(stale, Err(CommandError::PlanStale)), "{stale:?}");
-    // A plan that does not settle the group: refused.
-    let left_out = submit(
+    assert!(fold.history(&group).contains(&older));
+    let older_value = fold.body(&older).unwrap().record;
+    submit(
         &handle,
-        Command::ResolvePins {
-            conflict: conflict.id,
-            shown: vec![review(&handle, &group)],
-            plan: UpgradePlan {
-                changes: plan(fold.heads(&RecordKey::Check(from.clone()))).changes[1..].to_vec(),
-            },
-        },
-    );
-    assert!(
-        matches!(left_out, Err(CommandError::Refused(Refusal::Resolve(_)))),
-        "{left_out:?}"
-    );
-    assert_eq!(pending_files(&rig.fs, &folder).len(), files_before);
-
-    let reply = submit(
-        &handle,
-        Command::ResolvePins {
-            conflict: conflict.id,
-            shown: vec![review(&handle, &group)],
-            plan: plan(fold.heads(&RecordKey::Check(from.clone()))),
+        Command::Restore {
+            shown: token(&handle, &group),
+            from: older,
         },
     )
     .unwrap();
-    assert_eq!(reply.changes.len(), 3);
-    assert_eq!(
-        pending_files(&rig.fs, &folder).len(),
-        files_before + 1,
-        "one batch, one pending file"
-    );
-    let fold = handle.snapshot().fold().clone();
-    assert_eq!(
-        fold.conflicts_of(tc_journal::fold::ConflictKind::Pins)
-            .count(),
-        0
-    );
-    assert_eq!(fold.heads(&group).len(), 1);
-    assert!(matches!(
-        fold.projected(&RecordKey::Check(to)),
-        Some(Record::Check {
-            value: CheckValue::Decision(_),
-            ..
-        })
-    ));
+    assert_eq!(projected(&handle, &group), Some(older_value));
+    assert_eq!(handle.snapshot().fold().heads(&group).len(), 1);
     handle.close().unwrap();
 }
 

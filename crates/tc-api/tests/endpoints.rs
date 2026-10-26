@@ -44,6 +44,12 @@ const PHASE_0: &[&str] = &[
     // B3: open and Understand.
     "session/open",
     "session/close",
+    "session/retryCheckpoint",
+    "session/leave",
+    "session/focus",
+    "session/importKept",
+    "session/notNow",
+    "session/dismissNotice",
     "editor/book",
     "editor/sources",
     "helps/passage",
@@ -80,6 +86,8 @@ const PHASE_0: &[&str] = &[
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
     "door43/share",
+    // HIST-1: the last sync result, readable after its toast.
+    "door43/lastSync",
     // B6: the aligner's rail, its session and its save.
     "align/index",
     "align/open",
@@ -114,12 +122,20 @@ const PHASE_0: &[&str] = &[
     "conflicts/resolve",
     // C7a: the bulk keep.
     "conflicts/resolveBulk",
+    "conflicts/restore",
+    // HIST-1: the History of a record a screen shows.
+    "conflicts/versions",
     // B8: what the Community Checking preview prints.
     "export/book",
     "export/stories",
     // D2: the export's conflict check and its job.
     "export/preflight",
     "export/run",
+    // F1: import a tC3 project, and Update a book from USFM.
+    "import/review",
+    "import/versions",
+    "import/run",
+    "import/updateBook",
     "test/quiet",
     "test/echo",
     "test/crash",
@@ -187,6 +203,16 @@ fn the_list_and_the_impls_agree() {
         <tc_api::resources::Download as Endpoint>::KIND,
         Kind::StartJob
     );
+    assert_eq!(
+        <tc_api::import::Versions as Endpoint>::NET,
+        Some(NetKind::ImportVersions)
+    );
+    assert_eq!(<tc_api::import::Run as Endpoint>::KIND, Kind::StartJob);
+    assert_eq!(
+        <tc_api::import::UpdateBook as Endpoint>::KIND,
+        Kind::StartJob
+    );
+    assert_eq!(<tc_api::import::Review as Endpoint>::KIND, Kind::Query);
     assert_eq!(<tc_api::app::Hello as Endpoint>::KIND, Kind::Query);
     for endpoint in ALL {
         let asks = endpoint.net.is_some();
@@ -206,6 +232,7 @@ fn the_list_and_the_impls_agree() {
                 | "resources/checkUpdates"
                 | "resources/planUpgrade"
                 | "resources/fixFetch"
+                | "import/versions"
         );
         assert_eq!(
             asks, expected,

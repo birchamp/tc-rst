@@ -52,7 +52,11 @@
               "mode": {
                 "type": "writable"
               },
-              "role": "screen"
+              "role": "screen",
+              "outside": {
+                "waiting": [],
+                "kept": []
+              }
             },
             "name": "Equipo Ejemplo — Tito y Jonás",
             "tag": "es-419",
@@ -106,7 +110,36 @@
             "alignments": 0,
             "restored": 0,
             "missingPins": 5,
-            "recreated": false
+            "recreated": false,
+            "replaced": [
+              {
+                "by": {
+                  "who": {
+                    "type": "teammate",
+                    "value": 1
+                  },
+                  "computer": null
+                },
+                "whose": {
+                  "who": {
+                    "type": "username",
+                    "value": "maria"
+                  },
+                  "computer": null
+                },
+                "kind": "alignment",
+                "place": {
+                  "type": "verse",
+                  "value": {
+                    "book": "TIT",
+                    "chapter": 1,
+                    "verse": 1
+                  }
+                },
+                "count": 1,
+                "was": null
+              }
+            ]
           }
         }
       }

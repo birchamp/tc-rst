@@ -320,6 +320,9 @@ impl Actor {
                 },
                 asked: self.asked,
                 suggesting: self.suggesting,
+                // A token that cannot be written out leaves the verse without History, never
+                // without its aligner.
+                history: crate::wire::token::shown(&self.tokens.alignment).ok(),
             },
         )
     }

@@ -15,7 +15,7 @@ use tc_journal::fold::Counters;
 use tc_store::FakePlatform;
 use tempfile::TempDir;
 
-use super::corpus::{FOLDER, corpora, store_corpora};
+use super::corpus::{FOLDER, corpora, larger_psalms, store_corpora};
 use crate::common::{Parts, TestApp, folder, open_progress};
 use crate::store_world::{APP, PROJECTS, assert_valid_burrito, backend_over};
 
@@ -289,7 +289,10 @@ pub fn growth(small: &Cost, large: &Cost) -> Vec<String> {
         .exceeding(&small.app)
         .into_iter()
         .map(|(name, big, little)| {
-            format!("app {name}: {little} on Psalms, {big} ten times larger")
+            format!(
+                "app {name}: {little} on Psalms, {big} {} times larger",
+                tc_corpus::Spec::test_factor()
+            )
         });
     let grew =
         |kind: &'static str, big: Vec<(&'static str, u64)>, little: Vec<(&'static str, u64)>| {
@@ -297,7 +300,10 @@ pub fn growth(small: &Cost, large: &Cost) -> Vec<String> {
                 .zip(little)
                 .filter(|((_, big), (_, little))| big > little)
                 .map(move |((name, big), (_, little))| {
-                    format!("{kind} {name}: {little} on Psalms, {big} ten times larger")
+                    format!(
+                        "{kind} {name}: {little} on Psalms, {big} {} times larger",
+                        tc_corpus::Spec::test_factor()
+                    )
                 })
                 .collect::<Vec<_>>()
         };
@@ -322,16 +328,31 @@ pub async fn costs_on_both(
     action: impl AsyncFn(&Scale),
 ) -> (Cost, Cost) {
     let (memory, disk) = (corpora(), store_corpora());
-    let mut out = Vec::new();
-    for (project, on_disk) in [
-        (&memory.psalms, &disk.psalms),
-        (&memory.larger, &disk.larger),
-    ] {
-        let scale = scale(backing, project, on_disk).await;
-        before(&scale).await;
-        out.push(cost(&scale, async |s| action(s).await).await);
-    }
-    (out[0], out[1])
+    let small = cost_on(backing, &memory.psalms, &disk.psalms, &before, &action).await;
+    let large = cost_on(backing, &memory.larger, &disk.larger, &before, &action).await;
+    (small, large)
+}
+
+/// The cost of `action` on the larger corpus's Psalms alone over `backing`.
+pub async fn cost_alone(
+    backing: Backing,
+    before: impl AsyncFn(&Scale),
+    action: impl AsyncFn(&Scale),
+) -> Cost {
+    let alone = larger_psalms();
+    cost_on(backing, &alone.memory, &alone.disk, &before, &action).await
+}
+
+async fn cost_on(
+    backing: Backing,
+    project: &MemoryProject,
+    on_disk: &tc_store::fault::FaultFs,
+    before: impl AsyncFn(&Scale),
+    action: impl AsyncFn(&Scale),
+) -> Cost {
+    let scale = scale(backing, project, on_disk).await;
+    before(&scale).await;
+    cost(&scale, async |s| action(s).await).await
 }
 
 /// What a row holds to on the store: everything, or (for an action that opens the project,
@@ -351,16 +372,50 @@ pub async fn costs_what_it_touches(
     before: impl AsyncFn(&Scale),
     action: impl AsyncFn(&Scale),
 ) -> ((Cost, Cost), (Cost, Cost)) {
+    touches(name, on_store, Against::Psalms, before, action).await
+}
+
+/// [`costs_what_it_touches`] for an action whose cost is each of Psalms' records: the larger
+/// corpus is held to its own Psalms alone ([`larger_psalms`]), since the Psalms corpus holds a
+/// few more or fewer merged and conflicting records. Answers the costs on Psalms and on the
+/// larger corpus, as [`costs_what_it_touches`] does.
+pub async fn book_costs_what_it_touches(
+    name: &str,
+    on_store: OnStore,
+    before: impl AsyncFn(&Scale),
+    action: impl AsyncFn(&Scale),
+) -> ((Cost, Cost), (Cost, Cost)) {
+    touches(name, on_store, Against::ItsOwnPsalms, before, action).await
+}
+
+/// What the larger corpus's cost is held to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Against {
+    Psalms,
+    ItsOwnPsalms,
+}
+
+async fn touches(
+    name: &str,
+    on_store: OnStore,
+    against: Against,
+    before: impl AsyncFn(&Scale),
+    action: impl AsyncFn(&Scale),
+) -> ((Cost, Cost), (Cost, Cost)) {
     let mut both = Vec::new();
     for backing in [Backing::Memory, Backing::Store] {
         let (small, large) = costs_on_both(backing, &before, &action).await;
-        let mut grew = growth(&small, &large);
+        let base = match against {
+            Against::Psalms => small,
+            Against::ItsOwnPsalms => cost_alone(backing, &before, &action).await,
+        };
+        let mut grew = growth(&base, &large);
         if backing == Backing::Store && on_store == OnStore::AppCounts {
             grew.retain(|g| g.starts_with("app "));
         }
         assert!(
             grew.is_empty(),
-            "{name} grows with the project on {backing:?}:\n{}",
+            "{name} grows with the project on {backing:?} (against {against:?}):\n{}",
             grew.join("\n")
         );
         both.push((small, large));

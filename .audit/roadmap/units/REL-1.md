@@ -8,7 +8,7 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, E1c]
+depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c]
 needs_owner: []
 proves: []
 no_loss: false
@@ -50,3 +50,4 @@ The owner's yes is recorded, and the release tag points at a commit
 ## Log
 
 - 2026-10-24 | roadmap | created | none | the owner cut scope to finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-26 11:30 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner: "Yes, REL-1 waits for LOSS-1." (2026-10-26): depends gains LOSS-1, the 26 §15 loss tests CHK-3 found | message from the orchestrator, 2026-10-26

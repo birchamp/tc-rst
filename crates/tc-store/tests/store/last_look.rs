@@ -86,6 +86,9 @@ fn a_same_stat_edit_after_the_group_read_is_kept_at_the_last_look() {
         "the final look overwrote the same-size/same-time outside bytes without a copy: {:?}",
         handle.notices()
     );
+    // The book waits for the person's answer; *Import* takes the outside verse in beside the
+    // translator's, both changed since the file was written: a conflict to review.
+    assert_eq!(counts(&import_waiting(&handle)), vec![(0, 1)]);
     assert_verse_history(&handle, &outside_words);
     assert_verse_history(&handle, inside_words);
     assert_valid_burrito(&rig.fs, &folder);

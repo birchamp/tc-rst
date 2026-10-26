@@ -255,3 +255,20 @@ pub fn resume_line(resume: &LastEditView) -> String {
 pub fn is_stories(card: &HomeCard) -> bool {
     card.kind == ProjectKind::Stories
 }
+
+/// The failed checkpoint's banner (tC4 `startLeaveCheckpoint`, `Home.jsx:363-368`): "Checkpoint
+/// not saved: <reason>", and Ask for help when the failure is a problem in the app.
+pub fn checkpoint_banner(
+    failed: &tc_api::app::FailedCheckpoint,
+) -> (String, Option<crate::app::feedback::HelpRequest>) {
+    let text = format!("{}: {}", t(keys::app::COMMIT_ERROR, &[]), failed.reason);
+    let help = failed
+        .code
+        .clone()
+        .map(|code| crate::app::feedback::HelpRequest {
+            code,
+            text: text.clone(),
+            report: None,
+        });
+    (text, help)
+}

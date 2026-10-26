@@ -7,6 +7,8 @@
 //! dialog over its fields, so the browser tests can prove that a language switch keeps typed
 //! text.
 //!
+//! `?probe=q9&screen=<name>` draws one screen of C7b's H5 packet instead ([`Q9`]).
+//!
 //! Test triggers, read only here: `sessionStorage["tc4.test.panicOnInput"] = "1"` makes the next
 //! input handler panic before it tells the machine, and `sessionStorage["tc4.test.panicAtBoot"]
 //! = n` makes the next n page loads panic in `run_app`. A ticker reads the machine every 20 ms,
@@ -45,6 +47,29 @@ pub(super) fn requested() -> bool {
         .ok()
         .and_then(|window| window.location().search().ok())
         .is_some_and(|search| search.split(['?', '&']).any(|part| part == "probe=fields"))
+}
+
+/// The screen of the H5 packet the address asks for with `?probe=q9&screen=<name>` (C7b).
+pub(super) fn q9_requested() -> Option<String> {
+    let search = js::window().ok()?.location().search().ok()?;
+    let mut parts = search.trim_start_matches('?').split('&');
+    if !parts.clone().any(|part| part == "probe=q9") {
+        return None;
+    }
+    parts.find_map(|part| part.strip_prefix("screen=").map(str::to_owned))
+}
+
+/// One screen of the H5 packet, drawn from its fixed data; the boot error is the app's own.
+#[component]
+pub(super) fn Q9(name: String) -> impl IntoView {
+    let screen = match crate::app::q9::screen(&name) {
+        Some(crate::app::q9::Q9Screen::BootError(reason)) => {
+            view! { <super::BootError reason=reason /> }.into_any()
+        }
+        Some(screen) => crate::views::review::q9_screen(screen),
+        None => view! { <p data-testid="q9-unknown">"no such screen"</p> }.into_any(),
+    };
+    view! { <div data-testid="q9" data-screen=name>{screen}</div> }
 }
 
 /// A boot that panics, for the recovery tests: `run_app` calls this first.

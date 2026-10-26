@@ -82,6 +82,7 @@ async fn script_synced(w: &World, n: u8, project: &ProjectRef) {
                     teammates: None,
                     joined: None,
                     restored: 0,
+                    kinds: Vec::new(),
                 },
             },
         },
@@ -1222,4 +1223,340 @@ async fn a_shared_project_is_never_shared_to_a_second_repository() {
         Vec::<String>::new(),
         "nothing was created or pushed"
     );
+}
+
+/// What every import port must do (F1), driven through the app's public API on a store world:
+/// post `import/review`, `import/run` and `import/updateBook`, follow the jobs, read the project
+/// list. The checks before a port is called are the app's own, so both ports meet them.
+mod import_ports {
+    use std::sync::Arc;
+
+    use tc_api::ApiError;
+    use tc_api::import::{
+        FoundBook, ImportDetails, ImportFile, ImportFound, Review, UpdateReport, VersionSlot,
+    };
+    use tc_api::jobs::{JobOutcome, JobState};
+    use tc_api::refusal::{ImportRefusal, Refusal};
+    use tc_app::StoreChoice;
+    use tc_app::ports::scripted::ScriptedImportPort;
+    use tc_core::BookId;
+    use tc_store::hooks::Point;
+
+    use super::super::common::{Parts, TestApp, post};
+    use super::super::import::{aligned_titus, open_sample, run, tc3_titus, update, upload};
+    use super::{ended, listed};
+    use crate::store_world::{StoreWorld, store_world};
+
+    pub(super) struct ImportWorld {
+        pub dir: tempfile::TempDir,
+        pub t: TestApp,
+        pub world: StoreWorld,
+        pub scripted: Option<Arc<ScriptedImportPort>>,
+        pub zip: ImportFile,
+    }
+
+    async fn world_with(scripted: Option<Arc<ScriptedImportPort>>) -> ImportWorld {
+        let world = store_world();
+        let store = world.store();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("app-data/uploads")).unwrap();
+        super::super::import::install_notes(dir.path());
+        let port: Arc<dyn tc_app::ports::ImportPort> = match &scripted {
+            Some(port) => port.clone(),
+            None => Arc::new(tc_app::import::TcImport),
+        };
+        let t = TestApp::start_with(dir.path(), &Parts::new(), |_, deps| {
+            deps.store = StoreChoice::Given(store);
+            deps.import = port;
+        })
+        .await;
+        let zip = upload(dir.path(), 9, "cfm_fbt_tit_book.zip", &tc3_titus());
+        ImportWorld {
+            dir,
+            t,
+            world,
+            scripted,
+            zip,
+        }
+    }
+
+    fn found() -> ImportFound {
+        ImportFound {
+            details: ImportDetails {
+                name: "cfm_fbt".into(),
+                code: "cfm".into(),
+            },
+            licenses: vec!["CC BY-SA 4.0".into()],
+            contributors: Vec::new(),
+            books: vec![FoundBook {
+                book: BookId::Titus,
+                chapters: 3,
+                verses: 46,
+                drafted: 46,
+                aligned: 0,
+                decisions: 5,
+                not_kept: Vec::new(),
+            }],
+            slots: vec![
+                VersionSlot::TranslationNotes,
+                VersionSlot::OriginalNewTestament,
+            ],
+        }
+    }
+
+    fn details(name: &str) -> ImportDetails {
+        ImportDetails {
+            name: name.into(),
+            code: "cfm".into(),
+        }
+    }
+
+    /// A port under the contract: how a world is made, and how each case's outcome is arranged.
+    pub(super) trait ImportPortFixture {
+        /// Whether a successful run writes the project it answers. The scripted port answers a
+        /// project the world holds already.
+        const RUN_WRITES: bool;
+        async fn world() -> ImportWorld;
+        /// The next review reads the zip.
+        fn review_reads(w: &ImportWorld);
+        /// The next run makes a project named `name`; the project it answers.
+        fn run_succeeds(w: &ImportWorld, name: &str) -> tc_api::ids::ProjectRef;
+        /// The next run fails while it writes; the job's error. [`Self::heal`] ends it.
+        fn run_fails(w: &ImportWorld) -> ApiError;
+        fn heal(w: &ImportWorld);
+        /// The next run stops before its end until [`Self::release`]; `held` waits for it.
+        fn hold_run(w: &ImportWorld);
+        async fn held(w: &ImportWorld);
+        fn release(w: &ImportWorld);
+        /// The next Update a book of Titus succeeds.
+        fn update_succeeds(w: &ImportWorld);
+    }
+
+    pub(super) struct Scripted;
+
+    impl Scripted {
+        fn port(w: &ImportWorld) -> &ScriptedImportPort {
+            w.scripted.as_deref().expect("the scripted port")
+        }
+    }
+
+    impl ImportPortFixture for Scripted {
+        const RUN_WRITES: bool = false;
+
+        async fn world() -> ImportWorld {
+            world_with(Some(Arc::new(ScriptedImportPort::default()))).await
+        }
+
+        fn review_reads(w: &ImportWorld) {
+            Self::port(w).script_review(Ok(found()));
+        }
+
+        fn run_succeeds(w: &ImportWorld, _name: &str) -> tc_api::ids::ProjectRef {
+            let project = w.world.bible.clone();
+            Self::port(w).script_run(Ok(project.clone()));
+            project
+        }
+
+        fn run_fails(w: &ImportWorld) -> ApiError {
+            let error = ApiError::Refused(Refusal::Import(ImportRefusal::WriteFailed));
+            Self::port(w).script_run(Err(error.clone()));
+            error
+        }
+
+        fn heal(_w: &ImportWorld) {}
+
+        fn hold_run(w: &ImportWorld) {
+            Self::port(w).script_run_until_cancelled();
+        }
+
+        async fn held(_w: &ImportWorld) {}
+
+        fn release(_w: &ImportWorld) {}
+
+        fn update_succeeds(w: &ImportWorld) {
+            Self::port(w).script_update(Ok(UpdateReport {
+                book: BookId::Titus,
+                imported: 41,
+                to_review: 5,
+                left_as_it_was: Vec::new(),
+                markup_kept: Vec::new(),
+                book_added: false,
+            }));
+        }
+    }
+
+    pub(super) struct Real;
+
+    impl ImportPortFixture for Real {
+        const RUN_WRITES: bool = true;
+
+        async fn world() -> ImportWorld {
+            world_with(None).await
+        }
+
+        fn review_reads(_w: &ImportWorld) {}
+
+        fn run_succeeds(_w: &ImportWorld, name: &str) -> tc_api::ids::ProjectRef {
+            tc_api::ids::ProjectRef::parse(name).unwrap()
+        }
+
+        fn run_fails(w: &ImportWorld) -> ApiError {
+            w.world
+                .fs
+                .fail_writes(Some(std::io::ErrorKind::StorageFull));
+            ApiError::Refused(Refusal::Import(ImportRefusal::WriteFailed))
+        }
+
+        fn heal(w: &ImportWorld) {
+            w.world.fs.fail_writes(None);
+        }
+
+        fn hold_run(w: &ImportWorld) {
+            w.world.hooks.hold(Point::BeforeStagingRename);
+        }
+
+        async fn held(w: &ImportWorld) {
+            let hooks = w.world.hooks.clone();
+            tokio::task::spawn_blocking(move || hooks.wait_reached(Point::BeforeStagingRename, 1))
+                .await
+                .unwrap();
+        }
+
+        fn release(w: &ImportWorld) {
+            w.world.hooks.release(Point::BeforeStagingRename);
+        }
+
+        fn update_succeeds(_w: &ImportWorld) {}
+    }
+
+    macro_rules! import_port_contract {
+        ($name:ident, $fixture:ty) => {
+            mod $name {
+                use super::*;
+
+                #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+                async fn an_import_makes_one_project_or_none() {
+                    let w = <$fixture>::world().await;
+                    let app = &w.t.app;
+                    let before = listed(app).await;
+                    let error = <$fixture>::run_fails(&w);
+                    let job = post(app, &run(1, &w.zip, details("contract_one")))
+                        .await
+                        .unwrap();
+                    assert_eq!(ended(app, job).await, JobState::Failed(error));
+                    <$fixture>::heal(&w);
+                    assert_eq!(listed(app).await, before, "a failed run adds no project");
+
+                    let project = <$fixture>::run_succeeds(&w, "contract_one");
+                    if <$fixture>::RUN_WRITES {
+                        assert!(!before.contains(&project), "{project:?} is new");
+                    }
+                    let job = post(app, &run(2, &w.zip, details("contract_one")))
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        ended(app, job).await,
+                        JobState::Done(JobOutcome::Created {
+                            project: project.clone()
+                        })
+                    );
+                    let after = listed(app).await;
+                    assert!(after.contains(&project), "{project:?} is listed");
+                    let added = after.iter().filter(|p| !before.contains(p)).count();
+                    assert_eq!(
+                        added,
+                        usize::from(<$fixture>::RUN_WRITES),
+                        "one project, or none"
+                    );
+                }
+
+                #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+                async fn a_cancel_leaves_nothing() {
+                    let w = <$fixture>::world().await;
+                    let app = &w.t.app;
+                    let before = listed(app).await;
+                    <$fixture>::hold_run(&w);
+                    let job = post(app, &run(3, &w.zip, details("contract_cancel")))
+                        .await
+                        .unwrap();
+                    <$fixture>::held(&w).await;
+                    assert_eq!(listed(app).await, before, "nothing is listed while it runs");
+                    app.jobs().cancel(job);
+                    <$fixture>::release(&w);
+                    match ended(app, job).await {
+                        JobState::Cancelled => {
+                            assert_eq!(listed(app).await, before, "a cancel leaves nothing")
+                        }
+                        // The real create was past its last check: it placed the whole project.
+                        JobState::Done(JobOutcome::Created { project }) => {
+                            assert!(<$fixture>::RUN_WRITES);
+                            assert!(listed(app).await.contains(&project));
+                        }
+                        other => panic!("{other:?}"),
+                    }
+                }
+
+                #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+                async fn a_name_in_use_is_refused_on_review() {
+                    let w = <$fixture>::world().await;
+                    let app = &w.t.app;
+                    <$fixture>::review_reads(&w);
+                    let in_use = details(w.world.bible.as_str());
+                    let review = post(
+                        app,
+                        &Review {
+                            files: vec![w.zip.clone()],
+                            details: Some(in_use.clone()),
+                            use_installed: None,
+                        },
+                    )
+                    .await
+                    .unwrap();
+                    assert_eq!(review.found.books[0].book, BookId::Titus);
+                    assert_eq!(
+                        review.refusal,
+                        Some(Refusal::Import(ImportRefusal::NameExists))
+                    );
+                    let before = listed(app).await;
+                    assert_eq!(
+                        post(app, &run(4, &w.zip, in_use)).await,
+                        Err(ApiError::Refused(Refusal::Import(
+                            ImportRefusal::NameExists
+                        )))
+                    );
+                    assert_eq!(listed(app).await, before);
+                }
+
+                #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+                async fn update_a_book_reports_and_refuses_another_book() {
+                    let w = <$fixture>::world().await;
+                    let app = &w.t.app;
+                    let at = open_sample(&w.t).await;
+                    let other = aligned_titus().replacen("\\id TIT", "\\id PHM", 1);
+                    let file = upload(w.dir.path(), 10, "PHM.usfm", other.as_bytes());
+                    assert!(matches!(
+                        post(app, &update(5, &at, BookId::Titus, &file)).await,
+                        Err(ApiError::Refused(Refusal::Import(
+                            ImportRefusal::UpdateOtherBook { .. }
+                        )))
+                    ));
+                    <$fixture>::update_succeeds(&w);
+                    let file = upload(w.dir.path(), 11, "TIT.usfm", aligned_titus().as_bytes());
+                    let job = post(app, &update(6, &at, BookId::Titus, &file))
+                        .await
+                        .unwrap();
+                    match ended(app, job).await {
+                        JobState::Done(JobOutcome::BookUpdated(report)) => {
+                            assert_eq!(report.book, BookId::Titus);
+                            assert!(report.imported > 0 && report.to_review > 0, "{report:?}");
+                        }
+                        other => panic!("{other:?}"),
+                    }
+                }
+            }
+        };
+    }
+
+    import_port_contract!(scripted, Scripted);
+    import_port_contract!(tc_import, Real);
 }

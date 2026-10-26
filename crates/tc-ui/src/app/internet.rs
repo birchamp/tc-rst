@@ -56,6 +56,8 @@ pub enum Pending {
     UpgradeText(String),
     /// The guided fix's "Download it" (B5b, tC4 `fixFetch`), for the screen the id names.
     Fix(u64),
+    /// Import's "Look up on Door43" (F1, tC4 `importGoOnline`).
+    ImportVersions,
 }
 
 impl Pending {
@@ -72,6 +74,7 @@ impl Pending {
             Self::Profile => NetKind::Profile,
             Self::OpenDoor43 => NetKind::Open,
             Self::Fix(_) => NetKind::Fix,
+            Self::ImportVersions => NetKind::ImportVersions,
             Self::Catalog
             | Self::Download
             | Self::Updates

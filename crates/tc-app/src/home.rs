@@ -794,12 +794,14 @@ impl Handle<List> for App {
                 Ok(peek) => cards.push(self.home_card(entry, peek)),
                 // The folder went away between the listing and its peek.
                 Err(StoreError::NotAProject) => {}
-                Err(StoreError::Other(reason)) => unusable.push(UnusableCard {
-                    name: entry.folder.to_string(),
-                    reason: UnusableReason::FolderUnreadable {
-                        reason: reason.clone(),
-                    },
-                }),
+                Err(error @ (StoreError::Other(_) | StoreError::NotKept)) => {
+                    unusable.push(UnusableCard {
+                        name: entry.folder.to_string(),
+                        reason: UnusableReason::FolderUnreadable {
+                            reason: error.to_string(),
+                        },
+                    });
+                }
             }
         }
         unusable.sort_by(|a, b| a.name.cmp(&b.name));
@@ -815,6 +817,10 @@ impl Handle<List> for App {
                 .then_some(StartNotice::OpenDoor43Removed)
                 .into_iter()
                 .collect(),
+            import_removed: self
+                .inner
+                .import_removed
+                .swap(false, std::sync::atomic::Ordering::SeqCst),
         })
     }
 }

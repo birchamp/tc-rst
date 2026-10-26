@@ -131,7 +131,8 @@ impl ScriptedResources {
         match next {
             tc_api::test::Scripted::Updates(view) => *lock(&self.updates) = Some(view),
             tc_api::test::Scripted::Plan(view) => lock(&self.plans).push_back(*view),
-            tc_api::test::Scripted::Sync { .. } => {}
+            tc_api::test::Scripted::Sync { .. }
+            | tc_api::test::Scripted::CheckpointFails { .. } => {}
         }
     }
 

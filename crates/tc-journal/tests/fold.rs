@@ -7,7 +7,7 @@ mod support;
 
 use support::*;
 use tc_journal::fold::{
-    BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
+    AutoRule, BookView, ConflictKind, FoldInput, FoldState, MergeHow, ProjectKind, Resolved,
 };
 use tc_journal::record::{PresentHow, UserStatus};
 use tc_journal::{Cause, RecordKey};
@@ -100,7 +100,7 @@ fn a_paragraph_break_and_a_rewording_merge_by_units() {
 }
 
 #[test]
-fn bookmark_and_status_merge_but_two_statuses_conflict() {
+fn bookmark_and_status_merge_and_of_two_statuses_the_newest_wins() {
     let mut ana = Dev::new(1);
     let mut pedro = Dev::new(2);
     let key = check_key("abcd", 1, 1);
@@ -126,11 +126,28 @@ fn bookmark_and_status_merge_but_two_statuses_conflict() {
         check(&key, decision(Some(UserStatus::Todo), false, None)),
         vec![base.id()],
     );
-    let state = fold(&[base, status, other]);
-    let conflicts: Vec<_> = state.conflicts().collect();
-    assert_eq!(conflicts.len(), 1);
-    assert_eq!(conflicts[0].kind, ConflictKind::Check);
-    assert_eq!(conflicts[0].disputed.len(), 1);
+    let state = fold(&[base, status.clone(), other.clone()]);
+    // Ruling H5: no conflict; the newest wins and the other stays in History.
+    assert_eq!(state.conflicts().count(), 0);
+    let newest = [&status, &other]
+        .into_iter()
+        .max_by_key(|c| (c.body().at, c.id()))
+        .unwrap();
+    let older = if newest.id() == status.id() {
+        &other
+    } else {
+        &status
+    };
+    let key = RecordKey::Check(key);
+    assert_eq!(
+        state.key_state(&key).map(|k| k.state),
+        Some(Resolved::SettledByRule {
+            head: newest.id(),
+            rule: AutoRule::Newest
+        })
+    );
+    assert_eq!(state.projected(&key), Some(newest.body().record.clone()));
+    assert!(state.history(&key).contains(&older.id()));
 }
 
 #[test]
@@ -207,8 +224,10 @@ fn a_join_against_an_edit_of_a_joined_verse_is_one_passage_conflict() {
     );
 }
 
+// Owner ruling H5: the newest of a removal and an edit the remover had not seen decides,
+// with no question, and the edit stays in History either way.
 #[test]
-fn removal_hides_nothing_unseen() {
+fn the_newest_of_a_removal_and_an_unseen_edit_decides() {
     let mut maria = Dev::new(1);
     let mut juan = Dev::new(2);
     let mut book = imported_book(&mut maria, &[3]);
@@ -224,29 +243,29 @@ fn removal_hides_nothing_unseen() {
         vec![],
     ));
     let presence = on(&book, &RecordKey::BookPresence(BOOK));
-    // Juan edits verse 2; Maria removes the book without having seen it.
-    let edit = juan.one(
-        verse(1, 2, text("Juan's", 2)),
-        vec![on(&book, &verse_key(1, 2)).id()],
-    );
+    let base = on(&book, &verse_key(1, 2)).id();
+    // Juan edits verse 2 before Maria, who had not seen it, removes the book.
+    let older = juan.one(verse(1, 2, text("Juan's", 2)), vec![base]);
     let held: Vec<_> = ids(&book);
     let removal = maria.one(removed(&held), vec![presence.id()]);
+    assert!(juan.at < maria.at, "the removal is the newest");
     let mut all = book.clone();
     all.push(removal.clone());
+    all.push(older.clone());
     let state = fold(&all);
     assert_eq!(state.book(BOOK), BookView::Removed);
-    let mut all_with = all.clone();
-    all_with.push(edit);
-    let state = fold(&all_with);
+    assert!(state.history(&verse_key(1, 2)).contains(&older.id()));
+    assert_eq!(state.conflicts().count(), 0);
+    // Juan's next edit, after the removal, keeps the book.
+    juan.at = maria.at + 60_000;
+    let newer = juan.one(verse(1, 2, text("Juan's again", 2)), vec![older.id()]);
+    all.push(newer);
+    let state = fold(&all);
     assert!(matches!(
         state.book(BOOK),
-        BookView::RemovedWhileEdited { unseen: 1, .. }
+        BookView::RemovedWhileEdited { unseen: 2, .. }
     ));
-    assert!(
-        state
-            .conflicts()
-            .any(|c| matches!(c.kind, ConflictKind::BookRemovedWhileEdited { unseen: 1 }))
-    );
+    assert_eq!(state.conflicts().count(), 0);
 }
 
 #[test]

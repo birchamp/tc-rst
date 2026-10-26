@@ -1,0 +1,125 @@
+{
+  "path": "door43/lastSync",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "project": "sample_burrito"
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "view": {
+        "received": 3,
+        "from": [
+          {
+            "who": {
+              "type": "username",
+              "value": "juan"
+            },
+            "computer": null
+          }
+        ],
+        "keptNewest": 3,
+        "verseConflicts": 0,
+        "alignments": 0,
+        "restored": 0,
+        "missingPins": 0,
+        "recreated": false,
+        "replaced": [
+          {
+            "by": {
+              "who": {
+                "type": "username",
+                "value": "juan"
+              },
+              "computer": null
+            },
+            "whose": {
+              "who": {
+                "type": "mine"
+              },
+              "computer": null
+            },
+            "kind": "setting",
+            "place": {
+              "type": "book",
+              "value": {
+                "book": "TIT"
+              }
+            },
+            "count": 1,
+            "was": {
+              "type": "font",
+              "value": "Noto Sans"
+            }
+          },
+          {
+            "by": {
+              "who": {
+                "type": "username",
+                "value": "juan"
+              },
+              "computer": null
+            },
+            "whose": {
+              "who": {
+                "type": "mine"
+              },
+              "computer": null
+            },
+            "kind": "setting",
+            "place": {
+              "type": "book",
+              "value": {
+                "book": "TIT"
+              }
+            },
+            "count": 1,
+            "was": {
+              "type": "direction",
+              "value": "ltr"
+            }
+          },
+          {
+            "by": {
+              "who": {
+                "type": "username",
+                "value": "juan"
+              },
+              "computer": null
+            },
+            "whose": {
+              "who": {
+                "type": "mine"
+              },
+              "computer": null
+            },
+            "kind": "resources",
+            "place": {
+              "type": "book",
+              "value": {
+                "book": "TIT"
+              }
+            },
+            "count": 1,
+            "was": {
+              "type": "resources",
+              "value": [
+                "en_tn v90"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

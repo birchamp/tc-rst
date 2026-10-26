@@ -527,6 +527,12 @@ impl ImportKind {
             Self::Burrito => "burrito",
         }
     }
+
+    /// Only the tC3 kind has an importer in this release (rulings/2026-10-24-H3-H4-H7); tC4
+    /// draws a kind without one disabled (`KindStep`).
+    pub fn has_importer(self) -> bool {
+        self == Self::Tc3
+    }
 }
 
 /// The steps of Import.
@@ -539,24 +545,528 @@ pub enum ImportStep {
     Failed,
 }
 
-/// tC4's `im`, the kind step's part; F1 adds the files, the review and the run.
+/// The page of Import the person is on; the run's state adds Working and Failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportPage {
+    Kind,
+    Files,
+    Review,
+}
+
+/// Where a chosen file's upload stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportUpload {
+    Sending,
+    Sent(UploadId),
+    /// It could not be sent: why, in words.
+    Failed(String),
+}
+
+/// A file chosen on the files step (tC4 `im.files`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportEntry {
+    /// Names the row whatever is removed meanwhile.
+    pub id: u32,
+    pub name: String,
+    pub bytes: u64,
+    pub upload: ImportUpload,
+}
+
+/// A refusal as the damaged panel and the failed step show it: its sentence, tC4's code for
+/// it when tC4 has one, and what went wrong in detail.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportFailure {
+    pub code: Option<String>,
+    pub sentence: String,
+    pub detail: Option<String>,
+}
+
+/// What the review step read of the files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reviewed {
+    Found(Box<tc_api::import::ImportReview>),
+    /// The files cannot be imported (tC4's `damaged` finding): nothing will be made of them.
+    Damaged(ImportFailure),
+}
+
+/// The resource versions of a tC3 import (tC4 `im.versions`, D82). The review never looks
+/// them up on its own (D95).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VersionLookup {
+    NotLookedUp,
+    Looking,
+    Found(tc_api::import::VersionsView),
+    /// "Use installed versions": the slots Door43 did not give take this computer's, and what
+    /// that does to their decisions once the server has counted it.
+    Installed(
+        tc_api::import::VersionsView,
+        Option<tc_api::import::CarryOver>,
+    ),
+}
+
+impl VersionLookup {
+    /// tC4's `data-state` of the Resource versions row.
+    pub fn data_state(&self) -> &'static str {
+        match self {
+            Self::NotLookedUp => "offline",
+            Self::Looking => "looking",
+            Self::Found(view) if view.unresolved.is_empty() => "found",
+            Self::Found(_) => "missing",
+            Self::Installed(..) => "installed",
+        }
+    }
+
+    /// Import waits for a choice, a lookup or Use installed versions, or for the count of
+    /// what the installed versions do (tC4 `im.busy`).
+    pub fn open(&self) -> bool {
+        match self {
+            Self::NotLookedUp | Self::Looking | Self::Installed(_, None) => true,
+            Self::Found(view) => !view.unresolved.is_empty(),
+            Self::Installed(_, Some(_)) => false,
+        }
+    }
+
+    /// The versions Door43 gave, which the project pins.
+    pub fn found(&self) -> Vec<tc_api::import::FoundVersion> {
+        match self {
+            Self::Found(view) | Self::Installed(view, _) => view.found.clone(),
+            Self::NotLookedUp | Self::Looking => Vec::new(),
+        }
+    }
+}
+
+/// tC4's `im.busy` and `im.error` as one state, beside the run's attempt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportState {
+    Idle,
+    /// `import/review` is out: the files step's buttons are off.
+    Reviewing,
+    /// The run is out (the working step); its job once the server named it.
+    Running {
+        job: Option<tc_api::ids::JobId>,
+        progress: Option<tc_api::jobs::Progress>,
+    },
+    /// What the callout says.
+    Problem(String),
+    /// The run was refused or failed: the failed step.
+    Failed(ImportFailure),
+}
+
+/// tC4's `im`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportForm {
-    pub step: ImportStep,
+    page: ImportPage,
     pub kind: Option<ImportKind>,
-    /// The import's attempt: one request per attempt (UI-3).
+    /// The chosen files, in the order they were chosen.
+    pub files: Vec<ImportEntry>,
+    next_file: u32,
+    pub reviewed: Option<Reviewed>,
+    /// The Bible name and the language code of the review step.
+    pub name: String,
+    pub code: String,
+    pub versions: VersionLookup,
+    /// The version lookup or the count of "Use installed versions" in flight: an answer to
+    /// an earlier one, of other files, is dropped.
+    asked: Option<RequestId>,
+    /// The license the project states: the files' one, or the one picked where they differ
+    /// (tC4 `im.license`); `None` until picked, `Some("")` for none.
+    pub license: Option<String>,
+    /// The run's attempt: one request per attempt (UI-3).
     pub submit: crate::app::submit::Submit,
-    pub error: Option<String>,
+    pub state: ImportState,
 }
 
 impl ImportForm {
     /// `openImport`, with the request of its first attempt.
     pub fn open(request: RequestId) -> Self {
         Self {
-            step: ImportStep::Kind,
+            page: ImportPage::Kind,
             kind: None,
+            files: Vec::new(),
+            next_file: 0,
+            reviewed: None,
+            name: String::new(),
+            code: String::new(),
+            versions: VersionLookup::NotLookedUp,
+            asked: None,
+            license: None,
             submit: crate::app::submit::Submit::new(request),
-            error: None,
+            state: ImportState::Idle,
         }
+    }
+
+    pub fn step(&self) -> ImportStep {
+        match (&self.state, self.page) {
+            (ImportState::Running { .. }, _) => ImportStep::Working,
+            (ImportState::Failed(_), _) => ImportStep::Failed,
+            (_, ImportPage::Kind) => ImportStep::Kind,
+            (_, ImportPage::Files) => ImportStep::Files,
+            (_, ImportPage::Review) => ImportStep::Review,
+        }
+    }
+
+    /// A card of the kind step (tC4 `importPickKind`). A kind with no importer stays on the
+    /// kind step.
+    pub fn pick_kind(&mut self, kind: ImportKind) {
+        if !kind.has_importer() {
+            return;
+        }
+        self.kind = Some(kind);
+        self.files.clear();
+        self.reviewed = None;
+        self.page = ImportPage::Files;
+        self.state = ImportState::Idle;
+    }
+
+    /// "← Choose another kind".
+    pub fn back_to_kind(&mut self) {
+        self.page = ImportPage::Kind;
+        self.state = ImportState::Idle;
+    }
+
+    /// "← Choose other files".
+    pub fn back_to_files(&mut self) {
+        self.page = ImportPage::Files;
+        self.reviewed = None;
+        self.versions = VersionLookup::NotLookedUp;
+        self.state = ImportState::Idle;
+    }
+
+    /// A file chosen or dropped: its row sends until the server has it.
+    pub fn add_file(&mut self, name: String, bytes: u64) -> u32 {
+        let id = self.next_file;
+        self.next_file += 1;
+        self.files.push(ImportEntry {
+            id,
+            name,
+            bytes,
+            upload: ImportUpload::Sending,
+        });
+        if matches!(self.state, ImportState::Problem(_)) {
+            self.state = ImportState::Idle;
+        }
+        id
+    }
+
+    /// The upload of file `id` ended; a file removed meanwhile has no row to change.
+    pub fn file_sent(&mut self, id: u32, upload: ImportUpload) {
+        if let Some(entry) = self.files.iter_mut().find(|e| e.id == id) {
+            entry.upload = upload;
+        }
+    }
+
+    pub fn remove_file(&mut self, id: u32) {
+        self.files.retain(|e| e.id != id);
+    }
+
+    /// The uploaded files, in order.
+    pub fn sent(&self) -> Vec<tc_api::import::ImportFile> {
+        self.files
+            .iter()
+            .filter_map(|e| match &e.upload {
+                ImportUpload::Sent(upload) => Some(tc_api::import::ImportFile {
+                    upload: upload.clone(),
+                    name: e.name.clone(),
+                }),
+                ImportUpload::Sending | ImportUpload::Failed(_) => None,
+            })
+            .collect()
+    }
+
+    /// "Review files →" is off while a file sends or could not be sent, with no file, and
+    /// while a review is out.
+    pub fn can_review(&self) -> bool {
+        !self.files.is_empty()
+            && self
+                .files
+                .iter()
+                .all(|e| matches!(e.upload, ImportUpload::Sent(_)))
+            && self.state != ImportState::Reviewing
+    }
+
+    /// The press of "Review files →": the files to read.
+    pub fn press_review(&mut self) -> Option<Vec<tc_api::import::ImportFile>> {
+        if !self.can_review() {
+            return None;
+        }
+        self.state = ImportState::Reviewing;
+        Some(self.sent())
+    }
+
+    /// The review's answer: the review step with the details the files hold, not looked up.
+    /// A review that names no version has nothing to look up (tC4 `unresolvedSlots` empty).
+    pub fn reviewed(&mut self, review: tc_api::import::ImportReview, next: RequestId) {
+        self.name = review.details.name.clone();
+        self.code = review.details.code.clone();
+        self.license = match review.found.licenses.as_slice() {
+            [one] => Some(one.clone()),
+            [] => Some(String::new()),
+            _ => None,
+        };
+        self.versions = if review.found.slots.is_empty() {
+            VersionLookup::Found(tc_api::import::VersionsView {
+                found: Vec::new(),
+                unresolved: Vec::new(),
+            })
+        } else {
+            VersionLookup::NotLookedUp
+        };
+        self.reviewed = Some(Reviewed::Found(Box::new(review)));
+        self.page = ImportPage::Review;
+        self.state = ImportState::Idle;
+        self.submit.next(next);
+    }
+
+    /// The files cannot be imported: the review step says why, and Import stays off.
+    pub fn review_refused(&mut self, failure: ImportFailure) {
+        self.reviewed = Some(Reviewed::Damaged(failure));
+        self.page = ImportPage::Review;
+        self.state = ImportState::Idle;
+    }
+
+    /// No usable answer: the files step says why.
+    pub fn review_lost(&mut self, problem: String) {
+        self.state = ImportState::Problem(problem);
+    }
+
+    /// The Bible name typed: the next Import is another request.
+    pub fn type_name(&mut self, name: String, next: RequestId) {
+        self.name = name;
+        self.submit.edited(next);
+    }
+
+    /// The language code typed (tC4 trims it).
+    pub fn type_code(&mut self, code: String, next: RequestId) {
+        self.code = code.trim().to_owned();
+        self.submit.edited(next);
+    }
+
+    /// The details Import sends.
+    pub fn details(&self) -> tc_api::import::ImportDetails {
+        tc_api::import::ImportDetails {
+            name: self.name.trim().to_owned(),
+            code: self.code.trim().to_owned(),
+        }
+    }
+
+    /// The review's refusal while the details are the ones it read.
+    fn review_refusal(&self) -> Option<&tc_api::Refusal> {
+        match &self.reviewed {
+            Some(Reviewed::Found(review)) if review.details == self.details() => {
+                review.refusal.as_ref()
+            }
+            _ => None,
+        }
+    }
+
+    /// tC4 `nameClash`: the folder the name makes is one Home lists (without letter case), or
+    /// the review refused the name in use while the details are the ones it read.
+    pub fn name_in_use<'a>(&self, listing: impl IntoIterator<Item = &'a str>) -> bool {
+        if matches!(
+            self.review_refusal(),
+            Some(tc_api::Refusal::Import(
+                tc_api::refusal::ImportRefusal::NameExists
+            ))
+        ) {
+            return true;
+        }
+        let details = self.details();
+        let form = Details {
+            name: details.name,
+            language_name: String::new(),
+            code: details.code,
+            door43_code: None,
+            direction: Direction::Ltr,
+            font: String::new(),
+        };
+        // The name alone makes the folder unless it is all punctuation; a missing code says
+        // nothing of a clash.
+        let form = Details {
+            code: if form.code.is_empty() {
+                "und".to_owned()
+            } else {
+                form.code
+            },
+            ..form
+        };
+        form.folder().is_ok_and(|folder| {
+            listing
+                .into_iter()
+                .any(|name| name.eq_ignore_ascii_case(folder.as_str()))
+        })
+    }
+
+    /// The review's refusal of the details other than a name in use (no name, a language code
+    /// a Scripture Burrito cannot hold, #835), while the details are the ones it read.
+    pub fn details_refusal(&self) -> Option<&tc_api::Refusal> {
+        self.review_refusal().filter(|r| {
+            !matches!(
+                r,
+                tc_api::Refusal::Import(tc_api::refusal::ImportRefusal::NameExists)
+            )
+        })
+    }
+
+    /// "Look up on Door43" as `request`: `true` when the lookup is to run.
+    pub fn look_up(&mut self, request: RequestId) -> bool {
+        if !matches!(self.reviewed, Some(Reviewed::Found(_)))
+            || self.versions != VersionLookup::NotLookedUp
+        {
+            return false;
+        }
+        self.versions = VersionLookup::Looking;
+        self.asked = Some(request);
+        true
+    }
+
+    /// Whether `request` is the lookup or count the form waits for.
+    fn waits_for(&self, request: RequestId) -> bool {
+        self.asked == Some(request)
+    }
+
+    pub fn versions_found(&mut self, request: RequestId, view: tc_api::import::VersionsView) {
+        if self.versions == VersionLookup::Looking && self.waits_for(request) {
+            self.versions = VersionLookup::Found(view);
+        }
+    }
+
+    /// The lookup gave no answer: it can be asked again, and the callout says why.
+    pub fn versions_failed(&mut self, request: RequestId, problem: String) {
+        if self.versions == VersionLookup::Looking && self.waits_for(request) {
+            self.versions = VersionLookup::NotLookedUp;
+            self.state = ImportState::Problem(problem);
+        }
+    }
+
+    /// The internet question's Not now, or the question took over.
+    pub fn versions_not_looked_up(&mut self) {
+        if self.versions == VersionLookup::Looking {
+            self.versions = VersionLookup::NotLookedUp;
+        }
+    }
+
+    /// "Use installed versions" (tC4 `importUseInstalled`): the review to ask for what the
+    /// installed versions do to the decisions. Not looked up, every slot the files name takes
+    /// them.
+    pub fn use_installed(&mut self, request: RequestId) -> Option<tc_api::import::Review> {
+        let view = match &self.versions {
+            VersionLookup::Found(view) if !view.unresolved.is_empty() => view.clone(),
+            VersionLookup::NotLookedUp => match &self.reviewed {
+                Some(Reviewed::Found(review)) => tc_api::import::VersionsView {
+                    found: Vec::new(),
+                    unresolved: review.found.slots.clone(),
+                },
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let found = view.found.clone();
+        self.versions = VersionLookup::Installed(view, None);
+        self.asked = Some(request);
+        Some(tc_api::import::Review {
+            files: self.sent(),
+            details: Some(self.details()),
+            use_installed: Some(found),
+        })
+    }
+
+    pub fn carry_counted(&mut self, request: RequestId, carry: Option<tc_api::import::CarryOver>) {
+        if !self.waits_for(request) {
+            return;
+        }
+        if let (VersionLookup::Installed(_, held @ None), Some(carry)) = (&mut self.versions, carry)
+        {
+            *held = Some(carry);
+        }
+    }
+
+    /// The count failed: the choice is offered again, and the callout says why.
+    pub fn carry_failed(&mut self, request: RequestId, problem: String) {
+        if let VersionLookup::Installed(view, None) = &self.versions
+            && self.waits_for(request)
+        {
+            self.versions = if view.found.is_empty() {
+                VersionLookup::NotLookedUp
+            } else {
+                VersionLookup::Found(view.clone())
+            };
+            self.state = ImportState::Problem(problem);
+        }
+    }
+
+    /// The license picker (tC4 `import-license`): `None` is "Choose a license".
+    pub fn pick_license(&mut self, license: Option<String>, next: RequestId) {
+        self.license = license;
+        self.submit.edited(next);
+    }
+
+    /// tC4 `cantImport`, inverted.
+    pub fn can_import<'a>(&self, listing: impl IntoIterator<Item = &'a str>) -> bool {
+        matches!(self.reviewed, Some(Reviewed::Found(_)))
+            && self.page == ImportPage::Review
+            && !self.name.trim().is_empty()
+            && !self.code.trim().is_empty()
+            && !self.name_in_use(listing)
+            && self.details_refusal().is_none()
+            && !self.versions.open()
+            && self.license.is_some()
+            && !matches!(
+                self.state,
+                ImportState::Reviewing | ImportState::Running { .. }
+            )
+            && !self.submit.busy()
+    }
+
+    /// The press of Import (and of "Try the import again"): the request to send, the form on
+    /// its working step.
+    pub fn press_run<'a>(
+        &mut self,
+        listing: impl IntoIterator<Item = &'a str>,
+    ) -> Option<tc_api::import::Run> {
+        if !self.can_import(listing) {
+            return None;
+        }
+        let request = self.submit.press()?;
+        self.state = ImportState::Running {
+            job: None,
+            progress: None,
+        };
+        Some(tc_api::import::Run {
+            request,
+            files: self.sent(),
+            details: self.details(),
+            found: self.versions.found(),
+            license: self.license.clone().unwrap_or_default(),
+        })
+    }
+
+    pub fn run_started(&mut self, job: tc_api::ids::JobId) {
+        if let ImportState::Running { job: held, .. } = &mut self.state {
+            *held = Some(job);
+        }
+    }
+
+    pub fn run_progress(&mut self, progress: tc_api::jobs::Progress) {
+        if let ImportState::Running { progress: held, .. } = &mut self.state {
+            *held = Some(progress);
+        }
+    }
+
+    /// The run was refused or failed: the failed step, and the next press is a new attempt.
+    pub fn run_refused(&mut self, failure: ImportFailure, next: RequestId) {
+        self.submit.refused(failure.sentence.clone(), next);
+        self.state = ImportState::Failed(failure);
+    }
+
+    /// No usable answer: back to the review with why; the next press sends the same request.
+    pub fn run_lost(&mut self, problem: String) {
+        self.submit.lost(problem.clone());
+        self.state = ImportState::Problem(problem);
+    }
+
+    /// The run ended with nothing to say (a cancel, a new server run): back to the review.
+    pub fn run_stopped(&mut self, next: RequestId) {
+        self.submit.next(next);
+        self.state = ImportState::Idle;
     }
 }

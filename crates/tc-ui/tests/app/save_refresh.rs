@@ -292,6 +292,7 @@ fn open_at(epoch: u64) -> OpenSession {
         id: ProjectId::parse(PROJECT_ID).unwrap(),
         mode: SessionMode::Writable,
         role: SessionRole::Screen,
+        outside: Default::default(),
     }
 }
 

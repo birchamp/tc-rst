@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "af80cd66229406d2",
+    "ui": "766046edeaa48eb2",
     "commit": "dev",
     "api": 1
   },
@@ -2161,11 +2161,11 @@
       "domSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9"
     },
     {
-      "name": "share-progress-preparing",
+      "name": "import-files",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "E1b",
+      "by": "F1",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2180,17 +2180,17 @@
       },
       "syncToast": null,
       "maskRects": {},
-      "png": "screens/share-progress-preparing.png",
-      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
-      "dom": "dom/share-progress-preparing.json",
-      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
+      "png": "screens/import-files.png",
+      "sha256": "6c8a502f2b758a92ef5354382339ec40c9c1b33f500c80f8dde5e20b4c13c4f8",
+      "dom": "dom/import-files.json",
+      "domSha256": "bcc6a7c68deebf7c16de96b95b1b836ed3d567a41799c27d41d50c3badba3618"
     },
     {
-      "name": "share-progress-create",
+      "name": "import-review-usfm",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "E1b",
+      "by": "F1",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2199,23 +2199,20 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
-      "png": "screens/share-progress-create.png",
-      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
-      "dom": "dom/share-progress-create.json",
-      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
+      "png": "screens/import-review-usfm.png",
+      "sha256": "c7abc1ed897df647ec67014d56c5c052b6d7df4a3967184f21b5b757229ee9aa",
+      "dom": "dom/import-review-usfm.json",
+      "domSha256": "5013cf92f521381a34f3694db392fbc952d3843b128f9330e27c79525e7684de"
     },
     {
-      "name": "share-progress-push",
+      "name": "import-review-tc3",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "E1b",
+      "by": "F1",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2224,23 +2221,20 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
-      "png": "screens/share-progress-push.png",
-      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
-      "dom": "dom/share-progress-push.json",
-      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
+      "png": "screens/import-review-tc3.png",
+      "sha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+      "dom": "dom/import-review-tc3.json",
+      "domSha256": "028b2b0eb4b5ec84d1477bf3414ab293cc00ee78af733b2465706a11e2c507bf"
     },
     {
-      "name": "share-done",
+      "name": "import-working",
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "E1b",
+      "by": "F1",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2255,10 +2249,35 @@
       },
       "syncToast": null,
       "maskRects": {},
-      "png": "screens/share-done.png",
-      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
-      "dom": "dom/share-done.json",
-      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
+      "png": "screens/import-working.png",
+      "sha256": "4367c9a400890f64eee2592d7eefa266f50b74c83dbfd701b7f74a9cde6838cc",
+      "dom": "dom/import-working.json",
+      "domSha256": "1377352f785783c1949eb562540a33a8be056d3b9e189fb88ce97d098fab8a46"
+    },
+    {
+      "name": "import-failed",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-failed.png",
+      "sha256": "92fb01b7a671528a413486e8596b9558c6b93a3773e50fe1d0bcc6bc0bbbcc6d",
+      "dom": "dom/import-failed.json",
+      "domSha256": "ba055ee4dba038236c63798a2efdd0207e8a8903009303a45b19cfb4e6eeae51"
     },
     {
       "name": "add-book-pick",
@@ -2331,7 +2350,7 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "C6",
       "backend": "store",
       "layers": [
         "pixels",
@@ -2344,9 +2363,9 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm-files.png",
-      "sha256": "c39d8a9636a7c51b9e3758e9965e6e0f0b0e0aa472533d366abe4b5960bad00d",
+      "sha256": "cfb15e0f4018012377d3e9ceaeb68232173adfb26df081b4a3820c499df30dfd",
       "dom": "dom/add-book-usfm-files.json",
-      "domSha256": "558df5c42d8a37cd86d0cbe5aec68782696935909975c5819a3bb831e5c3b6d5"
+      "domSha256": "6b9e2258ae452b289358fc868062b4e754ef5947e0f221dff40fd7de9f2fa7e3"
     },
     {
       "name": "signin-error",
@@ -2868,6 +2887,31 @@
       "domSha256": "3dc557a9d1a872aced02b6733ee1bd07a3667c9ecd1147ba1223c9e4e8be377f"
     },
     {
+      "name": "home-checkpoint-error",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "D1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito": "share",
+        "sample_burrito_obs": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/home-checkpoint-error.png",
+      "sha256": "18074ee24f7d5ce72fbb4e2050790a120dd701bf781fa62ce78628542a479520",
+      "dom": "dom/home-checkpoint-error.json",
+      "domSha256": "e16ac370bdbdd43fb56d5aa41d510f7fedf54cc280ae0e589aa3db2de0a49417"
+    },
+    {
       "name": "home-resume",
       "kind": "case",
       "scenario": "sample",
@@ -2891,6 +2935,132 @@
       "sha256": "d58143645c7db683c68a935c28fa89e9b63a9dc8490578aa889467a4328965cb",
       "dom": "dom/home-resume.json",
       "domSha256": "71c716c91807457f6d9d196d0ba8ecd4c7d04b4f2fe1f2649e636d5cfcff24f2"
+    },
+    {
+      "name": "import-toast",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "F1",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "tita_tc3": "share",
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/import-toast.png",
+      "sha256": "dbe49f873f3567081862f76a8740014f98b6a41da9327e20bba5fea59fa2ad50",
+      "dom": "dom/import-toast.json",
+      "domSha256": "424b0aa7d3fbd6334ede6a0b677caf03ef3b8f8338e3a852505e38240f1492f0"
+    },
+    {
+      "name": "share-progress-preparing",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-preparing.png",
+      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+      "dom": "dom/share-progress-preparing.json",
+      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
+    },
+    {
+      "name": "share-progress-create",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-create.png",
+      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+      "dom": "dom/share-progress-create.json",
+      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
+    },
+    {
+      "name": "share-progress-push",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-progress-push.png",
+      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+      "dom": "dom/share-progress-push.json",
+      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
+    },
+    {
+      "name": "share-done",
+      "kind": "case",
+      "scenario": "sample",
+      "locale": "en",
+      "by": "E1b",
+      "backend": "store",
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "error": null,
+      "pageErrors": [],
+      "refused": [],
+      "homeCards": {
+        "sample_burrito_obs": "share",
+        "sample_burrito": "share"
+      },
+      "syncToast": null,
+      "maskRects": {},
+      "png": "screens/share-done.png",
+      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+      "dom": "dom/share-done.json",
+      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
     }
   ]
 }

@@ -1,7 +1,7 @@
 //! The drafted rule of Home's book tiles and the book rail (tC4 #572).
 
 use tc_app::drafted::{BookDraft, usfm_draft};
-use tc_usfm::codec::{MarkerTerm, is_drafted};
+use tc_usfm::codec::{MarkerTerm, tc4_indexer_drafted};
 
 fn percent(usfm: &str) -> u8 {
     usfm_draft(usfm).expect("the book decomposes").percent()
@@ -53,7 +53,10 @@ fn joining_verses_keeps_the_drafted_percentage() {
 fn a_poem_verse_with_words_counts_as_drafted() {
     let usfm = "\\id TST\n\\c 1\n\\v 1\n\\q1 Blessed is the man\n\\v 2 ___\n";
     assert_eq!(percent(usfm), 50);
-    assert!(!is_drafted(MarkerTerm::Lf, "\\q1 Blessed is the man\n"));
+    assert!(!tc4_indexer_drafted(
+        MarkerTerm::Lf,
+        "\\q1 Blessed is the man\n"
+    ));
 }
 
 #[test]

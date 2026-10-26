@@ -294,6 +294,17 @@ impl ScenarioStore {
         })
     }
 
+    /// Teammates 1 and 2's versions of one record of `kind` (C7b), from its version in Door43's
+    /// copy, written into the project as [`Self::teammates_write`] does.
+    #[cfg(feature = "test-hooks")]
+    pub fn teammates_change_kind(
+        &self,
+        folder: &ProjectRef,
+        kind: tc_api::test::TeammatesKind,
+    ) -> Result<Vec<ChangeId>, ScenarioError> {
+        self.teammates_write(folder, |next, base| next.change_kind(base, kind))
+    }
+
     /// Teammate `n` signed in to Door43 as `username` (STORAGE §8.5), written into the project
     /// as [`Self::teammates_write`] does.
     pub fn teammates_sign_in(
@@ -512,6 +523,14 @@ impl ProjectStore for ScenarioStore {
         self.backend.create(new)
     }
 
+    fn create_imported(
+        &self,
+        new: super::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), super::CreateFailure> {
+        self.backend.create_imported(new, cause)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.backend.trust_lock(folder);
     }
@@ -541,6 +560,16 @@ impl ProjectStore for ScenarioStore {
         last: tc_journal::VerseNo,
     ) -> Result<Vec<ChangeId>, StoreError> {
         ScenarioStore::teammates_join_verses(self, folder, book, chapter, first, last)
+            .map_err(|e| StoreError::Other(e.to_string()))
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn teammates_change_kind(
+        &self,
+        folder: &ProjectRef,
+        kind: tc_api::test::TeammatesKind,
+    ) -> Result<Vec<ChangeId>, StoreError> {
+        ScenarioStore::teammates_change_kind(self, folder, kind)
             .map_err(|e| StoreError::Other(e.to_string()))
     }
 

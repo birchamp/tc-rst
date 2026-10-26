@@ -117,6 +117,23 @@ impl From<RepoName> for String {
     }
 }
 
+/// `door43/lastSync`: the project's last sync result on this computer since the app started,
+/// so what a teammate's newer versions replaced stays readable after its toast (owner ruling
+/// H5); `None` before the first sync.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LastSync {
+    pub project: ProjectRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct LastSyncView {
+    pub view: Option<crate::jobs::SyncResultView>,
+}
+
 /// A repository on the app's Door43 server: `owner/name`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]

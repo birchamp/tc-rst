@@ -475,3 +475,587 @@ async fn a_join_cut_short_is_removed_and_home_says_so_once() {
         "INV-A-HALF-JOIN-NEVER-SITS-AT-THE-PROJECT-NAME: the next launch says nothing"
     );
 }
+
+/// D1 step 3: a book file another program changed is asked about once, kept, and listed until
+/// it is imported or dismissed (owner ruling OE 3; delta §2.3, §2.11), on the store world.
+mod outside {
+    use std::path::PathBuf;
+
+    use tc_api::ids::{RequestId, Scope};
+    use tc_api::session::{Focus, ImportKept, KeptWhy, NotNow, OutsideEdits};
+    use tc_journal::BookId;
+
+    use super::super::checkpoints::store_app;
+    use super::super::common::{TestApp, open_progress, post};
+    use crate::store_world::{StoreWorld, save, store_world, tit, words_of};
+
+    const TIT: &str = "ingredients/TIT.usfm";
+    const JON: &str = "ingredients/JON.usfm";
+
+    fn request(n: u8) -> RequestId {
+        RequestId::from_bytes([n; 16])
+    }
+
+    fn path(world: &StoreWorld, file: &str) -> PathBuf {
+        world.folder(&world.bible).join(file)
+    }
+
+    /// `bytes` with the text of verse c:v replaced.
+    fn set_verse(bytes: &[u8], c: u16, v: u16, text: &str) -> Vec<u8> {
+        let s = String::from_utf8(bytes.to_vec()).unwrap();
+        let chapter = s.find(&format!("\\c {c}")).unwrap();
+        let marker = format!("\\v {v} ");
+        let at = chapter + s[chapter..].find(&marker).unwrap() + marker.len();
+        let end = at + s[at..].find('\n').unwrap();
+        format!("{}{}{}", &s[..at], text, &s[end..]).into_bytes()
+    }
+
+    /// Another program saves verse c:v of `file`; the bytes it wrote.
+    fn edit(world: &StoreWorld, file: &str, c: u16, v: u16, text: &str) -> Vec<u8> {
+        let written = world.fs.peek(&path(world, file)).unwrap();
+        let edited = set_verse(&written, c, v, text);
+        world.fs.put(&path(world, file), &edited, None);
+        edited
+    }
+
+    async fn opened(world: &StoreWorld) -> (tempfile::TempDir, TestApp, Scope) {
+        let (dir, t) = store_app(world).await;
+        let open = t
+            .app
+            .sessions()
+            .open_screen(&world.bible, open_progress())
+            .await
+            .unwrap();
+        t.app.read(&open.at).unwrap().handle().wait_idle();
+        (dir, t, open.at)
+    }
+
+    async fn focus(t: &TestApp, at: &Scope, n: u8) -> OutsideEdits {
+        post(
+            &t.app,
+            &Focus {
+                request: request(n),
+                at: at.clone(),
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    /// What `hello` lists for the open project.
+    async fn hello_outside(t: &TestApp, at: &Scope) -> OutsideEdits {
+        post(&t.app, &tc_api::app::Hello {})
+            .await
+            .unwrap()
+            .sessions
+            .into_iter()
+            .find(|s| s.at == *at)
+            .unwrap()
+            .outside
+    }
+
+    fn words(t: &TestApp, at: &Scope, v: u16) -> Option<String> {
+        let session = t.app.read(at).unwrap();
+        words_of(&session.handle().snapshot(), &tit(1, v))
+    }
+
+    /// INV-A-CHANGED-BOOK-IS-ASKED-NOT-TAKEN: two books changed together are one question that
+    /// names both, and nothing of them is in the project yet; a reload asks it again.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn two_changed_books_are_asked_in_one_question() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        let before = words(&t, &at, 1);
+        edit(
+            &world,
+            TIT,
+            1,
+            1,
+            "Paul, a servant of God, from another program",
+        );
+        edit(&world, JON, 1, 1, "The word came, from another program");
+        let outside = focus(&t, &at, 1).await;
+        let asked: Vec<_> = outside
+            .waiting
+            .iter()
+            .map(|w| (w.file.as_str(), w.book, w.added))
+            .collect();
+        assert_eq!(
+            asked,
+            [
+                (JON, Some(BookId::Jonah), false),
+                (TIT, Some(BookId::Titus), false)
+            ],
+            "{outside:?}"
+        );
+        assert_eq!(words(&t, &at, 1), before, "nothing enters before Import");
+        assert_eq!(hello_outside(&t, &at).await, outside, "a reload asks again");
+    }
+
+    /// *Not now* keeps the project's text, writes the file from it, and lists the copy in the
+    /// notices, where it has *Import* (OE 3.4).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn not_now_keeps_the_text_and_lists_the_copy_with_import() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        let before = words(&t, &at, 1);
+        let written = world.fs.peek(&path(&world, TIT)).unwrap();
+        edit(&world, TIT, 1, 1, "Paul, from another program");
+        let copy = focus(&t, &at, 1).await.waiting[0].copy.clone();
+        let outside = post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(outside.waiting.is_empty(), "{outside:?}");
+        assert_eq!(words(&t, &at, 1), before);
+        t.app.read(&at).unwrap().handle().wait_idle();
+        assert_eq!(world.fs.peek(&path(&world, TIT)), Some(written));
+        assert_eq!(outside.kept.len(), 1, "{outside:?}");
+        assert_eq!(outside.kept[0].copy, copy);
+        assert_eq!(outside.kept[0].file, TIT);
+        assert_eq!(outside.kept[0].why, KeptWhy::Changed, "listed with Import");
+        // Its Import still takes the copy in.
+        let report = post(
+            &t.app,
+            &ImportKept {
+                request: request(3),
+                at: at.clone(),
+                copy,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.imported, 1, "{report:?}");
+        assert_eq!(
+            words(&t, &at, 1).as_deref(),
+            Some("Paul, from another program")
+        );
+    }
+
+    /// The question's *Import* reports what came in and what is to review, and the changes to
+    /// review are conflicts the review's Text tab lists.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn import_from_the_question_reports_counts_and_links_the_review() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 1, "Paul, from another program");
+        edit(&world, TIT, 1, 2, "in hope, from another program");
+        let waiting = focus(&t, &at, 1).await.waiting;
+        let session = t.app.read(&at).unwrap();
+        save(session.handle().as_ref(), &tit(1, 2), "in hope, typed here")
+            .await
+            .unwrap();
+        let report = post(
+            &t.app,
+            &ImportKept {
+                request: request(2),
+                at: at.clone(),
+                copy: waiting[0].copy.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(report.file, TIT);
+        assert_eq!(report.book, Some(BookId::Titus));
+        assert_eq!((report.imported, report.to_review), (1, 1), "{report:?}");
+        assert!(report.outside.waiting.is_empty());
+        assert_eq!(
+            words(&t, &at, 1).as_deref(),
+            Some("Paul, from another program")
+        );
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Text,
+            },
+        )
+        .await
+        .unwrap();
+        let text = review
+            .tabs
+            .iter()
+            .find(|c| c.tab == tc_api::conflicts::ReviewTab::Text)
+            .unwrap();
+        assert_eq!(text.count, report.to_review, "the link's review lists them");
+    }
+
+    /// INV-A-KEPT-COPY-STAYS-ON-A-SCREEN, review R2: a second outside save keeps the first copy
+    /// listed beside the newest, which the question imports.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_second_outside_save_keeps_the_first_copy_in_the_notices() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 1, "Paul, the first save");
+        let first = focus(&t, &at, 1).await;
+        world.fs.advance(std::time::Duration::from_secs(5));
+        edit(&world, TIT, 1, 2, "in hope, the second save");
+        let second = focus(&t, &at, 2).await;
+        assert_eq!(second.waiting.len(), 1, "one question names the book once");
+        assert_eq!(second.kept.len(), 2, "{second:?}");
+        assert_eq!(second.kept[0].copy, first.waiting[0].copy);
+        assert_eq!(second.waiting[0].copy, second.kept[1].copy, "the newest");
+        assert_eq!(hello_outside(&t, &at).await.kept, second.kept);
+    }
+
+    /// A reload or a `Resync` reads `hello` again: the copy given *Not now* is still listed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_kept_copy_shows_again_after_a_resync() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 1, "Paul, from another program");
+        focus(&t, &at, 1).await;
+        let outside = post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(outside.kept.len(), 1);
+        let again = hello_outside(&t, &at).await;
+        assert_eq!(again.kept, outside.kept);
+        assert!(again.waiting.is_empty());
+    }
+
+    /// The world again over `fs`: the same projects, a new store on those files.
+    fn world_over(world: &StoreWorld, fs: tc_store::fault::FaultFs) -> StoreWorld {
+        use crate::store_world::{APP, backend_over};
+        let hooks = std::sync::Arc::new(tc_store::Hooks::default());
+        let (backend, watch) =
+            backend_over(&fs, APP, tc_store::FakePlatform::default(), hooks.clone());
+        StoreWorld {
+            fs,
+            hooks,
+            backend: std::sync::Arc::new(backend),
+            watch,
+            bible: world.bible.clone(),
+            conflicted: world.conflicted.clone(),
+            other: world.other.clone(),
+            sources: world.sources.clone(),
+        }
+    }
+
+    const SAVED: &str = "saved before the file was deleted";
+
+    /// The store world after a save of Titus 1:1 that the book file holds and the project's
+    /// records lost (its pending file deleted before a crash).
+    fn lost_work_world() -> StoreWorld {
+        let world = store_world();
+        let folder = world.folder(&world.bible);
+        // The store itself, so a mode leave writes the book file and seals nothing.
+        let handle = world
+            .backend
+            .store()
+            .open(&folder, &tc_store::OpenOptions::default())
+            .unwrap();
+        handle.wait_idle();
+        let before = crate::store_world::pending_files(&world.fs, &folder);
+        let shown = handle.mint(&tit(1, 1), None).unwrap();
+        handle
+            .submit(tc_journal::command::Command::SaveVerse {
+                shown,
+                words: SAVED.to_owned(),
+            })
+            .wait()
+            .unwrap();
+        handle.leave(tc_store::Leave::Mode).wait().unwrap();
+        let pending: Vec<_> = crate::store_world::pending_files(&world.fs, &folder)
+            .into_iter()
+            .filter(|p| !before.contains(p))
+            .collect();
+        assert_eq!(pending.len(), 1, "{pending:?}");
+        world.fs.delete(&folder.join(&pending[0])).unwrap();
+        assert!(
+            String::from_utf8_lossy(&world.fs.peek(&path(&world, TIT)).unwrap()).contains(SAVED)
+        );
+        let world = world_over(&world, world.fs.crash(false));
+        drop(handle);
+        world
+    }
+
+    /// A second writer appears while a book waits (a synced folder): the project turns
+    /// read-only, so the question goes, as a read-only open asks nothing; an answer would be
+    /// refused and the dialog would block the screen.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_second_writer_mid_session_takes_the_question_away() {
+        use tc_app::backend::{CheckpointReason, ProjectStore};
+        let world = store_world();
+        let (_d, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 1, "Paul, from another program");
+        assert_eq!(focus(&t, &at, 1).await.waiting.len(), 1);
+        let (theirs, _theirs_watch) = crate::store_world::backend_over(
+            &world.fs.other_machine(),
+            "/app-desktop",
+            tc_store::FakePlatform {
+                machine: "machine-2".to_owned(),
+                host: "host-2".to_owned(),
+                ..tc_store::FakePlatform::default()
+            },
+            std::sync::Arc::default(),
+        );
+        theirs.trust_lock(&world.bible);
+        let handle = theirs
+            .open(&world.bible, crate::store_world::progress())
+            .unwrap();
+        save(handle.as_ref(), &tit(1, 15), "from the other computer")
+            .await
+            .unwrap();
+        handle.wait_idle();
+        let session = t.app.read(&at).unwrap();
+        session
+            .handle()
+            .checkpoint(CheckpointReason::Other("test".to_owned()))
+            .await;
+        assert!(
+            matches!(
+                session.handle().facts().mode,
+                tc_api::event::SessionMode::ReadOnly(_)
+            ),
+            "{:?}",
+            session.handle().facts().mode
+        );
+        let outside = hello_outside(&t, &at).await;
+        assert!(outside.waiting.is_empty(), "{outside:?}");
+        assert_eq!(outside.kept.len(), 1, "the copy stays listed");
+        drop(handle);
+    }
+
+    /// *Not now* on lost work answers that question alone: a changed copy of the same book
+    /// that another program saved meanwhile is still asked, and the file keeps its bytes.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn not_now_on_lost_work_leaves_a_changed_copy_asked() {
+        let world = lost_work_world();
+        let (_d, t, at) = opened(&world).await;
+        edit(&world, TIT, 1, 3, "a change from another program");
+        let both = focus(&t, &at, 1).await;
+        assert_eq!(both.waiting.len(), 2, "{both:?}");
+        let after = post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        let whys: Vec<KeptWhy> = after.waiting.iter().map(|w| w.why).collect();
+        assert_eq!(whys, vec![KeptWhy::Changed], "{after:?}");
+        let file = String::from_utf8(world.fs.peek(&path(&world, TIT)).unwrap()).unwrap();
+        assert!(file.contains("a change from another program"), "{file}");
+    }
+
+    /// H22 part 1: *Not now* on the lost-work question answers it for good: it is not asked
+    /// again after a reload, and the copy stays in the notices with *Bring it back*.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn not_now_on_lost_work_is_never_asked_again() {
+        let world = lost_work_world();
+        let (_dir, t, at) = opened(&world).await;
+        assert_eq!(hello_outside(&t, &at).await.waiting.len(), 1);
+        let outside = post(
+            &t.app,
+            &NotNow {
+                request: request(1),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(outside.waiting.is_empty(), "{outside:?}");
+        assert_eq!(outside.kept.len(), 1);
+        assert_eq!(outside.kept[0].why, KeptWhy::Lost);
+        assert_eq!(
+            hello_outside(&t, &at).await,
+            outside,
+            "not asked after a reload"
+        );
+    }
+
+    /// H22 part 1: a save the project's records lost (its pending file deleted before a
+    /// crash), still in the book file the app wrote, is listed as lost work, asked once and not
+    /// taken in; *Bring it back* is the copy's import, with the same report.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_lost_work_copy_offers_bring_it_back() {
+        let world = lost_work_world();
+        let (_dir, t, at) = opened(&world).await;
+        let outside = hello_outside(&t, &at).await;
+        assert_eq!(outside.kept.len(), 1, "{outside:?}");
+        assert_eq!(outside.kept[0].why, KeptWhy::Lost);
+        assert_eq!(outside.kept[0].file, TIT);
+        // Asked once (H22 part 1), until the person answers: a reload asks again.
+        assert_eq!(outside.waiting.len(), 1, "{outside:?}");
+        assert_eq!(outside.waiting[0].why, KeptWhy::Lost);
+        assert_eq!(outside.waiting[0].copy, outside.kept[0].copy);
+        assert_eq!(hello_outside(&t, &at).await, outside, "a reload asks again");
+        assert_ne!(
+            words(&t, &at, 1).as_deref(),
+            Some(SAVED),
+            "nothing comes back on its own"
+        );
+        let report = post(
+            &t.app,
+            &ImportKept {
+                request: request(1),
+                at: at.clone(),
+                copy: outside.kept[0].copy.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        // Nothing newer was saved over the verse since the loss: the save comes back with no
+        // question (H22 part 1).
+        assert_eq!((report.imported, report.to_review), (1, 0), "{report:?}");
+        assert_eq!(
+            words(&t, &at, 1).as_deref(),
+            Some(SAVED),
+            "the save is restored"
+        );
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Text,
+            },
+        )
+        .await
+        .unwrap();
+        let text = review
+            .tabs
+            .iter()
+            .find(|c| c.tab == tc_api::conflicts::ReviewTab::Text)
+            .unwrap();
+        assert_eq!(text.count, report.to_review, "the report's review lists it");
+        assert!(report.outside.kept.is_empty());
+        // A second *Bring it back* of the same copy is refused, never a 0/0 report.
+        let again = post(
+            &t.app,
+            &ImportKept {
+                request: request(2),
+                at: at.clone(),
+                copy: outside.kept[0].copy.clone(),
+            },
+        )
+        .await;
+        assert_eq!(
+            again,
+            Err(tc_api::ApiError::NotSaved(tc_api::NotSaved::Refused(
+                tc_api::write::SaveRefusal::NotKept
+            )))
+        );
+    }
+
+    /// H22 part 4: a project opened read-only keeps no copy and asks nothing; the review's
+    /// notices name the changed book.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_read_only_open_asks_nothing_and_shows_a_notice() {
+        let world = store_world();
+        edit(&world, TIT, 1, 2, "in hope, from another program");
+        world.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+        let (_dir, t, at) = opened(&world).await;
+        let outside = hello_outside(&t, &at).await;
+        world.fs.fail_writes(None);
+        // Asked nothing and kept nowhere, but listed, so the toolbar's way into the review
+        // shows and the notice is on a screen.
+        assert_eq!(
+            outside,
+            OutsideEdits {
+                read_only_changed: vec![TIT.to_owned()],
+                ..OutsideEdits::default()
+            }
+        );
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Notices,
+            },
+        )
+        .await
+        .unwrap();
+        let tc_api::conflicts::ReviewEntries::Notices(notices) = review.entries else {
+            panic!("{:?}", review.entries)
+        };
+        assert!(
+            notices.iter().any(|n| n.notice
+                == tc_api::conflicts::NoticeView::ChangedWhileReadOnly { file: TIT.into() }),
+            "{notices:?}"
+        );
+    }
+
+    /// Two outside edits of the header, the first given *Not now* and the second imported:
+    /// the first's *Import* is a header conflict, and neither version reads empty in the
+    /// review (the header's lines, as the file holds them).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_header_conflict_shows_both_versions() {
+        let world = store_world();
+        let (_dir, t, at) = opened(&world).await;
+        let written = String::from_utf8(world.fs.peek(&path(&world, TIT)).unwrap()).unwrap();
+        let header = |h: &str| written.replacen("\\h Tito", &format!("\\h {h}"), 1);
+        world
+            .fs
+            .put(&path(&world, TIT), header("Tito A").as_bytes(), None);
+        let first = focus(&t, &at, 1).await.waiting[0].copy.clone();
+        post(
+            &t.app,
+            &NotNow {
+                request: request(2),
+                at: at.clone(),
+                file: TIT.into(),
+            },
+        )
+        .await
+        .unwrap();
+        t.app.read(&at).unwrap().handle().wait_idle();
+        world.fs.advance(std::time::Duration::from_secs(5));
+        world
+            .fs
+            .put(&path(&world, TIT), header("Tito B").as_bytes(), None);
+        let second = focus(&t, &at, 3).await.waiting[0].copy.clone();
+        for (n, copy) in [(4, second), (5, first)] {
+            post(
+                &t.app,
+                &ImportKept {
+                    request: request(n),
+                    at: at.clone(),
+                    copy,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let review = post(
+            &t.app,
+            &tc_api::conflicts::List {
+                at: at.clone(),
+                tab: tc_api::conflicts::ReviewTab::Text,
+            },
+        )
+        .await
+        .unwrap();
+        let tc_api::conflicts::ReviewEntries::Conflicts(entries) = review.entries else {
+            panic!("{:?}", review.entries)
+        };
+        let headers: Vec<_> = entries
+            .iter()
+            .filter(|e| format!("{:?}", e.record).contains("bookHeader"))
+            .collect();
+        assert!(!headers.is_empty(), "{entries:?}");
+        for version in headers.iter().flat_map(|e| &e.versions) {
+            assert!(
+                matches!(&version.value, tc_api::conflicts::VersionValue::Text(text) if !text.is_empty()),
+                "{version:?}"
+            );
+        }
+    }
+}

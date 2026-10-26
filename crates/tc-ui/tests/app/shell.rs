@@ -165,6 +165,7 @@ fn hello(instance: ServerInstance, sessions: Vec<OpenSession>) -> HelloView {
             app_locale: LocaleId::ENGLISH,
         },
         startup: StartupState::Ready,
+        checkpoints: Vec::new(),
     }
 }
 
@@ -174,6 +175,7 @@ fn session(p: &CurrentProject, role: SessionRole) -> OpenSession {
         id: p.id.clone(),
         mode: SessionMode::Writable,
         role,
+        outside: Default::default(),
     }
 }
 
