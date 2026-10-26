@@ -4,7 +4,7 @@ title: Dialogs that own their forms, WriteCap enforced
 track: A
 lane: app
 milestone: M1
-state: gating
+state: done
 owner: REF1 session (Claude Code 56b3f56d)
 branch: track-UI-3b
 worktree: /home/bot/tc-rst/.worktrees/track-REF1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 1 d (steps 5-6 of UI-3; step 5 built on track-UI-3b)
-merged: none
+merged: 8fbc3c1f
 updated: 2026-10-25
-next: Ready for a batch: the full gate on the batch commit.
+next: none
 blocked_by: none
 ---
 
@@ -250,3 +250,4 @@ save_props` must pass unchanged.
 - 2026-10-25 21:10 EDT | REF1 session (Claude Code 56b3f56d) | verify | 036494ac | Races and protocol lens (an independent reviewer at f436a61f; fixed in 036494ac). 1 Code: New Bible's late reply lands only on the form that sent it (NewProjectForm::awaits), Add book's only on its project's form, Open's success closes only its own dialog. 2 Checks: the forms tests of the late reply, and the journeys above. 3 Reach: Cancel then a new dialog before the reply, reachable. 4 Siblings: the other replies that patch a dialog searched (orgs, settings read). 5 No loss: no blocker or major. 6 Prose: WriteCap's doc says it gates the click. Not done, decided: a journey that turns an open project read-only, which nothing a test can reach does (only a second computer writing the folder, SecondWriter) | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/UI-3b-lens-races.md
 - 2026-10-25 21:10 EDT | REF1 session (Claude Code 56b3f56d) | verify | 036494ac | Browser and parity lens (an independent reviewer in Chromium against tC4 b86270f; fixed in 036494ac). 1 Code: off controls take tC4's off look (cursor default, opacity .55) and drop their action hints; the check comment is read-only and Delete off. 2 Checks: read-only.test.mjs gains a negative control, a real drop payload, placed words, suggestion buttons, the cursor, the sentence and the comment, and passes 3 of 3. 3 Reach: a read-only open (another computer holds the lock). 4 Siblings: every align and check control listed in the journey. 5 No loss: the three majors (clickable look, no reason shown, comment editable) fixed. 6 Prose: the aligner and the check say why in the banner's words until C6 draws the banner | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/UI-3b-lens-parity.md
 - 2026-10-25 21:10 EDT | REF1 session (Claude Code 56b3f56d) | note | none | The read-only journey's two nothing-sent assertions name INV-READ-ONLY-HAS-NO-WRITE-CONTROLS, which the claims check needs printed; the journey passes 3 of 3 | node --test parity/app/journeys/read-only.test.mjs
+- 2026-10-25 22:49 EDT | integration lane (Claude Code 3d07d5f8) | merge | 8fbc3c1f | merged into main in batch 8 (UI-3b 8fbc3c1f, X's follow-up 654c5a0b, RULING-H11), gated by scripts/gates.sh --wait-ci batch-8 | scripts/gates.sh --wait-ci batch-8
