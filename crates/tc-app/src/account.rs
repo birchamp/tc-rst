@@ -112,8 +112,8 @@ impl OsKeychain {
     }
 
     fn entry(&self) -> Result<keyring_core::Entry, KeychainError> {
-        // The platform store starts at the first use, so a launch that never keeps a token
-        // never touches it; `keyring` installs it once and remembers how that went.
+        // The platform store starts at its first use (the read at launch, in a real build);
+        // `keyring` installs it once and remembers how that went.
         if self.platform && keyring::Entry::store_status().is_err() {
             return Err(KeychainError::NoKeychain);
         }

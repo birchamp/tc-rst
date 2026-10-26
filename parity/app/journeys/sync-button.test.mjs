@@ -151,6 +151,11 @@ browserTest('E1a. Download on the sync toast opens the project\'s Source texts a
     assert.equal(await page.getByTestId('sync-download').count(), 1, 'Download is offered');
     await page.getByTestId('sync-download').click();
     await page.getByTestId('sources-modal').waitFor();
-    await toast(page).waitFor({ state: 'detached' });
+    // The toast is drawn only on Home: back there, it is gone.
+    await page.keyboard.press('Escape');
+    await page.getByTestId('sources-modal').waitFor({ state: 'detached' });
+    await page.getByTestId('project-switch').click();
+    await button(page).waitFor();
+    assert.equal(await toast(page).count(), 0, 'the toast closed once Source texts opened');
   }, { ...opts, realSync: true });
 });

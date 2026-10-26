@@ -1604,7 +1604,7 @@ impl ProjectHandle for StoreHandle {
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
         // The write lock waits for a sync that holds the read lock; waiting on a runtime worker
         // could leave that sync no worker to drive its network calls (one-CPU machines).
-        let work = tokio::task::spawn_blocking(move || {
+        let take = move || {
             let taken = {
                 let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
                 let taken = inner.take();
@@ -1623,12 +1623,20 @@ impl ProjectHandle for StoreHandle {
             // queued before its close.
             lock(&self.relay).take();
             Some(close_off_thread(handle))
-        });
+        };
+        // Outside a runtime (the store's own unit tests) no sync can be running: take it here.
+        let work = match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => Ok(runtime.spawn_blocking(take)),
+            Err(_) => Err(take()),
+        };
         Box::pin(async move {
-            let Some(closed) = work
-                .await
-                .map_err(|_| store_error("the close stopped without an outcome"))?
-            else {
+            let taken = match work {
+                Ok(work) => work
+                    .await
+                    .map_err(|_| store_error("the close stopped without an outcome"))?,
+                Err(taken) => taken,
+            };
+            let Some(closed) = taken else {
                 return Ok(());
             };
             closed

@@ -224,8 +224,9 @@ And these (unit B10):
   alignment and counts it among the conflicts that kept the newest version, so a teammate's
   alignment can disappear unannounced (#791). Since #806 (D108, in rc.2) tC4 names each such
   verse in its own row ("{book} {ref}: {name}'s alignment replaced yours."), but still keeps
-  only the newest alignment; the rebuild keeps both as a conflict, so its toast shows a count and
-  Review rather than one row per verse.
+  only the newest alignment; the rebuild keeps both. Owner ruling H5 (2026-10-24) changes this:
+  the newest alignment wins, the older stays in History, and the Received sheet says what was
+  replaced (unit C7b); until C7b lands the toast still counts such a verse.
 - A section draft not yet saved survives a reload, and its card opens again with the typed
   text when Translate shows its chapter, ready for Save or Cancel. tC4 4.0 keeps the draft only
   in the open card, so a reload or crash loses it (FIX-HIDE2).
