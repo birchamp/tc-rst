@@ -100,7 +100,11 @@ jobs:
         with:
           tool: cargo-nextest@0.9.149
       - run: scripts/gates.sh --step test
-      - run: scripts/gates.sh --step ignored
+      # Each test step runs even when one before it failed, so one failure hides no other.
+      - if: ${{ !cancelled() }}
+        run: scripts/gates.sh --step test-doc
+      - if: ${{ !cancelled() }}
+        run: scripts/gates.sh --step ignored
 
   test-app:
     runs-on: ubuntu-latest
@@ -123,6 +127,8 @@ jobs:
         with:
           tool: cargo-nextest@0.9.149
       - run: scripts/gates.sh --step test-app
+      - if: ${{ !cancelled() }}
+        run: scripts/gates.sh --step test-app-op-counts
 
   # The Windows tests, nightly or on request, until CHK-5 makes them a push gate.
   nightly-windows:
@@ -145,6 +151,8 @@ jobs:
         with:
           tool: cargo-nextest@0.9.149
       - run: scripts/gates.sh --step test 2>&1 | tee nightly.log
+      - if: ${{ !cancelled() }}
+        run: scripts/gates.sh --step test-doc 2>&1 | tee -a nightly.log
       - if: failure() && github.event_name == 'schedule'
         run: scripts/nightly-stub.sh nightly-windows nightly.log
 

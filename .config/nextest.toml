@@ -30,3 +30,10 @@ slow-timeout = { period = "60s", terminate-after = 10 }
 filter = 'binary_id(tc-app::app) & test(=app::store_scenario::a_crash_while_a_scenario_project_is_written_leaves_no_half_project)'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
+
+# tc-server's never_blocked reads how late a timer wakes, which other tests running at once spoil:
+# libtest ran its binary alone and its two tests one at a time (a static lock that cannot reach
+# across nextest's processes).
+[[profile.default.overrides]]
+filter = 'binary_id(tc-server::never_blocked)'
+threads-required = 'num-test-threads'

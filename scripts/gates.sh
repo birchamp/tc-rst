@@ -13,12 +13,15 @@ STEPS=(
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
   # nextest names a test that runs past 60 s and stops it at its limit (.config/nextest.toml,
-  # CHK-8); it runs no doctests, so cargo test --doc does.
-  "test|cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app && cargo test --locked --workspace --doc --no-fail-fast --exclude tc-app"
+  # CHK-8). Each part is its own step, so one failure hides none of the others.
+  "test|cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app"
+  # nextest runs no doctests.
+  "test-doc|cargo test --locked --workspace --doc --no-fail-fast"
   # tc-app alone took 39 min locally: in one CI job with the rest it ran past the job's 75 min.
+  "test-app|cargo nextest run --locked -p tc-app --no-fail-fast"
   # Its op-count tests run on libtest, which shares their 7 GB corpora (.config/nextest.toml);
   # CI's job limit bounds them.
-  "test-app|cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --test op_counts --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast"
+  "test-app-op-counts|cargo test --locked -p tc-app --test op_counts --no-fail-fast"
   "alignment-budget|cargo nextest run --locked -p tc-align --release --test suggestion_budget --run-ignored only --no-capture"
   "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
@@ -181,7 +184,7 @@ touched() {
   mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
   mapfile -t files < <(node -e 'for (const f of JSON.parse(process.argv[1]).journeys) console.log(f)' "$picked")
   echo "gates: --touched: ${#crates[@]} crates, ${#files[@]} journey files"
-  cargo test --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
+  cargo nextest run --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
   if (( ${#crates[@]} )); then
     cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
     cargo test --locked --no-fail-fast --doc "${crates[@]/#/--package=}" || code=1

@@ -242,3 +242,7 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+CHK-8	Under nextest each tc-store corpus test leaves a FaultFs mirror under %TEMP%\tc-faultfs on Windows (statics never drop; sweep_dead_mirrors runs only on Linux), where libtest left one per binary; the VM's disk filled once	crates/tc-store/src/fault.rs sweep_dead_mirrors
+CHK-8	build_once_per_run under libtest keys the folder by pid, so a leftover folder of an earlier run with the same pid is reused; a transient Windows rename failure while the folder is absent panics	crates/tc-app/examples/bundle_store/build.rs build_once_per_run
+CHK-8	Wall-clock asserts in other binaries can flake on a loaded runner as nextest runs binaries together (as libtest already ran their tests together): lifecycle.rs:317,440 and applock.rs:111 under 1 s, aquifer.rs:798 under 5 s	crates/tc-server/tests, crates/tc-resources/tests
+CHK-8	NIGHTLY model-long and sync-model-long stay on libtest, bounded by their 180 min job	scripts/gates.sh NIGHTLY
