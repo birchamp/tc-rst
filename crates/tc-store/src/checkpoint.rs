@@ -508,9 +508,11 @@ impl Writer {
                 return Ok(None);
             };
             let read = tc_journal::pack::read_pack(path, &bytes, project);
-            // A consolidated pack holds changes `base`'s packs hold too: none of them is
-            // missing from a link that leaves it out.
-            let consolidated = read.header.as_ref().is_none_or(|h| !h.replaces.is_empty());
+            // A consolidated pack holds changes `base`'s packs hold too, and so may a pack at a
+            // path where `base` has another copy (a damaged one, salvaged): none of their
+            // changes is missing from a link that leaves them out.
+            let consolidated = theirs.contains_key(path)
+                || read.header.as_ref().is_none_or(|h| !h.replaces.is_empty());
             let ids = read.entries.iter().map(|e| e.id()).collect();
             held.insert(path.clone(), (ids, consolidated));
             new_packs.push((path.clone(), d.size));
