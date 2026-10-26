@@ -509,6 +509,14 @@ impl ProjectStore for ScenarioStore {
         self.backend.create(new)
     }
 
+    fn create_imported(
+        &self,
+        new: super::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), super::CreateFailure> {
+        self.backend.create_imported(new, cause)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.backend.trust_lock(folder);
     }

@@ -240,7 +240,26 @@ fn banners(
             })
         }
     };
-    view! { {commit} {open} }
+    // The server says it in one listing only (once per launch), so the notice is held here.
+    let removed = s.import_removed.clone();
+    Effect::new({
+        let removed = removed.clone();
+        move |_| {
+            if list.with(|l| l.value().is_some_and(|v| v.import_removed)) {
+                removed.set(true);
+            }
+        }
+    });
+    let import_removed = move || {
+        removed.get().then(|| {
+            view! {
+                <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "0 0 16px" } attrs=Attrs::from([("role", "status"), ("data-testid", "home-import-removed")])>
+                    {move || t(keys::home::IMPORT_REMOVED, &[])}
+                </Callout>
+            }
+        })
+    };
+    view! { {commit} {open} {import_removed} }
 }
 
 /// "Ask for help" on a banner (tC4 #378).

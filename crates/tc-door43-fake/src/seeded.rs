@@ -11,11 +11,16 @@
 //!
 //! | Repository | Tags (release kind) | Subject |
 //! |---|---|---|
-//! | `unfoldingWord/en_tn` | `v86`, `v91` (published), `v92` (pre-release) | TSV Translation Notes |
+//! | `unfoldingWord/en_tn` | `v86`, `v87`, `v91` (published), `v92` (pre-release) | TSV Translation Notes |
 //! | `unfoldingWord/en_ult` | `v89` (published) | Aligned Bible |
 //! | `unfoldingWord/en_twl` | `v86` (published) | TSV Translation Words Links |
 //! | `es-419_gl/es-419_tn` | `v66` (published) | TSV Translation Notes |
 //! | `uW/en_ugl` | none: pinned by commit only | Greek Lexicon |
+//!
+//! `en_tn` `v87` is the version tC4's tC3 import fixtures name (`TC3_DCS_TAGS`, tC4 j09 :280 and
+//! :321); it holds `v91`'s files, since an import pins it and downloads nothing. The fake binary
+//! also holds the Greek (`el-x-koine_ugnt` `v0.21`, `v0.34`) and Hebrew (`hbo_uhb` `v2.1.30`)
+//! tags those fixtures name ([`tc3_original_languages`]).
 
 use crate::{
     CommitSeed, FakeDoor43, FakeError, FakeOrg, FakeUser, OrgMember, ReleaseKind, RepoSeed,
@@ -231,6 +236,7 @@ pub async fn unfolding_word_resources(fake: &FakeDoor43) -> Result<(), FakeError
                     &[("TIT.tsv", "TIT.tsv"), ("JON.tsv", "JON.tsv")],
                 )?,
             ),
+            release("v87", ReleaseKind::Published, tn_v91.clone()),
             release("v91", ReleaseKind::Published, tn_v91.clone()),
             release("v92", ReleaseKind::PreRelease, tn_v91),
         ],
@@ -260,5 +266,35 @@ pub async fn unfolding_word_resources(fake: &FakeDoor43) -> Result<(), FakeError
         )],
     ))
     .await?;
+    Ok(())
+}
+
+/// The original-language tags tC4's tC3 import fixtures name beside `en_tn` `v87`
+/// (`TC3_DCS_TAGS`, tC4 j09 :280 and :321), for the fake binary the browser journeys use. Tags
+/// with no release, as the lookup reads tags only: the catalog stays the seeded fake's. The
+/// Rust tests seed their own Greek releases, so [`FakeDoor43::start_seeded`] leaves these out.
+pub async fn tc3_original_languages(fake: &FakeDoor43) -> Result<(), FakeError> {
+    for (name, subject, tags) in [
+        (
+            "el-x-koine_ugnt",
+            "Greek New Testament",
+            &["v0.21", "v0.34"][..],
+        ),
+        ("hbo_uhb", "Hebrew Old Testament", &["v2.1.30"][..]),
+    ] {
+        let commits = tags
+            .iter()
+            .map(|tag| {
+                Ok(CommitSeed {
+                    message: format!("Tag {tag}"),
+                    files: burrito("en_ult@v89", &[("TIT.usfm", "TIT.usfm")])?,
+                    tag: Some((*tag).to_owned()),
+                    release: None,
+                })
+            })
+            .collect::<Result<Vec<_>, FakeError>>()?;
+        fake.add_repo(resource("unfoldingWord", name, subject, "en", commits))
+            .await?;
+    }
     Ok(())
 }

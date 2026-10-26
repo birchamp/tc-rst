@@ -242,7 +242,9 @@
   {
     "wire": {
       "type": "import",
-      "value": "writeFailed"
+      "value": {
+        "type": "writeFailed"
+      }
     },
     "code": "import.write-failed",
     "key": "refusal.import.write-failed",
@@ -252,12 +254,227 @@
   {
     "wire": {
       "type": "import",
-      "value": "nameExists"
+      "value": {
+        "type": "nameExists"
+      }
     },
     "code": "import.name-exists",
     "key": "refusal.import.name-exists",
     "vars": {},
     "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "notZip",
+        "value": {
+          "file": "cfm_fbt_tit_book.zip"
+        }
+      }
+    },
+    "code": "import.damaged.truncated",
+    "key": "importer.tc3.notZip",
+    "vars": {
+      "file": "cfm_fbt_tit_book.zip"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "corruptEntry",
+        "value": {
+          "file": "cfm_fbt_tit_book.zip",
+          "entry": "tit/1.json"
+        }
+      }
+    },
+    "code": "import.damaged.corrupt-entry",
+    "key": "importer.tc3.corruptEntry",
+    "vars": {
+      "file": "cfm_fbt_tit_book.zip",
+      "entry": "tit/1.json"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "noManifest",
+        "value": {
+          "file": "cfm_fbt_tit_book.zip"
+        }
+      }
+    },
+    "code": "import.damaged.no-manifest",
+    "key": "importer.tc3.noManifest",
+    "vars": {
+      "file": "cfm_fbt_tit_book.zip"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "noText",
+        "value": {
+          "file": "cfm_fbt_tit_book.zip"
+        }
+      }
+    },
+    "code": null,
+    "key": "importer.tc3.noText",
+    "vars": {
+      "file": "cfm_fbt_tit_book.zip"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "languages",
+        "value": {
+          "languages": [
+            "cfm",
+            "es-419"
+          ]
+        }
+      }
+    },
+    "code": null,
+    "key": "importer.tc3.languages",
+    "vars": {
+      "languages": "cfm, es-419"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "twice",
+        "value": {
+          "code": "TIT"
+        }
+      }
+    },
+    "code": null,
+    "key": "importer.tc3.twice",
+    "vars": {
+      "code": "TIT"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "unreadable",
+        "value": {
+          "file": "cfm_fbt_tit_book.zip",
+          "problem": "tit/1.json: expected value at line 1 column 1"
+        }
+      }
+    },
+    "code": null,
+    "key": "importer.tc3.unreadable",
+    "vars": {
+      "file": "cfm_fbt_tit_book.zip"
+    },
+    "detail": "tit/1.json: expected value at line 1 column 1"
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "textChanged",
+        "value": {
+          "book": "TIT"
+        }
+      }
+    },
+    "code": null,
+    "key": "importer.tc3.textChanged",
+    "vars": {
+      "book": "TIT"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "updateUnreadable",
+        "value": {
+          "file": "TIT.usfm",
+          "line": 5,
+          "problem": "verse 1:1 appears twice"
+        }
+      }
+    },
+    "code": null,
+    "key": "updateBook.unreadable",
+    "vars": {
+      "file": "TIT.usfm",
+      "line": "5"
+    },
+    "detail": "verse 1:1 appears twice"
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "updateOtherBook",
+        "value": {
+          "file": "TIT.usfm",
+          "named": "PHM",
+          "chosen": "TIT"
+        }
+      }
+    },
+    "code": null,
+    "key": "updateBook.otherBook",
+    "vars": {
+      "file": "TIT.usfm",
+      "named": "PHM",
+      "chosen": "TIT"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "updateNotWritten",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "updateBook.notWritten",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
+  },
+  {
+    "wire": {
+      "type": "import",
+      "value": {
+        "type": "updateReviewNotWritten",
+        "value": {
+          "reason": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": null,
+    "key": "updateBook.reviewNotWritten",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
   },
   {
     "wire": {

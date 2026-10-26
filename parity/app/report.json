@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "af80cd66229406d2",
+      "ui": "766046edeaa48eb2",
       "commit": "dev",
       "api": 1
     }
@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 36,
     "declared": 0,
-    "differs": 76,
-    "unported": 18,
+    "differs": 82,
+    "unported": 12,
     "failed": 0
   },
   "rows": [
@@ -2762,10 +2762,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "e8ca2bfae9565dc502eddcddbc32609dc565286832a1eef0455010d211d6aef1",
+        "rustSha256": "6c8a502f2b758a92ef5354382339ec40c9c1b33f500c80f8dde5e20b4c13c4f8",
+        "mismatched": 7753,
+        "outsideMasks": 7753,
+        "masks": [],
+        "diff": "diffs/import-files.png"
+      },
+      "dom": {
+        "tc4Sha256": "e3f6fa7ff49f417cfcae6889fb317a44bb7ea6d69939b0f72cc3290a22f56baf",
+        "rustSha256": "bcc6a7c68deebf7c16de96b95b1b836ed3d567a41799c27d41d50c3badba3618",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 137: tC4                   \"USFM files\" | rust                   \"translationCore 3 project\"",
+          "line 140: tC4               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re… | rust               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re…",
+          "line 152: tC4                       \"Drop your USFM files here, or browse\" | rust                       \"Drop your translationCore 3 zips here, or browse\"",
+          "line 154: tC4                       \".usfm, .sfm or .txt · one or many\" | rust                       \".zip exported from translationCore 3 · one or many\"",
+          "line 160: tC4                       <div  style=\"align-items: baseline; column-gap: 10px; display: flex; flex-basis: 0%; flex-grow: 1; flex-shrink: 1; min-width: 0px; row-gap: 10px\"> | rust                       <div  style=\"column-gap: 3px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-width: 0px; row-gap: 3px\">"
+        ]
       }
     },
     {
@@ -2773,10 +2793,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "08f5729ea4bed78555d5f7d8d73ffb8a7d5e3fadb973092f683fb2ce972752b6",
+        "rustSha256": "c7abc1ed897df647ec67014d56c5c052b6d7df4a3967184f21b5b757229ee9aa",
+        "mismatched": 189623,
+        "outsideMasks": 189623,
+        "masks": [],
+        "diff": "diffs/import-review-usfm.png"
+      },
+      "dom": {
+        "tc4Sha256": "84f61aa22860ec1eb5e8408806d7eac7c78e1d1d7071fd61e42f55d4e6cd5ba1",
+        "rustSha256": "5013cf92f521381a34f3694db392fbc952d3843b128f9330e27c79525e7684de",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 154: tC4                             \"3 chapters · 46 verses · 5 drafted\" | rust                             \"3 chapters · 46 verses · 46 drafted\"",
+          "line 165: tC4                           \"USFM files\" | rust                           \"translationCore 3 project\"",
+          "line 176: tC4                   <div  style=\"column-gap: 14px; display: flex; flex-direction: column; row-gap: 14px\"> | rust                     <div data-testid=\"import-carried\" style=\"column-gap: 8px; display: flex; flex-direction: column; row-gap: 8px\">",
+          "line 177: tC4                     <span  style=\"color: var(--fg-muted); display: block; font-family: var(--font-ui); font-size: var(--fs-label); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-overline); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0… | rust                       <span  style=\"color: var(--fg-muted); display: block; font-family: var(--font-ui); font-size: var(--fs-label); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-overline); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top:…",
+          "line 178: tC4                       \"Checks\" | rust                         \"Carried over from translationCore 3\""
+        ]
       }
     },
     {
@@ -2784,10 +2824,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+        "rustSha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+        "mismatched": 0,
+        "outsideMasks": 0,
+        "masks": [],
+        "diff": null
+      },
+      "dom": {
+        "tc4Sha256": "32b3fd7ae3974a8af0e1df0953c3730d9afb06ebd1261b27786c20441e763807",
+        "rustSha256": "028b2b0eb4b5ec84d1477bf3414ab293cc00ee78af733b2465706a11e2c507bf",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 140: tC4               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re… | rust               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re…",
+          "line 257: tC4               <button data-i=\"text\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-x: initial; background-… | rust               <button data-i=\"text\" data-testid=\"import-review-back\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background…"
+        ]
       }
     },
     {
@@ -2795,10 +2852,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0349808f5a92991501539aaaf37a7d525486e17a4c5806835ecb12bde8ae91a7",
+        "rustSha256": "4367c9a400890f64eee2592d7eefa266f50b74c83dbfd701b7f74a9cde6838cc",
+        "mismatched": 163395,
+        "outsideMasks": 163395,
+        "masks": [],
+        "diff": "diffs/import-working.png"
+      },
+      "dom": {
+        "tc4Sha256": "95c1321765a37894f8a54148a9b3bac88aa6540e4da5aab0296e0617bf37e7bb",
+        "rustSha256": "1377352f785783c1949eb562540a33a8be056d3b9e189fb88ce97d098fab8a46",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 141: tC4               <div data-testid=\"import-working\" style=\"display: flex; justify-content: center; padding-bottom: 30px; padding-left: 0px; padding-right: 0px; padding-top: 26px\"> | rust               <div data-testid=\"import-working\" style=\"align-items: center; column-gap: 16px; display: flex; flex-direction: column; padding-bottom: 30px; padding-left: 0px; padding-right: 0px; padding-top: 26px; row-gap: 16px\">",
+          "line 143: tC4                   <span aria-busy=\"true\" aria-label=\"Creating “Tito”…\" role=\"progressbar\" style=\"animation-delay: 0s; animation-direction: normal; animation-duration: 800ms; animation-fill-mode: none; animation-iteration-count: infinite; animation-name: tcSpin; animation-play-state: running; animati… | rust                   <span aria-busy=\"true\" aria-label=\"Creating “Obra tC3”…\" role=\"progressbar\" style=\"animation-delay: 0s; animation-direction: normal; animation-duration: 800ms; animation-fill-mode: none; animation-iteration-count: infinite; animation-name: tcSpin; animation-play-state: running; ani…",
+          "line 145: tC4                     \"Creating “Tito”…\" | rust                     \"Creating “Obra tC3”…\"",
+          "line 146: tC4 (none) | rust             <div  style=\"column-gap: 10px; display: flex; flex-direction: row; justify-content: flex-end; min-width: 0px; padding-bottom: 22px; padding-left: 24px; padding-right: 24px; padding-top: 18px; row-gap: 10px\">",
+          "line 147: tC4 (none) | rust               <div  style=\"flex-basis: 0%; flex-grow: 1; flex-shrink: 1\">"
+        ]
       }
     },
     {
@@ -2806,10 +2883,27 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "b70b54689871429335d79e34a86038785105322f465b7aad339a7eee43298ab3",
+        "rustSha256": "92fb01b7a671528a413486e8596b9558c6b93a3773e50fe1d0bcc6bc0bbbcc6d",
+        "mismatched": 139928,
+        "outsideMasks": 139928,
+        "masks": [],
+        "diff": "diffs/import-failed.png"
+      },
+      "dom": {
+        "tc4Sha256": "fda61bb02985b0e8725df582a2462d9fa02eb054cbc1b0c81c83cd448a8895a3",
+        "rustSha256": "ba055ee4dba038236c63798a2efdd0207e8a8903009303a45b19cfb4e6eeae51",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 140: tC4               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re… | rust               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re…",
+          "line 150: tC4                     \"import.write-failed the ops record of the import was not saved; the imported project was removed\" | rust                     \"import.write-failed\""
+        ]
       }
     },
     {
@@ -2893,23 +2987,25 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "C6",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "61d2576fef3b1d7b2c2b59e9595a4cf3f579292918bbc8a81f05e1515bab04f4",
-        "rustSha256": "c39d8a9636a7c51b9e3758e9965e6e0f0b0e0aa472533d366abe4b5960bad00d",
-        "mismatched": 41,
-        "outsideMasks": 41,
+        "rustSha256": "cfb15e0f4018012377d3e9ceaeb68232173adfb26df081b4a3820c499df30dfd",
+        "mismatched": 148062,
+        "outsideMasks": 148062,
         "masks": [],
         "diff": "diffs/add-book-usfm-files.png"
       },
       "dom": {
         "tc4Sha256": "4a40b4a31d200db33b76c746073e30ea917e981e2dde3375d24428efd5ff4666",
-        "rustSha256": "558df5c42d8a37cd86d0cbe5aec68782696935909975c5819a3bb831e5c3b6d5",
+        "rustSha256": "6b9e2258ae452b289358fc868062b4e754ef5947e0f221dff40fd7de9f2fa7e3",
         "scope": null,
-        "same": true,
+        "same": false,
         "declared": [],
-        "firstDiffs": []
+        "firstDiffs": [
+          "line 163: tC4                         \"Titus is already in this project. To replace an existing book, use Import.\" | rust                         \"Titus is already in this project. To bring in changes to it, open the project and choose Update a book from USFM in the account menu.\""
+        ]
       }
     },
     {
@@ -3627,10 +3723,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "F1",
-        "dom": "F1"
+      "status": "differs",
+      "by": "F1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "cbc6d110be1cc89ee38cd915e8df54001a56da9aba5b0b5f67b16c99ef44a4e3",
+        "rustSha256": "dbe49f873f3567081862f76a8740014f98b6a41da9327e20bba5fea59fa2ad50",
+        "mismatched": 315411,
+        "outsideMasks": 315411,
+        "masks": [],
+        "diff": "diffs/import-toast.png"
+      },
+      "dom": {
+        "tc4Sha256": "297e697f6a503b6404aa639e67468b1cfd859942bf826ed0bb43b76188a5814d",
+        "rustSha256": "424b0aa7d3fbd6334ede6a0b677caf03ef3b8f8338e3a852505e38240f1492f0",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 29: tC4           <button data-i=\"fill\" data-testid=\"add-project\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background… | rust           <button data-i=\"fill\" data-testid=\"add-project\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background…",
+          "line 32: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-tita_tc3\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; …",
+          "line 35: tC4                 \"EE\" | rust                 \"TT\"",
+          "line 39: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Tita tC3\"",
+          "line 40: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…"
+        ]
       }
     }
   ]

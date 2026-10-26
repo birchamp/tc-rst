@@ -1060,7 +1060,7 @@ async fn a_failed_save_keeps_the_plan_for_the_retry() {
 
 /// A resource fixture as a Door43 repository's files: its `metadata.json` naming `repo`, and each
 /// fixture file at the ingredient path the metadata lists it under.
-fn export(fixture_dir: &str, repo: &str) -> Vec<SeedFile> {
+pub(super) fn export(fixture_dir: &str, repo: &str) -> Vec<SeedFile> {
     let dir = repo_root()
         .join("fixtures/tc4/test-fixtures/resources")
         .join(fixture_dir);
@@ -1429,7 +1429,7 @@ fn fix_state(w: &World) -> FixState {
 }
 
 /// A burrito zip of the fixture's export that declares `commit` as its revision.
-fn zip_declaring(fixture_dir: &str, repo: &str, commit: &str) -> Vec<u8> {
+pub(super) fn zip_declaring(fixture_dir: &str, repo: &str, commit: &str) -> Vec<u8> {
     use std::io::Write;
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     let options = zip::write::SimpleFileOptions::default();

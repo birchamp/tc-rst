@@ -1,0 +1,81 @@
+{
+  "path": "import/review",
+  "kind": "query",
+  "net": null,
+  "request": {
+    "files": [
+      {
+        "upload": "00000000000000000000000000000007",
+        "name": "cfm_fbt_tit_book.zip"
+      }
+    ],
+    "details": {
+      "name": "Tita tC3",
+      "code": "cfm"
+    },
+    "useInstalled": [
+      {
+        "slot": "translationNotes",
+        "repoPath": "git.door43.org/unfoldingWord/en_tn",
+        "tag": "v87",
+        "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
+      }
+    ]
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "found": {
+        "details": {
+          "name": "cfm_fbt",
+          "code": "cfm"
+        },
+        "licenses": [
+          "CC BY-SA 4.0"
+        ],
+        "contributors": [
+          "Translator"
+        ],
+        "books": [
+          {
+            "book": "TIT",
+            "chapters": 3,
+            "verses": 46,
+            "drafted": 46,
+            "aligned": 0,
+            "decisions": 5,
+            "notKept": []
+          }
+        ],
+        "slots": [
+          "translationNotes",
+          "originalNewTestament"
+        ]
+      },
+      "details": {
+        "name": "Tita tC3",
+        "code": "cfm"
+      },
+      "folder": "tita_tc3",
+      "refusal": {
+        "type": "import",
+        "value": {
+          "type": "nameExists"
+        }
+      },
+      "carryOver": {
+        "carried": 4,
+        "invalidated": 1
+      }
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

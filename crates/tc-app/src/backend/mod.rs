@@ -410,6 +410,25 @@ impl StoreCommand {
         )
     }
 
+    /// One part of "Update a book from USFM" (STORAGE §13.6): the `Fill` first, then the
+    /// `Review`, each planned on the fold it lands on.
+    pub fn update_book(
+        book: BookId,
+        bytes: Vec<u8>,
+        file_name: String,
+        part: tc_journal::outside::UpdatePart,
+    ) -> Self {
+        Self::new(
+            Command::UpdateBook {
+                book,
+                bytes,
+                file_name,
+                part,
+            },
+            Vec::new(),
+        )
+    }
+
     /// `SetSetting` (STORAGE §5.4): one top-level key of `settings.json`, over the value the
     /// token shows.
     pub fn set_setting(shown: EditToken, value: Option<tc_journal::Json>) -> Self {
@@ -656,6 +675,9 @@ pub struct StoreReply {
     pub changes: Vec<ChangeId>,
     /// Conflicts a bulk choice left for a choice of their own (tc-store).
     pub skipped: Vec<ConflictId>,
+    /// Records the command left as they were (tc-store): the verses an Update a book's `Fill`
+    /// did not change.
+    pub kept: Vec<RecordKey>,
 }
 
 /// Why a command wrote nothing (tc-store `CommandError`). The memory backend makes none of
@@ -1118,6 +1140,17 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// Blocking. Only the store on disk creates projects.
     fn create(&self, new: NewProjectSpec) -> Result<(), CreateFailure> {
         let _ = new;
+        Err(CreateFailure::Unavailable)
+    }
+
+    /// Creates a project from an import, as [`ProjectStore::create`] does, with `cause` on
+    /// every record so History says where the work came from (STORAGE §13).
+    fn create_imported(
+        &self,
+        new: NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), CreateFailure> {
+        let _ = (new, cause);
         Err(CreateFailure::Unavailable)
     }
 

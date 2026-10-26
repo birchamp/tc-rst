@@ -34,6 +34,7 @@ mod handlers;
 pub mod home;
 #[cfg(feature = "test-hooks")]
 pub mod hooks;
+pub mod import;
 pub mod jobs;
 mod js;
 pub mod language_search;

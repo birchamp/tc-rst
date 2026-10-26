@@ -197,6 +197,7 @@ scoped!(
     crate::conflicts::Restore,
     crate::conflicts::ResolveBulk,
     crate::export::RunExport,
+    crate::import::UpdateBook,
 );
 unscoped!(
     crate::app::Quit,
@@ -216,6 +217,8 @@ unscoped!(
     crate::create::Obs,
     crate::create::AddBlankBooks,
     crate::create::AddUsfmBooks,
+    crate::import::Versions,
+    crate::import::Run,
 );
 #[cfg(feature = "test-hooks")]
 unscoped!(
