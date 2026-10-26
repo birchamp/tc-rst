@@ -152,8 +152,7 @@ fn only_leave_calls_the_gate() {
             || (file == "app/web/mod.rs" && fn_lines(text, "ProbeRoot").contains(&line))
             || (file == "app/web/check.rs" && fn_lines(text, "restore_check").contains(&line))
             || (file == "app/web/align.rs" && fn_lines(text, "restore_alignment").contains(&line))
-            || (file == "views/comment_box.rs"
-                && fn_lines(text, "comment_history").contains(&line))
+            || (file == "views/comment_box.rs" && fn_lines(text, "comment_history").contains(&line))
     });
     assert!(
         callers.is_empty(),

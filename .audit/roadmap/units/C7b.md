@@ -4,7 +4,7 @@ title: Newest wins outside verse text (H5), and the conflict screens that stay
 track: A
 lane: app
 milestone: M3
-state: verifying
+state: done
 owner: shell lane (Claude Code e1bb3a0c)
 branch: track-C7b
 worktree: .worktrees/track-C7b
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P3, P7]
 no_loss: true
 size: 3-5 sessions (basis: the design in the 2026-10-24 log; the fold already orders heads, so the rule is small, the tests and goldens are most of it)
-merged: none
-updated: 2026-10-24
-next: With the integration lane for batch 8.
+merged: 39a6158c
+updated: 2026-10-26
+next: none
 blocked_by: none
 ---
 
@@ -210,3 +210,4 @@ Plus:
 - 2026-10-25 11:30 EDT | shell lane (Claude Code e1bb3a0c) | note | none | Main 4956ac52 merged in (86920510; one PLAN.md conflict: kept main's removal of the aligner bullet and H5's bullet); HIST-1 card created and added to ROADMAP, REL-1's and DONE's depends
 - 2026-10-25 12:40 EDT | shell lane (Claude Code e1bb3a0c) | verify | none | After the merge of main: change_kind moved to its own test-hooks impl block (main's test_hook_branches lint), clippy borrow and single-match fixes; tc-journal, tc-store, tc-api, tc-app and tc-ui tests with test-hooks pass (tc-app app 698/698), workspace and tc-ui/tc-api wasm32 clippy clean, conflict-kinds.test.mjs 1/1, board.py --check 0 errors, claims 4/4 | cargo test -p tc-journal -p tc-store -p tc-api -p tc-app -p tc-ui --features tc-api/test-hooks; node --test parity/app/journeys/conflict-kinds.test.mjs
 - 2026-10-26 | shell lane (Claude Code e1bb3a0c) | fix | none | Integration lane's hand-back: INV-NEWEST-WINS-CONVERGES, INV-ONLY-TEXT-CONFLICTS and INV-THE-LOSER-STAYS-IN-HISTORY are in their tests' assert messages; docs/P-LEDGER.md P2 names C7b's tests. Main 1a0c8469 merged in; tc-journal, tc-store, tc-api, tc-app and tc-ui tests, clippy (workspace and wasm32), claims with C7b set to done, conflict-kinds, conflict-review and sync-button journeys pass | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 11:30 EDT | integration lane (Claude Code 3d07d5f8) | merge | 39a6158c | merged into main in batch 9 (C7b 39a6158c, HIST-1 144e595d, CHK-3 e36f49d2, and REL-1 waits for LOSS-1), gated by scripts/gates.sh --wait-ci batch-9 | scripts/gates.sh --wait-ci batch-9
