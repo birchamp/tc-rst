@@ -4,7 +4,7 @@ title: Lint ratchet and fresh P7 captures
 track: A
 lane: checks
 milestone: M1
-state: building
+state: verifying
 owner: checks lane (Claude Code 2414b2c7)
 branch: track-CHK-6
 worktree: .worktrees/track-CHK-6
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-26
-next: steps 2 and 3 on this branch; step 5 (the recapture) waits until E1a, E1b and E1c merge. Branch track-CHK-6
+next: steps 2 and 3 are ready for a merge batch run by the integration lane; step 5 (the recapture) waits until E1a, E1b and E1c merge, then a second merge. Branch track-CHK-6
 blocked_by: none
 ---
 
@@ -277,3 +277,7 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 - 2026-10-26 17:54 EDT | checks lane (Claude Code 2414b2c7) | step 2 | none | Workspace lints unreachable, allow_attributes_without_reason, struct_excessive_bools and fn_params_excessive_bools are on, max-struct-bools and max-fn-params-bools = 3 in the root and the three crate clippy.toml files, each line under its invariant comment. Sites: 246 lint exemptions without a reason (237 host, 8 wasm-only, 1 Windows-only): test headers keep allow with a reason, written by a script; library ones became #[expect] with their old comment as the reason; 3 #[allow(clippy::too_many_lines)] were deleted (the lint is off, they allowed nothing). unreachable!: 21 #[expect] in library code carry each site's proof; the 10 in tests became panic!. 17 structs and 1 component fn (Layer) carry #[expect]/#[allow] saying why the flags stay independent (Field: A4b no-loss code, new states go in FieldSave). unreachable_pub counts 934, over 150: not turned on, a line in .audit/minors.tsv. Plant in tc-check/src/lib.rs, reverted: a four-bool struct gave "more than 3 bools in a struct", an #[allow(dead_code)] gave "`allow` attribute without specifying a reason". Steps clippy, clippy-release-bins, clippy-release-app, clippy-windows, wasm-ui, wasm-ui-gallery, wasm-ui-app, wasm-ui-hooks and wasm-api exit 0 | scripts/gates.sh --step clippy
 - 2026-10-26 17:54 EDT | checks lane (Claude Code 2414b2c7) | step 3 | none | crates/tc-arch/tests/clippy_config.rs: every crates/*/clippy.toml holds each top-level key of the root clippy.toml but disallowed-methods and disallowed-types, with the same value. Plant: allow-dbg-in-tests deleted from crates/tc-app/clippy.toml gave "INV-PROVEN-PANICS: crates/tc-app/clippy.toml replaces the root clippy.toml but lacks allow-dbg-in-tests = true"; reverted | cargo test --locked -p tc-arch --test clippy_config
 - 2026-10-26 17:59 EDT | checks lane (Claude Code 2414b2c7) | verify | none | Independent reviewer (a fresh general-purpose agent, steps 2 and 3, diff 654c083e..b8d99e5d): no blocker, no major. 1 Code: no type can carry a lint rule; clippy is the structure, and each bool struct says why it stays. 2 Checks: the four lints run in every clippy gate step, clippy_config runs in CI's test job in 0.02 s, each has a recorded failing plant. 3 Reach: build-time only, nothing to drop. 4 Siblings: src, tests and examples swept; it found one never-compiled reasonless allow in tc-server's stub. 5 No loss: not a no-loss card; library code only gained attributes, tests only swapped unreachable! for panic!. 6 Prose and Human: reasons give the why except four minors, all fixed in the next commit (two swapped bench reasons, seven bench headers called test code, drafts.rs's reason not proving its site, the dead cfg(not(test-hooks)) test_rows in a test-hooks-only module deleted); no owner questions | git diff 654c083e..HEAD
+- 2026-10-26 19:21 EDT | checks lane (Claude Code 2414b2c7) | note | none | Main 2d4bea68 merged in; its one new reasonless allow (allow(clippy::type_complexity) on tc-store kept.rs prepare_import) allowed nothing and is deleted. Host, Windows and the four wasm clippy runs show no site left | scripts/gates.sh --step clippy
+- 2026-10-26 19:21 EDT | checks lane (Claude Code 2414b2c7) | note | none | The first --touched run was stopped by tc-heavy as hung in tc-app's app tests, with app::save_machine::c3_reload_anywhere_keeps_each_saved_field_once the one test unfinished; alone it passes in 12 s, the whole app binary passed on the next run (758 in 276 s). Intermittent, not from this card (tc-app gained only attributes); the integration lane is told | target/chk6-touched.log (local)
+- 2026-10-26 19:21 EDT | checks lane (Claude Code 2414b2c7) | gate | none | scripts/gates.sh --touched exits 0 on the branch with main 2d4bea68 merged | scripts/gates.sh --touched
+- 2026-10-26 19:21 EDT | checks lane (Claude Code 2414b2c7) | park | none | Steps 2 and 3 go to the integration lane for a batch; step 5 waits until E1a, E1b and E1c merge (orchestrator, 2026-10-26) | python3 -I .audit/tools/board.py
