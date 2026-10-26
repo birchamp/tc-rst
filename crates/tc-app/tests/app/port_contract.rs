@@ -5,7 +5,7 @@
 use tc_api::ApiError;
 use tc_api::account::WebUrl;
 use tc_api::door43::{
-    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
     SyncProject,
 };
 use tc_api::editor::SaveVerse;
@@ -44,6 +44,9 @@ pub(super) trait SyncPortFixture {
     /// The next sync of the sample fails before anything is taken in; the job's error.
     async fn sync_fails_before_intake(w: &World) -> ApiError;
     /// The next open from Door43 succeeds; the project it adds.
+    /// The computer that opens from Door43: this one for the scripted port; for a real port a
+    /// second one, since a computer that has the project opens no second copy (ruling H14).
+    async fn opener(w: &World) -> Opener;
     async fn open_succeeds(w: &World) -> ProjectRef;
     /// The next open from Door43 is refused; the job's error.
     async fn open_refused(w: &World) -> ApiError;
@@ -191,6 +194,13 @@ impl SyncPortFixture for Scripted {
         ApiError::Refused(Refusal::Sync(failure))
     }
 
+    async fn opener(w: &World) -> Opener {
+        Opener {
+            app: w.t.app.clone(),
+            _computer: None,
+        }
+    }
+
     async fn open_succeeds(w: &World) -> ProjectRef {
         let project = folder(SAMPLE);
         w.t.app.script_open_door43(Ok(project.clone()));
@@ -259,14 +269,13 @@ pub(super) fn share(n: u8, project: &ProjectRef, name: &str) -> ShareOnDoor43 {
     }
 }
 
-/// Door43's `repo` of the parity user opened here as the new project `name`.
-async fn open_shared(app: &App, n: u8, repo: &str, name: &str) -> JobState {
+/// Door43's `repo` of the parity user opened here as a new project.
+async fn open_shared(app: &App, n: u8, repo: &str) -> JobState {
     let job = post(
         app,
         &OpenDoor43 {
             request: rid(n),
             repo: RepoSource::new(PARITY_USER, repo).unwrap(),
-            name: ProjectName::parse(name).unwrap(),
         },
     )
     .await
@@ -281,11 +290,10 @@ pub(super) fn sync(n: u8) -> SyncProject {
     }
 }
 
-pub(super) fn open(n: u8, name: &str) -> OpenDoor43 {
+pub(super) fn open(n: u8) -> OpenDoor43 {
     OpenDoor43 {
         request: rid(n),
         repo: RepoSource::new(PARITY_USER, "es-419_tit_equipo").unwrap(),
-        name: ProjectName::parse(name).unwrap(),
     }
 }
 
@@ -335,16 +343,18 @@ macro_rules! sync_port_contract {
                 let app = &w.t.app;
                 internet_on(app).await;
                 sign_in(app).await;
-                let before = listed(app).await;
                 let project = <$fixture>::open_succeeds(&w).await;
+                let opener = <$fixture>::opener(&w).await;
+                let other = &opener.app;
+                let before = listed(other).await;
                 if <$fixture>::OPEN_WRITES {
                     assert!(!before.contains(&project), "{project:?} is new");
                 }
-                let job = post(app, &open(2, "contract-open")).await.unwrap();
-                match ended(app, job).await {
+                let job = post(other, &open(2)).await.unwrap();
+                match ended(other, job).await {
                     JobState::Done(tc_api::jobs::JobOutcome::Created { project: added }) => {
                         assert_eq!(added, project);
-                        assert!(listed(app).await.contains(&added), "{added:?} is listed");
+                        assert!(listed(other).await.contains(&added), "{added:?} is listed");
                     }
                     other => panic!("{other:?}"),
                 }
@@ -411,11 +421,13 @@ macro_rules! sync_port_contract {
                 let app = &w.t.app;
                 internet_on(app).await;
                 sign_in(app).await;
-                let before = listed(app).await;
+                let opener = <$fixture>::opener(&w).await;
+                let other = &opener.app;
+                let before = listed(other).await;
                 let error = <$fixture>::open_refused(&w).await;
-                let job = post(app, &open(4, "contract-refused")).await.unwrap();
-                assert_eq!(ended(app, job).await, JobState::Failed(error));
-                assert_eq!(listed(app).await, before, "no project was added");
+                let job = post(other, &open(4)).await.unwrap();
+                assert_eq!(ended(other, job).await, JobState::Failed(error));
+                assert_eq!(listed(other).await, before, "no project was added");
             }
 
             /// INV-A-SYNC-NEVER-LOSES-A-SAVE: a save made while a sync runs is on disk after
@@ -496,7 +508,7 @@ macro_rules! sync_port_contract {
                     Err(ApiError::NeedsInternet(NetKind::Sync))
                 );
                 assert_eq!(
-                    post(app, &open(6, "contract-offline")).await,
+                    post(app, &open(6)).await,
                     Err(ApiError::NeedsInternet(NetKind::Open))
                 );
                 assert_eq!(<$fixture>::calls(&w), 0, "nothing reached the port");
@@ -573,10 +585,18 @@ impl SyncPortFixture for Door43 {
         repo_lookup_fails(w)
     }
 
+    async fn opener(w: &World) -> Opener {
+        let b = computer_b(w).await;
+        Opener {
+            app: b.0.app.clone(),
+            _computer: Some(b),
+        }
+    }
+
     async fn open_succeeds(w: &World) -> ProjectRef {
         // The repository holds the sample once a first sync pushed it.
         synced(&w.t.app, 91).await;
-        folder("contract-open")
+        folder(REPO)
     }
 
     async fn open_refused(w: &World) -> ApiError {
@@ -602,9 +622,10 @@ impl SyncPortFixture for Door43 {
     }
 
     async fn door43_holds(w: &World, words: &str) -> Option<bool> {
-        // Door43's copy, opened as a new project, as a teammate's computer would get it.
-        let app = &w.t.app;
-        let job = post(app, &open(20, "door43-copy")).await.unwrap();
+        // Door43's copy, opened as a new project, as a teammate's computer gets it.
+        let (b, _dir) = computer_b(w).await;
+        let app = &b.app;
+        let job = post(app, &open(20)).await.unwrap();
         let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(app, job).await
         else {
             return Some(false);
@@ -626,9 +647,10 @@ impl SyncPortFixture for Door43 {
     }
 
     async fn shared_holds(w: &World, name: &str, words: &str) -> Option<bool> {
-        let app = &w.t.app;
+        let (b, _dir) = computer_b(w).await;
+        let app = &b.app;
         let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) =
-            open_shared(app, 32, name, "shared-copy").await
+            open_shared(app, 32, name).await
         else {
             return Some(false);
         };
@@ -716,7 +738,15 @@ struct Teammate {
     _dir: tempfile::TempDir,
 }
 
-async fn teammate_b(w: &World) -> Teammate {
+/// The computer that opens from Door43 in the contract, kept while its app is used.
+pub(super) struct Opener {
+    app: tc_app::App,
+    _computer: Option<(super::common::TestApp, tempfile::TempDir)>,
+}
+
+/// A second computer (B) on the same fake Door43: its own app data, device and empty projects
+/// folder, the internet on and the parity user signed in.
+async fn computer_b(w: &World) -> (super::common::TestApp, tempfile::TempDir) {
     use tc_app::StoreChoice;
     use tc_app::config::ProjectsFolder;
     let dir = tempfile::tempdir().unwrap();
@@ -748,7 +778,12 @@ async fn teammate_b(w: &World) -> Teammate {
     t.watch = Some(watch);
     internet_on(&t.app).await;
     sign_in(&t.app).await;
-    let job = post(&t.app, &open(40, "titus-b")).await.unwrap();
+    (t, dir)
+}
+
+async fn teammate_b(w: &World) -> Teammate {
+    let (t, dir) = computer_b(w).await;
+    let job = post(&t.app, &open(40)).await.unwrap();
     let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(&t.app, job).await
     else {
         panic!("B opens the sample from Door43");
@@ -913,8 +948,10 @@ async fn the_first_sync_sends_the_username_at_once() {
         device
     };
     synced(app, 61).await;
-    // Door43's copy, opened as a teammate's computer would get it.
-    let job = post(app, &open(62, "door43-names")).await.unwrap();
+    // Door43's copy, opened as a teammate's computer gets it.
+    let (b, _dir) = computer_b(&w).await;
+    let app = &b.app;
+    let job = post(app, &open(62)).await.unwrap();
     let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) = ended(app, job).await
     else {
         panic!("Door43's copy opens");
@@ -1064,6 +1101,9 @@ async fn open_private_repo_signs_in_and_retries() {
         .await
         .unwrap();
     synced(app, 41).await;
+    // Another computer, signed out, opens it.
+    let (b, _dir) = computer_b(&w).await;
+    let app = &b.app;
     post(app, &tc_api::account::SignOut { request: rid(42) })
         .await
         .unwrap();
@@ -1073,7 +1113,6 @@ async fn open_private_repo_signs_in_and_retries() {
         &OpenDoor43 {
             request: rid(43),
             repo: RepoSource::new(PARITY_USER, "privado").unwrap(),
-            name: ProjectName::parse("privado-aqui").unwrap(),
         },
     )
     .await
@@ -1093,7 +1132,7 @@ async fn open_private_repo_signs_in_and_retries() {
         "the first try carried no token"
     );
     sign_in_again(app, 47).await;
-    let after = open_shared(app, 44, "privado", "privado-aqui").await;
+    let after = open_shared(app, 44, "privado").await;
     assert!(
         matches!(
             after,
@@ -1102,7 +1141,7 @@ async fn open_private_repo_signs_in_and_retries() {
         "the open after the sign-in gets the project: {after:?}"
     );
     assert_eq!(
-        open_shared(app, 45, "no-such-repo", "nada").await,
+        open_shared(app, 45, "no-such-repo").await,
         JobState::Failed(ApiError::Refused(Refusal::Sync(SyncFailure::BeforeIntake(
             SyncRefusal::RemoteMissing
         )))),
@@ -1110,28 +1149,59 @@ async fn open_private_repo_signs_in_and_retries() {
     );
 }
 
+/// Ruling H14: a computer holds one copy of a project. An open of a repository this computer's
+/// project syncs with makes no second copy and names that project, before Door43 is asked
+/// anything.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn open_name_in_use_refused_before_request() {
-    let w = Door43::share_world().await;
+async fn opening_a_project_you_have_makes_no_copy_and_offers_yours() {
+    let w = Door43::world().await;
     let app = &w.t.app;
     internet_on(app).await;
     sign_in(app).await;
+    let before = listed(app).await;
     w.fake.clear_requests();
     assert_eq!(
-        post(
-            app,
-            &OpenDoor43 {
-                request: rid(46),
-                repo: RepoSource::new(PARITY_USER, "anything").unwrap(),
-                name: ProjectName::parse("SAMPLE_burrito").unwrap(),
-            },
-        )
-        .await,
+        post(app, &open(46)).await,
         Err(ApiError::Refused(Refusal::OpenDoor43(
-            OpenDoor43Refusal::NameExists
+            OpenDoor43Refusal::AlreadyHere {
+                project: folder(SAMPLE)
+            }
         )))
     );
+    assert_eq!(listed(app).await, before, "no second copy");
     assert_eq!(w.fake.requests(), Vec::new(), "Door43 was asked nothing");
+}
+
+/// Ruling H14: an open asks for no name. The project keeps the name it has on Door43, in a
+/// folder named for the repository (`open_folder`; its `-2` is tc-api's and the store test's).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_open_asks_no_name_and_keeps_the_teams_name() {
+    let w = Door43::world().await;
+    let app = &w.t.app;
+    internet_on(app).await;
+    sign_in(app).await;
+    synced(app, 47).await;
+    let (b, _dir) = computer_b(&w).await;
+    let JobState::Done(tc_api::jobs::JobOutcome::Created { project }) =
+        ended(&b.app, post(&b.app, &open(48)).await.unwrap()).await
+    else {
+        panic!("Door43's copy opens");
+    };
+    assert_eq!(project, folder(REPO));
+    let name_of = |home: &tc_api::home::HomeView, project: &ProjectRef| {
+        home.cards
+            .iter()
+            .find(|c| &c.project == project)
+            .map(|c| c.name.clone())
+    };
+    let here = post(app, &tc_api::home::List {}).await.unwrap();
+    let there = post(&b.app, &tc_api::home::List {}).await.unwrap();
+    assert!(name_of(&here, &folder(SAMPLE)).is_some());
+    assert_eq!(
+        name_of(&there, &project),
+        name_of(&here, &folder(SAMPLE)),
+        "one name for the whole team"
+    );
 }
 
 /// A project already on Door43 is never shared again: a second tab's dialog, or a resend with

@@ -191,36 +191,58 @@ impl Handle<ShareOnDoor43> for App {
 }
 
 impl Handle<OpenDoor43> for App {
-    /// tC4's `openFromDoor43Asking` after its question: the name is checked against every
-    /// entry of the projects folder, without letter case, before anything is sent; then the
-    /// job.
+    /// tC4's `openFromDoor43Asking` without its question (ruling H14): a project of that
+    /// repository already here is the answer, since a project has one copy on a computer;
+    /// else the folder is the first free one of the projects folder, without letter case.
+    /// Both before anything is sent.
     async fn handle(&self, req: OpenDoor43) -> Result<JobId, ApiError> {
-        let name = req.name.clone();
+        let repo = req.repo.clone();
+        // A remote names its server as written in the project's URL: the host with its port.
+        let server = self.inner.config.door43.as_url();
+        let host = server.host_str().map(|h| match server.port() {
+            Some(port) => format!("{h}:{port}"),
+            None => h.to_owned(),
+        });
         let listed = self
             .with_store(move |store| {
                 store.list().map(|listing| {
-                    name.in_use(
-                        listing
-                            .projects
-                            .iter()
-                            .map(|p| p.folder.as_str())
-                            .chain(listing.unusable.iter().map(|u| u.name.as_str()))
-                            .chain(listing.others.iter().map(String::as_str)),
-                    )
+                    let ours = listing.projects.iter().find(|entry| {
+                        store.peek(&entry.folder).is_ok_and(|peek| {
+                            peek.remote.is_some_and(|remote| {
+                                host.as_deref()
+                                    .is_some_and(|h| h.eq_ignore_ascii_case(&remote.host))
+                                    && remote.owner.eq_ignore_ascii_case(repo.owner())
+                                    && remote.repo.eq_ignore_ascii_case(repo.name())
+                            })
+                        })
+                    });
+                    match ours {
+                        Some(entry) => Err(entry.folder.clone()),
+                        None => Ok(tc_api::door43::open_folder(
+                            &repo,
+                            listing
+                                .projects
+                                .iter()
+                                .map(|p| p.folder.as_str())
+                                .chain(listing.unusable.iter().map(|u| u.name.as_str()))
+                                .chain(listing.others.iter().map(String::as_str)),
+                        )),
+                    }
                 })
             })
             .await?;
-        let in_use = listed.map_err(|e| {
-            self.internal(
-                "the projects folder could not be listed",
-                facts(json!({ "reason": e.to_string() })),
-            )
-        })?;
-        if in_use {
-            return Err(ApiError::Refused(Refusal::OpenDoor43(
-                OpenDoor43Refusal::NameExists,
-            )));
-        }
+        let name = listed
+            .map_err(|e| {
+                self.internal(
+                    "the projects folder could not be listed",
+                    facts(json!({ "reason": e.to_string() })),
+                )
+            })?
+            .map_err(|project| {
+                ApiError::Refused(Refusal::OpenDoor43(OpenDoor43Refusal::AlreadyHere {
+                    project,
+                }))
+            })?;
         let app = self.clone();
         let spec = JobSpec::new(JobKind::Join, Phase::Sync(SyncPhase::Fetch));
         Ok(self
@@ -228,7 +250,7 @@ impl Handle<OpenDoor43> for App {
             .jobs
             .start_typed::<OpenDoor43, _, _>(spec, move |_ctx| async move {
                 let port = app.inner.sync.clone();
-                port.open(app, req.repo, req.name)
+                port.open(app, req.repo, name)
                     .await
                     .map_err(JobEnd::Failed)
             }))

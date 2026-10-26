@@ -12,7 +12,7 @@ use tc_api::jobs::SharePhase;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 use tc_ui::app::internet::{InternetFlow, NetStep, Pending};
-use tc_ui::app::open_door43::{NameError, OpenForm, OpenProblem, RepoError, refusal_key};
+use tc_ui::app::open_door43::{OpenForm, RepoError, refusal_key};
 use tc_ui::app::share::{
     Choices, ShareForm, ShareProject, ShareStep, SharedItems, Target, name_ok,
 };
@@ -20,116 +20,61 @@ use tc_ui::i18n::keys;
 
 const HOST: &str = "git.door43.org";
 
-fn od(repo: &str, name: &str) -> OpenForm {
+fn od(repo: &str) -> OpenForm {
     OpenForm {
         repo: repo.into(),
-        name: name.into(),
         ..OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]))
     }
 }
 
+/// Ruling H14: the open asks for no name; the repository alone makes the request.
 #[test]
-fn the_name_follows_the_repository_name_until_the_person_types_one() {
-    let mut form = OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]));
-    form.type_repo(
-        "https://git.door43.org/anna_k/titus-team-draft".into(),
-        HOST,
-    );
-    assert_eq!(form.name, "titus-team-draft");
-    form.type_name("mine".into());
-    form.type_repo("anna_k/other".into(), HOST);
-    assert_eq!(
-        (form.repo.as_str(), form.name.as_str()),
-        ("anna_k/other", "mine")
-    );
-}
-
-#[test]
-fn a_repository_name_with_a_dot_gives_a_valid_default_name() {
-    let mut form = OpenForm::new(tc_api::ids::RequestId::from_bytes([1; 16]));
-    form.type_repo("anna_k/en_ult.v2".into(), HOST);
-    assert_eq!(form.name, "en_ult-v2");
-    // A repository box that does not parse leaves no name to follow.
-    form.type_repo("anna_k".into(), HOST);
-    assert_eq!(form.name, "");
-}
-
-#[test]
-fn open_project_runs_and_a_repository_on_another_server_cannot_be_opened() {
-    let form = od("anna_k/titus-team-draft", "titus-team-draft");
-    let (source, name) = form.ready(HOST, ["jonah"]).unwrap();
-    assert_eq!(
-        (source.to_string().as_str(), name.as_str()),
-        ("anna_k/titus-team-draft", "titus-team-draft")
-    );
-    let other = od(
-        "https://example.org/anna_k/titus-team-draft",
-        "titus-team-draft",
-    );
-    assert_eq!(other.ready(HOST, ["jonah"]), None);
+fn open_project_sends_the_repository_alone_and_one_on_another_server_cannot_be_opened() {
+    let source = od("anna_k/titus-team-draft").ready(HOST).unwrap();
+    assert_eq!(source.to_string(), "anna_k/titus-team-draft");
+    let other = od("https://example.org/anna_k/titus-team-draft");
+    assert_eq!(other.ready(HOST), None);
     assert_eq!(other.repo_error(HOST), Some(RepoError::Bad));
-    assert_eq!(
-        od("", "x").repo_error(HOST),
-        None,
-        "an empty box shows no error"
-    );
+    assert_eq!(od("").repo_error(HOST), None, "an empty box shows no error");
 }
 
 #[test]
 fn while_the_open_runs_open_project_is_off() {
-    let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
+    let mut form = od("anna_k/titus-team-draft");
     form.submit.press();
-    assert_eq!(form.ready(HOST, std::iter::empty()), None);
-}
-
-#[test]
-fn a_name_in_use_is_an_inline_error_under_the_name_and_open_project_is_off() {
-    let form = od("anna_k/titus-team-draft", "Jonah");
-    assert_eq!(form.name_error(["jonah"]), Some(NameError::InUse));
-    assert_eq!(form.ready(HOST, ["jonah"]), None);
-    assert_eq!(form.refusal(), None);
-    // The same when the server refused the name.
-    let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
-    form.submit.press();
-    form.refused(
-        Some("open-door43.name-exists"),
-        String::new(),
-        tc_api::ids::RequestId::from_bytes([2; 16]),
-    );
-    assert_eq!(form.error, Some(OpenProblem::NameInUse));
-    assert_eq!(form.name_error(std::iter::empty()), Some(NameError::InUse));
-    assert_eq!(form.refusal(), None);
-    assert!(!form.busy());
-    // A name that is no folder name.
-    assert_eq!(
-        od("a/b", "my project").name_error(std::iter::empty()),
-        Some(NameError::Bad)
-    );
-    assert_eq!(od("a/b", "").name_error(std::iter::empty()), None);
+    assert_eq!(form.ready(HOST), None);
 }
 
 #[test]
 fn a_change_takes_the_last_refusal_away() {
-    let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
+    let mut form = od("anna_k/titus-team-draft");
     form.refused(
         Some("open-door43.no-journal"),
         "no journal".into(),
         tc_api::ids::RequestId::from_bytes([2; 16]),
     );
-    form.type_repo("anna_k/titus-team-draft2".into(), HOST);
+    form.type_repo("anna_k/titus-team-draft2".into());
     assert_eq!(form.error, None);
-    form.refused(
-        None,
-        "Door43 cannot be reached".into(),
-        tc_api::ids::RequestId::from_bytes([2; 16]),
-    );
-    form.type_name("other".into());
-    assert_eq!(form.error, None);
+}
+
+/// Ruling H14: a project already here is named, Open project can be pressed again, and a new
+/// repository takes the offer away.
+#[test]
+fn a_project_already_here_is_offered_until_the_repository_changes() {
+    let mut form = od("anna_k/titus-team-draft");
+    form.submit.press();
+    let here = ProjectRef::parse("titus-team-draft").unwrap();
+    form.already_here(here.clone(), tc_api::ids::RequestId::from_bytes([2; 16]));
+    assert_eq!(form.yours, Some(here));
+    assert_eq!(form.refusal(), None, "it is no failure");
+    assert!(!form.busy());
+    form.type_repo("anna_k/other".into());
+    assert_eq!(form.yours, None);
 }
 
 #[test]
 fn a_refusal_shows_its_code_and_each_code_its_own_sentence() {
-    let mut form = od("anna_k/titus-team-draft", "titus-team-draft");
+    let mut form = od("anna_k/titus-team-draft");
     form.refused(
         Some("sync.incoming-invalid"),
         "1 journal file fails".into(),

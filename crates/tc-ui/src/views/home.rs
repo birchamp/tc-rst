@@ -78,6 +78,13 @@ pub fn Home() -> impl IntoView {
         Callback::new(move |_: web_sys::MouseEvent| actions.open_add_project())
     };
     let ready = Memo::new(move |_| list.with(|l| l.value().cloned()));
+    provide_context(SharedNames(Memo::new(move |_| {
+        ready.with(|view| {
+            view.as_ref()
+                .map(|v| crate::app::home::shared_names(&v.cards))
+                .unwrap_or_default()
+        })
+    })));
     let resume = {
         let actions = actions.clone();
         move || {
@@ -603,7 +610,12 @@ fn card_signal(project: &ProjectRef, listed: Signal<Option<HomeCard>>) -> Signal
     memo.into()
 }
 
-/// The card's header: initials, name and badges, the line, Share and Settings.
+/// The names more than one Home card holds.
+#[derive(Clone, Copy)]
+struct SharedNames(Memo<Vec<String>>);
+
+/// The card's header: initials, name and badges, where it lives when another card has its name,
+/// the line, Share and Settings.
 fn header(
     s: &AppState,
     actions: &Actions,
@@ -645,6 +657,15 @@ fn header(
         }
     });
     let chip = (!stories).then(|| conflicts_chip(actions, card, project));
+    let shared = use_context::<SharedNames>();
+    let where_id = format!("card-where-{project}");
+    let where_line = move || {
+        let SharedNames(names) = shared?;
+        let line = names.with(|names| {
+            card.with(|c| c.as_ref().and_then(|c| crate::app::home::where_line(c, names)))
+        })?;
+        Some(view! { <span data-testid=where_id.clone() style=META_STYLE>{line}</span> })
+    };
     view! {
         <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 18px;">
             {initials(name)}
@@ -657,6 +678,7 @@ fn header(
                     {shared_badge(card, project)}
                     {chip}
                 </div>
+                {where_line}
                 <span style=META_STYLE>
                     <span data-testid=if stories { "obs-progress" } else { "project-summary" }>{line}</span>
                     {share_meta(card, project)}

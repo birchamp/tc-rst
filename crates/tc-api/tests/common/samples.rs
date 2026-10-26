@@ -149,6 +149,9 @@ pub fn share() -> Vec<ShareRefusal> {
 
 pub fn open_door43() -> Vec<OpenDoor43Refusal> {
     vec![
+        OpenDoor43Refusal::AlreadyHere {
+            project: tc_api::ids::ProjectRef::parse("es-419_tit_equipo").unwrap(),
+        },
         OpenDoor43Refusal::NameExists,
         OpenDoor43Refusal::NoJournal,
         OpenDoor43Refusal::Removed,

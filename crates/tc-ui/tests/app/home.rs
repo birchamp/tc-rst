@@ -10,8 +10,8 @@ use tc_api::prefs::PlaceMode;
 use tc_api::shown::{Direction, Known};
 use tc_core::BookId;
 use tc_ui::app::home::{
-    collapsed_stories, location, obs_line, resume_line, resume_place, share_button, shown_books,
-    shows_book_toggle, story_tile_meta, story_tile_name, summary_line,
+    collapsed_stories, location, obs_line, resume_line, resume_place, share_button, shared_names,
+    shown_books, shows_book_toggle, story_tile_meta, story_tile_name, summary_line, where_line,
 };
 use tc_ui::i18n::keys;
 
@@ -246,4 +246,34 @@ fn the_resume_card_names_the_place_and_the_text() {
     };
     assert_eq!(resume_place(&resume), "Story 3");
     assert_eq!(resume_line(&resume), "Last edited frame 2");
+}
+
+/// Ruling H14: a project has one name, so two cards can hold it; each then says where it lives.
+#[test]
+fn two_cards_of_one_name_each_say_where_they_live() {
+    let mut on_door43 = card(vec![]);
+    on_door43.project = ProjectRef::parse("en_ult-2").unwrap();
+    on_door43.door43 = Door43Card::Shared {
+        place: RepoPlace {
+            owner: "Juan".into(),
+            name: "es_tit_text".into(),
+            server: None,
+        },
+    };
+    let here = card(vec![]);
+    let mut other = card(vec![]);
+    other.project = ProjectRef::parse("titus").unwrap();
+    other.name = "Titus".into();
+    let cards = [on_door43.clone(), here.clone(), other.clone()];
+    let shared = shared_names(&cards);
+    assert_eq!(shared, ["English ULT"]);
+    assert_eq!(
+        where_line(&on_door43, &shared).as_deref(),
+        Some("On Door43: Juan/es_tit_text")
+    );
+    assert_eq!(
+        where_line(&here, &shared).as_deref(),
+        Some("Only on this computer")
+    );
+    assert_eq!(where_line(&other, &shared), None, "a name of its own needs no line");
 }

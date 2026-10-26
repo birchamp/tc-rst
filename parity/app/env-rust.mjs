@@ -470,9 +470,9 @@ export async function startTeammate({ tc4, ui, door43, name = 'teammate' }) {
   await call('account/signIn', { request: newRequestId(), login: name, password, stay: false });
   return {
     env,
-    /** Door43's `repo` of the fake's user, opened as the project `folder`. */
-    async join(repo, folder) {
-      const outcome = await ended(await call('door43/open', { request: newRequestId(), repo: `${DOOR43_OWNER}/${repo}`, name: folder }));
+    /** Door43's `repo` of the fake's user, opened as a new project; its folder. */
+    async join(repo) {
+      const outcome = await ended(await call('door43/open', { request: newRequestId(), repo: `${DOOR43_OWNER}/${repo}` }));
       return outcome.value.project;
     },
     /** Saves Titus `chapter`:`verse` as `words` over the version this computer shows. */

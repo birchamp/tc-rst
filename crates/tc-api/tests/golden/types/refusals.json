@@ -816,7 +816,24 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "nameExists"
+      "value": {
+        "type": "alreadyHere",
+        "value": {
+          "project": "es-419_tit_equipo"
+        }
+      }
+    },
+    "code": "open-door43.already-here",
+    "key": "refusal.open-door43.already-here",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "openDoor43",
+      "value": {
+        "type": "nameExists"
+      }
     },
     "code": "open-door43.name-exists",
     "key": "refusal.open-door43.name-exists",
@@ -826,7 +843,9 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "noJournal"
+      "value": {
+        "type": "noJournal"
+      }
     },
     "code": "open-door43.no-journal",
     "key": "refusal.open-door43.no-journal",
@@ -836,7 +855,9 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "removed"
+      "value": {
+        "type": "removed"
+      }
     },
     "code": "open-door43.removed",
     "key": "refusal.open-door43.removed",

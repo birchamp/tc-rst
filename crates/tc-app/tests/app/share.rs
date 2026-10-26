@@ -4,7 +4,7 @@
 
 use tc_api::account::{OrgChoice, Orgs, RepoLink, ShareTargets, SignIn, WebUrl};
 use tc_api::door43::{
-    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
 };
 use tc_api::endpoint::NetKind;
 use tc_api::error::{Feature, SignInReason};
@@ -279,11 +279,10 @@ async fn the_repository_link_is_given_only_for_the_apps_door43_server() {
     );
 }
 
-fn open(id: u8, name: &str) -> OpenDoor43 {
+fn open(id: u8) -> OpenDoor43 {
     OpenDoor43 {
         request: rid(id),
         repo: RepoSource::new(PARITY_USER, "es-419_tit_equipo").unwrap(),
-        name: ProjectName::parse(name).unwrap(),
     }
 }
 
@@ -301,29 +300,15 @@ async fn ended(app: &App, job: tc_api::ids::JobId) -> JobState {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_name_in_use_is_refused_before_anything_starts_whatever_its_letter_case() {
-    let dir = tempfile::tempdir().unwrap();
-    let t = app_on(dir.path(), "http://127.0.0.1:9").await;
-    internet(&t.app, true, 1).await;
-    assert_eq!(
-        post(&t.app, &open(2, "KR_ulb")).await,
-        Err(ApiError::Refused(Refusal::OpenDoor43(
-            OpenDoor43Refusal::NameExists
-        )))
-    );
-    assert!(t.app.jobs().view(tc_api::ids::JobId::new(1)).is_none());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_open_asks_the_internet_question_and_until_unit_x_is_not_available() {
     let dir = tempfile::tempdir().unwrap();
     let t = app_on(dir.path(), "http://127.0.0.1:9").await;
     assert_eq!(
-        post(&t.app, &open(2, "titus")).await,
+        post(&t.app, &open(2)).await,
         Err(ApiError::NeedsInternet(NetKind::Open))
     );
     internet(&t.app, true, 1).await;
-    let job = post(&t.app, &open(3, "titus")).await.unwrap();
+    let job = post(&t.app, &open(3)).await.unwrap();
     assert_eq!(
         ended(&t.app, job).await,
         JobState::Failed(ApiError::Unavailable(Feature::Sync))
@@ -341,12 +326,12 @@ async fn a_scripted_open_ends_with_its_project_or_its_refusal() {
         .script_open_door43(Err(ApiError::Refused(Refusal::OpenDoor43(
             OpenDoor43Refusal::NoJournal,
         ))));
-    let first = post(&t.app, &open(2, "titus")).await.unwrap();
+    let first = post(&t.app, &open(2)).await.unwrap();
     assert_eq!(
         ended(&t.app, first).await,
         JobState::Done(JobOutcome::Created { project: titus })
     );
-    let second = post(&t.app, &open(3, "titus")).await.unwrap();
+    let second = post(&t.app, &open(3)).await.unwrap();
     assert_eq!(
         ended(&t.app, second).await,
         JobState::Failed(ApiError::Refused(Refusal::OpenDoor43(

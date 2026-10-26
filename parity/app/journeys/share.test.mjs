@@ -73,7 +73,7 @@ browserTest('J11 1. Share to the account: one progress line, the end with its ad
     await page.getByTestId('share-dialog').waitFor({ state: 'detached' });
     // INV-SHARE-PUSHES-WHAT-THE-TRANSLATOR-SAW: a teammate who opens it gets the verse.
     const b = await teammate('teammate-b');
-    const project = await b.join(BIBLE, 'titus-b');
+    const project = await b.join(BIBLE);
     assert.equal(await b.words(project, 1, 1), WORDS, 'INV-SHARE-PUSHES-WHAT-THE-TRANSLATOR-SAW');
   }, opts);
 });

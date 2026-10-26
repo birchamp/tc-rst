@@ -45,7 +45,7 @@ use tc_api::create::{
     UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
 use tc_api::door43::{
-    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
     SyncProject,
 };
 use tc_api::editor::{
@@ -545,7 +545,6 @@ impl Example for OpenDoor43 {
         OpenDoor43 {
             request: request(20),
             repo: RepoSource::new("facilitator-zq", "es-419_tit_equipo").unwrap(),
-            name: ProjectName::parse("es-419_tit_equipo").unwrap(),
         }
     }
 }

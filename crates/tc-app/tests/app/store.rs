@@ -408,13 +408,11 @@ async fn the_app_starts_when_the_projects_folder_holds_no_project() {
 
 /// A project the open from Door43 adds must not land on anything of the projects folder
 /// (APP-DESIGN B9b D5), as tC4 checks `listLocalRepos()`: the translator's notes folder, an
-/// empty folder and a plain file are refused as a project is, without letter case, though Home
-/// lists none of them.
+/// empty folder and a plain file are passed over as a project is, without letter case, though
+/// Home lists none of them; the open asks for no name (ruling H14).
 #[tokio::test]
-async fn the_open_refuses_a_name_any_entry_of_the_projects_folder_has() {
-    use tc_api::door43::{OpenDoor43, ProjectName, RepoSource};
-    use tc_api::refusal::OpenDoor43Refusal;
-    use tc_api::{ApiError, Refusal};
+async fn the_open_passes_over_every_entry_of_the_projects_folder() {
+    use tc_api::door43::{RepoSource, open_folder};
     let disk = OnDisk::new();
     make_project(&disk.app_data(), &disk.projects, "titus_on_disk");
     std::fs::create_dir(disk.projects.join("Notes")).unwrap();
@@ -422,37 +420,21 @@ async fn the_open_refuses_a_name_any_entry_of_the_projects_folder_has() {
     std::fs::create_dir(disk.projects.join("empty")).unwrap();
     std::fs::write(disk.projects.join("afile"), b"mine").unwrap();
     let t = disk.start().await;
-    post(
-        &t.app,
-        &tc_api::net::Set {
-            request: rid(1),
-            on: true,
-        },
-    )
-    .await
-    .unwrap();
-
-    for (id, name) in [
-        (2, "notes"),
-        (3, "empty"),
-        (4, "afile"),
-        (5, "TITUS_ON_DISK"),
-    ] {
-        let open = OpenDoor43 {
-            request: rid(id),
-            repo: RepoSource::new("jdoe", "es-419_tit_text_reg").unwrap(),
-            name: ProjectName::parse(name).unwrap(),
-        };
+    let listing = t.app.sessions().store().list().unwrap();
+    let entries: Vec<&str> = listing
+        .projects
+        .iter()
+        .map(|p| p.folder.as_str())
+        .chain(listing.unusable.iter().map(|u| u.name.as_str()))
+        .chain(listing.others.iter().map(String::as_str))
+        .collect();
+    for repo in ["notes", "Empty", "afile", "TITUS_ON_DISK"] {
+        let source = RepoSource::new("jdoe", repo).unwrap();
         assert_eq!(
-            post(&t.app, &open).await,
-            Err(ApiError::Refused(Refusal::OpenDoor43(
-                OpenDoor43Refusal::NameExists
-            ))),
-            "{name}"
+            open_folder(&source, entries.iter().copied()).as_str(),
+            format!("{repo}-2")
         );
     }
-    assert!(t.app.jobs().view(tc_api::ids::JobId::new(1)).is_none());
-    // The dialog checks the same names before Open is pressed.
     let home = post(&t.app, &tc_api::home::List {}).await.unwrap();
     assert_eq!(home.others, ["Notes", "afile", "empty"]);
 }

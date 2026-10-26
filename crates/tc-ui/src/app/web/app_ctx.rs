@@ -1113,8 +1113,8 @@ impl Actions {
         });
     }
 
-    /// "Open project" (tC4 `openDoor43Run`): the name check is the dialog's and comes first;
-    /// then, with the internet off, the question; Not now sends nothing.
+    /// "Open project" (tC4 `openDoor43Run`): with the internet off, the question first; Not now
+    /// sends nothing.
     pub fn open_door43_run(&self) {
         let ready = self.s().layers.dialog.try_update(|dialog| {
             let od = open_form(dialog)?;
@@ -1134,22 +1134,18 @@ impl Actions {
         let form = self.s().layers.dialog.try_update(|dialog| {
             let od = open_form(dialog)?;
             od.submit.press();
-            Some((
-                od.source(&host)?,
-                tc_api::door43::ProjectName::parse(&od.name).ok()?,
-                od.submit.request(),
-            ))
+            Some((od.source(&host)?, od.submit.request()))
         });
-        let Some(Some((repo, name, attempt))) = form else {
+        let Some(Some((repo, attempt))) = form else {
             self.drop_pending(Pending::OpenDoor43);
             return;
         };
         let this = self.clone();
         spawn_local(async move {
+            let name = repo.name().to_owned();
             let request = OpenDoor43 {
                 request: attempt,
                 repo,
-                name: name.clone(),
             };
             let ended = match this.run_net(Pending::OpenDoor43, &request).await {
                 NetEnd::Ok(job) => this.follow::<OpenDoor43>(job, |_| {}, || true).await,
@@ -1186,7 +1182,7 @@ impl Actions {
                     this.s().import_toast.try_set(Some(ImportToast {
                         message: crate::i18n::t(
                             crate::i18n::keys::open_door43::DONE,
-                            &[("name", &name.as_str())],
+                            &[("name", &name)],
                         ),
                     }));
                     this.s().imported_repo.try_set(Some(project));
@@ -1200,6 +1196,9 @@ impl Actions {
                 }
                 JobEnd::Failed(error) => match this.net_refusal(Pending::OpenDoor43, error) {
                     None => this.patch_od(|od| od.submit.next(js::random_request_id())),
+                    Some(ApiError::Refused(tc_api::Refusal::OpenDoor43(
+                        tc_api::refusal::OpenDoor43Refusal::AlreadyHere { project },
+                    ))) => this.patch_od(|od| od.already_here(project, js::random_request_id())),
                     Some(ApiError::Refused(refusal)) => {
                         let reason = crate::i18n::refusal_text(&refusal);
                         this.open_refused(refusal.code(), reason);

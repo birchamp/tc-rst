@@ -9,17 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{IdError, ProjectRef, RequestId};
 
-/// `door43/open`: get a full copy of the repository and add it as the project `name`. The name
-/// is checked against the projects on this computer first, without letter case, and a name in
-/// use is refused (`open-door43.name-exists`) before anything is sent. The job ends with
-/// `JobOutcome::Created` naming the new project.
+/// `door43/open`: get a full copy of the repository and add it as a project. It asks for no
+/// name (ruling H14): the project keeps the name it has on Door43, and its folder on this
+/// computer is [`open_folder`]'s. The job ends with `JobOutcome::Created` naming the new
+/// project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OpenDoor43 {
     pub request: RequestId,
     pub repo: RepoSource,
-    pub name: ProjectName,
 }
 
 /// `door43/sync`: one sync of a shared project with its Door43 repository, the press of its
@@ -290,6 +289,23 @@ pub fn default_project_name(repo: &str) -> String {
         }
     }
     out.trim_matches('-').to_owned()
+}
+
+/// The folder an open of `repo` gets (ruling H14): the repository's name as a folder name, with
+/// `-2`, `-3`… when a folder of `listing` has it, without letter case.
+pub fn open_folder<'a>(repo: &RepoSource, listing: impl IntoIterator<Item = &'a str>) -> ProjectName {
+    let listing: Vec<&str> = listing.into_iter().collect();
+    let base = default_project_name(repo.name());
+    // A repository named only of dots suggests nothing.
+    let base = if base.is_empty() { "project".to_owned() } else { base };
+    (1..)
+        .map(|n| match n {
+            1 => base.clone(),
+            n => format!("{base}-{n}"),
+        })
+        .filter_map(|name| ProjectName::parse(&name).ok())
+        .find(|name| !name.in_use(listing.iter().copied()))
+        .unwrap_or_else(|| unreachable!("a listing is finite, so some suffix is free"))
 }
 
 #[cfg(feature = "proptest")]

@@ -8,7 +8,7 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c]
+depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, E1c]
 needs_owner: []
 proves: []
 no_loss: false
