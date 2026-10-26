@@ -51,3 +51,4 @@ The owner's yes is recorded, and the release tag points at a commit
 
 - 2026-10-24 | roadmap | created | none | the owner cut scope to finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
 - 2026-10-26 11:30 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | the owner: "Yes, REL-1 waits for LOSS-1." (2026-10-26): depends gains LOSS-1, the 26 §15 loss tests CHK-3 found | message from the orchestrator, 2026-10-26
+- 2026-10-26 19:05 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | depends gains E1c (one project name, owner ruling H14) and E1d (E1a's two unwritten tests), on the orchestrator's word | messages from the orchestrator, 2026-10-26

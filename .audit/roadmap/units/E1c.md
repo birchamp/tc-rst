@@ -4,7 +4,7 @@ title: One name for a project; open from Door43 asks none
 track: A
 lane: app
 milestone: M3
-state: blocked
+state: done
 owner: E1b session (Claude Code fd622395)
 branch: track-E1c
 worktree: .worktrees/track-E1c
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: false
 size: 0.5 d (basis: E1b step 6 as planned, plus Home's second line)
-merged: none
+merged: 455e418d
 updated: 2026-10-26
-next: Ready for a batch with E1a and E1b (track-E1c holds track-E1b2).
+next: none
 blocked_by: E1b not done; E1c is ready on track-E1c and merges with or after E1b
 ---
 
@@ -89,3 +89,4 @@ and drifted from what the team calls the project.
 - 2026-10-26 18:10 EDT | E1b session (Claude Code fd622395) | note | 9a7a70a0 | Merged track-E1a2 at 20c3faeb (main ad4b67bc, batch 13) into track-E1c, so this one branch carries E1a, E1b and E1c (audit session's request); F1's import_removed and E1b's notices both stay on HomeView. Recaptured open-door43, open-door43-internet-consent and open-door43-refused (store, --real-sync): the dialog has no name field by H14, so their DOM rows say so and the q3 masks hold both positions | node parity/app/capture-rust.mjs --unit E1b --only open-door43,open-door43-internet-consent,open-door43-refused --real-sync
 - 2026-10-26 18:50 EDT | E1b session (Claude Code fd622395) | gate | f8190b95 | scripts/gates.sh --touched on the branch that carries E1a, E1b and E1c over main ad4b67bc: 17 crates, 14 journey files, app-e2e 109 pass 0 skipped; screen_record passes | scripts/gates.sh --touched
 - 2026-10-26 20:35 EDT | E1b session (Claude Code fd622395) | fix | none | With E1a, E1b and E1c set done, claims and coverage failed 17 ways (integration lane): retired E1b's two H14-replaced names and E1a's H5-dropped one; E1a's two unwritten tests moved to card E1d (pending: E1d, which claims.test.mjs now honours on a card's Checks); E1c's invariants are printed by their tests; P-LEDGER P1, P2, TC4-ISSUES #761, #24 and the coverage map's J18, J26 and two tC4 specs name tests that exist; three story-frame tests #761 planned are a minor | node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs
+- 2026-10-26 19:05 EDT | integration lane (Claude Code 3d07d5f8) | merge | 455e418d | merged into main in batch 18 as one branch carrying E1a, E1b and E1c (track-E1c, main 29faa1ef merged in by the G5 lane); E1a's two unwritten tests wait on E1d; gated by scripts/gates.sh --wait-ci batch-18 | scripts/gates.sh --wait-ci batch-18

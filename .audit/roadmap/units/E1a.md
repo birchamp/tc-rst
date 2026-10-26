@@ -4,7 +4,7 @@ title: Sync with Door43 in the app
 track: A
 lane: app
 milestone: M3
-state: verifying
+state: done
 owner: C7a session (Claude Code 3058c665)
 branch: track-E1a
 worktree: .worktrees/track-E1a
@@ -14,9 +14,9 @@ later: ["H11 from step 2"]
 proves: [P1, P2, P4]
 no_loss: true
 size: 5-6 sessions (basis: B10 and C0)
-merged: none
-updated: 2026-10-24
-next: Reviewed and ready; the merge waits for D1. The integration lane gates it then.
+merged: 455e418d
+updated: 2026-10-26
+next: none
 blocked_by: none
 ---
 
@@ -322,3 +322,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 - 2026-10-26 15:25 EDT | checks lane (Claude Code 70ea6b18) | gate | none | main (86d669b1) merged on track-E1a2 for the next batch; 21 conflicts kept both sides: SyncResultView has recreated and replaced (golden, events and lastSync goldens, every initializer), the i18n keys of both, port_contract's E1a tests and F1's import contract, scripted.rs's imports, units.json lists F1 and E1a; ports.rs imports Feature again for F1's UnavailableImport; E1a's script_synced sets F1's kinds | scripts/gates.sh --touched
 - 2026-10-26 15:58 EDT | checks lane (Claude Code 70ea6b18) | gate | none | main (ad4b67bc, batch 13 with D1) merged too: units.json lists D1, F1, E1a. The first --touched run on 313b4637 passed 2801 tests with 0 failing and stopped on D1's tc-sync race, which this merge brings the fix for | scripts/gates.sh --touched
 - 2026-10-26 16:34 EDT | checks lane (Claude Code 70ea6b18) | gate | none | on f77e5ab9: scripts/gates.sh --touched (17 crates, 3 journey files: 3551 tests pass; tc-journal's fold_converges_under_any_union failed once with 'the generator never reached decision placed' and passed 3 of 3 alone, E1a changes no tc-journal file), and E1a's journeys sync-button, share-open, team-sync, j11-sign-in and conflict-review: # tests 23 # pass 23, no skips | scripts/gates.sh --touched
+- 2026-10-26 19:05 EDT | integration lane (Claude Code 3d07d5f8) | merge | 455e418d | merged into main in batch 18 as one branch carrying E1a, E1b and E1c (track-E1c, main 29faa1ef merged in by the G5 lane); E1a's two unwritten tests wait on E1d; gated by scripts/gates.sh --wait-ci batch-18 | scripts/gates.sh --wait-ci batch-18
