@@ -4,7 +4,7 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: building
+state: done
 owner: S2 session (Claude Code add49644)
 branch: track-X
 worktree: /home/bot/tc-rst/.worktrees/track-X
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
-merged: none
+merged: 3ddc25b5
 updated: 2026-10-25
-next: integration batch after 2b (tip pushed); then the D1 fix shas and C7b's books and carried-files commits for one look each; E2 (USB in the app) after.
+next: none
 blocked_by: none
 later: [C7b from step 5]
 ---
