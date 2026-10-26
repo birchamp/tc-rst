@@ -248,11 +248,6 @@
           "C7a (#78). Every History row but the one shown has Restore this version; a double press writes one restore, the restored text is the one kept, and the replaced version stays in History",
           "C7a. With two verses in conflict, Keep all of Teammate 1’s keeps their version in both with one request however often it is pressed, and says how many were left"
         ]
-      },
-      {
-        "pending": [
-          "E1a"
-        ]
       }
     ],
     "J20": {
@@ -314,9 +309,15 @@
         ]
       }
     ],
-    "J26": {
-      "pending": "E1a"
-    }
+    "J26": [
+      {
+        "file": "parity/app/journeys/team-sync.test.mjs",
+        "tests": [
+          "J26 [G1]. Three computers: B and C change verses, A takes their work in by name, and every computer ends with the same text",
+          "J26 [G6]. A and B change the same verse: both versions are kept, and the sync on A counts one verse conflict to review"
+        ]
+      }
+    ]
   },
   "specs": {
     "app-language.spec.ts": {
@@ -637,9 +638,15 @@
         ]
       }
     ],
-    "j26-team-sync.spec.ts": {
-      "pending": "E1a"
-    },
+    "j26-team-sync.spec.ts": [
+      {
+        "file": "parity/app/journeys/team-sync.test.mjs",
+        "tests": [
+          "J26 [G1]. Three computers: B and C change verses, A takes their work in by name, and every computer ends with the same text",
+          "J26 [G6]. A and B change the same verse: both versions are kept, and the sync on A counts one verse conflict to review"
+        ]
+      }
+    ],
     "language-suggestions.spec.ts": {
       "file": "parity/app/journeys/language-suggestions.test.mjs",
       "tests": [
@@ -665,8 +672,13 @@
         "#678. Nothing goes to Door43 at launch or after 5 s idle; one press asks, signs in and syncs once, and the result shows until it is dismissed"
       ]
     },
-    "sync-refusal.spec.ts": {
-      "pending": "E1a"
-    }
+    "sync-refusal.spec.ts": [
+      {
+        "file": "parity/app/journeys/sync-button.test.mjs",
+        "tests": [
+          "E1a. A real sync pushes the project to Door43; a cut connection fails and changes nothing"
+        ]
+      }
+    ]
   }
 }

@@ -1480,7 +1480,11 @@ async fn opening_a_project_you_have_makes_no_copy_and_offers_yours() {
             }
         )))
     );
-    assert_eq!(listed(app).await, before, "no second copy");
+    assert_eq!(
+        listed(app).await,
+        before,
+        "INV-ONE-COPY-PER-COMPUTER: no second copy"
+    );
     assert_eq!(w.fake.requests(), Vec::new(), "Door43 was asked nothing");
 }
 
@@ -1512,7 +1516,7 @@ async fn an_open_asks_no_name_and_keeps_the_teams_name() {
     assert_eq!(
         name_of(&there, &project),
         name_of(&here, &folder(SAMPLE)),
-        "one name for the whole team"
+        "INV-ONE-NAME-PER-PROJECT: one name for the whole team"
     );
 }
 
