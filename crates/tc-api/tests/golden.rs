@@ -68,19 +68,20 @@ use tc_api::home::{
     StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{
-    AlignerId, ChangeRef, CheckSessionId, ConflictRef, Epoch, JobId, LocaleId, ProjectId,
-    ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo, UploadId,
-    ViewSeq, WallMs,
+    AlignerId, ChangeRef, CheckSessionId, ConflictRef, DownloadId, Epoch, JobId, LocaleId,
+    ProjectId, ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo,
+    UploadId, ViewSeq, WallMs,
 };
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
+use tc_api::model::print::{ChapterOpening, Columns, PageSetup};
 use tc_api::model::section::ParaFormat;
 use tc_api::model::{ArticleBlock, ArticleSpan, BlockKind};
 use tc_api::net::{NetView, Set, State as NetState};
 use tc_api::prefs::{
     DraftUnit, PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetAlignSuggestions, SetDraftUnit,
-    SetLocale,
+    SetLocale, SetRailFolded,
 };
 use tc_api::refusal::Message;
 use tc_api::resources::{
@@ -329,6 +330,18 @@ impl Example for SetAlignSuggestions {
             at: scope(),
             request: request(5),
             on: true,
+        }
+    }
+}
+
+impl Example for SetRailFolded {
+    fn example() -> Self {
+        SetRailFolded {
+            at: scope(),
+            request: request(6),
+            tool: Tool::TranslationNotes,
+            groups: vec!["figs-metaphor".to_owned(), "figs-abstractnouns".to_owned()],
+            folded: true,
         }
     }
 }
@@ -2483,7 +2496,9 @@ impl Example for CheckSessionView {
             list: titus_tn(),
             view: ViewSeq::new(41),
             rows: RailRows::Full(vec![Ack::example().rows[0].row.clone()]),
-            terms: vec![],
+            terms: vec!["figs-metaphor".to_owned()],
+            group_titles: vec!["Metaphor".to_owned()],
+            folded: vec!["figs-metaphor".to_owned()],
             progress: RailProgress {
                 decided: 1,
                 total: 112,
@@ -3019,6 +3034,61 @@ impl Example for export::StoriesPrint {
     }
 }
 
+impl Example for export::Preflight {
+    fn example() -> Self {
+        export::Preflight {
+            at: scope(),
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+        }
+    }
+}
+
+impl Example for export::PreflightView {
+    fn example() -> Self {
+        export::PreflightView {
+            conflicts: 4,
+            verses: 3,
+        }
+    }
+}
+
+impl Example for export::RunExport {
+    fn example() -> Self {
+        export::RunExport {
+            utc_offset: export::UtcOffset::new(180).unwrap(),
+            request: request(41),
+            at: scope(),
+            producer: export::Producer::PrintHtml,
+            subject: export::Subject::Book {
+                book: BookId::Titus,
+            },
+            print: Some(export::PrintRequest {
+                setup: PageSetup {
+                    columns: Columns::Two,
+                    chapter_opening: ChapterOpening::Heading,
+                    ..PageSetup::default()
+                },
+                title: "Tito".into(),
+                words: export::PrintWords {
+                    chapter_heading: "Capítulo {n}".into(),
+                    chapter_not_drafted: "[ capítulo {n} sin borrador ]".into(),
+                    chapters_not_drafted: "[ capítulos {from}–{to} sin borrador ]".into(),
+                    not_yet_drafted: "[ versículo sin borrador ]".into(),
+                    frame_not_drafted: "[ cuadro {n} sin borrador ]".into(),
+                    frames_not_drafted: "[ cuadros {from}–{to} sin borrador ]".into(),
+                    story_not_drafted: "[ historia {n} sin borrador ]".into(),
+                    stories_not_drafted: "[ historias {from}–{to} sin borrador ]".into(),
+                    story_number: "Historia {n}".into(),
+                    image_alt: "Cuadro de la historia {n}".into(),
+                    nothing_drafted_obs: "Nada tiene borrador en este proyecto.".into(),
+                },
+            }),
+        }
+    }
+}
+
 fn golden_dir() -> PathBuf {
     common::crate_dir().join("tests/golden")
 }
@@ -3162,6 +3232,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
+            "prefs/setRailFolded",
             "resources/applyPlan",
             "resources/download",
             "resources/fixFetch",
@@ -3180,6 +3251,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "story/saveFrame",
             "story/saveRef",
             "editor/saveVerse",
+            "export/run",
             "editor/saveLayout",
             "editor/draft",
             "editor/discardDraft",
@@ -3400,6 +3472,25 @@ fn events() -> Vec<Event> {
             kind: JobKind::GatewayPlan,
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
             state: JobState::Done(JobOutcome::PlanReady(Box::new(gateway_plan()))),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(13),
+            kind: JobKind::Export,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::ExportReady(export::Exported {
+                file: export::ExportedFile::Download {
+                    download: DownloadId::parse("0123456789abcdef0123456789abcdef").unwrap(),
+                    file_name: "TIT-aligned-2026-10-24.usfm".into(),
+                },
+                facts: export::ExportFacts {
+                    skipped: vec![export::SkippedVerse {
+                        chapter: 1,
+                        verse: RefPart::parse("4-5").unwrap(),
+                        why: export::SkipReason::NeedsReview,
+                    }],
+                    skipped_total: 1,
+                },
+            })),
         }),
         Event::ProjectsChanged,
         Event::HomeCard {

@@ -196,3 +196,24 @@ pub(crate) async fn obs_picture<B: Backend>(
         None => StatusCode::NOT_FOUND.into_response(),
     }
 }
+
+/// `GET /print/{job}`: the print document of a finished print export (§5.5). It is made for
+/// one print, so nothing keeps it.
+pub(crate) async fn print_page<B: Backend>(
+    State(state): State<AppState<B>>,
+    Path(job): Path<String>,
+) -> Response {
+    match state.backend.print_page(&job).await {
+        Some(file) => {
+            let mut response = file.bytes.into_response();
+            let headers = response.headers_mut();
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(file.content_type),
+            );
+            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}

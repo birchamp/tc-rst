@@ -4,7 +4,7 @@ title: Door43 sync and USB exchange (tc-sync)
 track: A
 lane: storage
 milestone: M2
-state: building
+state: done
 owner: S2 session (Claude Code add49644)
 branch: track-X
 worktree: /home/bot/tc-rst/.worktrees/track-X
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2, P3, P4, P5]
 no_loss: true
 size: 4-6 d (basis: S1 16 commits and +19,944 lines in about 18 h; S2 about 76 h including proof; H18 unsupported removes the Door43 intake walk, docs/STORAGE-DELTA-2026-10-21.md §6 gives -1 to -2 d)
-merged: none
+merged: 3ddc25b5
 updated: 2026-10-25
-next: integration batch after 2b (tip pushed); then the D1 fix shas and C7b's books and carried-files commits for one look each; E2 (USB in the app) after.
+next: none
 blocked_by: none
 later: [C7b from step 5]
 ---
@@ -491,5 +491,8 @@ features and with each of `--features gallery`, `--features app`, `--features te
 - 2026-10-25 08:40 EDT | S2 session (Claude Code add49644) | verify | 6f436230+wt | lens parity (reviewer: Opus subagent, read-only, tC4 at d310bf3; no screen in this unit, so no Playwright): fix_first on one item, taken as a declared difference: the Door43 username reaches the team one sync late, because the name notice (consent, Q7) comes after the first confirmed sync and the name goes out with the next push; tC4 writes it inside the sync. Fixes taken: `recreated` only after a successful push (tC4 reports after the push), the gate's order is tC4's (signed in, online, then the repository), STORAGE §9.1 names the recreate ruling, §9.6 and §9.7 refreshed. Minor logged: a second share always creates. Same as tC4: offline, no write access, busy, never forced, nothing new, share's owner/branch/visibility. Declared: six retries (Q11), tc.branch (Q10), fetch-and-merge (C1), other tools kept (H18 B), carried files (H19 A), tC4 team repository blocked, private repositories (Q3), OBS (Q2), both verse texts kept (Q1, Q4). H5's replaced-list is a later field once C7b's fold says what newest-wins replaced | crates/tc-sync
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | fix | 57b606c5 | D1's loss lens found a store bug outside D1: a checkpoint retried after a materialization that failed past a book file's rename committed the last commit's blob for that file (the entry kept its old blob id), so Door43 and teammates read a stale book file until the book changed again; the entry's blob is now unknown whenever its bytes change (classify.rs set_state, with the scope digest); test a_retried_checkpoint_commits_the_book_file_as_saved fails on the old code at fail point 36 | crates/tc-store/src/classify.rs
 - 2026-10-25 09:00 EDT | S2 session (Claude Code add49644) | note | 57b606c5 | main (batch 2b, c45091d1) merged; hand-over checks on the merged tree: board.py --check 0 errors, node .audit/tools tests 38 pass, cargo check --workspace --all-targets, wasm clippy tc-ui app, tc-sync 28 tests, tc-api golden 9, tc-store checkpoint 29. Pushed once to origin/track-X for E1a (SyncReport.recreated) and the next batch | .audit/roadmap/units/X.md
+- 2026-10-25 10:20 EDT | integration lane (Claude Code 3d07d5f8) | merge | 3ddc25b5 | merged into main in batch 5, gated by scripts/gates.sh --wait-ci batch-5. In the batch ci.yml's nightly sync-model-long run tees into the same nightly.log as model-long, so CHK-7's failure card covers it | scripts/gates.sh --wait-ci batch-5
 - 2026-10-25 12:30 EDT | S2 session (Claude Code add49644) | fix | none | the unlisted journal file (checks lane's note 2026-10-24-store-unlisted-journal-file.md, repro a_retry_skipped_as_read_only_keeps_the_failure_shown on track-D1): a pack renamed into place whose folder flush then failed (WriteError::WrittenNotDurable) was treated as not written, so it stayed unknown and unlisted by metadata.json (not a valid Burrito) and the next checkpoint took it, sealed by this device, for a second writer's and turned the project read-only. Now write_pack tries the flush once more; if it still fails the pack is registered with its ids (listed, known, blob stored) and the seal stops with the pending files kept (K2's state, which O7 handles at an open); the next seal packs none of those changes again and removes their pending files once a pack holds them. Test a_seal_that_fails_after_its_pack_rename_leaves_the_pack_listed (tc-store tests/store/checkpoint.rs, fail points 0..24: valid Burrito, writable, the retry commits) fails on the old code at fail point 9 | crates/tc-store/src/seal.rs
+- 2026-10-25 17:27 EDT | integration lane (Claude Code 3d07d5f8) | note | 47c6aced | the storage lane's follow-up fix (a pack whose folder flush failed stayed unlisted) merged into main in batch 7, after X itself landed in batch 5 | scripts/gates.sh --wait-ci batch-7
 - 2026-10-25 17:10 EDT | S2 session (Claude Code add49644) | fix | none | E1a's real-sync captures found two gaps in SyncReport: (1) received_by counted DeviceProfile records (the username a sync writes, Q7), so a toast read "6 changes" where tC4 says 2: a profile is bookkeeping and is left out of received_by (and of restored); (2) nothing reported what a push sent again: SyncReport.restored counts the teammates' changes in the packs HEAD holds and Door43's branch lacks when the push goes out (§9.7 restored, tC4's sync-ok-restored "Door43 did not have 1 change from a teammate. tC4 sent it again."). Test a_sync_sends_again_what_door43_lost_and_never_counts_a_profile moves the fake's main back behind Juan's push | crates/tc-sync/src/sync.rs
+- 2026-10-25 22:45 EDT | integration lane (Claude Code 3d07d5f8) | note | 654c5a0b | the storage lane's tc-sync follow-up (received_by leaves out DeviceProfile records; SyncReport.restored counts what a push sent again) merged into main in batch 8 | scripts/gates.sh --wait-ci batch-8

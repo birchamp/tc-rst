@@ -46,6 +46,12 @@ export function testNames(repo) {
   if (fs.existsSync(report)) {
     for (const row of JSON.parse(fs.readFileSync(report, 'utf8')).rows ?? []) if (row.name) exact.add(row.name);
   }
+  // The release pipeline's node tests and the names its scripts print as `ok <name>` (card G3).
+  for (const file of walk(path.join(repo, 'scripts/release'), (n) => n.endsWith('.mjs'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    for (const t of titlesOf(text).exact) exact.add(t);
+    for (const m of text.matchAll(/\b(?:step\(|ok |FAIL )['`]?([a-z][a-z0-9]*(?:_[a-z0-9]+)+)/g)) exact.add(m[1]);
+  }
   // The Electronite shell's node tests (`shell/test`, `shell/e2e`).
   for (const file of walk(path.join(repo, 'shell'), (n) => n.endsWith('.test.cjs'))) {
     const titles = titlesOf(fs.readFileSync(file, 'utf8'));

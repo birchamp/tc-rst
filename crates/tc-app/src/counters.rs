@@ -418,6 +418,41 @@ impl CountingSnapshot {
         self.snapshot.fold().render_book(book)
     }
 
+    /// The carried files whose path starts with `prefix`, each with the blob of the version
+    /// the project shows, in path order. A removed file is left out.
+    pub fn carried_under(&self, prefix: &str) -> Vec<(tc_journal::RepoPath, tc_journal::GitOid)> {
+        let records: std::collections::BTreeSet<tc_journal::RepoPath> = self
+            .snapshot
+            .fold()
+            .carried_files()
+            .into_iter()
+            .map(|placement| placement.record)
+            .filter(|record| record.as_str().starts_with(prefix))
+            .collect();
+        records
+            .into_iter()
+            .filter_map(
+                |record| match self.projected(&RecordKey::CarriedFile(record.clone())) {
+                    Some(tc_journal::Record::CarriedFile {
+                        value: tc_journal::record::CarriedValue::Present { oid, .. },
+                        ..
+                    }) => Some((record, oid)),
+                    _ => None,
+                },
+            )
+            .collect()
+    }
+
+    /// A whole book's parts, as `book_usfm` composes them: what an export reads.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the one counted projection of a whole book into its parts"
+    )]
+    pub fn book_parts(&self, book: BookId) -> Option<tc_usfm::codec::BookParts> {
+        self.count(AppCounter::BookUsfm, 1);
+        self.snapshot.fold().book_parts(book)
+    }
+
     /// A whole book's USFM.
     #[expect(
         clippy::disallowed_methods,

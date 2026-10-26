@@ -402,6 +402,11 @@ pub struct PackRead {
     pub changes: Vec<tc_journal::Change>,
 }
 
+/// The device that sealed the pack at `path`, when `path` names a pack.
+pub fn pack_sealer(path: &str) -> Option<tc_journal::DeviceId> {
+    PackPath::parse(path).map(|p| p.sealer)
+}
+
 /// Reads `bytes` as the pack at `path` of `project`.
 pub fn read_received_pack(path: &str, bytes: &[u8], project: tc_journal::ProjectId) -> PackRead {
     let read = read_pack(path, bytes, project);

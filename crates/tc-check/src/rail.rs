@@ -7,7 +7,7 @@
 
 use std::cmp::Ordering;
 
-use crate::item::{Category, CheckItem};
+use crate::item::CheckItem;
 use crate::js;
 use crate::key::ToolId;
 use crate::status::{CheckState, UserStatus};
@@ -72,8 +72,9 @@ pub enum SortMode {
     ByVerse,
     /// Grouped by term, terms in alphabetical order (tW).
     ByWord,
-    /// Grouped by tN category, categories in order of first appearance.
-    ByCategory,
+    /// Grouped by the note's figure (its Translation Academy article, `group_id`), in order of
+    /// each group's first note among the checks shown (tN, tC4 #769).
+    ByFigure,
 }
 
 impl SortMode {
@@ -81,7 +82,7 @@ impl SortMode {
     pub fn modes(tool: ToolId) -> &'static [SortMode] {
         match tool {
             ToolId::TranslationWords => &[SortMode::ByWord, SortMode::ByVerse],
-            ToolId::TranslationNotes => &[SortMode::ByVerse, SortMode::ByCategory],
+            ToolId::TranslationNotes => &[SortMode::ByVerse, SortMode::ByFigure],
             ToolId::TranslationQuestions => &[SortMode::ByVerse],
         }
     }
@@ -98,7 +99,8 @@ pub enum GroupLabel {
     Unit,
     /// A tW term: the article slug.
     Term(String),
-    Category(Category),
+    /// A tN figure: the note's article slug; empty for notes with none ("Other notes").
+    Figure(String),
 }
 
 /// A group of rail rows: indices into the check list.
@@ -145,26 +147,44 @@ pub fn groups(
                 })
                 .collect()
         }
-        SortMode::ByCategory => {
-            let mut categories: Vec<Category> = Vec::new();
+        SortMode::ByFigure => {
+            let mut figures: Vec<&str> = Vec::new();
             for &i in &rows {
-                if !categories.contains(&items[i].category) {
-                    categories.push(items[i].category);
+                if !figures.contains(&items[i].group_id.as_str()) {
+                    figures.push(&items[i].group_id);
                 }
             }
-            categories
+            figures
                 .into_iter()
-                .map(|category| RailGroup {
-                    label: GroupLabel::Category(category),
+                .map(|figure| RailGroup {
+                    label: GroupLabel::Figure(figure.to_owned()),
                     rows: rows
                         .iter()
                         .copied()
-                        .filter(|&i| items[i].category == category)
+                        .filter(|&i| items[i].group_id == figure)
                         .collect(),
                 })
                 .collect()
         }
     }
+}
+
+/// Each group id's progress over every check of the tool, whatever the filter shows: the
+/// counts a folding heading shows (tC4 `groupStatsOf`).
+pub fn group_progress(
+    items: &[CheckItem],
+    states: &[CheckState],
+) -> std::collections::BTreeMap<String, Progress> {
+    let mut out: std::collections::BTreeMap<String, Progress> = std::collections::BTreeMap::new();
+    for (item, state) in items.iter().zip(states) {
+        let p = out.entry(item.group_id.clone()).or_insert(Progress {
+            decided: 0,
+            total: 0,
+        });
+        p.total += 1;
+        p.decided += usize::from(state.is_decided());
+    }
+    out
 }
 
 /// Sorts indices into `items` in the rail's reference order (tC4 `railGroupsOf`): by chapter,
