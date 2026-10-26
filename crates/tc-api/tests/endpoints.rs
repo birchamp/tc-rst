@@ -127,6 +127,7 @@ const PHASE_0: &[&str] = &[
     "test/reset",
     "test/lastEdit",
     "test/script",
+    "test/connectDoor43",
     "test/validate",
 ];
 
