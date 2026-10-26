@@ -4,37 +4,20 @@
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
 fail-fast = false
-# tc-app's op-count tests stay on libtest (scripts/gates.sh step test-app): nearly every one builds
-# the Psalms corpora and their 10x in memory, 7.1 GB a process, which libtest builds once for the
-# binary (14.6 GB at 4 threads) and nextest once per test. Two at a time passed 22 GB, and one at
-# a time, about 250 s each, is 48 tests in over three hours.
-default-filter = 'not binary_id(tc-app::op_counts)'
 
 # Longer limits only for tests whose measured time needs one (CHK-8: a local run at 4 threads,
 # and CI's libtest times). Each still stops, and SLOW names it every minute.
 
-# tc-api's two round-trip property tests: 210 s and past 300 s locally; their binary took 502 s
-# on CI (run 40356855830).
+# tc-api's two round-trip property tests: 210 s to past 516 s locally as the load varied; their
+# binary took 502 s on CI (run 40356855830).
 [[profile.default.overrides]]
 filter = 'binary_id(tc-api::roundtrip)'
-slow-timeout = { period = "60s", terminate-after = 15 }
+slow-timeout = { period = "60s", terminate-after = 20 }
 
-# tc-store's op-count tests build the Psalms corpus (and its 10x) in each test's process, where
-# libtest built it once per binary: 132 to 281 s each locally. Four at once with the rest reached
-# 19.4 GB, past a CI runner's 16 GB, so two at a time.
-[[profile.default.overrides]]
-filter = 'binary_id(tc-store::store) & test(/^(opcount|groups|outside|checkpoint|commands)::/)'
-test-group = 'store-corpora'
-slow-timeout = { period = "60s", terminate-after = 10 }
-
-[test-groups]
-store-corpora = { max-threads = 2 }
-
-# A crash at every write of a scenario project: 277 s locally.
+# A crash at every write of a scenario project: 190 to 277 s locally.
 [[profile.default.overrides]]
 filter = 'binary_id(tc-app::app) & test(=app::store_scenario::a_crash_while_a_scenario_project_is_written_leaves_no_half_project)'
 slow-timeout = { period = "60s", terminate-after = 10 }
-
 
 # tc-server's never_blocked reads how late a timer wakes, which other tests running at once spoil:
 # libtest ran its binary alone and its two tests one at a time (a static lock that cannot reach

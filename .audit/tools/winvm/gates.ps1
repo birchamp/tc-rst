@@ -13,7 +13,6 @@ $gates = [ordered]@{
   test   = 'cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app'
   'test-doc' = 'cargo test --locked --workspace --doc --no-fail-fast'
   'test-app' = 'cargo nextest run --locked -p tc-app --no-fail-fast'
-  'test-app-op-counts' = 'cargo test --locked -p tc-app --test op_counts --no-fail-fast'
   'wasm-ui' = 'cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings'
 }
 
@@ -25,7 +24,7 @@ foreach ($g in $gates.Keys) {
   Write-Output ("{0,-7} exit {1}  {2:N0} s" -f $g, $code, $t.Elapsed.TotalSeconds)
   if ($code -ne 0) { $failed += $g }
 }
-$r = Select-String -Path "$logs\test.log","$logs\test-doc.log","$logs\test-app.log","$logs\test-app-op-counts.log" -Pattern '^test result:','^\s+Summary \[' | ForEach-Object { $_.Line }
+$r = Select-String -Path "$logs\test.log","$logs\test-doc.log","$logs\test-app.log" -Pattern '^test result:','^\s+Summary \[' | ForEach-Object { $_.Line }
 $p = ($r | ForEach-Object { if ($_ -match '(\d+) passed') { [int]$Matches[1] } } | Measure-Object -Sum).Sum
 $f = ($r | ForEach-Object { if ($_ -match '(\d+) failed') { [int]$Matches[1] } } | Measure-Object -Sum).Sum
 $o = ($r | ForEach-Object { if ($_ -match '(\d+) timed out') { [int]$Matches[1] } } | Measure-Object -Sum).Sum

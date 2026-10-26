@@ -109,17 +109,16 @@ test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on requ
 test('INV-A-HUNG-TEST-IS-NAMED-AND-STOPPED: every gate test has a time limit (CHK-8)', () => {
   const problems = [];
   for (const step of steps) {
-    // tc-app's op-count tests stay on libtest, which shares their 7 GB corpora (.config/nextest.toml).
-    const libtest = step.command.split('&&').filter((c) => /cargo test /.test(c) && !/ --doc\b| --list\b|-p tc-app --test op_counts\b/.test(c));
+    const libtest = step.command.split('&&').filter((c) => /cargo test /.test(c) && !/ --doc\b| --list\b/.test(c));
     if (libtest.length) problems.push(`step ${step.name} runs Rust tests through cargo test, which stops no hung test; use cargo nextest run`);
   }
   const nextest = read('.config/nextest.toml');
   const config = nextest.split(/^\[profile\.default\]$/m)[1]?.split(/^\[/m)[0] ?? '';
   if (!/^slow-timeout = \{ period = "60s", terminate-after = 5 \}$/m.test(config)) problems.push('.config/nextest.toml [profile.default] does not stop a test after 5 periods of 60 s');
-  // An override may lengthen a measured test's limit, never remove it or stretch it past 15 minutes.
+  // An override may lengthen a measured test's limit, never remove it or stretch it past 20 minutes.
   for (const line of nextest.split('\n').filter((l) => /^slow-timeout\b/.test(l))) {
     const m = line.match(/^slow-timeout = \{ period = "60s", terminate-after = (\d+) \}$/);
-    if (!m || Number(m[1]) > 15) problems.push(`.config/nextest.toml: ${line} sets no limit of 15 minutes or less`);
+    if (!m || Number(m[1]) > 20) problems.push(`.config/nextest.toml: ${line} sets no limit of 20 minutes or less`);
   }
   const nextestSteps = new Set(steps.filter((s) => s.command.includes('cargo nextest')).map((s) => s.name));
   for (const job of jobsOf(ci)) {
