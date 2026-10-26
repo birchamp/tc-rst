@@ -131,7 +131,7 @@ fn component(
 pub(crate) fn local_projection(state: &FoldState, k: KeyIdx) -> Projected {
     match &state.entry(k).local {
         Local::Empty => Projected::Nothing,
-        Local::Settled(c) | Local::ByRule(c) => Projected::Change(*c),
+        Local::Settled(c) | Local::ByRule { head: c, .. } => Projected::Change(*c),
         Local::Merged(merged) => Projected::Merged(merged.0.clone()),
         Local::Conflict(conflict) => Projected::Change(conflict.provisional),
         // Not in a group (its batches' passages could not be read): its newest head.

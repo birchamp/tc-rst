@@ -95,9 +95,10 @@ pub fn CommentBox(
         }
     };
     let composition = {
-        let (saves, key) = (SendWrapper::new(saves), key.clone());
+        let (saves, key) = (SendWrapper::new(saves.clone()), key.clone());
         move |_: leptos::ev::CompositionEvent| saves.composition(&key)
     };
+    let history = comment_history(&at, &target, &key, current, &saves, &runtime);
     let style = crate::css! {
         "width": "100%", "box-sizing": "border-box", "margin-top": 4,
         "border": "var(--stroke) solid var(--border-input)",
@@ -116,5 +117,84 @@ pub fn CommentBox(
                 {t(keys::understand::CANNOT_CLEAR, &[])}
             </p>
         })}
+        {history}
     }.into_any()
+}
+
+/// The comment's History (owner ruling H5): a teammate's newer comment wins with no question,
+/// and *Restore this version* brings the person's own back. The text being typed is saved
+/// first, so its save never lands over the restore.
+fn comment_history(
+    at: &Scope,
+    target: &CommentTarget,
+    key: &tc_api::buffer::BufferKey,
+    current: Memo<Option<Pair>>,
+    saves: &crate::app::web::Saves,
+    runtime: &crate::app::web::Runtime,
+) -> AnyView {
+    let open = ArcRwSignal::new(false);
+    let restoring = ArcRwSignal::new(false);
+    let failed = ArcRwSignal::new(false);
+    let restore = {
+        let (at, key) = (at.clone(), key.clone());
+        let (saves, runtime) = (
+            SendWrapper::new(saves.clone()),
+            SendWrapper::new(runtime.clone()),
+        );
+        let (restoring, failed) = (restoring.clone(), failed.clone());
+        Callback::new(move |from: tc_api::ids::ChangeRef| {
+            let (at, key, saves, runtime) =
+                (at.clone(), key.clone(), saves.clone(), runtime.clone());
+            let (restoring, failed) = (restoring.clone(), failed.clone());
+            restoring.set(true);
+            failed.set(false);
+            wasm_bindgen_futures::spawn_local(async move {
+                let shown = if saves.gate().await {
+                    saves.base(&key).and_then(|base| base.into_iter().next())
+                } else {
+                    None
+                };
+                let restored = match shown {
+                    Some(shown) => {
+                        let request = tc_api::conflicts::Restore {
+                            at,
+                            request: crate::app::web::js::random_request_id(),
+                            shown,
+                            from,
+                        };
+                        runtime.api().call(&request).await.is_ok()
+                    }
+                    None => false,
+                };
+                restoring.set(false);
+                failed.set(!restored);
+            });
+        })
+    };
+    crate::views::history::record_history(crate::views::history::RecordHistory {
+        test_id: "comment-history",
+        at: at.clone(),
+        // A verse with no comment shows no History: one line per verse would crowd the list.
+        shown: Signal::derive(move || {
+            current
+                .get()
+                .filter(|pair| !pair.value.trim().is_empty())
+                .map(|pair| pair.token)
+        }),
+        open,
+        busy: Signal::derive(move || restoring.get()),
+        failed: Signal::derive(move || failed.get()),
+        reference: match target {
+            CommentTarget::Verse {
+                book,
+                chapter,
+                verse,
+            } => format!("{} {chapter}:{verse}", book.english_name()),
+            CommentTarget::Frame { story, frame } => t(
+                keys::review::place::FRAME,
+                &[("story", &story.get()), ("frame", frame)],
+            ),
+        },
+        restore,
+    })
 }

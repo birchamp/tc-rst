@@ -14,18 +14,20 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use tc_api::conflicts::{
     ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, List, NoticeEntry,
-    ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version, VersionValue,
+    ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
-use tc_api::ids::Scope;
+use tc_api::ids::{ChangeRef, Scope};
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
+use crate::app::load::Load;
+use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
-    notice_text, persons, place_label, tab_label, tabs_shown,
+    notice_text, persons, place_label, tab_label, tabs_shown, version_text,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -222,8 +224,12 @@ fn review_tab(s: &AppState, actions: &Actions, at: Scope, tab: ReviewTab) -> Any
         let actions = actions.clone();
         move || {
             view.with(|v| {
+                let on_tab = {
+                    let actions = actions.clone();
+                    Callback::new(move |tab| actions.choose_review_tab(tab))
+                };
                 v.as_ref()
-                    .map(|v| tab_strip(&actions, &tabs_shown(&v.tabs, tab), tab))
+                    .map(|v| tab_strip(on_tab, &tabs_shown(&v.tabs, tab), tab))
             })
         }
     };
@@ -401,7 +407,7 @@ fn navigator(
 }
 
 /// The tabs, drawn only while a kind tC4 does not review holds something (Q-9).
-fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<AnyView> {
+fn tab_strip(on_tab: Callback<ReviewTab>, tabs: &[TabCount], shown: ReviewTab) -> Option<AnyView> {
     if tabs.is_empty() {
         return None;
     }
@@ -418,7 +424,6 @@ fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<A
         .map(|count| {
             let (tab, n) = (count.tab, count.count);
             let selected = tab == shown;
-            let actions = actions.clone();
             let style = crate::css! {
                 "display": "inline-flex",
                 "align-items": "center",
@@ -437,7 +442,7 @@ fn tab_strip(actions: &Actions, tabs: &[TabCount], shown: ReviewTab) -> Option<A
             view! {
                 <button type="button" role="tab" aria-selected=selected.to_string()
                     data-testid=format!("review-tab-{}", tab_id(tab)) data-count=n.to_string()
-                    style=style.to_style() on:click=move |_| actions.choose_review_tab(tab)>
+                    style=style.to_style() on:click=move |_| on_tab.run(tab)>
                     {tab_label(tab)}" · "{n.to_string()}
                 </button>
             }
@@ -837,12 +842,7 @@ fn version_card(
         }
         .to_style()
     };
-    let text = match &version.value {
-        VersionValue::Text(text) => Some(text.trim().to_owned()),
-        VersionValue::Joined { by } => Some(t(keys::review::value::JOINED, &[("by", by)])),
-        VersionValue::Absent => Some(t(keys::review::value::ABSENT, &[])),
-        VersionValue::NotShown => None,
-    };
+    let text = version_text(&version.value);
     let text = text.map(|text| {
         view! { <span data-testid="conflict-text" dir=dir style=text_style>{text}</span> }
     });
@@ -1215,47 +1215,51 @@ fn history_list(
         record: entry.record.clone(),
     });
     let title = t(keys::review::HISTORY_OF, &[("ref", &reference)]);
-    let label = title.clone();
     let (actions, entry) = (actions.clone(), entry.clone());
+    let restore = Callback::new(move |from| {
+        actions.restore_version(entry.clone(), position, from);
+    });
+    Some(history_section(read, title, restore, busy))
+}
+
+/// Every version of a record, newest first, each with *Restore this version* but the one shown
+/// (#78; owner ruling H5 for a record in no conflict).
+pub(crate) fn history_section(
+    read: Signal<Load<Arc<tc_api::conflicts::HistoryView>>>,
+    title: String,
+    restore: Callback<ChangeRef>,
+    busy: Signal<bool>,
+) -> AnyView {
+    let label = title.clone();
     let rows = move || {
         read.with(|l| {
             l.value().map(|view: &Arc<tc_api::conflicts::HistoryView>| {
                 view.versions
                     .iter()
                     .map(|v| {
-                        let restore = (!v.version.shown).then(|| {
-                            let (actions, entry) = (actions.clone(), entry.clone());
-                            let from = v.version.change.clone();
-                            let on_click = Callback::new(move |_| {
-                                actions.restore_version(entry.clone(), position, from.clone());
-                            });
-                            view! {
-                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
-                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
-                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned())>
-                                    {t(keys::review::RESTORE, &[])}
-                                </Button>
-                            }
-                        });
-                        let text = match &v.version.value {
-                            VersionValue::Text(text) => text.trim().to_owned(),
-                            VersionValue::Joined { by } => {
-                                t(keys::review::value::JOINED, &[("by", by)])
-                            }
-                            VersionValue::Absent => t(keys::review::value::ABSENT, &[]),
-                            VersionValue::NotShown => String::new(),
-                        };
                         let meta = format!(
                             "{} · {} · {}",
                             made_by(&v.version.by),
                             version_date(v.version.at.0),
                             cause_label(v.cause)
                         );
+                        let restore = (!v.version.shown).then(|| {
+                            let from = v.version.change.clone();
+                            let on_click = Callback::new(move |_| restore.run(from.clone()));
+                            view! {
+                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
+                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
+                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned()).with("aria-label", format!("{} · {}", t(keys::review::RESTORE, &[]), meta.clone()))>
+                                    {t(keys::review::RESTORE, &[])}
+                                </Button>
+                            }
+                        });
+                        let text = version_text(&v.version.value).unwrap_or_default();
                         view! {
                             <li data-testid="history-version" data-shown=v.version.shown.to_string()
                                 style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: var(--stroke-hair) solid var(--border-hair);">
                                 <span style="font-size: var(--fs-caption); font-weight: var(--fw-bold); color: var(--uw-slate);">{meta}</span>
-                                <span style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
+                                <span dir="auto" style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
                                 {restore}
                             </li>
                         }
@@ -1270,15 +1274,13 @@ fn history_list(
         "background": "var(--surface-card)",
         "border": "var(--stroke-hair) solid var(--border)",
     };
-    Some(
-        view! {
-            <section data-testid="conflict-history-list" aria-label=label style=style.to_style()>
-                <Overline tone=OverlineTone::Muted>{title}</Overline>
-                <ul style="list-style: none; margin: 6px 0 0; padding: 0;">{rows}</ul>
-            </section>
-        }
-        .into_any(),
-    )
+    view! {
+        <section data-testid="conflict-history-list" aria-label=label style=style.to_style()>
+            <Overline tone=OverlineTone::Muted>{title}</Overline>
+            <ul style="list-style: none; margin: 6px 0 0; padding: 0;">{rows}</ul>
+        </section>
+    }
+    .into_any()
 }
 
 fn list_box(rows: Vec<(String, String)>, test_id: &'static str, about: Option<String>) -> AnyView {
@@ -1341,4 +1343,187 @@ fn notices(entries: &[NoticeEntry]) -> AnyView {
         .map(|e| (String::new(), notice_text(&e.notice)))
         .collect();
     list_box(rows, "review-notice", None)
+}
+
+/// One screen of the H5 packet (C7b step 2), drawn from its fixed data in the review's own
+/// style. Its buttons do nothing: the owner signs the screens off before any is wired. The
+/// boot error is the app's own component, which the probe page draws itself.
+pub fn q9_screen(screen: Q9Screen) -> AnyView {
+    match screen {
+        Q9Screen::Review(review) => q9_review(review),
+        Q9Screen::Received(sheet) => q9_sheet(sheet, "q9-received", true),
+        Q9Screen::DraftOffer(offer) => q9_sheet(offer, "q9-draft-offer", true),
+        Q9Screen::ReadOnly(banner) => q9_sheet(banner, "q9-read-only", false),
+        Q9Screen::BootError(_) => ().into_any(),
+    }
+}
+
+/// A packet button: `data-choice` carries its words, so the packet's JSON lists every choice.
+fn q9_choice(label: String, primary: bool, size: Size) -> AnyView {
+    let variant = if primary {
+        ButtonVariant::Primary
+    } else {
+        ButtonVariant::Secondary
+    };
+    view! {
+        <Button variant=variant size=size
+            attrs=Attrs::new().with("data-testid", "q9-choice").with("data-choice", label.clone())>
+            {label}
+        </Button>
+    }
+    .into_any()
+}
+
+/// A row of buttons, the last one primary when `primary_last`.
+fn q9_choices(labels: Vec<String>, primary_last: bool, size: Size) -> AnyView {
+    let last = labels.len().saturating_sub(1);
+    labels
+        .into_iter()
+        .enumerate()
+        .map(|(i, label)| q9_choice(label, primary_last && i == last, size))
+        .collect_view()
+        .into_any()
+}
+
+fn q9_review(review: Q9Review) -> AnyView {
+    let root = crate::css! {
+        "flex": 1,
+        "min-height": "100vh",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--surface-app)",
+    };
+    let bar = crate::css! {
+        "height": 53,
+        "flex": "none",
+        "box-sizing": "border-box",
+        "display": "flex",
+        "align-items": "center",
+        "gap": 14,
+        "padding": "0 24px",
+        "background": "var(--surface-card)",
+        "border-bottom": "var(--stroke-hair) solid var(--border)",
+    };
+    let h1 = crate::css! {
+        "margin": 0,
+        "font-size": "var(--fs-title)",
+        "letter-spacing": "var(--track-17)",
+        "font-weight": "var(--fw-heavy)",
+        "color": "var(--text-heading)",
+    };
+    let scroll = crate::css! {
+        "flex": 1,
+        "min-height": 0,
+        "overflow": "auto",
+        "padding": "22px 24px",
+    };
+    let tabs = tab_strip(
+        Callback::new(|_| ()),
+        &tabs_shown(&review.tabs, review.tab),
+        review.tab,
+    );
+    let Q9Body::Rows { about, rows } = review.body;
+    let body = q9_rows(about, rows);
+    let ghost = crate::css! { "padding": 0, "height": "auto", "font-size": "var(--fs-ui-sm)" };
+    let back = back_label(BackTo::Translate(Some(tc_core::BookId::Titus), 1));
+    view! {
+        <main data-testid="q9-review" data-tab=tab_id(review.tab) style=root.to_style()>
+            <div style=bar.to_style()>
+                <Button variant=ButtonVariant::Ghost style=ghost>
+                    {icon(&["M19 12H5", "M12 19l-7-7 7-7"], 16, "2")}{back}
+                </Button>
+                <span aria-hidden="true" style="width: 1px; height: 22px; background: var(--border);"></span>
+                <h1 style=h1.to_style()>{t(keys::conflicts::TITLE, &[])}</h1>
+                <span style="flex: 1;"></span>
+            </div>
+            {tabs}
+            <div style=scroll.to_style()>{body}</div>
+        </main>
+    }
+    .into_any()
+}
+
+/// The Detached and Notices tabs: `list_box`'s rows, each with its buttons.
+fn q9_rows(about: Option<String>, rows: Vec<Q9Row>) -> AnyView {
+    let style = measure().merge(&crate::css! {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": 10,
+    });
+    let about = about.map(|about| {
+        view! { <p style="margin: 0; font-size: var(--fs-ui-sm); color: var(--text-tertiary);">{about}</p> }
+    });
+    let rows = rows
+        .into_iter()
+        .map(|row| {
+            let head = (!row.head.is_empty()).then(|| {
+                view! { <strong style="font-size: var(--fs-ui-sm); color: var(--text-heading);">{row.head}</strong> }
+            });
+            view! {
+                <div data-testid="q9-row" style="padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface-card); border: var(--stroke-hair) solid var(--border); display: flex; flex-direction: column; gap: 6px;">
+                    {head}
+                    <span style="font-size: var(--fs-ui-sm); color: var(--uw-ink);">{row.line}</span>
+                    <span style="display: flex; flex-wrap: wrap; gap: 8px;">{q9_choices(row.choices, false, Size::Sm)}</span>
+                </div>
+            }
+        })
+        .collect_view();
+    view! { <div style=style.to_style()>{about}{rows}</div> }.into_any()
+}
+
+/// A sentence with its buttons: the Received sheet and the draft offer as a card over the page,
+/// the read-only banner as a strip across its top.
+fn q9_sheet(question: Q9Question, test_id: &'static str, card: bool) -> AnyView {
+    let frame = if card {
+        crate::css! {
+            "box-sizing": "border-box",
+            "max-width": 560,
+            "margin": "48px auto",
+            "padding": "20px 24px",
+            "border-radius": "var(--radius-lg)",
+            "background": "var(--surface-card)",
+            "box-shadow": "var(--shadow-hover)",
+            "display": "flex",
+            "flex-direction": "column",
+            "gap": 12,
+        }
+    } else {
+        crate::css! {
+            "box-sizing": "border-box",
+            "padding": "12px 24px",
+            "background": "var(--uw-cream)",
+            "border-bottom": HAIR,
+            "display": "flex",
+            "align-items": "center",
+            "flex-wrap": "wrap",
+            "gap": 12,
+        }
+    };
+    let sentence = crate::css! {
+        "margin": 0,
+        "font-size": "var(--fs-ui)",
+        "line-height": 1.45,
+        "font-weight": "var(--fw-bold)",
+        "color": "var(--uw-ink)",
+        "flex": "1 1 320px",
+    };
+    let lines = question
+        .lines
+        .into_iter()
+        .map(|l| {
+            view! { <p style="margin: 0; font-size: var(--fs-ui-sm); color: var(--uw-slate);">{l}</p> }
+        })
+        .collect_view();
+    view! {
+        <div style="min-height: 100vh; background: var(--surface-app);">
+            <section data-testid=test_id role="region" style=frame.to_style()>
+                <p style=sentence.to_style()>{question.sentence}</p>
+                {lines}
+                <span style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;">
+                    {q9_choices(question.choices, true, Size::default())}
+                </span>
+            </section>
+        </div>
+    }
+    .into_any()
 }

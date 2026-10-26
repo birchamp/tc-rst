@@ -147,7 +147,7 @@ pub(super) fn random_bytes() -> [u8; 16] {
     bytes
 }
 
-pub(super) fn random_request_id() -> tc_api::ids::RequestId {
+pub(crate) fn random_request_id() -> tc_api::ids::RequestId {
     tc_api::ids::RequestId::from_bytes(random_bytes())
 }
 

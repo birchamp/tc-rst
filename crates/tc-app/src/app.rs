@@ -213,6 +213,10 @@ pub(crate) struct Inner {
     /// The (package, book) pairs this app session downloaded, which Get source texts counts
     /// per package (tC4 `installedSrc`, B9a).
     pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
+    /// Each project's last sync result this app session, which Home reads again (`door43/lastSync`,
+    /// owner ruling H5: what a newer version replaced stays readable after the toast).
+    pub(crate) last_sync:
+        Mutex<std::collections::BTreeMap<tc_api::ids::ProjectRef, tc_api::jobs::SyncResultView>>,
     /// The plans a person is reading: upgrades, gateway changes and re-pins (C8).
     pub(crate) plans: crate::upgrades::KeptPlans,
     /// The offers and plans a test or a parity capture scripted (C8).
@@ -489,6 +493,7 @@ impl App {
             import,
             resources_door43,
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
+            last_sync: Mutex::new(std::collections::BTreeMap::new()),
             plans: crate::upgrades::KeptPlans::default(),
             uploads: std::sync::OnceLock::new(),
             downloads: std::sync::OnceLock::new(),

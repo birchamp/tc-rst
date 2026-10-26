@@ -175,8 +175,8 @@ pub struct SyncResultView {
     pub received: u32,
     /// Who sent them, each person once, named as the conflict review names them (#680).
     pub from: Vec<PersonLabel>,
-    /// Open conflicts of kinds other than a verse's text and alignments (checks, comments,
-    /// settings): each shows its newest version until someone reviews it.
+    /// Records that held two versions and kept the newest with no question (owner ruling H5),
+    /// one per record as tC4 counts them: tC4's "{n} conflicts kept the newest version".
     pub kept_newest: u32,
     /// Open verse conflicts.
     pub verse_conflicts: u32,
@@ -186,6 +186,62 @@ pub struct SyncResultView {
     pub restored: u32,
     /// The project's pinned resource versions that this computer does not have (D88 point 6).
     pub missing_pins: u32,
+    /// What a teammate's newer version replaced, with no question (owner ruling H5): "Juan's
+    /// alignment of Titus 1:1 replaced yours. Your version is in History."
+    #[serde(default)]
+    pub replaced: Vec<ReplacedView>,
+}
+
+/// The versions of one kind of `whose` that the newer changes of `by` replaced: `place` is
+/// the first of them, `count` how many.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplacedView {
+    pub by: crate::shown::PersonLabel,
+    pub whose: crate::shown::PersonLabel,
+    pub kind: ReplacedKind,
+    pub place: crate::conflicts::ReviewPlace,
+    pub count: u32,
+    /// A setting's or the pins' older value, which the person can set again where it is set
+    /// (owner ruling H5 for settings and pins); a row of one record names it.
+    #[serde(default)]
+    pub was: Option<ReplacedValue>,
+}
+
+/// The older value a settings or pins row names.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ReplacedValue {
+    /// The project's text font.
+    Font(String),
+    /// The project's text direction.
+    Direction(crate::shown::Direction),
+    /// The pinned resources that differ: each by its repository's name and version, as
+    /// `en_tn v90`, or a gateway language by its code.
+    Resources(
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))] Vec<String>,
+    ),
+}
+
+/// What a newer version replaced, as the Received sheet names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum ReplacedKind {
+    Alignment,
+    Check,
+    Comment,
+    Setting,
+    Resources,
+    Book,
+    File,
 }
 
 /// `jobs/get`: a job's state, or `None` when no job has this id or its outcome expired.

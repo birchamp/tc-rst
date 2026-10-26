@@ -945,17 +945,13 @@ pub struct UpdatePlan {
     pub book_added: bool,
 }
 
-/// A verse with words in it: Home's drafted test (`tc-app` `words_drafted`): words that are
-/// not blank and not the stub `___`. Formatting or markers with no words are empty.
+/// A verse with words in it ([`tc_usfm::codec::words_drafted`]).
 fn verse_has_words(record: Option<&Record>) -> bool {
     match record {
         Some(Record::Verse {
             value: VerseValue::Text { words, .. },
             ..
-        }) => {
-            let words = tc_core::js::trim(words);
-            !words.is_empty() && words != "___"
-        }
+        }) => tc_usfm::codec::words_drafted(words),
         _ => false,
     }
 }

@@ -328,13 +328,12 @@ impl ChapterText {
         }
     }
 
-    /// The content of the run that starts at `start` when tC4 reads it as drafted
-    /// ([`codec::is_drafted`]); `None` for an undrafted run, which has no text.
+    /// The content of the run that starts at `start` when it is drafted
+    /// ([`codec::words_drafted`]); `None` for an undrafted run, which has no text.
     pub fn drafted_content(&self, start: u16) -> Option<String> {
         match self.verses.get(&start) {
             Some(VersePart::Text(t)) => {
-                let content = format!("{}{}", t.words, t.layout);
-                codec::is_drafted(t.marker.term(), &content).then_some(content)
+                codec::words_drafted(&t.words).then(|| format!("{}{}", t.words, t.layout))
             }
             _ => None,
         }
@@ -1661,10 +1660,17 @@ impl FoldState {
     /// (or its `.case-` path), every other head of a conflict at its `.conflict-` path.
     pub fn carried_files(&self) -> Vec<CarriedPlacement> {
         let mut out = Vec::new();
+        let mut taken: BTreeSet<String> = self
+            .case_moves
+            .values()
+            .map(|p| tc_burrito::collision_form(p))
+            .collect();
+        let mut beside = Vec::new();
         for k in self.carried_keys.iter() {
             let RecordKey::CarriedFile(path) = &self.entry(*k).key else {
                 continue;
             };
+            taken.insert(path.collision_form());
             let provisional = match &self.entry(*k).projected {
                 Projected::Change(c) => Some(*c),
                 _ => None,
@@ -1677,23 +1683,46 @@ impl FoldState {
                 else {
                     continue;
                 };
-                let at = if Some(*h) == provisional {
-                    self.case_moves
-                        .get(path)
-                        .cloned()
-                        .unwrap_or_else(|| path.as_str().to_owned())
-                } else {
-                    attach::moved_path(path.as_str(), &oid, "conflict")
-                };
-                out.push(CarriedPlacement {
-                    path: at,
+                let placement = CarriedPlacement {
+                    path: String::new(),
                     record: path.clone(),
                     oid,
                     size,
                     md5,
                     head: self.meta(*h).id,
-                });
+                };
+                if Some(*h) == provisional {
+                    out.push(CarriedPlacement {
+                        path: self
+                            .case_moves
+                            .get(path)
+                            .cloned()
+                            .unwrap_or_else(|| path.as_str().to_owned()),
+                        ..placement
+                    });
+                } else {
+                    beside.push((self.meta(*h).order(), *h, placement));
+                }
             }
+        }
+        // Owner ruling H5: an older version is kept beside the file under its author's name,
+        // at a path no file holds. Newest first, so every computer gives out the same names.
+        beside.sort_by(|a, b| a.2.record.cmp(&b.2.record).then_with(|| b.0.cmp(&a.0)));
+        for (_, h, placement) in beside {
+            let person = attach::author(self, self.device_of(self.meta(h)))
+                .map(|name| {
+                    name.chars()
+                        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+                        .collect::<String>()
+                })
+                .filter(|name| !name.is_empty());
+            let path = beside_path(
+                placement.record.as_str(),
+                person.as_deref(),
+                &placement.oid,
+                &mut taken,
+            );
+            out.push(CarriedPlacement { path, ..placement });
         }
         out.sort();
         out
@@ -1723,6 +1752,45 @@ impl FoldState {
     }
 }
 
+/// `<stem>-<person>.<ext>`, or the version's short id without a person, with `-2`, `-3` until
+/// the path collides with none in `taken`, which then holds it.
+fn beside_path(
+    path: &str,
+    person: Option<&str>,
+    oid: &crate::ids::GitOid,
+    taken: &mut BTreeSet<String>,
+) -> String {
+    let short = oid.to_hex()[..8].to_owned();
+    let tag = person.unwrap_or(&short);
+    let (dir, name) = match path.rsplit_once('/') {
+        Some((dir, name)) => (format!("{dir}/"), name),
+        None => (String::new(), path),
+    };
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
+        _ => (name, String::new()),
+    };
+    // A name a project path cannot hold falls back to the short id, which it always can.
+    let tag = if crate::RepoPath::parse(&format!("{dir}{stem}-{tag}{ext}")).is_ok() {
+        tag
+    } else {
+        &short
+    };
+    let mut n = 1;
+    loop {
+        let suffix = if n == 1 {
+            String::new()
+        } else {
+            format!("-{n}")
+        };
+        let candidate = format!("{dir}{stem}-{tag}{suffix}{ext}");
+        if taken.insert(tc_burrito::collision_form(&candidate)) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 /// The numeric chapter and first verse of a check's target.
 fn check_verse(check: &CheckKey) -> Option<(u16, u16)> {
     match &check.target {
@@ -1740,8 +1808,8 @@ type Targeted<'a> = (Target<'a>, KeyIdx);
 /// finds a check's draft text (`verseTextIndex` and `withSpanMembers`, `src/state.jsx` at
 /// d310bf3, and `decisionIsStale`, `src/data/revalidate.ts`): a numeric chapter, and a verse
 /// that is a number (the run that holds it) or a span label that a projected run carries
-/// exactly. A run tC4 does not read as drafted ([`codec::is_drafted`]: the body its indexer
-/// finds, trimmed, is empty or the stub `___`) gives no text. Every other target (`front`,
+/// exactly. An undrafted run ([`codec::words_drafted`]: its words on every line, trimmed, are
+/// empty or the stub `___`) gives no text. Every other target (`front`,
 /// `intro`, a list such as `1,3,8,12`, a span no run carries) has none: it gives no
 /// evidence either way.
 pub(crate) fn target_content(text: &BookText, check: &CheckKey) -> Option<String> {
