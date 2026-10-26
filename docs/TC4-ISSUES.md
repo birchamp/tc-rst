@@ -41,12 +41,12 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
 | USFM, Translate and helps | 0 | 3 | 1 | 41 | 0 | 9 | 54 |
 | Check and resources | 0 | 2 | 2 | 37 | 1 | 22 | 64 |
 | Sync, storage and import | 0 | 14 | 3 | 33 | 2 | 13 | 65 |
-| Shell, startup, languages and help | 0 | 9 | 1 | 48 | 0 | 18 | 76 |
-| All area rows | 1 | 29 | 8 | 192 | 3 | 63 | 296 |
+| Shell, startup, languages and help | 0 | 8 | 1 | 49 | 0 | 18 | 76 |
+| All area rows | 1 | 28 | 8 | 193 | 3 | 63 | 296 |
 
 Counted from the rows on 2026-10-24, after FIX-R, the 2026-10-23 sweep, T, G1, I, REF1, G4, D2 and F1. A row counts once
-per area table. All area rows: 296; 1 rebuild bug, 29 unit todo, 8 reference
-change, 192 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
+per area table. All area rows: 296; 1 rebuild bug, 28 unit todo, 8 reference
+change, 193 covered, 3 owner question and 63 not applicable. The 2026-10-23 sweep
 added 24 area rows (271 before) and changed 31, and its commit range holds 59 items
 (`TC4-DELTA-2026-10-23.md`; 25 covered, 7 unit todo, 8 reference change, 19 not applicable).
 Earlier: the 2026-10-19 range added 22 items (`TC4-DELTA-2026-10-19.md` §2). §1 lists the
@@ -461,7 +461,7 @@ the rebuild fixed it or does as tC4 does:
 | #371 | Release v4.0.0-rc.1 | not applicable | — | — | Process. |
 | #58 | Pilot program | not applicable | — | — | Process. |
 | #832 | Home badge keeps left to right after Settings says right to left; empty language name | covered | tc-app; FIX-R step 1 | `a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart`; `an_imported_project_shows_its_metadata_language_name_in_settings` | See §1 row 20; fixed by FIX-R step 1 (declared differences #832.1, #832.2). |
-| #833 | rc.2 polish: offline update error, Save dialog title, import codes, right-click, source text version | unit todo | .1 FIX-R step 2; .2 G1, D2; .3 F1; .4 G1; .5 FIX-R step 5 | .1 `an_offline_update_check_shows_one_plain_sentence`; .2 export_save_dialog_has_a_readable_title, .3 an_import_refusal_shows_a_sentence_not_a_code, .4 a_text_field_right_click_offers_cut_copy_paste (to create); .5 none needed | .1 is §1 row 21, fixed by FIX-R step 2. .5 cannot occur: Get source texts lists no version, only "n installed" (FIX-R step 5). .2 to .4 are unit todos. |
+| #833 | rc.2 polish: offline update error, Save dialog title, import codes, right-click, source text version | covered | .1 FIX-R step 2; .2 G1, D2; .3 F1; .4 G1; .5 FIX-R step 5 | .1 `an_offline_update_check_shows_one_plain_sentence`; .2 `export_save_dialog_has_a_readable_title`; .3 `an_import_refusal_shows_a_sentence_not_a_code`; .4 `a_text_field_right_click_offers_cut_copy_paste`; .5 none needed | .1 is §1 row 21, fixed by FIX-R step 2. .5 cannot occur: Get source texts lists no version, only "n installed" (FIX-R step 5). .2 to .4 are covered by G1, D2 and F1. |
 | #838 | About says "License: MIT" (D111) | covered | REF1 | `parity/app/journeys/about.test.mjs` (case i reads the vendored MIT licence file) | The rebuild is MIT since LIC-1; REF1 re-vendored About's line and dialog from tC4 release/4.0 d25b7871. |
 | #839 | The single-instance guard is only in the packaged app | not applicable | G1 | `new_tc4_waits_for_the_old_one_then_names_the_holder` | tC4 rig machinery; the rebuild's guard is the app-data lock. |
 
