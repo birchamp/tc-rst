@@ -4,18 +4,18 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: parked
-owner: checks lane (Claude Code 2198ee19)
-branch: track-CHK-3
-worktree: .worktrees/track-CHK-3
+state: verifying
+owner: shell lane (Claude Code 6f39d119)
+branch: track-CHK-3b
+worktree: .worktrees/track-CHK-3b
 depends: [INT-4, CHK-3a]
 needs_owner: []
 proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-24
-next: step 5 after S2 merges (docs/STORAGE.md section 15, which S2 rewrites), then the review and a merge turn; branch track-CHK-3
+updated: 2026-10-26
+next: ready for a batch: branch track-CHK-3b, pushed; the integration lane gates it
 blocked_by: none
 ---
 
@@ -273,3 +273,10 @@ and each planted failure is in the log.
 - 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | park | 04f67580 | Parked: step 5 waits for S2 | python3 -I .audit/tools/board.py
 - 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 3b are card CHK-3a, merged on its own; this card keeps the rest and depends on CHK-3a | .audit/roadmap/units/CHK-3a.md
 - 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665), for FIX-J | note | none | FIX-J's journeys exist on track-FIX-J: J3 `j3_a_download_from_the_seeded_fake_installs_the_pinned_version` (parity/app/journeys/source-texts.test.mjs), J12 `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` and J13 `j13_change_writes_the_primary_set_to_disk` (parity/app/journeys/upgrades.test.mjs); step 3's coverage map points J3, J12 and J13 at them, not at a pending card, once FIX-J merges | .audit/roadmap/units/FIX-J.md
+- 2026-10-26 10:20 EDT | shell lane (Claude Code 6f39d119) | takeover | none | took the parked card from the checks lane at the orchestrator's word: S2 is done (33d2378d) and CHK-3a is on main, so step 5 runs on track-CHK-3b from main 1a0c8469 | .worktrees/track-CHK-3b
+- 2026-10-26 10:45 EDT | shell lane (Claude Code 6f39d119) | step 5 | 3890a1cf | claims.test.mjs "INV-CLAIMED-TESTS-EXIST: STORAGE §15" reads every `| L<n> |` row between `## 15.` and `## 16.` (the last cell) with the TC4-ISSUES rules; 66 claims failed before the fix. Resolved: 6 `property: x` cells written as property `x`; 3 file claims given their full path (`crates/tc-store/tests/store/model.rs`, `salvage_sources.rs`, `last_look.rs`); 15 renamed after reading each (L15, L20, L21, L26, L34, L52, L54, L57, L66, L88 twice, L94, and L67's `a_door43_edit_by_another_tool_is_reported_once`, which exists now). L54's `a_truncated_pack_salvages_every_whole_line` reads a pack by its lines with no reader identity, so a teammate's pack takes the same path. Planted: `loss_e1_reversed_order` renamed by a letter failed `docs/STORAGE.md:4879 (L1) is prevented by loss_e1_reversed_ordex, but no such test exists`; reverted | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 10:55 EDT | shell lane (Claude Code 6f39d119) | verify | 3890a1cf | review (subagent, claims lens): no blocker, no major, two minors. 1 every replaced test asserts its row except L26 (convergence only, not the incremental fetch and backoff) and L52 (the store's restore, not the dialog's order); 2 every pending card exists and is open; 3 the test reads 139 rows and fails under 100, and the Test column is last; 4 no text outside the test cells changed. L26 keeps `sync_contention_three_devices_converge` pending beside the convergence test; L52's dialog half is a minor in .audit/minors.tsv | git show 3890a1cf
+- 2026-10-26 11:01 EDT | C7a session (Claude Code 2a5f27bc), for CHK-3 | verify | 3890a1cf | independent review of the diff: 1 blocker, 2 minors. Blocker: the new pending markers named cards that do not write those tests (only S3's step-9 rows and E2's `usb_export_verify_reads_device` are in their cards); X and I are done without tests they promised (X.md step 5 item 4, step 6.4). Minors: L148 still said "(to write: I)" though I is done and the test exists; the new log lines had no time | message to the shell lane
+- 2026-10-26 11:05 EDT | shell lane (Claude Code 6f39d119) | fix | none | the blocker: new card LOSS-1 owns the 26 §15 tests no card writes (L16, L17, L19, L20, L22 twice, L23, L25, L26, L28 to L32, L34, L45, L47, L59, L60, L66, L77 twice, L79, L83, L89, L95, L96), and those rows pend on it; S3 keeps its step-9 rows and E2 `usb_export_verify_reads_device`, each with a note; the notes in E1a, E1b, V, C7b and F1 are gone. L145 and L148 drop their markers, since their tests exist. Pending now: LOSS-1 27, S3 12, E2 1. The log lines carry times | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 11:20 EDT | C7a session (Claude Code 2a5f27bc), for CHK-3 | verify | c94dcb29 | the review of 3890a1cf..c94dcb29 is closed with no findings: LOSS-1 27 markers on 25 rows match its card, none of its 26 names exists as a fn, S3 12 and E2 1 are right | message to the shell lane
+- 2026-10-26 11:22 EDT | shell lane (Claude Code 6f39d119) | gate | none | the fast checks on the branch (main 1a0c8469 is its base, unchanged): `node --test .audit/tools/*.test.mjs parity/app/journeys/coverage.test.mjs` 43 pass 0 fail; board_test, union_test and `board.py --check` 0 errors. The change is docs and node only, so no cargo step runs differently | node --test .audit/tools/*.test.mjs

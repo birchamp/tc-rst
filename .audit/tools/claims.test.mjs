@@ -138,3 +138,20 @@ test('INV-CLAIMED-TESTS-EXIST: P-LEDGER', () => {
   }
   assert.deepEqual(problems, []);
 });
+
+test('INV-CLAIMED-TESTS-EXIST: STORAGE §15', () => {
+  const file = 'docs/STORAGE.md';
+  const text = fs.readFileSync(path.join(REPO, file), 'utf8');
+  const start = text.indexOf('\n## 15.');
+  const end = text.indexOf('\n## 16.');
+  assert.ok(start > 0 && end > start, 'STORAGE has its §15 and §16');
+  const offset = text.slice(0, start + 1).split('\n').length - 1;
+  const problems = [];
+  const rows = tables(text.slice(start + 1, end), ['#']).filter((r) => /^L\d+$/.test(r.cells['#']));
+  assert.ok(rows.length > 100, `§15 has its loss rows (${rows.length})`);
+  for (const row of rows) {
+    const where = `${file}:${row.line + offset} (${row.cells['#']})`;
+    problems.push(...cellProblems(where, Object.values(row.cells).at(-1), 'prevented'));
+  }
+  assert.deepEqual(problems, []);
+});

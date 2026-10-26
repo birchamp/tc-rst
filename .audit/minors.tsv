@@ -260,3 +260,4 @@ HIST-1	An aligner Restore ignores a rail click or a tool close made while it run
 HIST-1	A mark clicked while a check's Restore waits on the save gate is written first, and the Restore then lands over it (the mark stays in History)	evidence/2026-10-25/HIST-1-lens-races.md
 HIST-1	A Restore whose reply was lost after it was saved says it was not restored; the read that follows shows it restored	evidence/2026-10-25/HIST-1-lens-races.md
 HIST-1	History rows draw their labels (Selected:, Comment:, Aligned:) in the scripture font	evidence/2026-10-25/HIST-1-lens-parity.md
+CHK-3	STORAGE §15 L52 names only the store test that adding a removed book again keeps the old text (restored with or without it); no test asserts that the dialog offers "Restore the text" first	crates/tc-store/tests/store/commands.rs a_book_is_added_with_stubs_removed_with_what_was_seen_and_restored_either_way; CHK-3 step 5 review
