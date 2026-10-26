@@ -3,7 +3,12 @@
 //! (`fixtures/align/suggest-vectors.json`): the training verses, every link and
 //! confidence of memory-only and boosted predictions, and the growth bench's recall.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

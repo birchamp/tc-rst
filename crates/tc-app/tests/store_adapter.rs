@@ -10,7 +10,8 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
-    clippy::disallowed_methods
+    clippy::disallowed_methods,
+    reason = "test code: a failed unwrap is a failed test, and tests set up files directly"
 )]
 
 #[path = "app/common.rs"]

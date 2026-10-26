@@ -1,6 +1,11 @@
 //! `tc4 serve` runs tc-app's `App` behind tc-server (APP-DESIGN §10, order paragraph): what the
 //! shell and the UI see over HTTP is the application's own state, not a stand-in's.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

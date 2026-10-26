@@ -1,6 +1,10 @@
 // Shared test helpers. Each test binary uses some of them, and a failed unwrap here is a
 // broken fixture, which should fail the test.
-#![allow(dead_code, clippy::unwrap_used)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use serde_json::Value;
 use std::path::PathBuf;

@@ -6,7 +6,12 @@
 //! The rows come from tc-usfm's `shown_text_v1` of each verse, the text the editor's rows
 //! show.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

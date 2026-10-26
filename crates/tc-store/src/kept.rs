@@ -688,7 +688,6 @@ impl Writer {
 
     /// The entry, the copy's bytes and what to import; `None` when the copy differs from the
     /// project in nothing an import takes in.
-    #[allow(clippy::type_complexity)]
     fn prepare_import(
         &mut self,
         copy: &str,

@@ -1,7 +1,12 @@
 //! The fold's rules (§7.2, §7.3): heads, merges, stub rules, passages, batches, books.
 
 // Helpers outside `#[test]` functions build known-valid values and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod support;
 

@@ -1051,7 +1051,10 @@ fn journal_of(
 
 /// O6 after the load: a device that wrote more than the folder holds (an older backup put
 /// back) or that another computer also saves as is replaced by a new one (§6.3).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each is one fact the identity check weighs; a struct would be built only to be taken apart"
+)]
 fn check_identity(
     env: &Env,
     vfs: &dyn Vfs,

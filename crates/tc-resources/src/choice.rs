@@ -32,8 +32,10 @@ use tc_journal::keys::ToolId;
 pub const HELPS_SOURCE_SETTING: &str = "helpsSource";
 
 /// Where the helps tabs read from.
-// One value per open project, so the size of the Aquifer pins costs nothing.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one value per open project, so the size of the Aquifer pins costs nothing"
+)]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "provider", rename_all = "camelCase")]
 pub enum HelpsChoice {

@@ -2,7 +2,11 @@
 //! a standard scheme.
 
 // Test helpers fail the test by panicking.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::path::PathBuf;
 use tc_versification::{

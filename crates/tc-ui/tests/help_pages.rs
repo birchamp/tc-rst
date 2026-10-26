@@ -3,7 +3,12 @@
 //! id in tc-website, so `git ls-tree -r <commit> tc-help` there confirms the list (tC4 #741's
 //! "help sha-list check").
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

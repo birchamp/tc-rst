@@ -2,7 +2,12 @@
 //! crash matrix (`docs/STORAGE.md` §16.2), the loss cases of §15.3, the open's progress and
 //! operation counts, and the tC4 tests ported (`docs/TC4-DELTA-2026-10-16.md` §4).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 #![allow(
     clippy::disallowed_methods,
     reason = "test code: damages project folders on purpose, as another program or a crash would"

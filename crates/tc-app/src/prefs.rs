@@ -663,7 +663,10 @@ impl Doc {
         }
         match slot {
             Value::Object(map) => map,
-            // The slot is an object: it was one, or was replaced by one just above.
+            #[expect(
+                clippy::unreachable,
+                reason = "the slot is an object: it was one, or was replaced by one just above"
+            )]
             _ => unreachable!("an object was just stored here"),
         }
     }
@@ -872,7 +875,10 @@ impl Shared {
         }
         match docs.projects.get_mut(id) {
             Some(doc) => f(doc),
-            // The document was inserted above and the lock is held.
+            #[expect(
+                clippy::unreachable,
+                reason = "the document was inserted above and the lock is held"
+            )]
             None => unreachable!("the project document was just loaded"),
         }
     }

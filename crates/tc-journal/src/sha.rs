@@ -88,7 +88,13 @@ impl Engine for Ring {
 }
 
 // Kept so that the choice above stays one line; the test below holds the two to one result.
-#[cfg_attr(all(not(test), not(target_arch = "wasm32")), allow(dead_code))]
+#[cfg_attr(
+    all(not(test), not(target_arch = "wasm32")),
+    expect(
+        dead_code,
+        reason = "kept so that the choice above stays one line; the test below holds the two to one result"
+    )
+)]
 struct Sha2;
 
 impl Engine for Sha2 {

@@ -5,7 +5,12 @@
 //! The stories and helps are the real ones: the template, and the en_obs v9, en_obs-tn v13,
 //! en_obs-twl v3 and en_obs-tq v10 exports in `bundle/en`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

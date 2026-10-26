@@ -203,12 +203,6 @@ impl Stub {
             _ => return None,
         })
     }
-
-    #[cfg(not(feature = "test-hooks"))]
-    #[allow(clippy::unused_self)]
-    fn test_rows(&self, _path: &str, _body: &[u8]) -> Option<Vec<u8>> {
-        None
-    }
 }
 
 /// Parses `body` as the request type `E`, answers with `answer`'s result, and writes the

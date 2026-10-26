@@ -1,7 +1,10 @@
 //! `Http::get`, the one GET that every network client outside this crate sends with.
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::time::Duration;
 use tc_door43::{Http, HttpError, HttpSpec, InternetSwitch, RedirectRule};

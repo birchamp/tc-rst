@@ -195,9 +195,10 @@ pub struct Subscription {
     last: u64,
 }
 
-// A frame is what a reader gets almost every time; boxing it would allocate once per frame
-// to save bytes on the two rare variants.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a frame is what a reader gets almost every time; boxing it would allocate once per frame to save bytes on the two rare variants"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Next {
     Frame(EventFrame),

@@ -1,5 +1,9 @@
 // Each test file uses a different subset of these helpers, and test helpers may panic.
-#![allow(dead_code, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::path::PathBuf;
 

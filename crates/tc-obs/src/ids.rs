@@ -9,15 +9,21 @@ pub use tc_core::{FrameNo, StoryNo};
 pub const STORY_COUNT: u8 = StoryNo::COUNT;
 
 /// The tc-helps and tc-check address of one frame of a story.
+#[expect(
+    clippy::unreachable,
+    reason = "the story is 1 to 50 by construction, which is all ObsRef::new asks"
+)]
 pub fn obs_ref(story: StoryNo, frame: FrameNo) -> ObsRef {
-    // The story is 1 to 50 by construction, which is all `ObsRef::new` asks.
     ObsRef::new(story.get(), frame.get())
         .unwrap_or_else(|| unreachable!("story {story} is 1 to 50"))
 }
 
 /// The story and frame of a tc-helps address.
+#[expect(
+    clippy::unreachable,
+    reason = "an ObsRef's story is 1 to 50 by construction"
+)]
 pub fn story_frame(at: ObsRef) -> (StoryNo, FrameNo) {
-    // An `ObsRef`'s story is 1 to 50 by construction.
     let story = StoryNo::new(at.story())
         .unwrap_or_else(|| unreachable!("an ObsRef's story {} is 1 to 50", at.story()));
     (story, FrameNo::new(at.frame()))

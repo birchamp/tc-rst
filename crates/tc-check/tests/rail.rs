@@ -1,6 +1,11 @@
 //! Progress, the rail's chips and its order, from tC4's suites (`check-filters`,
 //! `checkSessionMerge` `railGroupsOf`, `checkStartIndex`) and the real Titus lists.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
@@ -237,7 +242,7 @@ fn tw_groups_by_term_alphabetically_and_tn_lists_by_verse() {
     assert_eq!(by_word.iter().map(|g| g.rows.len()).sum::<usize>(), 188);
     for g in &by_word {
         let GroupLabel::Term(term) = &g.label else {
-            unreachable!()
+            panic!("unexpected")
         };
         assert!(g.rows.iter().all(|&i| &list.items[i].group_id == term));
         // Within a term, rows follow the verse order.

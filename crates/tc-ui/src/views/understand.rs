@@ -580,7 +580,10 @@ fn first_help_in(helps: Option<&PassageView>, unit: &Unit) -> Option<HelpFocus> 
     None
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view's inputs: the state, handles and signals it reads"
+)]
 fn understand_unit(
     s: &AppState,
     actions: &Actions,

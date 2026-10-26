@@ -3,7 +3,10 @@
 //! schema wherever both judge the same value.
 
 // Helpers outside #[test] functions unwrap too; in a test, a panic is the failure report.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

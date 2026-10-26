@@ -1,5 +1,11 @@
 //! The workspace as the architecture tests read it: `cargo metadata` and the files on disk.
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::path::{Path, PathBuf};
 

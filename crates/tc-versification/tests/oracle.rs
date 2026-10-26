@@ -6,7 +6,11 @@
 //! unchanged but is not fails as well.
 
 // Test helpers fail the test by panicking.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use serde_json::Value;
 use std::collections::HashMap;

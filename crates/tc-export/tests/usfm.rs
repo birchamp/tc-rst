@@ -3,7 +3,12 @@
 //! stored bytes and is named in the export's facts. Built on the tC4 sample burrito's Titus,
 //! its one alignment record (TIT 1:1) and the UGNT Titus it was made against.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

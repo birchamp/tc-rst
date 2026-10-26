@@ -1,7 +1,12 @@
 //! Shown tokens (`docs/STORAGE.md` §2.7): what a screen displayed, signed so a screen cannot
 //! make one up.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

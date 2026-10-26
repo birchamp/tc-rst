@@ -2,7 +2,12 @@
 //! real fixtures (`fixtures/align/*-vectors.json`, made by `tools/gen-align-vectors.cjs`):
 //! en_ult and en_ust Titus with UGNT Titus, and UHB Jonah (right to left).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

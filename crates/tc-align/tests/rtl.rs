@@ -4,7 +4,12 @@
 //! cards are in reading order, and a Shift click selects a run in reading order, whichever
 //! way the screen draws the verse.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

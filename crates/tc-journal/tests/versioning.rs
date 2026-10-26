@@ -2,7 +2,12 @@
 //! destroyed or reported as damaged, and older and newer apps holding the same changes
 //! compute the same keys.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 #![allow(
     clippy::disallowed_methods,
     reason = "test code writes its own fixture and snapshot files, never a project"

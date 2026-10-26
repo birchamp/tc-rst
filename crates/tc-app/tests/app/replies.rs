@@ -24,7 +24,10 @@ fn digest(body: &str) -> BodyDigest {
 fn bytes(outcome: &Outcome) -> Vec<u8> {
     match outcome {
         Outcome::Reply(bytes) => bytes.to_vec(),
-        #[allow(unreachable_patterns)]
+        #[allow(
+            unreachable_patterns,
+            reason = "with the test hooks off, Reply is the only outcome"
+        )]
         other => panic!("{other:?}"),
     }
 }

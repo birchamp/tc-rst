@@ -2,7 +2,12 @@
 //! `paginate` makes tC4's preview pages of `fixtures/export/print-vectors.json`. What the parts
 //! of each page show is checked against tC4's markup in tc-export's `tests/vectors.rs`.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

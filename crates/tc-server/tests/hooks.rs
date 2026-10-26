@@ -1,6 +1,11 @@
 //! Ending the process at a named point (AD35, APP-DESIGN §6.6), with a recorder in place of
 //! the real exit. `crates/tc4/tests/hooks.rs` drives the same hooks against the binary.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

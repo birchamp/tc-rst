@@ -185,8 +185,10 @@ fn pin((repo, version, sha, flavor): Row) -> ResourcePin {
     })();
     match built {
         Some(pin) => pin,
-        // Every row above is a valid repository, tag and sha; the unit test
-        // `the_suite_matches_tc4` builds them all.
+        #[expect(
+            clippy::unreachable,
+            reason = "every row above is a valid repository, tag and sha; the unit test the_suite_matches_tc4 builds them all"
+        )]
         None => unreachable!("bundled pin {repo} must parse"),
     }
 }
@@ -194,7 +196,7 @@ fn pin((repo, version, sha, flavor): Row) -> ResourcePin {
 fn pane(id: &str, row: Row) -> ScripturePane {
     match id.parse::<PaneId>() {
         Ok(id) => ScripturePane { id, pin: pin(row) },
-        // `ult` and `ust` are valid pane ids.
+        #[expect(clippy::unreachable, reason = "ult and ust are valid pane ids")]
         Err(_) => unreachable!("pane id {id} must parse"),
     }
 }
@@ -204,6 +206,7 @@ static SUITE: LazyLock<Suite> = LazyLock::new(|| {
         language: "en".to_owned(),
         owner: match "unfoldingWord".parse() {
             Ok(owner) => owner,
+            #[expect(clippy::unreachable, reason = "a literal account name")]
             Err(_) => unreachable!("unfoldingWord is an account name"),
         },
     });
@@ -256,7 +259,7 @@ pub fn english_helps() -> &'static LanguageSet {
 pub fn english_twl() -> &'static ResourcePin {
     match SUITE.helps.pin(SetSlot::TranslationWordsLinks) {
         Some(pin) => pin,
-        // HELPS above pins the links slot.
+        #[expect(clippy::unreachable, reason = "HELPS above pins the links slot")]
         None => unreachable!("the bundled suite pins translationWordsLinks"),
     }
 }

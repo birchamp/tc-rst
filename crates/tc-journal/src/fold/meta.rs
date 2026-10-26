@@ -37,8 +37,10 @@ pub(crate) enum ChangeList {
     #[default]
     Empty,
     One(ChangeIdx),
-    // A boxed Vec is a thin pointer, so the list stays 16 bytes.
-    #[allow(clippy::box_collection)]
+    #[expect(
+        clippy::box_collection,
+        reason = "a boxed Vec is a thin pointer, so the list stays 16 bytes"
+    )]
     Many(Box<Vec<ChangeIdx>>),
 }
 

@@ -3,7 +3,12 @@
 //! every book of the tC3 fixture zips and hand-written books.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use md5::{Digest, Md5};
 use serde_json::Value;

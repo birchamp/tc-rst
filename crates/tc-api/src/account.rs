@@ -280,9 +280,9 @@ impl From<WebUrl> for String {
 impl proptest::arbitrary::Arbitrary for WebUrl {
     type Parameters = ();
     type Strategy = proptest::strategy::BoxedStrategy<Self>;
+    #[expect(clippy::unreachable, reason = "the pattern is a literal that compiles")]
     fn arbitrary_with((): ()) -> Self::Strategy {
         use proptest::strategy::Strategy;
-        // The pattern is a literal that compiles.
         proptest::string::string_regex("https?://[a-z0-9.-]{1,20}(/[A-Za-z0-9._~%-]{0,12}){0,3}")
             .unwrap_or_else(|_| unreachable!("a valid regex"))
             .prop_map(WebUrl)

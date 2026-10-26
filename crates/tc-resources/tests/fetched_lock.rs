@@ -1,7 +1,12 @@
 //! A folder of archives checked against its `fetched.lock`, offline: `bundle/en/` itself,
 //! and the fixture folder `fixtures/door43/fetched-lock/` of the same shape.
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::fs;
 use std::io::{Cursor, Read, Write};

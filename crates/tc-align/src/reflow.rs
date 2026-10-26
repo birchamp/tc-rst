@@ -278,7 +278,12 @@ fn follow(old: &[TargetWord], new: &[TargetWord]) -> Vec<Option<usize>> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::follow;
     use proptest::prelude::*;

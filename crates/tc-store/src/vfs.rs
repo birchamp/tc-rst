@@ -45,7 +45,13 @@ pub struct DirEntry {
 pub type WatchSink = Arc<dyn Fn(Vec<PathBuf>) + Send + Sync>;
 
 /// A running watch. Dropping it stops the watch.
-pub struct WatchGuard(#[allow(dead_code)] Box<dyn std::any::Any + Send + Sync>);
+pub struct WatchGuard(
+    #[expect(
+        dead_code,
+        reason = "held only so that dropping the guard stops the watch"
+    )]
+    Box<dyn std::any::Any + Send + Sync>,
+);
 
 impl WatchGuard {
     pub fn new<T: Send + Sync + 'static>(inner: T) -> Self {
@@ -469,7 +475,12 @@ pub fn is_not_found(error: &io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::*;
     use crate::fault::FaultFs;

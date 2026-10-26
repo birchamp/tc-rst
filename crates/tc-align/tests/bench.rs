@@ -12,7 +12,12 @@
 //! TC_ALIGN_BENCH_CORPUS=/path/to/en_ult cargo test -p tc-align --release --test bench -- --ignored --nocapture
 //! ```
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

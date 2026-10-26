@@ -1,6 +1,11 @@
 //! A 1 GiB exchange upload streams to disk (APP-DESIGN §5.5, A-28): its own test binary,
 //! because it reads this process's memory high-water mark, which parallel tests would spoil.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

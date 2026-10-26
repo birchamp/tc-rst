@@ -2,7 +2,12 @@
 //! #129) and `test/align-done.test.ts` (#271, D73), at d310bf3. The verses and words are
 //! tC4's.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

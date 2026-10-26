@@ -3,7 +3,12 @@
 //! the order when a verse opens; a reflow keeps or reports every link; aligned USFM and
 //! the tC4 record give back what was written.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

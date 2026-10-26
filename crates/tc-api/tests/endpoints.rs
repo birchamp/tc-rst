@@ -1,7 +1,12 @@
 //! The endpoint list (APP-DESIGN §3.3, §3.9): one row per endpoint, the phase-0 set and the
 //! rows of the units that have landed since.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeSet;
 

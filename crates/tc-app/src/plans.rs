@@ -516,7 +516,11 @@ fn book_spec<'a>(book: BookId, spec: &'a UnitSpec<'a>) -> BookSpec<'a> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     //! How a carry-over becomes changes: one change per record, never a replacement of a
     //! record the plan did not read, never a loss of what a decision holds.

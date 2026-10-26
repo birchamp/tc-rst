@@ -21,6 +21,14 @@ expect_used = "warn"
 panic = "warn"
 dbg_macro = "warn"
 todo = "warn"
+# INV-PROVEN-PANICS
+unreachable = "warn"
+# INV-EVERY-ALLOW-HAS-A-REASON
+allow_attributes_without_reason = "warn"
+# INV-NO-BAGS-OF-BOOLEANS
+struct_excessive_bools = "warn"
+# INV-NO-BAGS-OF-BOOLEANS
+fn_params_excessive_bools = "warn"
 
 # The UI's WebAssembly: smallest code, one unit, link-time optimisation.
 [profile.wasm-release]

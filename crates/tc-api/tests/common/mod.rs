@@ -1,6 +1,9 @@
 //! Helpers the integration tests share: the interface catalogs, placeholders, and the
 //! variant names serde knows for an enum.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 pub mod samples;
 

@@ -402,8 +402,10 @@ impl ServerUrl {
     fn parse_known(s: &str) -> Self {
         match s.parse() {
             Ok(url) => url,
-            // Both constants are fixed https origins that the parser accepts; the unit
-            // test `known_servers_parse` proves it.
+            #[expect(
+                clippy::unreachable,
+                reason = "both constants are fixed https origins that the parser accepts; the unit test known_servers_parse proves it"
+            )]
             Err(_) => unreachable!("built-in server address {s} must parse"),
         }
     }

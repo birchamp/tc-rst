@@ -3,7 +3,12 @@
 //! The records are made from tC4's own tC3 fixture, `cfm_fbt_tit_book.zip`, as tC4's
 //! importer makes them, then read, written back and opened.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

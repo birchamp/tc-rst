@@ -372,6 +372,10 @@ pub(crate) type ConflictSort = (u8, RecordKey, u8, ConflictId);
 
 /// What the fold made dirty and must recompute.
 #[derive(Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per stage the fold recomputes; any mix can be dirty at once"
+)]
 pub(crate) struct Dirty {
     pub batches: BTreeSet<BatchIdx>,
     pub keys: BTreeSet<KeyIdx>,

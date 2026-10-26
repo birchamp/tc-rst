@@ -2,6 +2,10 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-dbg-in-tests = true
+# INV-NO-BAGS-OF-BOOLEANS
+max-struct-bools = 3
+# INV-NO-BAGS-OF-BOOLEANS
+max-fn-params-bools = 3
 # proxy-watch, which tc-door43's Windows proxy lookup uses (docs/evidence/proxy-watch-audit-2026-10-19.md).
 # The paths resolve only where it is built, on Windows.
 disallowed-methods = [

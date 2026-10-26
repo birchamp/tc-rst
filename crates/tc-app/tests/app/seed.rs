@@ -19,7 +19,10 @@ use tc_app::events::{Next, Subscription};
 use tc_app::reports::{OperationReport, ReportOp, ReportOutcome};
 use tc_resources::{ResourceStore, content_files_opened, content_files_written};
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the bundle builder's example code; this test uses part of it"
+)]
 #[path = "../../examples/bundle_store/build.rs"]
 pub(super) mod bundle_build;
 

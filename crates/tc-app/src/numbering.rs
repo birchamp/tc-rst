@@ -142,7 +142,10 @@ pub(crate) fn place(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     use super::*;
 

@@ -649,7 +649,7 @@ async fn run_case(ops: Vec<Op>) {
                 panic!("step {n}: {sent:?}")
             };
             let Answer::Reply { body, .. } = sent else {
-                unreachable!("a reply was read from it")
+                panic!("a reply was read from it")
             };
             calls.push((request, body));
 

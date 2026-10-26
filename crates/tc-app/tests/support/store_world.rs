@@ -6,7 +6,10 @@
 //! The projects are written once per test binary through tc-store's own create; each world
 //! is an independent copy of those files with a store of its own, so a test can crash, fail
 //! or fill its files without touching another's.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

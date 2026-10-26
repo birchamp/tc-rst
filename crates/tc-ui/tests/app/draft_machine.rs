@@ -393,6 +393,10 @@ enum Answered {
 
 /// The last text of one run's typing of one field.
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a test model's independent facts about one stretch of typing"
+)]
 struct Item {
     text: String,
     /// The text of the version this stretch of typing began over, and that version.
@@ -461,6 +465,10 @@ enum Why {
 }
 
 #[derive(Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a test model's independent facts about one world"
+)]
 struct World {
     seed: Option<Seed>,
     shell: bool,

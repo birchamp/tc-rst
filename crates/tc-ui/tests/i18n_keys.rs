@@ -17,7 +17,12 @@
 //! literal or a raw string cannot pair with the wrong quote. It reads `crates/tc-ui/src`; the
 //! generated file is in `OUT_DIR` and is not scanned.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

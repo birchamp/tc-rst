@@ -3,7 +3,12 @@
 //! keeps. That is safe only if the digest changes whenever the file's bytes would: these
 //! tests check it over random team histories, after every step.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 mod sim;

@@ -4,7 +4,12 @@
 //! card in one edit, only the shown selection placed (Q16), and when the selection is
 //! kept or cleared. Last, the occurrence numbers of repeated words (#735).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

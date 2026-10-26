@@ -1,7 +1,13 @@
 //! Starts the real `tc4` binary with piped stdio, and speaks HTTP to it with the client of
 //! tc-server's tests. Every wait has a timeout, and a child a failed test leaves running is
 //! killed.
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 #[path = "../../../tc-server/tests/common/mod.rs"]
 pub mod http;

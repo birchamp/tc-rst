@@ -238,6 +238,10 @@ pub enum Dot {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one row, as tC4 sends them; together they are not one state"
+)]
 pub struct RowFlags {
     pub dot: Dot,
     /// tC4's `isDecided` (tc-check `CheckState::is_decided`): progress and "To do" read it.

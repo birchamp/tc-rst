@@ -3,7 +3,12 @@
 //! -- --ignored --nocapture`; with `TC_ALIGN_BUDGET_ENFORCE` set (the reference laptop) the timing
 //! fails the test, without it only the behavior does. The fixture and training are outside the
 //! prediction timing.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

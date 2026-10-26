@@ -1,7 +1,12 @@
 //! Importing translationCore 3 projects, against tC4's own import fixtures
 //! (`fixtures/tc4/conformance-fixtures/import/`).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use serde_json::Value;
 use std::io::{Read, Write};
@@ -94,7 +99,7 @@ fn every_tc3_manifest_case_imports_or_refuses_as_tc4_does() {
         let names: Vec<&str> = match &case["file"] {
             Value::String(s) => vec![s.as_str()],
             Value::Array(a) => a.iter().map(|v| v.as_str().unwrap()).collect(),
-            _ => unreachable!(),
+            _ => panic!("unexpected"),
         };
         let files: Vec<SourceFile> = names
             .iter()

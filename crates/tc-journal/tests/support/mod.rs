@@ -1,7 +1,13 @@
 //! A small team for fold tests: devices that write changes from their own views.
 
 // Helpers build fixed, known-valid values and may fail loudly.
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::collections::BTreeMap;
 use tc_journal::command::PlannedChange;

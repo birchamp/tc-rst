@@ -5,7 +5,12 @@
 //! catalog is translated by name only. That file's three `t()` cases are in
 //! `i18n_runtime.rs`, with the rebuild's own, and `test/i18n-keys.test.ts` is `i18n_keys.rs`.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

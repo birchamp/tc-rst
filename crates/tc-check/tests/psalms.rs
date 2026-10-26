@@ -3,7 +3,12 @@
 //! (`crates/tc-check/tools/gen-psalms-vectors.cjs` runs it). Psalms is compared check by
 //! check, in order, for a whole-book project, partial scopes and an `org` project; every
 //! other book of en_tn and en_twl is compared by count and digest.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

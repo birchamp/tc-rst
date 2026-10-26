@@ -1,7 +1,12 @@
 //! The draft buffer's format (APP-DESIGN §6.6): what the UI, `boot.js`, the shell and the
 //! server rely on when they read each other's items and lines.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use serde_json::json;

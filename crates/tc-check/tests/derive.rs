@@ -1,7 +1,12 @@
 //! Check lists from the real unfoldingWord helps vendored by tC4, with the numbers tC4's
 //! own suites assert (`derive-full-strength`, `deriveForProject`, `deriveObs`,
 //! `twArticleGate`, `s0c-derive-parity`, `obsCheckSession`).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

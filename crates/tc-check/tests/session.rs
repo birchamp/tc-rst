@@ -1,7 +1,12 @@
 //! Opening a check session: the sample project's Titus tN decisions on the es-419_tn v66
 //! list, compared with what tC4's own session merge (`mergeAndReattach` in
 //! `completedCheckSession`, run on the same files) shows.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

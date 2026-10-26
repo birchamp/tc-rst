@@ -2,7 +2,10 @@
 //! Door43 does: HTTP 200 and a ref declined by the pre-receive hook.
 
 // The helper sits outside `#[test]` functions, where clippy.toml already allows this.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

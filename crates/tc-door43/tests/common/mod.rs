@@ -1,7 +1,13 @@
 // Each test binary uses a different subset of these helpers.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::path::Path;
 use tc_door43::{
