@@ -3398,10 +3398,9 @@ the fold (`tc_usfm::codec::words_drafted`, owner ruling H12): its words, on any 
 JavaScript trims, are neither empty nor the stub `___`; a line of layout markers alone holds no
 words. So a seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and a verse whose
 text starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) is drafted. This
-differs from tC4 on purpose: tC4's Check screen reads only the body its indexer finds (up to the
-first line that starts with a paragraph-level marker, `\v` or `\c`;
-`tc_usfm::codec::tc4_indexer_drafted`), so it shows such a poem verse as not drafted while its
-Home counts it. Every other target (`front`, `intro`, a list such as
+differs from tC4 on purpose: tC4's Check screen, Home and aligner read only the body its indexer
+finds (up to the first line that starts with a paragraph-level marker, `\v` or `\c`;
+`tc_usfm::codec::tc4_indexer_drafted`), so they show such a poem verse as not drafted. Every other target (`front`, `intro`, a list such as
 `1,3,8,12`, a span no run carries, an undrafted verse) has no text: the text gives no evidence
 either way, so it neither changes the verse nor loses the selections, as in tC4, where such a
 decision is never stale. One difference is deliberate: tC4's indexer reads a `\v` only at the

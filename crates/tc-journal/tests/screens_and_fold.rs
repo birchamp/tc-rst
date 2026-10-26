@@ -155,37 +155,38 @@ fn index_book(raw: &str) -> Vec<(String, String, usize, usize)> {
     out
 }
 
-/// tC4's draft index of a book's USFM (`verseTextIndex`, then `withSpanMembers`,
-/// `src/state.jsx` at d310bf3): each verse [`index_book`] finds whose body, trimmed, is
-/// neither empty nor the stub `___`, under `chapter:key`, and each member verse of a span
-/// under its own number when nothing else holds it. The text the screens assess a drafted
-/// verse with is its whole content (the hash and the selections are of it), read here with
-/// the codec.
+/// The draft index the Check screen reads, built as tC4 builds its own (`verseTextIndex`,
+/// then `withSpanMembers`, `src/state.jsx` at d310bf3): each verse [`index_book`] finds,
+/// under `chapter:key`, and each member verse of a span under its own number when nothing
+/// else holds it. A verse is in it
+/// when it is drafted by the rule of owner ruling H12, not tC4's: its words on any line,
+/// trimmed, are neither empty nor the stub `___` (tC4 trims only the body its indexer finds,
+/// so a verse whose words start on a `\q` line is not drafted there). The text the screens
+/// assess a drafted verse with is its whole content (the hash and the selections are of it),
+/// read here with the codec.
 fn draft_index(usfm: &str) -> HashMap<String, String> {
     let parts = codec::decompose(usfm).expect("the projection decomposes");
     let mut contents = HashMap::new();
     for (&c, chapter) in &parts.chapters {
         for (&v, part) in &chapter.verses {
             if let codec::VersePart::Text(text) = part {
-                contents.insert(
-                    format!("{c}:{}", codec::label(v, text.last)),
-                    codec::join_verse(&text.words, &text.layout),
-                );
+                let words = js_trim(&text.words);
+                if !words.is_empty() && words != "___" {
+                    contents.insert(
+                        format!("{c}:{}", codec::label(v, text.last)),
+                        codec::join_verse(&text.words, &text.layout),
+                    );
+                }
             }
         }
     }
     let mut index = HashMap::new();
     let mut spans = Vec::new();
-    for (chapter, key, start, end) in index_book(usfm) {
-        let body = js_trim(&usfm[start..end]);
-        if body.is_empty() || body == "___" {
-            continue;
-        }
+    for (chapter, key, _, _) in index_book(usfm) {
         let at = format!("{chapter}:{key}");
-        let content = contents
-            .get(&at)
-            .unwrap_or_else(|| panic!("tC4 indexes {at}, which the projection does not hold"))
-            .clone();
+        let Some(content) = contents.get(&at).cloned() else {
+            continue;
+        };
         if let Some((first, last)) = key.split_once('-') {
             spans.push((
                 chapter.clone(),
@@ -631,8 +632,8 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
     let v9 = on(&changes, &verse_key(1, 9));
     changes.push(ana.one(verse(1, 9, text("___", 9)), vec![v9.id()]));
     // Lay 1:2 out as poetry whose first line is a `\q1` line of its own, and 1:3 as the stub
-    // with a poetry line after it: tC4's indexer reads neither as drafted, so their checks
-    // have no text either, though the verses hold words.
+    // with a poetry line after it: tC4's indexer reads neither as drafted, but both hold
+    // words, so by owner ruling H12 their checks have the verses' text.
     let poetry = |words: &str, last: u16, term: codec::MarkerTerm| VerseValue::Text {
         marker: codec::MarkerWs::new(" ", term).unwrap(),
         words: words.into(),
@@ -671,7 +672,7 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
             chapter: tc_journal::RefPart::parse("1").unwrap(),
             verse: tc_journal::RefPart::parse(v).unwrap(),
         };
-        assert!(laid_out.text(&target).is_none(), "1:{v}");
+        assert!(laid_out.text(&target).is_some(), "1:{v}");
     }
     let after = compare(&edited);
     assert_eq!(after.decisions, before.decisions);
