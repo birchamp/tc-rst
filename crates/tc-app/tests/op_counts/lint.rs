@@ -17,7 +17,7 @@ use crate::common::{folder, open_progress, sample_bible};
 
 /// Every public read of `FoldState` that walks every key, change, book, batch or conflict of
 /// a fold, or projects a whole book, for everything it is asked or only for some of it.
-const WHOLE_FOLD_WALKS: [&str; 24] = [
+const WHOLE_FOLD_WALKS: [&str; 25] = [
     "record_keys",
     "frontier",
     "device_stats",
@@ -44,8 +44,10 @@ const WHOLE_FOLD_WALKS: [&str; 24] = [
     "metadata_heads",
     "plan_outside_edit",
     "undo_outside",
-    // I: Update a book plans an outside edit of the whole book.
+    // I: Update a book plans an outside edit of the whole book; D1's Import of a kept copy
+    // plans the same against the copy's base.
     "plan_update_book",
+    "plan_update_book_from",
 ];
 
 /// Every other public method of `FoldState`, by what it costs at most.
