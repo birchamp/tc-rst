@@ -14,7 +14,7 @@ test-hooks = ["tc-api/test-hooks", "tc-store/test-hooks"]
 # the parity projects, checked against their files, the memory backend that holds them, and the
 # loader of a parity scenario, which zips each sideloaded resource to install it. Release builds
 # never enable it.
-fixture-backend = ["dep:zip"]
+fixture-backend = []
 
 [dependencies]
 tc-api = { path = "../tc-api", features = ["server"] }
@@ -29,6 +29,8 @@ tc-door43 = { path = "../tc-door43" }
 tc-export = { path = "../tc-export" }
 # The helps the Understand screen shows: blocks and highlights (B3).
 tc-helps = { path = "../tc-helps" }
+# Import of translationCore 3 projects (F1).
+tc-import = { path = "../tc-import" }
 tc-journal = { path = "../tc-journal" }
 tc-obs = { path = "../tc-obs" }
 tc-resources = { path = "../tc-resources" }
@@ -46,7 +48,8 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 unicode-general-category.workspace = true
 unicode-normalization.workspace = true
-zip = { workspace = true, optional = true }
+# The Story Markdown export is a zip of the stories (D2).
+zip.workspace = true
 
 [dev-dependencies]
 # The integration tests use the test hooks and the fixture backend's seed, as tc-api's own
@@ -58,6 +61,8 @@ tc-corpus = { path = "../tc-corpus" }
 # The Door43 account's tests sign in to a fake Door43 on loopback (A8); tests never touch the
 # network.
 tc-door43-fake = { path = "../tc-door43-fake" }
+# The export test reads the commit its checkpoint made (STORAGE §5.13).
+git2.workspace = true
 proptest.workspace = true
 # The git blob id of the vendored language list (assets/README.md).
 sha1.workspace = true

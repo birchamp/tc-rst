@@ -12,7 +12,9 @@ STEPS=(
   "clippy-release-bins|cargo clippy --locked -p tc-server -p tc4 --lib --bins -- -D warnings"
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
-  "test|cargo test --locked --workspace"
+  "test|cargo test --locked --workspace --no-fail-fast --exclude tc-app"
+  # tc-app alone took 39 min locally: in one CI job with the rest it ran past the job's 75 min.
+  "test-app|cargo test --locked -p tc-app --no-fail-fast"
   "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
   "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
@@ -20,11 +22,13 @@ STEPS=(
   "wasm-ui-app|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings"
   "wasm-ui-hooks|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features test-hooks -- -D warnings"
   "wasm-api|cargo clippy --locked -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings"
-  "node|node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs parity/app/journeys/*.test.mjs .audit/tools/*.test.mjs"
+  "node|node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs .audit/tools/*.test.mjs"
   "board|python3 -I -B .audit/tools/board_test.py && python3 -I -B .audit/tools/union_test.py && python3 -I -B .audit/tools/board.py --check"
 )
 NIGHTLY=(
   "model-long|TC_MODEL_ROWS=1 cargo test --locked -p tc-store --test store model::random_histories_lose_no_work_long -- --ignored --exact --nocapture"
+  # The scale tests at ten times Psalms (rulings/2026-10-26-test-scale.md); pushes and gates run 2.
+  "scale-long|TC_SCALE_FACTOR=10 cargo test --locked --no-fail-fast -p tc-journal --test operation_counts -p tc-store --test store -p tc-app --test op_counts"
   "sync-model-long|cargo test --locked -p tc-sync --test sync model::random_syncs_lose_no_work_long -- --ignored --exact"
 )
 
@@ -145,18 +149,42 @@ wait_ci() {
 }
 
 # Every browser journey against real builds; app-e2e.yml runs this as `--step journeys`.
+# `|| return 1` on each build: under `journeys ... || code=1` bash turns set -e off, and the
+# journeys must never run against an older build.
 journeys() {
   [[ -d "${PLAYWRIGHT_MODULE:-parity/tc4-baseline/node_modules/playwright}" ]] || (cd parity/tc4-baseline && npm ci)
-  cargo build --locked -p tc4 --features test-hooks,fixture-backend
-  cargo build --locked -p tc-door43-fake
-  crates/tc-ui/build-app.sh --out "$target/tc-ui-app"
-  crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks"
+  cargo build --locked -p tc4 --features test-hooks,fixture-backend || return 1
+  cargo build --locked -p tc-door43-fake || return 1
+  crates/tc-ui/build-app.sh --out "$target/tc-ui-app" || return 1
+  crates/tc-ui/build-app.sh --test-hooks --out "$target/tc-ui-app-hooks" || return 1
   local tap="$target/app-e2e.tap" code=0
+  (( $# )) || set -- parity/app/journeys/*.test.mjs
   TC4_BIN="$target/debug/tc4" TC4_UI="$target/tc-ui-app" TC4_UI_HOOKS="$target/tc-ui-app-hooks" \
     TC4_DOOR43_FAKE="$target/debug/tc-door43-fake" \
-    node --test --test-reporter=tap parity/app/journeys/*.test.mjs | tee "$tap" || code=$?
+    node --test --test-reporter=tap "$@" | tee "$tap" || code=$?
   # Everything is built, so a skip is a missing build (INV-A-SKIP-IS-A-FAILURE).
   node parity/app/journeys/no-skips.mjs "$tap" || code=1
+  return "$code"
+}
+
+# Before a hand-over (CHK-7b): the fast checks, then the tests of the crates the branch changed and
+# of every crate that depends on them, tc-api's endpoint and golden lists, and the journeys that
+# name a changed endpoint or test id. CI on a track branch runs only the lints.
+touched() {
+  local base="${1:-origin/claude/focused-ride-5uzj7p}" picked crates=() files=() code=0
+  python3 -I -B .audit/tools/board.py --check
+  node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs .audit/tools/touched.test.mjs
+  picked="$(node .audit/tools/touched.mjs "$base")"
+  mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
+  mapfile -t files < <(node -e 'for (const f of JSON.parse(process.argv[1]).journeys) console.log(f)' "$picked")
+  echo "gates: --touched: ${#crates[@]} crates, ${#files[@]} journey files"
+  cargo test --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
+  if (( ${#crates[@]} )); then
+    cargo test --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
+  fi
+  if (( ${#files[@]} )); then
+    journeys "${files[@]}" || code=1
+  fi
   return "$code"
 }
 
@@ -204,5 +232,6 @@ case "${1:-}" in
   --step) run_step "${2:?gates: --step needs a name or number}" ;;
   --check-receipt) check_receipt ;;
   --wait-ci) wait_ci "${2:?gates: --wait-ci needs a card id}" ;;
-  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card>]" >&2; exit 2 ;;
+  --touched) touched "${2:-}" ;;
+  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card> | --touched [base]]" >&2; exit 2 ;;
 esac

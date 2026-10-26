@@ -484,6 +484,16 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     save(&a, 1, 1, "Paul, as Ana has it");
     save(&b, 1, 2, "in hope, as Juan has it");
     let receive = format!("/{}/titus-race.git/git-receive-pack", seeded::USER);
+    let pushes = || {
+        door43
+            .fake
+            .requests()
+            .iter()
+            .filter(|r| r.method == "POST" && r.path == receive)
+            .count()
+    };
+    // The first sync pushed already: Ana's held push is the next one.
+    let before = pushes();
     door43.fake.inject(tc_door43_fake::FaultRule::once(
         "POST",
         &receive,
@@ -492,15 +502,7 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     let ana_done = std::sync::atomic::AtomicBool::new(false);
     let teammate = async {
         // Ana's push is held: Juan's goes first.
-        loop {
-            if door43
-                .fake
-                .requests()
-                .iter()
-                .any(|r| r.method == "POST" && r.path == receive)
-            {
-                break;
-            }
+        while pushes() == before {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         let report = sync(&b, &door43).await;
@@ -1178,4 +1180,55 @@ async fn a_sync_never_rewrites_or_deletes_moved_json() {
         );
     }
     a.close().unwrap();
+}
+
+/// §9.7 `restored`: Door43's branch moved back behind a teammate's push (tC4's
+/// sync-ok-restored), so the next sync sends the teammate's change again and says so; a
+/// device's profile record is bookkeeping and never counts as received work (Q7).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_sync_sends_again_what_door43_lost_and_never_counts_a_profile() {
+    let door43 = door43("titus-restored").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-restored");
+    synced(&sync(&a, &door43).await);
+    tc_sync::record_username(&a, &door43.session).await.unwrap();
+    synced(&sync(&a, &door43).await);
+    let before_juan = on_door43_tip(&door43, "titus-restored");
+    a.close().unwrap();
+
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    save(&b, 1, 2, "in hope, as Juan has it");
+    let report = sync(&b, &door43).await;
+    synced(&report);
+    assert_eq!(
+        report.received_by.values().sum::<u32>(),
+        0,
+        "Ana's profile record is not received work: {report:?}"
+    );
+    let a = open(&ana, &folder_a);
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(report.received_by.values().sum::<u32>(), 1, "{report:?}");
+    assert_eq!(report.restored, 0, "{report:?}");
+    // Door43 loses Juan's push.
+    let bare = git2::Repository::open(door43.fake.git_dir(seeded::USER, "titus-restored")).unwrap();
+    bare.reference("refs/heads/main", before_juan, true, "moved back")
+        .unwrap();
+    save(&a, 1, 3, "in his time, as Ana has it");
+    let report = sync(&a, &door43).await;
+    synced(&report);
+    assert_eq!(
+        report.restored, 1,
+        "Juan's change was sent again: {report:?}"
+    );
+    assert_eq!(report.received_by.values().sum::<u32>(), 0, "{report:?}");
+    let again = sync(&a, &door43).await;
+    assert_eq!(again.restored, 0, "{again:?}");
+    a.close().unwrap();
+    b.close().unwrap();
 }

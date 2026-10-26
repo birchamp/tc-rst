@@ -666,6 +666,7 @@ impl MemoryHandle {
             seq,
             changes: Vec::new(),
             skipped: Vec::new(),
+            kept: Vec::new(),
         })
     }
 }
@@ -711,6 +712,7 @@ impl ProjectHandle for MemoryHandle {
                     seq: live.published.seq(),
                     changes: Vec::new(),
                     skipped: Vec::new(),
+                    kept: Vec::new(),
                 })
             };
             return Box::pin(async move { result });
@@ -752,6 +754,11 @@ impl ProjectHandle for MemoryHandle {
     fn checkpoint(&self, _reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
         // A memory project has no git history to commit to.
         Box::pin(async { CheckpointOutcome::Unchanged })
+    }
+
+    fn carried_bytes(&self, oid: GitOid) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        let bytes = self.state.seeded.carried.get(&oid).cloned();
+        Box::pin(async move { Ok(bytes) })
     }
 
     /// The memory backend touches no file.
@@ -1027,6 +1034,192 @@ pub mod teammates {
         }
     }
 
+    #[cfg(feature = "test-hooks")]
+    impl Teammates {
+        /// Teammates 1 and 2's versions of one record of `kind`, both from its current heads in
+        /// `fold` and each different from them and from the other, so the fold holds a conflict
+        /// of the kind (C7b). A carried file is first added by Teammate 1, so both versions
+        /// replace one version (CF 3). Nothing is counted when the record cannot be made.
+        pub fn change_kind(
+            &mut self,
+            fold: &FoldState,
+            kind: tc_api::test::TeammatesKind,
+        ) -> Result<Vec<Change>, MemoryError> {
+            use tc_api::test::TeammatesKind as Kind;
+            use tc_journal::Json;
+            use tc_journal::keys::{PinGroup, SettingKey, SlotName, ToolId};
+            use tc_journal::record::{
+                BookPresence, CheckValue, CommentTarget, CommentValue, PresentHow, Scope, SlotValue,
+            };
+            use tc_journal::{CommentId, RepoPath};
+
+            let missing = |what: &str| MemoryError::Change(format!("the project has no {what}"));
+            let bad = |e: &dyn std::fmt::Display| MemoryError::Change(e.to_string());
+            let first = |keys: Vec<RecordKey>, pick: &dyn Fn(&Record) -> bool| {
+                keys.iter()
+                    .filter_map(|key| fold.projected(key))
+                    .find(|record| pick(record))
+            };
+            let carried = |path: &str, text: &str| -> Result<Record, MemoryError> {
+                Ok(Record::CarriedFile {
+                    path: RepoPath::parse(path).map_err(|e| bad(&e))?,
+                    value: carried_value(text.as_bytes()),
+                })
+            };
+            let mut next = self.clone();
+            let two = |next: &mut Teammates, one: Record, other: Record| {
+                let parents = fold.heads(&one.key());
+                Ok::<_, MemoryError>(vec![
+                    next.change(1, one, parents.clone(), None)?,
+                    next.change(2, other, parents, None)?,
+                ])
+            };
+            let changes = match kind {
+                Kind::Check => {
+                    let record = first(
+                        fold.decisions_of(ToolId::TranslationNotes, BookId::Titus),
+                        &|r| {
+                            matches!(
+                                r,
+                                Record::Check {
+                                    value: CheckValue::Decision(_),
+                                    ..
+                                }
+                            )
+                        },
+                    )
+                    .ok_or_else(|| missing("Translation Notes decision"))?;
+                    let with = |n: u8| {
+                        let mut record = record.clone();
+                        if let Record::Check {
+                            value: CheckValue::Decision(decision),
+                            ..
+                        } = &mut record
+                        {
+                            decision.comment = Some(format!("Comentario del compañero {n}."));
+                        }
+                        record
+                    };
+                    two(&mut next, with(1), with(2))?
+                }
+                Kind::Comment => {
+                    let mut id = [0u8; 16];
+                    id[0] = 0x7E;
+                    let (chapter, verse) = ChapterNo::new(1)
+                        .zip(VerseNo::new(1))
+                        .ok_or_else(|| missing("Titus 1:1"))?;
+                    let with = |n: u8| Record::Comment {
+                        id: CommentId::from_bytes(id),
+                        value: CommentValue {
+                            target: CommentTarget::Verse {
+                                book: BookId::Titus,
+                                chapter,
+                                verse,
+                            },
+                            text: format!("Comentario del compañero {n}."),
+                        },
+                    };
+                    two(&mut next, with(1), with(2))?
+                }
+                Kind::Alignment => {
+                    let record = first(fold.alignments_of(BookId::Titus), &|r| {
+                        matches!(r, Record::Alignment { .. })
+                    })
+                    .ok_or_else(|| missing("alignment"))?;
+                    let (mut done, mut invalid) = (record.clone(), record);
+                    if let Record::Alignment { value, .. } = &mut done {
+                        value.done = !value.done;
+                    }
+                    if let Record::Alignment { value, .. } = &mut invalid {
+                        value.marked_invalid = !value.marked_invalid;
+                    }
+                    two(&mut next, done, invalid)?
+                }
+                Kind::Setting => {
+                    let key = SettingKey::parse("teammateNote").map_err(|e| bad(&e))?;
+                    let with = |n: u8| Record::Setting {
+                        key: key.clone(),
+                        value: Some(Json::Str(format!("compañero {n}"))),
+                    };
+                    two(&mut next, with(1), with(2))?
+                }
+                Kind::Pins => {
+                    let record = PinGroup::ALL
+                        .iter()
+                        .find_map(|group| fold.projected(&RecordKey::Pins(*group)))
+                        .ok_or_else(|| missing("pins"))?;
+                    let slot = SlotName::parse("teammateNote").map_err(|e| bad(&e))?;
+                    let with = |n: u8| {
+                        let mut record = record.clone();
+                        if let Record::Pins { value, .. } = &mut record {
+                            value.0.insert(
+                                slot.clone(),
+                                SlotValue(Json::Str(format!("compañero {n}"))),
+                            );
+                        }
+                        record
+                    };
+                    two(&mut next, with(1), with(2))?
+                }
+                Kind::BookPresence => {
+                    let with = |how| Record::BookPresence {
+                        book: BookId::Jonah,
+                        value: BookPresence::Present {
+                            scope: Scope::Whole,
+                            how,
+                        },
+                    };
+                    two(
+                        &mut next,
+                        with(PresentHow::RestoredText),
+                        with(PresentHow::StartedEmpty),
+                    )?
+                }
+                Kind::BookRemoved => {
+                    // Teammate 1 removes Jonah without having seen anyone's work on it.
+                    let removal = Record::BookPresence {
+                        book: BookId::Jonah,
+                        value: BookPresence::Removed { seen: Vec::new() },
+                    };
+                    let parents = fold.heads(&removal.key());
+                    vec![next.change(1, removal, parents, None)?]
+                }
+                Kind::CarriedFile => {
+                    const PATH: &str = "ingredients/audio/jon_01.wav";
+                    let added = carried(PATH, "la grabación")?;
+                    let parents = fold.heads(&added.key());
+                    let added = next.change(1, added, parents, None)?;
+                    let mut changes = vec![
+                        next.change(
+                            1,
+                            carried(PATH, "la grabación del compañero 1")?,
+                            vec![added.id()],
+                            None,
+                        )?,
+                        next.change(
+                            2,
+                            carried(PATH, "la grabación del compañero 2")?,
+                            vec![added.id()],
+                            None,
+                        )?,
+                    ];
+                    changes.insert(0, added);
+                    changes
+                }
+                Kind::PathCase => {
+                    let lower = carried("ingredients/audio/jon_02.wav", "la grabación de uno")?;
+                    let upper = carried("ingredients/audio/JON_02.wav", "la grabación de otro")?;
+                    vec![
+                        next.change(1, lower.clone(), fold.heads(&lower.key()), None)?,
+                        next.change(2, upper.clone(), fold.heads(&upper.key()), None)?,
+                    ]
+                }
+            };
+            *self = next;
+            Ok(changes)
+        }
+    }
+
     /// A batch of `n` changes whose id is derived from its device and the number of its
     /// first change.
     fn batch_ref(device: DeviceId, seq: u64, n: u32) -> Result<BatchRef, MemoryError> {
@@ -1043,6 +1236,24 @@ pub mod teammates {
         batch.copy_from_slice(&digest.as_ref()[..16]);
         BatchRef::new(BatchId::from_bytes(batch), n)
             .ok_or_else(|| MemoryError::Change("an empty batch".to_owned()))
+    }
+
+    /// A carried file holding `bytes`, under the git blob id git gives them, so the bytes
+    /// could be added to the project's object database as they are.
+    #[cfg(feature = "test-hooks")]
+    fn carried_value(bytes: &[u8]) -> tc_journal::record::CarriedValue {
+        let header = format!("blob {}\0", bytes.len());
+        let digest = ring::digest::digest(
+            &ring::digest::SHA1_FOR_LEGACY_USE_ONLY,
+            &[header.as_bytes(), bytes].concat(),
+        );
+        let mut oid = [0u8; 20];
+        oid.copy_from_slice(digest.as_ref());
+        tc_journal::record::CarriedValue::Present {
+            oid: GitOid::from_bytes(oid),
+            size: bytes.len() as u64,
+            md5: tc_journal::Md5::of(bytes),
+        }
     }
 
     /// When teammate `n` made their change number `seq`.

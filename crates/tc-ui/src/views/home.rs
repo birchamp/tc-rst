@@ -191,17 +191,18 @@ fn banners(
 ) -> impl IntoView + use<> {
     let banner_style = crate::css! { "margin": "0 0 16px", "overflow-wrap": "anywhere" };
     let commit = {
-        let (error, actions, style) = (
-            s.commit_error.clone(),
+        let (failed, actions, style) = (
+            s.server.failed.clone(),
             actions.clone(),
             banner_style.clone(),
         );
         move || {
-            error.get().map(|banner| {
-                let help = ask_for_help(&actions, banner.help.clone());
+            failed.with(|failed| failed.first().cloned()).map(|failed| {
+                let (text, help) = crate::app::home::checkpoint_banner(&failed);
+                let help = ask_for_help(&actions, help);
                 view! {
                     <Callout tone=CalloutTone::Warn style=style.clone() attrs=Attrs::from([("role", "alert"), ("data-testid", "home-checkpoint-error")])>
-                        {banner.text.clone()}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
+                        {text}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
                         {help}
                     </Callout>
                 }
@@ -240,7 +241,26 @@ fn banners(
             })
         }
     };
-    view! { {commit} {open} }
+    // The server says it in one listing only (once per launch), so the notice is held here.
+    let removed = s.import_removed.clone();
+    Effect::new({
+        let removed = removed.clone();
+        move |_| {
+            if list.with(|l| l.value().is_some_and(|v| v.import_removed)) {
+                removed.set(true);
+            }
+        }
+    });
+    let import_removed = move || {
+        removed.get().then(|| {
+            view! {
+                <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "0 0 16px" } attrs=Attrs::from([("role", "status"), ("data-testid", "home-import-removed")])>
+                    {move || t(keys::home::IMPORT_REMOVED, &[])}
+                </Callout>
+            }
+        })
+    };
+    view! { {commit} {open} {import_removed} }
 }
 
 /// "Ask for help" on a banner (tC4 #378).
@@ -533,6 +553,31 @@ fn first_book(card: Signal<Option<HomeCard>>) -> Option<tc_core::BookId> {
     })
 }
 
+/// What the project's last sync replaced, readable after its toast (owner ruling H5): the link
+/// shows the toast again. Nothing before a sync that replaced something.
+fn last_sync_link(actions: &Actions, project: &ProjectRef) -> impl IntoView + use<> {
+    let read = crate::app::web::use_runtime().map(|runtime| {
+        runtime.cache().read(tc_api::door43::LastSync {
+            project: project.clone(),
+        })
+    });
+    let (actions, project) = (actions.clone(), project.clone());
+    move || {
+        let view = read?.with(|l| l.value().and_then(|v| v.view.clone()))?;
+        let n: u32 = view.replaced.iter().map(|row| row.count).sum();
+        (n > 0).then(|| {
+            let (actions, project) = (actions.clone(), project.clone());
+            view! {
+                <button type="button" data-testid=format!("last-sync-{project}") data-count=n.to_string()
+                    on:click=move |_| actions.show_last_sync(project.clone(), view.clone())
+                    style="border: 0; background: transparent; padding: 0; margin-inline-start: 8px; font: inherit; white-space: nowrap; color: var(--uw-ocean); font-weight: var(--fw-bold); cursor: pointer;">
+                    {t(if n == 1 { keys::home::LAST_SYNC_REPLACED_ONE } else { keys::home::LAST_SYNC_REPLACED_MANY }, &[("n", &n.to_string())])}
+                </button>
+            }
+        })
+    }
+}
+
 /// The card's conflict count (#679): nothing while unknown or none.
 fn conflicts_chip(
     actions: &Actions,
@@ -687,6 +732,7 @@ fn header(
                 <span style=META_STYLE>
                     <span data-testid=if stories { "obs-progress" } else { "project-summary" }>{line}</span>
                     {share_meta(card, project)}
+                    {last_sync_link(actions, project)}
                 </span>
             </div>
             {share_action(s, actions, card, project)}

@@ -28,7 +28,7 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use super::ListenerId;
 use super::app_ctx::Actions;
 use super::js;
-use super::saves::GateHookId;
+use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
     EditFailure, EditQueue, Lens, RailFilter, SentEdit, refresh_for, same_verse,
 };
@@ -133,6 +133,12 @@ pub struct AlignState {
     pub open: ArcRwSignal<Option<(tc_api::ids::Scope, tc_api::ids::AlignerId, AlignPlace)>>,
     /// The verse each book was last at, kept in memory only (tC4 `toolPos`, §4.2).
     pub remembered: ArcRwSignal<Vec<(BookId, AlignPlace)>>,
+    /// The open verse's History is open (owner ruling H5).
+    pub history_open: ArcRwSignal<bool>,
+    /// A *Restore this version* of the open verse's alignment is on its way.
+    pub restoring: ArcRwSignal<bool>,
+    /// The last *Restore this version* of the open verse was not saved.
+    pub restore_failed: ArcRwSignal<bool>,
 }
 
 impl AlignState {
@@ -148,6 +154,9 @@ impl AlignState {
             edit_error: ArcRwSignal::new(None),
             open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
+            history_open: ArcRwSignal::new(false),
+            restoring: ArcRwSignal::new(false),
+            restore_failed: ArcRwSignal::new(false),
         }
     }
 }
@@ -327,6 +336,8 @@ impl Actions {
                 r.push((book, place));
             });
         }
+        a.history_open.try_set(false);
+        a.restore_failed.try_set(false);
         a.verse.try_set(Some(place));
         self.open_align(Some(place));
     }
@@ -465,6 +476,61 @@ impl Actions {
         }
     }
 
+    /// *Restore this version* from the open verse's History (owner ruling H5). The aligner holds
+    /// the verse's links while it is open, so the links typed are saved first, the restore is
+    /// written over the alignment as now stored, and the verse opens again from it.
+    pub fn restore_alignment(&self, from: tc_api::ids::ChangeRef) {
+        let Some((at, book)) = self.align_scope() else {
+            return;
+        };
+        let Some(place) = self.s().a.screen.with_untracked(|s| match s {
+            Screen::Ready(view) => Some(view.place),
+            _ => None,
+        }) else {
+            return;
+        };
+        let a = self.s().a.clone();
+        a.restoring.try_set(true);
+        let this = self.clone();
+        spawn_local(async move {
+            // Every field and the verse's links are saved first, and no click reaches the
+            // aligner until it opens again: a link placed meanwhile would be saved over the
+            // restore (loss lens M1).
+            let saved = this.runtime().saves().gate().await;
+            a.screen.try_set(Screen::Loading);
+            let mut restored = false;
+            if saved && this.flush_aligner().await {
+                let api = this.runtime().api();
+                let open = Open {
+                    at: at.clone(),
+                    request: js::random_request_id(),
+                    book,
+                    verse: Some(open_verse(place)),
+                };
+                if let Ok(Opened::Ready(view)) = api.call(&open).await
+                    && let Some(shown) = view.history.clone()
+                {
+                    let restore = tc_api::conflicts::Restore {
+                        at: at.clone(),
+                        request: js::random_request_id(),
+                        shown,
+                        from,
+                    };
+                    restored = api.call(&restore).await.is_ok();
+                    let close = Close {
+                        at,
+                        request: js::random_request_id(),
+                        aligner: view.aligner,
+                    };
+                    let _ = api.call(&close).await;
+                }
+            }
+            a.restoring.try_set(false);
+            a.restore_failed.try_set(!restored);
+            this.open_align(Some(place));
+        });
+    }
+
     /// A view of the open aligner came: it is the screen's, its save state is the indicator's,
     /// and its row is the rail's.
     fn align_view(&self, view: AlignerView) {
@@ -487,7 +553,7 @@ impl Actions {
 
     /// A click, a drop or a button (tC4 `applyAlignEdit`): queued, and sent when the reply to
     /// the one before has come.
-    pub fn align_edit(&self, edit: AlignEdit) {
+    pub fn align_edit(&self, _cap: WriteCap, edit: AlignEdit) {
         if !self
             .s()
             .a
@@ -612,7 +678,7 @@ impl Actions {
 
     /// "Keep the carried-over links" (tC4 `keepReflow`): the links the verse's new text could
     /// not keep stay in the bank, and the rest are the person's to save.
-    pub fn keep_align_reflow(&self) {
+    pub fn keep_align_reflow(&self, _cap: WriteCap) {
         let Some((at, _)) = self.align_scope() else {
             return;
         };

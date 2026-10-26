@@ -115,6 +115,14 @@
       "why": "Both projects load and the Rust Home lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out). The DOM with every computed style is line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the cards' summary lines (a few hundred pixels at most, all outside the masks), where a line of text is drawn at another fractional offset (docs/evidence/home-2026-10-19.md).",
       "until": null
     },
+    "home-checkpoint-error": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The banner is tC4's line for line: \"Checkpoint not saved: Failed to fetch Open the project again to retry.\" with the same computed style. Only the order of the two project cards differs. tC4's case is its Home state patched with commitError, with no project opened, so the OBS sample stands first; the Rust app reaches the banner the way a translator does, by opening Titus and leaving it with its checkpoint scripted to fail (test/script CheckpointFails), and an opened project moves to the top of Home in tC4 too. So the Bible card comes first, and the cards' pixels move with it.",
+      "until": null
+    },
     "home-list-error": {
       "layers": [
         "pixels",
@@ -319,7 +327,7 @@
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". The item detail beside the rail is B5b's (captured again with its session screens): its compare card is tC4's (#762), and the sample's Learn more link reads \"Translation Academy\" in both. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. The item detail beside the rail is B5b's (captured again with its session screens): its compare card is tC4's (#762), and the sample's Learn more link reads \"Translation Academy\" in both. The rail is tC4's line for line but for one count: the sample's decision gr8c (Titus 1:4) is stored invalidated with no status, which tC4 shows red but leaves out of Invalid (`status === 'invalid'`), and the journal's rule (STORAGE §7.7, tc_journal::decision::assess) shows as Invalid, as tC4 shows every decision it invalidates itself. So Invalid reads 1 where tC4 reads 0, and the filter that matches nothing, which the case presses, is Bookmarked rather than Invalid. The rail header's bar carries tC4 #764's declared difference (see check-picker)."
     },
     "project-settings": {
       "layers": [
@@ -353,10 +361,9 @@
     },
     "en-obs-check-tn-session": {
       "layers": [
-        "pixels",
         "dom"
       ],
-      "why": "A story's check is drawn with tC4 rc.2's compare card (#762): the gateway story text is a source card, \"Your translation\" a card of its own, the note box `calc(80ch + 36px)`, as for a Bible check. Two differences remain, each a known one: the sort button reads \"By category\" and the rail's rows are not grouped by figure until REF1c builds tC4 #769 (tC4 shows \"By figure\"), and the progress bars carry B5a's `aria-label` (tC4 #764, see check-picker). The pixels differ in the sort button's word (a few hundred pixels)."
+      "why": "A story's check is tC4 rc.2's: the compare card (#762), and By figure with its groups that fold, \"Other notes\" for the title's note (#769, REF1c); the pixels are tC4's. The DOM differs only in the progress bars' aria-label (tC4 #764, a declared difference of B5a, see check-picker)."
     },
     "add-book-pick": {
       "layers": [
@@ -381,9 +388,10 @@
     },
     "add-book-usfm-files": {
       "layers": [
-        "pixels"
+        "pixels",
+        "dom"
       ],
-      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md).",
+      "why": "Both projects load and the Rust Home behind the dialog lists both cards, as tC4's does (B7 fixed in tc-journal the three findings of docs/evidence/state-seed-check-2026-10-18.md section 4 that kept the OBS sample out; B7 captured C6's rows again on the merged build). The dialog's DOM with every computed style, from its scrim to its last button, and the Home behind it are line for line tC4's. The pixels differ only in the anti-aliasing of a few glyphs of the Bible card's summary line (41 pixels, all outside the masks), where a line of text is drawn at another fractional offset, as on `add-book` (docs/evidence/home-2026-10-19.md). Since F1 the refused row of 57-TIT.usfm says `addBook.usfmExistsUpdate` (\"…choose Update a book from USFM in the account menu\") in place of tC4's \"To replace an existing book, use Import.\": a declared difference (APP-DESIGN F1 row), so the row's text and its wrapping differ in the DOM and the pixels.",
       "until": null
     },
     "upgrade-set": {
@@ -484,84 +492,84 @@
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide and right to left: the source texts stack."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide and right to left: the source texts stack."
     },
     "ar-check-tn-session-row": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Right to left, scrolled to the marking row."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Right to left, scrolled to the marking row."
     },
     "ar-check-tw-session": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762) and the note box are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each term heading with a chevron and resolved/total, and the list header has Fold all. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). Right to left."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). Right to left."
     },
     "ar-check-tw-session-620": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762) and the note box are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each term heading with a chevron and resolved/total, and the list header has Fold all. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide and right to left: the source texts stack."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide and right to left: the source texts stack."
     },
     "check-tn-session": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The sample's Learn more link reads \"Translation Academy\" in both (es-419_ta v4 is vendored on neither side)."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The sample's Learn more link reads \"Translation Academy\" in both (es-419_ta v4 is vendored on neither side)."
     },
     "en-check-ta-drawer": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The Translation Academy drawer over the session; the drawer is tC4's (DS Drawer, 751 of 751 gallery DOM)."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. The Translation Academy drawer over the session; the drawer is tC4's (DS Drawer, 751 of 751 gallery DOM)."
     },
     "en-check-tn-session": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree."
     },
     "en-check-tn-session-620": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide: the source texts stack, since two do not fit in a row."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. 620 px wide: the source texts stack, since two do not fit in a row."
     },
     "en-check-tn-session-row": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762), the note box and the Notes titles (#773) are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each heading with a chevron and resolved/total, the list header has Fold all, and Notes sort \"By figure\" where the rebuild reads \"By category\". Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Scrolled to the marking row: the compare card above it is the taller C40 card."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The Invalid chip counts 1 where tC4 counts 0: the seed's decision for Titus 1:4 was invalidated by an edit of its verse before the project was made and records no status of its own; tC4 shows it red with no status, and counts only a stored status. The rebuild's decision state shows a decision that does not hold as Invalid unless the person chose To do (STORAGE §7.7, `tc_journal::decision::assess`; B5a's `RowFlags::invalid`), so the dot, the chip and the Invalid button agree. Scrolled to the marking row: the compare card above it is the taller C40 card."
     },
     "en-check-tw-article": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762) and the note box are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each term heading with a chevron and resolved/total, and the list header has Fold all. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The article drawer over the session; the article's blocks, its title and its path line are tC4's."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). The article drawer over the session; the article's blocks, its title and its path line are tC4's."
     },
     "en-check-tw-session": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762) and the note box are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each term heading with a chevron and resolved/total, and the list header has Fold all. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`)."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`)."
     },
     "en-check-tw-session-620": {
       "layers": [
         "pixels",
         "dom"
       ],
-      "why": "Against tC4 rc.2 (d25b7871) the compare card (#762) and the note box are tC4's. The visible difference is tC4 #769, which REF1c builds: tC4's rail groups fold, each term heading with a chevron and resolved/total, and the list header has Fold all. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide: the source texts stack."
+      "why": "Against tC4 rc.2 (d25b7871) the rail is tC4's, its groups that fold with their counts and Fold all included (#769, REF1c), and so are the compare card (#762), the note box and the Notes titles (#773). The pixels differ where the original-language pane lights the check's words (OLH-1, built ahead of tC4 by the owner's ruling Q39, tC4 #840) and as the sentences below say. Every other element of the detail (the header, the quote, the note, the Learn more link, the target words and their spans, the marking row, the marks) has tC4's DOM and computed styles. tC4 #764, a declared difference (B5a): a Check bar fills at least 6 px once one check is resolved, and names its count for screen readers (`aria-label`). 620 px wide: the source texts stack."
     },
     "upgrade-repin": {
       "layers": [
@@ -607,6 +615,53 @@
         "dom"
       ],
       "why": "After the click on “Pictures wrapped”, React updates each layout chip's style in place, one changed property at a time: it sets the chip's new `border` shorthand, whose value holds a `var()`, and does not set the unchanged `borderWidth: 1` again after it, so tC4's DOM reads the four `border-*-width` longhands as pending (empty). The rebuild writes each chip's whole style again, so they read `1px`, as both DOMs do before the click (`cc-obs` is the same). `--stroke` is 1px, so every pixel is the same (0 differ). Unit B8."
+    },
+    "import-files": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case is the files step of the USFM kind with 57-TIT.usfm; this release imports the tC3 kind only (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 kind's files step with cfm_fbt_tit_book.zip: the title, the drop zone's words and the file row (name and size) are the tC3 kind's. The frame, the steps' words and the layout are tC4's.",
+      "until": null
+    },
+    "import-review-usfm": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "A stand-in: the USFM kind has no review in this release (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 review with Use installed versions chosen. The row stays until the USFM importer lands; it shows the review frame, not the USFM review.",
+      "until": null
+    },
+    "import-review-tc3": {
+      "layers": [
+        "dom"
+      ],
+      "why": "The tC3 review draws tC4's pixels. The DOM differs in two attributes: the dialog's Close button holds the focus, because the Rust dialog draws itself again for the review step and the modal focuses its first control when it opens; and the Back button carries `data-testid=\"import-review-back\"`, which the import journey presses.",
+      "until": null
+    },
+    "import-working": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The working step as tC4 draws it (spinner and \"Creating “name”…\") with the run's Cancel in the footer and a progress bar once the job names its steps, which tC4 has not: a declared difference (APP-DESIGN F1 row). The Rust case is the tC3 kind's, named Obra tC3; tC4's is the USFM review's.",
+      "until": null
+    },
+    "import-failed": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "The failed step as tC4 draws it, from tC4's `import.write-failed` refusal; the line under the sentence is the code alone, because the refusal the Rust case answers carries no detail, where tC4's report carries the ops-record reason. The Rust case starts from the tC3 review.",
+      "until": null
+    },
+    "import-toast": {
+      "layers": [
+        "pixels",
+        "dom"
+      ],
+      "why": "tC4's case patches the Bible sample as if it had just been imported; the Rust case runs a real tC3 import, so the toast and the Imported badge are on a new card, Tita tC3, at the top of Home, with its own name and book. The toast and the badge are tC4's.",
+      "until": null
     }
   }
 }

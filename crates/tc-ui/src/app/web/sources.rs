@@ -58,18 +58,16 @@ impl Actions {
     /// A card's Settings (tC4 `openSettings`): the dialog at once with the card's facts, and
     /// one read of the project's files for the rest (AD14).
     pub fn open_settings(&self, card: &HomeCard) {
-        let s = self.s();
         let form = SettingsForm::of(card);
         let project = form.project.clone();
-        s.st.try_set(Some(form));
-        s.layers.dialog.try_set(Some(Dialog::Settings));
+        self.s().layers.dialog.try_set(Some(Dialog::Settings(form)));
         let this = self.clone();
         spawn_local(async move {
             let request = ViewFromHome {
                 project: project.clone(),
             };
             let read = this.runtime().api().call(&request).await;
-            this.s().st.try_update(|st| {
+            this.s().st_slot().try_update(|st| {
                 let Some(st) = st else { return };
                 match read {
                     Ok(view) => st.read(&project, view),
@@ -81,7 +79,7 @@ impl Actions {
 
     /// The direction chips and the font (tC4 `patchSt`): what Save sends is another request.
     pub fn patch_st(&self, patch: impl FnOnce(&mut SettingsForm)) {
-        self.s().st.try_update(|st| {
+        self.s().st_slot().try_update(|st| {
             if let Some(st) = st {
                 patch(st);
                 st.edited();
@@ -94,7 +92,7 @@ impl Actions {
     pub fn choose_settings_gateway(&self, package: GatewayPackage) {
         let Some(project) = self
             .s()
-            .st
+            .st_slot()
             .with_untracked(|st| st.as_ref().map(|st| st.project.clone()))
         else {
             return;
@@ -109,7 +107,7 @@ impl Actions {
     pub fn manage_settings_sources(&self) {
         let Some(project) = self
             .s()
-            .st
+            .st_slot()
             .with_untracked(|st| st.as_ref().map(|st| st.project.clone()))
         else {
             return;

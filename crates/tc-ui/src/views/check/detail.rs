@@ -25,7 +25,7 @@ use crate::app::check::place_parts;
 use crate::app::check_item::{self, MarkFailure, WordKey, WordNav, WordStep};
 use crate::app::save::Source;
 use crate::app::web::check::{Academy, Detail, Marking};
-use crate::app::web::{Actions, AppState};
+use crate::app::web::{Actions, AppState, WriteCap};
 use crate::attrs::Attrs;
 use crate::css::Css;
 use crate::ds::{
@@ -35,6 +35,7 @@ use crate::i18n::{TextDir as LocaleDir, keys, locale_of, shown_locale, t};
 use crate::views::helps_panel::{
     block_text, expandable_note, list_indent, number_mark, quoted, with_tables,
 };
+use crate::views::off_look;
 
 fn dir_attr(dir: TextDir) -> &'static str {
     match dir {
@@ -573,6 +574,17 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         .with_untracked(|p| p.as_ref().map(|p| p.dir))
         .unwrap_or(TextDir::Ltr);
 
+    // A verse holds several checks: the title says which one's History this is.
+    let history = check_history(
+        s,
+        actions,
+        format!(
+            "{unit} {} · {}",
+            t(keys::check::REF, &[("c", &chapter), ("v", &verse)]),
+            view.title
+        ),
+    );
+
     // ---- the header
     let header = {
         let row = crate::css! { "display": "flex", "align-items": "center", "gap": 10, "margin-bottom": 14 };
@@ -849,6 +861,11 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
         }
     });
     let nav = Memo::new(move |_| check_item::item_nav(index.get(), total.get()));
+    let cap = write_cap(actions);
+    let read_only = {
+        let actions = send_wrapper::SendWrapper::new(actions.clone());
+        Memo::new(move |_| actions.read_only_words())
+    };
     let marking_row = {
         let row = crate::css! {
             "display": "flex",
@@ -866,8 +883,15 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
                 <button
                     type="button"
                     data-testid=testid
+                    disabled=move || cap.get().is_none()
                     on:click=move |_| on.run(())
-                    style=move || triage_style(status.get() == Some(which), tone).to_style()
+                    style=move || {
+                        let mut css = triage_style(status.get() == Some(which), tone);
+                        if cap.get().is_none() {
+                            css.extend(&off_look());
+                        }
+                        css.to_style()
+                    }
                 >
                     {label}
                 </button>
@@ -877,9 +901,21 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             let (a, b, c2) = (actions.clone(), actions.clone(), actions.clone());
             let selection = c.selection.clone();
             (
-                Callback::new(move |()| a.mark(check_item::valid_edit(&selection.get_untracked()))),
-                Callback::new(move |()| b.mark(DecideEdit::Invalid)),
-                Callback::new(move |()| c2.mark(DecideEdit::Todo)),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        a.mark(cap, check_item::valid_edit(&selection.get_untracked()));
+                    }
+                }),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        b.mark(cap, DecideEdit::Invalid);
+                    }
+                }),
+                Callback::new(move |()| {
+                    if let Some(cap) = cap.get_untracked() {
+                        c2.mark(cap, DecideEdit::Todo);
+                    }
+                }),
             )
         };
         let (prev_actions, next_actions) = (actions.clone(), actions.clone());
@@ -906,11 +942,19 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
             {learn_more}
             {notices}
             {compare}
+            {move || read_only.get().map(|text| red_notice("check-read-only", text))}
             {marking_row}
             {marks}
+            {history}
         </div>
     }
     .into_any()
+}
+
+/// The open's write proof, followed (6.4): the marks turn off the moment it goes read-only.
+fn write_cap(actions: &Actions) -> Memo<Option<WriteCap>> {
+    let actions = send_wrapper::SendWrapper::new(actions.clone());
+    Memo::new(move |_| actions.write_cap())
 }
 
 /// A chip button of the marks (tC4's `railChip` with the marks' padding).
@@ -959,6 +1003,7 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
         }
     });
     let toggle: NodeRef<html::Button> = NodeRef::new();
+    let cap = write_cap(actions);
     let wrap = crate::css! { "margin-top": 16 };
     let row =
         crate::css! { "display": "flex", "align-items": "center", "gap": 10, "flex-wrap": "wrap" };
@@ -971,8 +1016,19 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
                 data-testid="bookmark"
                 data-active=move || if bookmarked.get() { "1" } else { "0" }
                 title=move || t(if bookmarked.get() { keys::check::bookmark::REMOVE_HINT } else { keys::check::bookmark::HINT }, &[])
-                on:click=move |_| actions.mark(DecideEdit::Bookmark { on: !bookmarked.get_untracked() })
-                style=move || mark_chip(bookmarked.get()).to_style()
+                disabled=move || cap.get().is_none()
+                on:click=move |_| {
+                    if let Some(cap) = cap.get_untracked() {
+                        actions.mark(cap, DecideEdit::Bookmark { on: !bookmarked.get_untracked() });
+                    }
+                }
+                style=move || {
+                    let mut css = mark_chip(bookmarked.get());
+                    if cap.get().is_none() {
+                        css.extend(&off_look());
+                    }
+                    css.to_style()
+                }
             >
                 <span aria-hidden="true">{t(keys::check::glyph::BOOKMARK, &[])}</span>
                 {move || t(if bookmarked.get() { keys::check::bookmark::ON } else { keys::check::bookmark::OFF }, &[])}
@@ -1032,6 +1088,7 @@ fn comment_editor(
     let Some((key, pair, scope)) = actions.comment_field() else {
         return ().into_any();
     };
+    let cap = write_cap(actions);
     let stored = pair.value.clone();
     let saves = send_wrapper::SendWrapper::new(actions.runtime().saves().clone());
     let text = saves.open(&key, scope, pair);
@@ -1157,6 +1214,7 @@ fn comment_editor(
                 rows="3"
                 dir="auto"
                 prop:value=move || text.get()
+                readonly=move || cap.get().is_none()
                 placeholder=t(keys::check::comment::PLACEHOLDER, &[])
                 on:input=on_input
                 on:focus=on_focus
@@ -1172,7 +1230,7 @@ fn comment_editor(
                 <Button
                     size=Size::Sm
                     variant=ButtonVariant::Ghost
-                    disabled=Signal::derive(can_delete)
+                    disabled=Signal::derive(move || can_delete() || cap.get().is_none())
                     attrs=Attrs::from([("data-testid", "comment-delete")])
                     on_click=Callback::new(delete)
                 >
@@ -1317,4 +1375,36 @@ fn article_body(state: &Academy) -> AnyView {
             .into_any()
         }
     }
+}
+
+/// The check's History under its marks (owner ruling H5); a decision in conflict has its review.
+fn check_history(s: &AppState, actions: &Actions, reference: String) -> AnyView {
+    let Some(at) = s
+        .project
+        .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+    else {
+        return ().into_any();
+    };
+    let c = s.c.clone();
+    let detail = c.detail.clone();
+    let shown = Memo::new(move |_| {
+        detail.with(|d| match d {
+            Some(Detail::Ready(view)) if view.decision.marker.is_none() => {
+                Some(view.decision.token.clone())
+            }
+            _ => None,
+        })
+    });
+    let (restoring, failed) = (c.restoring.clone(), c.restore_failed.clone());
+    let actions = actions.clone();
+    crate::views::history::record_history(crate::views::history::RecordHistory {
+        test_id: "check-history",
+        at,
+        shown: shown.into(),
+        open: c.history_open.clone(),
+        busy: Signal::derive(move || restoring.get()),
+        failed: Signal::derive(move || failed.get()),
+        reference,
+        restore: Callback::new(move |from| actions.restore_check(from)),
+    })
 }

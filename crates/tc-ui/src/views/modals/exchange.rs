@@ -63,13 +63,13 @@ fn leave_button(
     }
 }
 
-/// The dialog, while `s.layers.dialog` is SaveForTeammate and `s.ex` is set.
+/// The dialog, while `s.layers.dialog` is SaveForTeammate with its form.
 #[component]
 pub fn SaveForTeammate() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let ex = s.ex.clone();
+    let ex = s.export_form();
     let form = Memo::new(move |_| ex.get());
     let busy = Signal::derive(move || form.get().is_some_and(|f| f.busy()));
     let done = Signal::derive(move || {
@@ -168,13 +168,13 @@ pub fn SaveForTeammate() -> impl IntoView {
     .into_any()
 }
 
-/// The dialog, while `s.layers.dialog` is ReceiveWork and `s.rx` is set.
+/// The dialog, while `s.layers.dialog` is ReceiveWork with its form.
 #[component]
 pub fn ReceiveWork() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let rx = s.rx.clone();
+    let rx = s.receive_form();
     let form = Memo::new(move |_| rx.get());
     let input: NodeRef<leptos::html::Input> = NodeRef::new();
     let busy = Signal::derive(move || form.get().is_some_and(|f| f.busy()));

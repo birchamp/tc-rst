@@ -36,6 +36,7 @@ pub mod git;
 pub mod handle;
 mod history;
 pub mod hooks;
+pub mod kept;
 pub mod layout;
 pub mod ledger;
 pub mod load;
@@ -73,9 +74,10 @@ pub use handle::{
     Mode, Pending, ProjectFacts, ProjectHandle, ReceivedPack, Snapshot, StoreEvent, SyncFile, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
+pub use kept::{ImportReport, Kept, KeptBase, KeptWhy, WaitingBook};
 pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
-pub use packs::{PackRead, read_received_pack};
+pub use packs::{PackRead, pack_sealer, read_received_pack};
 pub use platform::{FakePlatform, FolderFacts, Platform, StdPlatform, UnsafeFolder};
 pub use progress::{Phase, Progress, ProgressSink};
 pub use reply::{

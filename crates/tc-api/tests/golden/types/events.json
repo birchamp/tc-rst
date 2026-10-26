@@ -52,7 +52,11 @@
               "mode": {
                 "type": "writable"
               },
-              "role": "screen"
+              "role": "screen",
+              "outside": {
+                "waiting": [],
+                "kept": []
+              }
             },
             "name": "Equipo Ejemplo — Tito y Jonás",
             "tag": "es-419",
@@ -105,7 +109,36 @@
             "verseConflicts": 1,
             "alignments": 0,
             "restored": 0,
-            "missingPins": 5
+            "missingPins": 5,
+            "replaced": [
+              {
+                "by": {
+                  "who": {
+                    "type": "teammate",
+                    "value": 1
+                  },
+                  "computer": null
+                },
+                "whose": {
+                  "who": {
+                    "type": "username",
+                    "value": "maria"
+                  },
+                  "computer": null
+                },
+                "kind": "alignment",
+                "place": {
+                  "type": "verse",
+                  "value": {
+                    "book": "TIT",
+                    "chapter": 1,
+                    "verse": 1
+                  }
+                },
+                "count": 1,
+                "was": null
+              }
+            ]
           }
         }
       }
@@ -248,6 +281,39 @@
               }
             ],
             "alignments": 12
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 13,
+      "kind": "export",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "exportReady",
+          "value": {
+            "file": {
+              "type": "download",
+              "value": {
+                "download": "0123456789abcdef0123456789abcdef",
+                "fileName": "TIT-aligned-2026-10-24.usfm"
+              }
+            },
+            "facts": {
+              "skipped": [
+                {
+                  "chapter": 1,
+                  "verse": "4-5",
+                  "why": "needsReview"
+                }
+              ],
+              "skippedTotal": 1
+            }
           }
         }
       }

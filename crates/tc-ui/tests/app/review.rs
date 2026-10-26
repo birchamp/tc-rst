@@ -20,7 +20,7 @@ use tc_ui::app::net::NetEnd;
 use tc_ui::app::review::{
     BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
     choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
-    notice_text, persons, picks_of, place_book, place_label, tabs_shown,
+    notice_text, persons, picks_of, place_book, place_label, tabs_shown, version_text,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -467,6 +467,7 @@ fn the_toasts_review_opens_where_something_waits() {
             alignments,
             restored: 0,
             missing_pins: 0,
+            replaced: Vec::new(),
         }),
     };
     assert_eq!(toast(1, 0).review_tab(), ReviewTab::Text);
@@ -504,6 +505,7 @@ fn every_notice_has_its_own_sentence() {
         NoticeView::ImportUnfinished,
         NoticeView::IncompleteChanges { have: 3, of: 5 },
         NoticeView::KeptApart { changes: 2 },
+        NoticeView::ChangedWhileReadOnly { file: file() },
     ];
     let texts: Vec<String> = all.iter().map(notice_text).collect();
     for (notice, text) in all.iter().zip(&texts) {
@@ -516,7 +518,17 @@ fn every_notice_has_its_own_sentence() {
     assert!(texts[2].contains("another computer") && texts[2].contains('3'));
     assert!(texts[3].contains("ingredients/TIT.usfm"));
     let unique: std::collections::BTreeSet<&String> = texts.iter().collect();
-    assert_eq!(unique.len(), texts.len());
+    assert_eq!(unique.len(), texts.len()); // H22 part 4: a read-only open names the book, or a story's file.
+    assert_eq!(
+        texts.last().unwrap(),
+        "Titus was changed outside translationCore. Open the project normally to import it."
+    );
+    assert_eq!(
+        notice_text(&NoticeView::ChangedWhileReadOnly {
+            file: "ingredients/content/01.md".into()
+        }),
+        "01.md was changed outside translationCore. Open the project normally to import it."
+    );
 }
 
 /// INV-EVERY-KIND-HAS-A-CHOICE: every kind of conflict has its choices, from one match with
@@ -595,6 +607,7 @@ fn a_look_again_refusal_says_another_version_was_kept() {
     let every = [
         api(NotSaved::Refused(SaveRefusal::IncoherentView)),
         api(NotSaved::Refused(SaveRefusal::LastBook)),
+        api(NotSaved::Refused(SaveRefusal::NotKept)),
         api(NotSaved::Disk("the disk is full".into())),
         api(NotSaved::ReadOnly(
             tc_api::write::ReadOnlyReason::SecondWriter,
@@ -649,4 +662,68 @@ fn in_flight(keep: &KeepPhase) -> RequestId {
 
 fn keep_press() -> Press {
     press_keep('1', 'a')
+}
+
+/// The screens of the H5 packet the ruling kept all draw, and the conflict cards of the kinds
+/// whose newest version now wins are gone from it.
+#[test]
+fn the_packet_draws_every_screen_the_ruling_kept() {
+    use tc_ui::app::q9::{SCREENS, screen};
+
+    for name in SCREENS {
+        assert!(screen(name).is_some(), "{name}");
+    }
+    for gone in [
+        "checks",
+        "alignments",
+        "settings-carried",
+        "settings-path-case",
+    ] {
+        assert!(screen(gone).is_none(), "{gone}");
+    }
+}
+
+/// A version in History says what the person chose, so the one to restore can be told apart
+/// (owner ruling H5): a check's words, status, bookmark and comment; an alignment's pairs.
+#[test]
+fn a_checks_version_names_its_selection_and_comment() {
+    use tc_api::check::DecisionStatus;
+    let check = |selected: &[&str], nothing: bool, status, bookmarked, comment: Option<&str>| {
+        version_text(&VersionValue::Check {
+            selected: selected.iter().map(|w| (*w).to_owned()).collect(),
+            nothing_to_select: nothing,
+            status,
+            bookmarked,
+            comment: comment.map(str::to_owned),
+        })
+    };
+    assert_eq!(
+        check(
+            &["siervo", "Dios"],
+            false,
+            Some(DecisionStatus::Valid),
+            true,
+            Some("Revisar")
+        )
+        .as_deref(),
+        Some("Selected: siervo … Dios · Valid · Bookmarked\nComment: Revisar")
+    );
+    assert_eq!(
+        check(&[], false, None, false, None).as_deref(),
+        Some("Nothing selected")
+    );
+    assert_eq!(
+        check(&[], true, Some(DecisionStatus::Todo), false, None).as_deref(),
+        Some("No selection needed · To do")
+    );
+    assert_eq!(
+        version_text(&VersionValue::Alignment {
+            pairs: vec!["Παῦλος = Pablo".into(), "δοῦλος = siervo".into()],
+            done: true,
+            marked_invalid: false,
+        })
+        .as_deref(),
+        Some("Aligned: Παῦλος = Pablo · δοῦλος = siervo · Marked done")
+    );
+    assert_eq!(version_text(&VersionValue::NotShown), None);
 }

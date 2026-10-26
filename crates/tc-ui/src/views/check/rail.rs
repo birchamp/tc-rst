@@ -244,6 +244,7 @@ fn rail_row(
             data-tone="accent"
             data-selected=move || is_active().then_some("true")
             data-rail-index=index.to_string()
+            data-rail-stop="true"
             tabindex=move || if stop.get() == Some(index) { "0" } else { "-1" }
             aria-current=move || is_active().then_some("true")
             title=format!("{locator} · {group}")
@@ -276,11 +277,102 @@ fn rail_row(
     .into_any()
 }
 
-fn group_label(label: GroupLabel, terms: &[String], unit: &str) -> String {
+fn group_label(label: GroupLabel, terms: &[String], titles: &[String], unit: &str) -> String {
     match label {
         GroupLabel::Unit => unit.to_owned(),
         GroupLabel::Term(t) => terms.get(t as usize).cloned().unwrap_or_default(),
-        GroupLabel::Category(c) => category_name(c).to_owned(),
+        // A figure is headed by its Translation Academy title; a note with no article is under
+        // "Other notes" (tC4 #769).
+        GroupLabel::Figure(figure) => match terms.get(figure as usize).map(String::as_str) {
+            Some("") | None => t(keys::check::group::OTHER, &[]),
+            Some(slug) => titles
+                .get(figure as usize)
+                .cloned()
+                .unwrap_or_else(|| slug.to_owned()),
+        },
+    }
+}
+
+/// Left on a row (Right in a right-to-left rail) moves the focus to its group's heading, the
+/// tree pattern, and selects nothing (tC4 #769 `rowToHeading`): the heading of the focused row's
+/// own group, which `group_of` names by the row's check index.
+fn row_to_heading(
+    e: &web_sys::KeyboardEvent,
+    list: NodeRef<leptos::html::Div>,
+    group_of: impl Fn(u32) -> Option<String>,
+) -> Option<web_sys::HtmlElement> {
+    let list = list.get_untracked()?;
+    let rtl = list
+        .closest("[dir]")
+        .ok()
+        .flatten()
+        .and_then(|el| el.get_attribute("dir"))
+        .is_some_and(|dir| dir == "rtl");
+    let target = e.target()?.dyn_into::<web_sys::Element>().ok()?;
+    if e.key() != (if rtl { "ArrowRight" } else { "ArrowLeft" })
+        || !target.has_attribute("data-rail-index")
+    {
+        return None;
+    }
+    let index = target
+        .get_attribute("data-rail-index")?
+        .parse::<u32>()
+        .ok()?;
+    let group = serde_json::to_string(&group_of(index)?).ok()?;
+    list.query_selector(&format!("[data-testid=\"rail-group\"][data-group={group}]"))
+        .ok()
+        .flatten()?
+        .dyn_into::<web_sys::HtmlElement>()
+        .ok()
+}
+
+/// Up and Down on a fold heading go to the stop before or after it in screen order: a heading
+/// takes the focus, a row is selected (tC4 #769 `headingKeyDown`). Enter and Space are the
+/// button's own.
+fn heading_key(e: &web_sys::KeyboardEvent, list: NodeRef<leptos::html::Div>, actions: &Actions) {
+    let step: i64 = match e.key().as_str() {
+        "ArrowDown" => 1,
+        "ArrowUp" => -1,
+        "Home" => i64::MIN,
+        "End" => i64::MAX,
+        _ => return,
+    };
+    e.prevent_default();
+    // The list's own keys move the selection; a heading's are its own.
+    e.stop_propagation();
+    let (Some(list), Some(heading)) = (
+        list.get_untracked(),
+        e.current_target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok()),
+    ) else {
+        return;
+    };
+    let Ok(stops) = list.query_selector_all("[data-rail-stop]") else {
+        return;
+    };
+    let n = i64::from(stops.length());
+    let at = (0..stops.length())
+        .find(|&i| stops.get(i).is_some_and(|s| s.is_same_node(Some(&heading))))
+        .map_or(-1, i64::from);
+    let to = match step {
+        i64::MIN => 0,
+        i64::MAX => n - 1,
+        _ if at < 0 => 0,
+        _ => (at + step + n) % n,
+    };
+    let Some(stop) = u32::try_from(to)
+        .ok()
+        .and_then(|i| stops.get(i))
+        .and_then(|node| node.dyn_into::<web_sys::HtmlElement>().ok())
+    else {
+        return;
+    };
+    let _ = stop.focus();
+    if let Some(index) = stop
+        .get_attribute("data-rail-index")
+        .and_then(|i| i.parse::<u32>().ok())
+    {
+        actions.select_check(index);
     }
 }
 
@@ -316,7 +408,9 @@ fn check_rail(
     let story = matches!(kind, CheckUnit::Story(_));
     let unit = super::picker::unit_label(kind);
     let terms = Arc::new(rail.view.terms.clone());
+    let titles = Arc::new(rail.view.group_titles.clone());
     let rows = Arc::new(rail.rows.clone());
+    let term_counts = Arc::new(rail::term_progress(&rows, terms.len()));
     let progress = rail.view.progress;
     let counts = rail::counts(&rows);
     let aside = crate::css! {
@@ -429,31 +523,75 @@ fn check_rail(
                             {t_dyn(&sort_key(mode, story), &[], None)}
                         </button>
                     }
+                    .into_any()
                 })
                 .collect::<Vec<_>>()
         }
     };
-    // The groups and the order the keys move in, from the filter and the sort.
+    let by_index: Arc<std::collections::HashMap<u32, usize>> = Arc::new(
+        rows.iter()
+            .enumerate()
+            .map(|(at, row)| (row.index, at))
+            .collect(),
+    );
+    // The active check's group id: its group is open whatever was folded (tC4 #769).
+    let active_group = {
+        let (c, rows, terms, by_index) = (c.clone(), rows.clone(), terms.clone(), by_index.clone());
+        Memo::new(move |_| {
+            let at = *by_index.get(&c.active.get()?)?;
+            let term = rows.get(at)?.term?;
+            terms.get(usize::try_from(term).ok()?).cloned()
+        })
+    };
+    // The groups, which are open, and the order the keys move in, from the filter, the sort and
+    // the folds: the rows of a folded group leave the order (tC4 #769).
     let layout = {
         let (c, rows, terms) = (c.clone(), rows.clone(), terms.clone());
         Memo::new(move |_| {
             let mode = c.sort.get().unwrap_or(SortMode::default_for(tool));
             let groups = rail::groups(rows.iter(), terms.len(), c.filter.get(), mode);
+            // Only a folding sort with a group folded depends on the selection, so a move under
+            // By verse does not group the rail again.
+            let open = c.folded.with(|folded| {
+                if rail::folds(mode) && !folded.is_empty() {
+                    active_group
+                        .with(|a| rail::open_groups(&groups, &terms, folded, a.as_deref(), mode))
+                } else {
+                    vec![true; groups.len()]
+                }
+            });
             let order: Vec<u32> = groups
                 .iter()
-                .flat_map(|g| {
+                .zip(&open)
+                .filter(|(_, open)| **open)
+                .flat_map(|(g, _)| {
                     g.rows
                         .iter()
                         .filter_map(|&at| rows.get(at).map(|r| r.index))
                 })
                 .collect();
-            (groups, order)
+            (groups, order, open, rail::folds(mode))
         })
+    };
+    let list_ref = NodeRef::<leptos::html::Div>::new();
+    // The group id of check `index`, by its row's term.
+    let group_of = {
+        let (rows, terms, by_index) = (rows.clone(), terms.clone(), by_index.clone());
+        move |index: u32| {
+            let term = rows.get(*by_index.get(&index)?)?.term?;
+            terms.get(usize::try_from(term).ok()?).cloned()
+        }
     };
     let keydown = {
         let (c, actions) = (c.clone(), actions.clone());
         move |e: web_sys::KeyboardEvent| {
-            let order = layout.with_untracked(|(_, order)| order.clone());
+            // Left (Right in a right-to-left rail) on a row goes to its group's heading.
+            if let Some(heading) = row_to_heading(&e, list_ref, &group_of) {
+                e.prevent_default();
+                let _ = heading.focus();
+                return;
+            }
+            let order = layout.with_untracked(|(_, order, ..)| order.clone());
             if let Some(next) = rail_key(&order, c.active.get_untracked(), &e.key()) {
                 e.prevent_default();
                 actions.select_check(next);
@@ -462,46 +600,152 @@ fn check_rail(
         }
     };
     let scroll_top = RwSignal::new(0.0_f64);
-    let list_ref = NodeRef::<leptos::html::Div>::new();
     let active: Signal<Option<u32>> = {
         let c = c.clone();
         Signal::derive(move || c.active.get())
     };
     let stop: Signal<Option<u32>> = Memo::new(move |_| {
         let current = active.get();
-        layout.with(|(_, order)| tab_stop(order, current))
+        layout.with(|(_, order, ..)| tab_stop(order, current))
     })
     .into();
-    let by_index: Arc<std::collections::HashMap<u32, usize>> = Arc::new(
-        rows.iter()
-            .enumerate()
-            .map(|(at, row)| (row.index, at))
-            .collect(),
-    );
+    // Fold all, or Unfold all once every other shown group is folded (tC4 #769), with the
+    // sort chips when the sort folds and more than one group shows.
+    let fold_all = {
+        let (c, actions, terms) = (c.clone(), actions.clone(), terms.clone());
+        move || {
+            let (ids, fold, shown) = layout.with(|(groups, _, _, folds)| {
+                let (ids, fold) = c.folded.with(|folded| {
+                    active_group.with(|a| rail::fold_all(groups, &terms, folded, a.as_deref()))
+                });
+                (ids, fold, *folds && groups.len() > 1)
+            });
+            let actions = actions.clone();
+            shown.then(|| {
+                let key = if fold { keys::check::FOLD_ALL } else { keys::check::UNFOLD_ALL };
+                view! {
+                    <button
+                        type="button"
+                        data-trim="cap"
+                        data-testid="rail-fold-all"
+                        style=rail_chip(false).merge(&crate::css! { "margin-inline-start": "auto" }).to_style()
+                        on:click=move |_| actions.set_rail_folded(tool, ids.clone(), fold)
+                    >
+                        {t(key, &[])}
+                    </button>
+                }
+            })
+        }
+    };
+    // With every shown group folded no row is drawn: the first heading is the Tab stop.
+    let heading_stop = Memo::new(move |_| {
+        layout.with(|(groups, order, _, folds)| {
+            (*folds && order.is_empty()).then(|| groups.first().map(|g| g.label))?
+        })
+    });
+    let heading = {
+        let (terms, titles, unit, counts, actions) = (
+            terms.clone(),
+            titles.clone(),
+            unit.clone(),
+            term_counts.clone(),
+            actions.clone(),
+        );
+        Arc::new(
+            move |label: GroupLabel, open: bool, folds: bool, style: Css| {
+                let text = group_label(label, &terms, &titles, &unit);
+                let Some(id) = rail::group_id(label, &terms)
+                    .filter(|_| folds)
+                    .map(str::to_owned)
+                else {
+                    return view! { <Overline tag="p" style=style>{text}</Overline> }.into_any();
+                };
+                let count = match label {
+                    GroupLabel::Term(t) | GroupLabel::Figure(t) => counts.get(t as usize).copied(),
+                    GroupLabel::Unit => None,
+                }
+                .map(|(decided, total)| format!("{decided}/{total}"))
+                .unwrap_or_default();
+                let toggle = {
+                    let (actions, id) = (actions.clone(), id.clone());
+                    move |_| actions.set_rail_folded(tool, vec![id.clone()], open)
+                };
+                let keys = {
+                    let actions = actions.clone();
+                    move |e: web_sys::KeyboardEvent| heading_key(&e, list_ref, &actions)
+                };
+                let button = crate::css! {
+                    "display": "flex",
+                    "align-items": "center",
+                    "gap": 8,
+                    "width": "100%",
+                    "padding": "4px 2px",
+                    "border": 0,
+                    "background": "transparent",
+                    "cursor": "pointer",
+                    "font-family": "inherit",
+                    "text-align": "start",
+                }
+                .merge(&style);
+                let chevron = crate::css! {
+                    "color": "var(--text-tertiary)",
+                    "transform": if open { "rotate(90deg)" } else { "none" },
+                    "transition": "transform var(--dur-hover) var(--ease-standard)",
+                };
+                let count_style = crate::css! {
+                    "font-size": "var(--fs-badge)",
+                    "font-weight": "var(--fw-bold)",
+                    "color": "var(--text-tertiary)",
+                    "white-space": "nowrap",
+                };
+                view! {
+                <button
+                    type="button"
+                    data-testid="rail-group"
+                    data-group=id
+                    data-rail-stop="true"
+                    aria-expanded=if open { "true" } else { "false" }
+                    tabindex=move || if heading_stop.get() == Some(label) { "0" } else { "-1" }
+                    on:click=toggle
+                    on:keydown=keys
+                    style=button.to_style()
+                >
+                    <span aria-hidden="true" style=chevron.to_style()>"›"</span>
+                    <Overline style=crate::css! { "flex": 1, "min-width": 0, "overflow-wrap": "anywhere" }>{text}</Overline>
+                    <span data-testid="rail-group-count" style=count_style.to_style()>{count}</span>
+                </button>
+            }
+            .into_any()
+            },
+        )
+    };
     let list = if rows.len() <= VIRTUAL_FROM {
         // tC4's DOM: a group of rows under its heading. Drawn again only when the filter or the
         // sort changes.
-        let (rows, terms, actions, unit) =
-            (rows.clone(), terms.clone(), actions.clone(), unit.clone());
+        let (rows, terms, actions) = (rows.clone(), terms.clone(), actions.clone());
+        let heading = heading.clone();
         (move || {
-            layout.with(|(groups, _)| {
+            layout.with(|(groups, _, open, folds)| {
                 let overline = crate::css! { "margin": "0 0 6px" };
                 let column =
                     crate::css! { "display": "flex", "flex-direction": "column", "gap": 6 };
                 groups
                     .iter()
-                    .map(|g| {
-                        let label = group_label(g.label, &terms, &unit);
-                        let buttons: Vec<AnyView> = g
-                            .rows
-                            .iter()
-                            .filter_map(|&at| rows.get(at))
-                            .map(|row| rail_row(&actions, row, &terms, active, stop, None))
-                            .collect();
+                    .zip(open)
+                    .map(|(g, &open)| {
+                        let head = heading(g.label, open, *folds, overline.clone());
+                        let id = rail::group_id(g.label, &terms).unwrap_or_default().to_owned();
+                        let buttons = open.then(|| {
+                            g.rows
+                                .iter()
+                                .filter_map(|&at| rows.get(at))
+                                .map(|row| rail_row(&actions, row, &terms, active, stop, None))
+                                .collect::<Vec<AnyView>>()
+                        });
                         view! {
                             <div>
-                                <Overline tag="p" style=overline.clone()>{label}</Overline>
-                                <div style=column.to_style()>{buttons}</div>
+                                {head}
+                                {buttons.map(|b| view! { <div data-testid="rail-group-rows" data-group=id style=column.to_style()>{b}</div> })}
                             </div>
                         }
                         .into_any()
@@ -516,18 +760,27 @@ fn check_rail(
         let plan = {
             let rows = rows.clone();
             Memo::new(move |_| {
-                layout.with(|(groups, _)| {
+                layout.with(|(groups, _, open, folds)| {
+                    // A folded group keeps its heading line and draws no row.
                     let indices: Vec<Vec<u32>> = groups
                         .iter()
-                        .map(|g| {
+                        .zip(open)
+                        .map(|(g, &open)| {
+                            if !open {
+                                return Vec::new();
+                            }
                             g.rows
                                 .iter()
                                 .filter_map(|&at| rows.get(at).map(|r| r.index))
                                 .collect()
                         })
                         .collect();
-                    let labels: Vec<GroupLabel> = groups.iter().map(|g| g.label).collect();
-                    (RailLayout::new(&indices), labels)
+                    let labels: Vec<(GroupLabel, bool)> = groups
+                        .iter()
+                        .map(|g| g.label)
+                        .zip(open.iter().copied())
+                        .collect();
+                    (RailLayout::new(&indices), labels, *folds)
                 })
             })
         };
@@ -536,25 +789,38 @@ fn check_rail(
                 .get()
                 .map_or(800.0, |el| f64::from(el.client_height()));
             let keep: Vec<u32> = stop.get().into_iter().chain(active.get()).collect();
-            plan.with(|(plan, _)| {
+            plan.with(|(plan, labels, folds)| {
                 // A filter that shortens the list clamps the browser's scroll without a scroll
                 // event: the window follows the clamp.
                 let top = scroll_top.get().min((plan.height - height).max(0.0));
                 let window = plan.window(top, height);
+                // A heading line carries what it draws, so a fold, a sort or a filter that
+                // leaves it in place still draws it again.
                 plan.mounted(window, &keep)
+                    .into_iter()
+                    .map(|(line, y)| {
+                        let head = match line {
+                            Line::Header(n) => {
+                                labels.get(n).map(|(label, open)| (*label, *open, *folds))
+                            }
+                            Line::Row(_) => None,
+                        };
+                        (line, y, head)
+                    })
+                    .collect::<Vec<_>>()
             })
         });
         let spacer = move || {
-            plan.with(|(plan, _)| {
+            plan.with(|(plan, ..)| {
                 format!("position: relative; height: {}px; flex: none;", plan.height)
             })
         };
-        let (rows, terms, actions, unit, by_index) = (
+        let (rows, terms, actions, by_index, heading) = (
             rows.clone(),
             terms.clone(),
             actions.clone(),
-            unit.clone(),
             by_index.clone(),
+            heading.clone(),
         );
         // Lines are placed from the list's padding edge; the list's 14 px padding comes first.
         let place = |y: f64, h: f64| {
@@ -575,16 +841,18 @@ fn check_rail(
                     crate::ds::refocus_after_moves();
                     lines.get()
                 }
-                key=|(line, y): &(Line, f64)| (*line, y.to_bits())
-                children=move |(line, y): (Line, f64)| match line {
-                    Line::Header(n) => {
-                        let label = plan.with_untracked(|(_, labels)| {
-                            labels.get(n).map(|l| group_label(*l, &terms, &unit)).unwrap_or_default()
-                        });
-                        view! {
-                            <Overline tag="p" style=place(y, crate::app::check::HEADER_HEIGHT).merge(&crate::css! { "margin": 0 })>{label}</Overline>
+                key=|(line, y, head): &(Line, f64, Option<(GroupLabel, bool, bool)>)| (*line, y.to_bits(), *head)
+                children=move |(line, y, head): (Line, f64, Option<(GroupLabel, bool, bool)>)| match line {
+                    Line::Header(_) => {
+                        match head {
+                            Some((label, open, folds)) => heading(
+                                label,
+                                open,
+                                folds,
+                                place(y, crate::app::check::HEADER_HEIGHT).merge(&crate::css! { "margin": 0 }),
+                            ),
+                            None => ().into_any(),
                         }
-                        .into_any()
                     }
                     Line::Row(index) => match by_index.get(&index).and_then(|&at| rows.get(at)) {
                         Some(row) => rail_row(
@@ -668,6 +936,7 @@ fn check_rail(
                 <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
                     <Overline>{t(keys::check::SORT, &[])}</Overline>
                     {sorts}
+                    {fold_all}
                 </div>
                 {dropped_note(rail.view.dropped.as_ref(), crate::css! { "margin-top": 10 })}
                 {citation.map(|(repo, version, rung)| view! { <p style=citation_style.to_style()>{repo}" · "{version}" · "{rung}</p> })}

@@ -721,3 +721,33 @@ async fn place_records_round_trip_through_the_file() {
     let again = prefs_over(Arc::clone(&env.files));
     assert_eq!(again.prefs.place(&project(1), "TIT"), Some(record));
 }
+
+/// REF1c, tC4 #769: a Check rail's folded groups are kept per computer, an unfold as `false`
+/// as tC4 writes it, and read back after a restart for their own tool only.
+#[tokio::test(start_paused = true)]
+async fn fold_survives_a_restart() {
+    let files = Arc::new(MemoryFiles::new());
+    let env = prefs_over(files.clone());
+    let groups = ["figs-metaphor".to_owned(), "figs-idiom".to_owned()];
+    env.prefs
+        .set_rail_folded(Tool::TranslationNotes, &groups, true);
+    env.prefs
+        .set_rail_folded(Tool::TranslationNotes, &groups[1..], false);
+    assert_eq!(
+        env.prefs.rail_folded(Tool::TranslationNotes),
+        ["figs-metaphor"],
+        "readers see it before the write"
+    );
+    settle().await;
+    assert_eq!(
+        json_of(&env, &AppDataPath::app_prefs())["railFolded"],
+        json!({"translationNotes|figs-metaphor": true, "translationNotes|figs-idiom": false})
+    );
+    drop(env);
+    let again = prefs_over(files);
+    assert_eq!(
+        again.prefs.rail_folded(Tool::TranslationNotes),
+        ["figs-metaphor"]
+    );
+    assert!(again.prefs.rail_folded(Tool::TranslationWords).is_empty());
+}

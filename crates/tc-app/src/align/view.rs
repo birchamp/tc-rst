@@ -93,6 +93,7 @@ pub(super) struct Moment {
     /// A Suggest was answered for this verse.
     pub asked: bool,
     pub suggesting: bool,
+    pub history: Option<tc_api::ShownToken>,
 }
 
 pub(super) fn word(w: &TargetWord) -> Word {
@@ -226,6 +227,7 @@ pub(super) fn build(aligner: &Aligner, facts: &Facts, now: &Moment) -> AlignerVi
         status: rail_status(aligner, facts),
         save: now.save.clone(),
         marker: facts.marker.clone(),
+        history: now.history.clone(),
     }
 }
 

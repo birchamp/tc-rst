@@ -788,21 +788,15 @@ impl ProjectStore for StoreBackend {
     }
 
     fn create(&self, new: super::NewProjectSpec) -> Result<(), super::CreateFailure> {
-        use super::CreateFailure;
-        let created = self.store.create(&tc_store::NewProject {
-            name: new.folder.as_str().to_owned(),
-            kind: new.kind,
-            records: new.records,
-            books: Vec::new(),
-        });
-        match created {
-            Ok(_) => Ok(()),
-            Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
-            Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
-                tc_store::Refusal::NotValidInBurrito(why),
-            ))) => Err(CreateFailure::NotHeld(why)),
-            Err(error) => Err(CreateFailure::Failed(error.to_string())),
-        }
+        create_failure(self.store.create(&new_project(new)))
+    }
+
+    fn create_imported(
+        &self,
+        new: super::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), super::CreateFailure> {
+        create_failure(self.store.create_imported(&new_project(new), cause))
     }
 
     fn receive_new(
@@ -842,13 +836,26 @@ impl ProjectStore for StoreBackend {
 /// thread of its own, so the reports are written from another, and the start never waits for
 /// them. "Ask for help" attaches them; E1b tells the person of a join that did not finish, and
 /// F1 of an import (APP-DESIGN §10).
+///
+/// An import's removal also sets `import_removed` for Home's next listing, and Home lists again.
 pub(crate) fn report_removed_staging(
     backend: Arc<StoreBackend>,
     reports: ReportLog,
     clock: Arc<dyn Clock>,
+    bus: crate::events::EventBus,
+    import_removed: Arc<std::sync::atomic::AtomicBool>,
 ) {
-    fn record(backend: &StoreBackend, reports: &ReportLog, clock: &dyn Clock, started: WallMs) {
-        for removed in backend.removed_at_start() {
+    let started = clock.now();
+    let record = move |started: WallMs| {
+        let removed = backend.removed_at_start();
+        if removed
+            .iter()
+            .any(|r| r.kind == Some(tc_store::StagingKind::Import))
+        {
+            import_removed.store(true, std::sync::atomic::Ordering::SeqCst);
+            bus.publish(tc_api::event::Event::ProjectsChanged);
+        }
+        for removed in removed {
             let (op, outcome, facts) = staging_report(&removed);
             reports.add(
                 op,
@@ -858,17 +865,14 @@ pub(crate) fn report_removed_staging(
                 clock.now(),
             );
         }
-    }
-    let started = clock.now();
+    };
     let spawned = {
-        let (backend, reports, clock) = (backend.clone(), reports.clone(), clock.clone());
-        spawn("tc-app staging report", move || {
-            record(&backend, &reports, clock.as_ref(), started);
-        })
+        let record = record.clone();
+        spawn("tc-app staging report", move || record(started))
     };
     if spawned.is_none() {
         // No thread to be had: wait for the cleanup here rather than lose the reports.
-        record(&backend, &reports, clock.as_ref(), started);
+        record(started);
     }
 }
 
@@ -995,6 +999,29 @@ pub(crate) fn open_phase(phase: tc_store::Phase) -> OpenPhase {
 
 /// The pins a new project gets (tC4 `INSTALLED_SUITE`), which an open writes into a project
 /// that holds none (tC4 #766): every group or, should one not convert, none.
+fn new_project(new: super::NewProjectSpec) -> tc_store::NewProject {
+    tc_store::NewProject {
+        name: new.folder.as_str().to_owned(),
+        kind: new.kind,
+        records: new.records,
+        books: Vec::new(),
+    }
+}
+
+fn create_failure(
+    created: Result<std::path::PathBuf, tc_store::CreateError>,
+) -> Result<(), super::CreateFailure> {
+    use super::CreateFailure;
+    match created {
+        Ok(_) => Ok(()),
+        Err(tc_store::CreateError::NameExists(_)) => Err(CreateFailure::NameExists),
+        Err(tc_store::CreateError::Refused(tc_store::CommandError::Refused(
+            tc_store::Refusal::NotValidInBurrito(why),
+        ))) => Err(CreateFailure::NotHeld(why)),
+        Err(error) => Err(CreateFailure::Failed(error.to_string())),
+    }
+}
+
 pub(crate) fn creation_pins() -> Vec<(PinGroup, PinGroupValue)> {
     let pins = tc_resources::suite::project_pins();
     PinGroup::ALL
@@ -1045,6 +1072,7 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
         seq: reply.seq,
         changes: reply.changes,
         skipped: reply.skipped,
+        kept: reply.kept,
     }
 }
 
@@ -1399,6 +1427,115 @@ fn close_off_thread(handle: tc_store::ProjectHandle) -> oneshot::Receiver<Result
     rx
 }
 
+/// A store call of a handle that may have closed.
+fn store_result<P>(pending: Option<P>) -> Result<P, StoreError> {
+    pending.ok_or_else(|| StoreError::Other("the project is closed".to_owned()))
+}
+
+fn other(error: tc_store::StoreError) -> StoreError {
+    match error {
+        tc_store::StoreError::NotKept { .. } => StoreError::NotKept,
+        error => StoreError::Other(error.to_string()),
+    }
+}
+
+/// The store's waiting books and kept copies in the screens' terms (D1).
+pub fn outside_edits(
+    waiting: Vec<tc_store::WaitingBook>,
+    kept: Vec<tc_store::Kept>,
+    notices: &[StoreNotice],
+) -> tc_api::session::OutsideEdits {
+    use tc_api::session::{KeptCopy, OutsideEdits, WaitingBook};
+    use tc_journal::fold::DerivedFile;
+    OutsideEdits {
+        waiting: waiting
+            .into_iter()
+            .map(|w| WaitingBook {
+                book: match w.file {
+                    DerivedFile::Usfm(book) => Some(book),
+                    _ => None,
+                },
+                file: w.path,
+                added: w.added,
+                copy: w.kept.copy,
+                unreadable: w.kept.unreadable,
+                why: kept_why(w.kept.why),
+            })
+            .collect(),
+        kept: kept
+            .into_iter()
+            .map(|k| KeptCopy {
+                file: k.path,
+                copy: k.copy,
+                why: kept_why(k.why),
+            })
+            .collect(),
+        read_only_changed: notices
+            .iter()
+            .filter_map(|n| match &n.notice {
+                tc_journal::fold::Notice::ChangedWhileReadOnly { path } => {
+                    Some(path.as_str().to_owned())
+                }
+                _ => None,
+            })
+            .collect(),
+    }
+}
+
+fn kept_why(why: tc_store::KeptWhy) -> tc_api::session::KeptWhy {
+    use tc_api::session::KeptWhy;
+    match why {
+        tc_store::KeptWhy::Changed => KeptWhy::Changed,
+        tc_store::KeptWhy::Lost => KeptWhy::Lost,
+    }
+}
+
+/// What a checkpoint came to, for the screens (D1): a commit is `Committed`; no changes, a
+/// read-only project and a second writer are `Unchanged` (the last two have their own banner or
+/// notice); every other skip and every store error is `Failed`, which stays on Home until a
+/// later checkpoint of the project ends otherwise. One arm per skip, so a new one is decided.
+pub fn checkpoint_outcome(
+    report: Result<tc_store::CheckpointReport, tc_store::StoreError>,
+) -> CheckpointOutcome {
+    use tc_store::CheckpointSkip;
+    // A skip is a problem in the app, so the banner offers Ask for help with its code; an I/O
+    // error (a full disk) is the computer's, and tC4 offers none for it either.
+    let failed = |code: &str, reason: &str| CheckpointOutcome::Failed {
+        reason: reason.to_owned(),
+        code: Some(format!("checkpoint.{code}")),
+    };
+    match report {
+        Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
+        Ok(report) => match report.skipped {
+            None
+            | Some(
+                CheckpointSkip::NoChanges | CheckpointSkip::ReadOnly | CheckpointSkip::SecondWriter,
+            ) => CheckpointOutcome::Unchanged,
+            Some(CheckpointSkip::NoHistory) => {
+                failed("no-history", "the project has no history to commit to")
+            }
+            Some(CheckpointSkip::SealFailed) => {
+                failed("seal-failed", "the saved changes could not be sealed")
+            }
+            Some(CheckpointSkip::PackMissing) => {
+                failed("pack-missing", "a saved pack is missing or unreadable")
+            }
+            Some(CheckpointSkip::TreeInvalid) => failed(
+                "tree-invalid",
+                "the project's files are not a valid Scripture Burrito",
+            ),
+            Some(CheckpointSkip::HeadMoved) => failed(
+                "head-moved",
+                "the history moved while the checkpoint was made",
+            ),
+        },
+        Err(error) => CheckpointOutcome::Failed {
+            reason: error.to_string(),
+            code: None,
+        },
+    }
+}
+
 impl ProjectHandle for StoreHandle {
     fn facts(&self) -> ProjectFacts {
         match self.inner().as_ref() {
@@ -1458,24 +1595,32 @@ impl ProjectHandle for StoreHandle {
         let Some(pending) = self.inner().as_ref().map(|handle| {
             handle.checkpoint(match reason {
                 CheckpointReason::LeavingProject => tc_store::CheckpointReason::LeavingProject,
+                CheckpointReason::LeavingTranslate => tc_store::CheckpointReason::LeavingTranslate,
+                CheckpointReason::LeavingMode(mode) => {
+                    tc_store::CheckpointReason::Other(format!("leaving {mode}"))
+                }
+                CheckpointReason::BeforeExport => tc_store::CheckpointReason::BeforeExport,
                 CheckpointReason::Other(why) => tc_store::CheckpointReason::Other(why),
             })
         }) else {
             return Box::pin(async {
                 CheckpointOutcome::Failed {
                     reason: "the project is closed".to_owned(),
+                    code: None,
                 }
             });
         };
-        Box::pin(async move {
-            match pending.await {
-                Ok(report) if report.commit.is_some() => CheckpointOutcome::Committed,
-                Ok(_) => CheckpointOutcome::Unchanged,
-                Err(error) => CheckpointOutcome::Failed {
-                    reason: error.to_string(),
-                },
-            }
-        })
+        Box::pin(async move { checkpoint_outcome(pending.await) })
+    }
+
+    fn carried_bytes(
+        &self,
+        oid: tc_journal::GitOid,
+    ) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        let Some(pending) = self.inner().as_ref().map(|handle| handle.read_carried(oid)) else {
+            return Box::pin(async { Err(StoreError::Other("the project is closed".to_owned())) });
+        };
+        Box::pin(async move { pending.await.map_err(store_error) })
     }
 
     fn counters(&self) -> StoreCounters {
@@ -1490,6 +1635,42 @@ impl ProjectHandle for StoreHandle {
             .as_ref()
             .map(|handle| handle.notices())
             .unwrap_or_default()
+    }
+
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        self.inner()
+            .as_ref()
+            .map(|handle| {
+                outside_edits(
+                    handle.waiting_books(),
+                    handle.kept_copies(),
+                    &handle.notices(),
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self.inner().as_ref().map(|handle| handle.focus());
+        Box::pin(async move { store_result(pending)?.await.map(drop).map_err(other) })
+    }
+
+    fn import_kept(&self, copy: &str) -> BoxFuture<Result<tc_store::ImportReport, StoreError>> {
+        let pending = self.inner().as_ref().map(|handle| handle.import_kept(copy));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
+    }
+
+    fn not_now(&self, file: &str) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self.inner().as_ref().map(|handle| handle.not_now(file));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
+    }
+
+    fn dismiss_kept(&self, copy: &str) -> BoxFuture<Result<(), StoreError>> {
+        let pending = self
+            .inner()
+            .as_ref()
+            .map(|handle| handle.dismiss_kept(copy));
+        Box::pin(async move { store_result(pending)?.await.map_err(other) })
     }
 
     fn offered_drafts(&self) -> Vec<OfferedDraft> {

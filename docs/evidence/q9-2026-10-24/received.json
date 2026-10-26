@@ -1,0 +1,35 @@
+{
+  "screen": "received",
+  "choices": [
+    "Later",
+    "Review now"
+  ],
+  "dom": {
+    "html": "<html dir=\"ltr\" lang=\"en\">",
+    "outside": [],
+    "root": [
+      "<div id=\"root\">",
+      "  <div data-screen=\"received\" data-testid=\"q9\">",
+      "    <div  style=@2466e7e008c4>",
+      "      <section data-testid=\"q9-received\" role=\"region\" style=@db576ca0af14>",
+      "        <p  style=@aac647ed79bd>",
+      "          \"Received 212 changes from Juan and Ana. 3 verses, 1 alignment and 2 checks were changed by more than one person.\"",
+      "        <p  style=@6fbeea614cf0>",
+      "          \"Only 212 of 230 changes in a set of a teammate's changes have arrived. The rest come with a later sync.\"",
+      "        <span  style=@949f63146b71>",
+      "          <button data-choice=\"Later\" data-i=\"quiet\" data-testid=\"q9-choice\" data-tone=\"neutral\" data-trim=\"cap\" type=\"button\" style=@94ff06e83fae>",
+      "            \"Later\"",
+      "          <button data-choice=\"Review now\" data-i=\"fill\" data-testid=\"q9-choice\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=@1a73ba27a3e9>",
+      "            \"Review now\""
+    ],
+    "styles": {
+      "1a73ba27a3e9": "align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: initial; border-bottom-left-radius: ; border-bottom-right-radius: ; border-bottom-style: initial; border-bottom-width: 0px; border-image-outset: initial; border-image-repeat: initial; border-image-slice: initial; border-image-source: initial; border-image-width: initial; border-left-color: initial; border-left-style: initial; border-left-width: 0px; border-right-color: initial; border-right-style: initial; border-right-width: 0px; border-top-color: initial; border-top-left-radius: ; border-top-right-radius: ; border-top-style: initial; border-top-width: 0px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--tone-on-fill); column-gap: ; cursor: pointer; display: inline-flex; flex-basis: auto; flex-grow: 0; flex-shrink: 0; font-family: var(--font-ui); font-size: var(--control-fs-md); font-weight: var(--fw-heavy); height: var(--control-h-md); justify-content: center; letter-spacing: var(--track-13-5); line-height: 1.2; padding-block-end: 0px; padding-block-start: 0px; padding-inline-end: ; padding-inline-start: ; row-gap: ; text-align: center; text-decoration-color: initial; text-decoration-line: none; text-decoration-style: initial; text-decoration-thickness: initial; text-wrap-mode: nowrap; white-space-collapse: collapse",
+      "2466e7e008c4": "background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; min-height: 100vh",
+      "6fbeea614cf0": "color: var(--uw-slate); font-size: var(--fs-ui-sm); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px",
+      "949f63146b71": "column-gap: 8px; display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px",
+      "94ff06e83fae": "align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-bottom-style: ; border-bottom-width: ; border-image-outset: ; border-image-repeat: ; border-image-slice: ; border-image-source: ; border-image-width: ; border-left-color: ; border-left-style: ; border-left-width: ; border-right-color: ; border-right-style: ; border-right-width: ; border-top-color: ; border-top-left-radius: ; border-top-right-radius: ; border-top-style: ; border-top-width: ; box-sizing: border-box; color: var(--fg-muted); column-gap: ; cursor: pointer; display: inline-flex; flex-basis: auto; flex-grow: 0; flex-shrink: 0; font-family: var(--font-ui); font-size: var(--control-fs-md); font-weight: var(--fw-heavy); height: var(--control-h-md); justify-content: center; letter-spacing: var(--track-13-5); line-height: 1.2; padding-block-end: 0px; padding-block-start: 0px; padding-inline-end: ; padding-inline-start: ; row-gap: ; text-align: center; text-decoration-color: initial; text-decoration-line: none; text-decoration-style: initial; text-decoration-thickness: initial; text-wrap-mode: nowrap; white-space-collapse: collapse",
+      "aac647ed79bd": "color: var(--uw-ink); flex-basis: 320px; flex-grow: 1; flex-shrink: 1; font-size: var(--fs-ui); font-weight: var(--fw-bold); line-height: 1.45; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px",
+      "db576ca0af14": "background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radius: ; border-top-right-radius: ; box-shadow: var(--shadow-hover); box-sizing: border-box; column-gap: 12px; display: flex; flex-direction: column; margin-bottom: 48px; margin-left: auto; margin-right: auto; margin-top: 48px; max-width: 560px; padding-bottom: 20px; padding-left: 24px; padding-right: 24px; padding-top: 20px; row-gap: 12px"
+    }
+  }
+}

@@ -38,6 +38,10 @@ struct Shared {
     opens: Condvar,
     /// `true` lets a held checkpoint go.
     checkpoint: watch::Sender<bool>,
+    /// What the handles list as outside edits instead of the store's, when set.
+    outside: Mutex<Option<tc_api::session::OutsideEdits>>,
+    /// The handles' event channels, beside the store's events, for [`CountingStore::emit`].
+    senders: Mutex<Vec<tokio::sync::mpsc::UnboundedSender<StoreEvent>>>,
 }
 
 pub struct CountingStore<S> {
@@ -53,12 +57,26 @@ impl<S: ProjectStore> CountingStore<S> {
                 counts: Mutex::new(Counts::default()),
                 opens: Condvar::new(),
                 checkpoint: watch::channel(false).0,
+                outside: Mutex::new(None),
+                senders: Mutex::new(Vec::new()),
             }),
         }
     }
 
     pub fn inner(&self) -> &S {
         &self.inner
+    }
+
+    /// The handles list `outside` as their outside edits from now on.
+    pub fn set_outside(&self, outside: tc_api::session::OutsideEdits) {
+        *self.shared.outside.lock().unwrap() = Some(outside);
+    }
+
+    /// Every open handle's subscribers get `event`, as if the store sent it.
+    pub fn emit(&self, event: &StoreEvent) {
+        for sender in self.shared.senders.lock().unwrap().iter() {
+            let _ = sender.send(event.clone());
+        }
     }
 
     fn counts(&self) -> std::sync::MutexGuard<'_, Counts> {
@@ -160,6 +178,14 @@ impl<S: ProjectStore> ProjectStore for CountingStore<S> {
         self.inner.create(new)
     }
 
+    fn create_imported(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.inner.create_imported(new, cause)
+    }
+
     fn trust_lock(&self, folder: &ProjectRef) {
         self.inner.trust_lock(folder);
     }
@@ -202,7 +228,33 @@ impl ProjectHandle for CountingHandle {
     }
 
     fn subscribe(&self) -> tokio::sync::mpsc::UnboundedReceiver<StoreEvent> {
-        self.inner.subscribe()
+        let mut from_store = self.inner.subscribe();
+        let (sender, events) = tokio::sync::mpsc::unbounded_channel();
+        self.shared.senders.lock().unwrap().push(sender.clone());
+        tokio::spawn(async move {
+            while let Some(event) = from_store.recv().await {
+                if sender.send(event).is_err() {
+                    break;
+                }
+            }
+        });
+        events
+    }
+
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        self.shared
+            .outside
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| self.inner.outside_edits())
+    }
+
+    fn carried_bytes(
+        &self,
+        oid: tc_journal::GitOid,
+    ) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        self.inner.carried_bytes(oid)
     }
 
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
@@ -223,7 +275,7 @@ impl ProjectHandle for CountingHandle {
                 let _ = released.wait_for(|go| *go).await;
             }
             match fail {
-                Some(reason) => CheckpointOutcome::Failed { reason },
+                Some(reason) => CheckpointOutcome::Failed { reason, code: None },
                 None => inner.await,
             }
         })
@@ -327,6 +379,14 @@ impl ProjectStore for SharedStore {
         new: tc_app::backend::NewProjectSpec,
     ) -> Result<(), tc_app::backend::CreateFailure> {
         self.0.create(new)
+    }
+
+    fn create_imported(
+        &self,
+        new: tc_app::backend::NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), tc_app::backend::CreateFailure> {
+        self.0.create_imported(new, cause)
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {

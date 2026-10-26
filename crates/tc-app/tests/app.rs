@@ -24,6 +24,7 @@ mod app {
     mod check;
     mod check_item;
     mod check_story;
+    mod checkpoints;
     pub mod common;
     mod conflicts;
     mod create;
@@ -40,6 +41,7 @@ mod app {
     mod hello;
     mod home;
     mod hooks;
+    mod import;
     mod internet;
     mod jobs;
     mod keychain;

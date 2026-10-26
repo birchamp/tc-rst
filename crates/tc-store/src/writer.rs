@@ -107,15 +107,43 @@ pub(crate) enum Job {
         reply: Resolver<Result<crate::reply::FocusReport, StoreError>>,
     },
     /// The watcher told these paths changed (§11.1).
-    Paths(Vec<String>),
+    /// The paths the watcher told, and how many changes it had heard of when it told them.
+    Paths(Vec<String>, u64),
     /// *Take in the file as an edit* for a held path (§6.2).
     TakeInHeld {
         rel: String,
         reply: Resolver<Result<crate::reply::TakenIn, StoreError>>,
     },
+    /// The bytes of a carried file's version, its blob (§11.4), for an export.
+    ReadCarried {
+        oid: tc_journal::GitOid,
+        reply: Resolver<Result<Option<Vec<u8>>, StoreError>>,
+    },
     /// The branch moved: the objects of the commit are reachable now, so a repack due may
     /// run (§9.8).
     Repack,
+    /// *Import* of a kept copy (delta §2.11 Q4).
+    ImportKept {
+        copy: String,
+        reply: Resolver<Result<crate::kept::ImportReport, StoreError>>,
+    },
+    /// The actor's answer to an *Import*: its batches are durable, or why not.
+    Imported {
+        copy: String,
+        bytes: Vec<u8>,
+        result: Result<crate::kept::ImportReport, StoreError>,
+        reply: Resolver<Result<crate::kept::ImportReport, StoreError>>,
+    },
+    /// *Not now* for a held book file or story (delta §2.11 Q5).
+    NotNow {
+        rel: String,
+        reply: Resolver<Result<(), StoreError>>,
+    },
+    /// *Dismiss* of a kept copy.
+    DismissKept {
+        copy: String,
+        reply: Resolver<Result<(), StoreError>>,
+    },
     /// Resolves when every job sent before it has finished.
     Sync {
         reply: Resolver<()>,
@@ -452,7 +480,13 @@ impl Writer {
             .unrecorded_metadata
             .values()
             .any(|copy| Some(copy) == notice.copy.as_ref());
-        if held || shared_copy || unrecorded {
+        // A kept copy goes only with its own entry (`dismiss_kept`).
+        let kept = self
+            .manifest
+            .kept
+            .iter()
+            .any(|k| Some(&k.copy) == notice.copy.as_ref());
+        if held || shared_copy || unrecorded || kept {
             self.shared.remove_notice(id);
             return Ok(());
         }
@@ -497,7 +531,7 @@ impl Writer {
 
     /// *Restore from the project* for a held path (§6.2): the file is written from the
     /// fold, with the held bytes as the ones the compare-and-swap expects.
-    fn restore_held(&mut self, rel: &str) -> Result<(), StoreError> {
+    pub(crate) fn restore_held(&mut self, rel: &str) -> Result<(), StoreError> {
         if let Some(reason) = self.read_only() {
             return Err(StoreError::Other(format!(
                 "the project is read-only: {reason:?}"
@@ -541,7 +575,10 @@ impl Writer {
                 let result = self.focus();
                 reply.resolve(result);
             }
-            Job::Paths(rels) => self.paths_changed(rels),
+            Job::Paths(rels, upto) => {
+                self.paths_changed(rels);
+                self.shared.examined(upto);
+            }
             Job::TakeInHeld { rel, reply } => self.take_in_held(&rel, reply),
             Job::DismissNotice { id, reply } => {
                 let result = self.dismiss(id);
@@ -565,7 +602,30 @@ impl Writer {
                     self.retry();
                 }
             }
+            Job::ReadCarried { oid, reply } => {
+                // The writer owns the repository; a project with none has no carried bytes.
+                let result = match &self.git {
+                    Some(git) => git.read_blob(oid).map_err(StoreError::from),
+                    None => Ok(None),
+                };
+                reply.resolve(result);
+            }
             Job::Repack => self.maybe_repack(),
+            Job::ImportKept { copy, reply } => self.import_kept(&copy, reply),
+            Job::Imported {
+                copy,
+                bytes,
+                result,
+                reply,
+            } => self.imported(&copy, &bytes, result, reply),
+            Job::NotNow { rel, reply } => {
+                let result = self.not_now(&rel);
+                reply.resolve(result);
+            }
+            Job::DismissKept { copy, reply } => {
+                let result = self.dismiss_kept(&copy);
+                reply.resolve(result);
+            }
             Job::Sync { reply } => reply.resolve(()),
             Job::Close { reply } => {
                 self.stop_repack();
@@ -584,7 +644,7 @@ impl Writer {
         if !self.wrote_group || !self.shared.hooks.looks_at_burrito() {
             return;
         }
-        if !self.pending_record.is_empty() || self.shared.group_open() {
+        if !self.pending_record.is_empty() || self.shared.group_open() || self.shared.unexamined() {
             // Looked at after a later job, when the group is closed.
             return;
         }

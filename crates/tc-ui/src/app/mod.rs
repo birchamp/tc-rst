@@ -39,7 +39,9 @@ pub mod load;
 pub mod net;
 pub mod offer;
 pub mod open_door43;
+pub mod outside;
 pub mod print;
+pub mod q9;
 pub mod recovery;
 pub mod review;
 pub mod save;
@@ -52,6 +54,7 @@ pub mod submit;
 pub mod sync;
 pub mod translate;
 pub mod understand;
+pub mod update_book;
 pub mod upgrades;
 
 #[cfg(all(target_arch = "wasm32", feature = "app"))]

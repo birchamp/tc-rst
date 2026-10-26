@@ -228,6 +228,13 @@ fn loaded_screen(
                 .unwrap_or_default()
         }))
     });
+    // A story's kept copies of outside edits reach the review's notices from here
+    // (INV-A-KEPT-COPY-STAYS-ON-A-SCREEN); this screen counts no frame conflicts.
+    let review_button = {
+        let editing = s.editing.clone();
+        let off = Signal::derive(move || editing.with(Editing::is_open));
+        super::translate::review_entry_button(s, actions, shown.at.clone(), Signal::stored(0), off)
+    };
     let panel = StoryPanel {
         focus_frame,
         comments: Some(comments),
@@ -245,6 +252,7 @@ fn loaded_screen(
                     </IconButton>
                     <h2 style=h2.to_style()>{story_label(shown.story)}</h2>
                     <div style="flex: 1;"></div>
+                    {review_button}
                     <HelpsToggleButton />
                 </div>
                 <div style=scroll.to_style()>

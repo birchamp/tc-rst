@@ -3,6 +3,6 @@
   "methods": ["bufferChanged", "chooseFile", "chooseFolder", "feedbackSend", "onCloseRequested",
               "onDownloadDone", "openExternal", "platform", "printPdf", "setCanClose", "takeBuffered"],
   "calledByThePage": ["bufferChanged", "chooseFile", "chooseFolder", "feedbackSend",
-                      "onCloseRequested", "openExternal", "printPdf", "setCanClose",
-                      "takeBuffered"]
+                      "onCloseRequested", "onDownloadDone", "openExternal", "printPdf",
+                      "setCanClose", "takeBuffered"]
 }

@@ -18,7 +18,10 @@ use tc_app::wire::scope::record_ref;
 use tc_journal::{ChapterNo, Record, RecordKey, VerseNo};
 
 use super::corpus::{PSALMS, corpora, store_corpora};
-use super::harness::{Backing, OnStore, Scale, cost, costs_what_it_touches, growth, opened, scale};
+use super::harness::{
+    Backing, OnStore, Scale, book_costs_what_it_touches, cost, costs_what_it_touches, growth,
+    opened, scale,
+};
 
 async fn ok<E: tc_api::Endpoint>(app: &App, req: &E) -> E::Ok {
     match app.request(req).await.unwrap() {
@@ -121,7 +124,7 @@ async fn align_edit_touches_one_verse() {
 /// project: its cost is the book's, whatever the history behind it (PERF rule 1).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn align_index_costs_the_book() {
-    let ((small, large), _) = costs_what_it_touches(
+    let ((small, large), _) = book_costs_what_it_touches(
         "the aligner's rail",
         OnStore::AppCounts,
         opened,

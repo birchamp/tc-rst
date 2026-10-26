@@ -22,6 +22,7 @@ mod app {
     mod latest;
     mod lint;
     mod offer;
+    mod outside;
     mod print;
     mod recovery;
     mod review;

@@ -1,10 +1,12 @@
 // Community Checking (B8): the preview of Titus on A4 sheets and of the OBS sample's drafted
-// story, the page setup, the export menu (its items listed and off until D2's exports), the way
+// story, the page setup, the export menu (its items listed; one runs only when chosen, as j07-export shows), the way
 // back to the checking tools, and the book changing while the preview is open. Reading the
 // preview writes nothing.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app node --test parity/app/journeys/community-checking.test.mjs
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { newRequestId } from '../env-rust.mjs';
 import { browserTest, recordRequests, until, withApp } from './kit.mjs';
 
@@ -43,8 +45,10 @@ const printedText = (page) => page.locator('[data-testid="cc-flow"]').evaluateAl
 const chip = (page, group, name) => page.getByRole('group', { name: group }).getByRole('button', { name, exact: true });
 
 browserTest('cc_titus_prints_its_drafted_chapter_and_reading_it_writes_nothing', async () => {
-  await withApp(async ({ page }) => {
+  await withApp(async ({ page, env }) => {
     await openTitusCheck(page);
+    const commits = () => Number(execFileSync('git', ['-C', path.join(env.projectsDir, BIBLE), 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).trim());
+    const before = commits();
     const requests = recordRequests(page);
     const mark = requests.mark();
     await page.getByTestId('open-community-checking').click();
@@ -59,7 +63,10 @@ browserTest('cc_titus_prints_its_drafted_chapter_and_reading_it_writes_nothing',
     assert.equal(await page.locator('[data-testid="cc-chapter"] .print-verse-number').count(), 16);
     assert.ok((await printedText(page)).startsWith('Pablo, siervo de Dios'));
     assert.equal(await page.getByText('Incomplete draft.').count(), 1, 'the notice explains the undrafted lines');
-    assert.deepEqual([...new Set(requests.api(mark))], ['/api/v1/export/book'], 'the preview reads its print and writes nothing');
+    // Opening the preview is a mode switch, which tC4 checkpoints too (state.jsx MODE_NAME.publish,
+    // D1's session/leave); with nothing pending it commits nothing.
+    assert.deepEqual([...new Set(requests.api(mark))].filter((p) => p !== '/api/v1/session/leave'), ['/api/v1/export/book'], 'the preview reads its print');
+    assert.equal(commits(), before, 'and writes nothing');
   });
 });
 
@@ -118,7 +125,7 @@ browserTest('cc_the_page_setup_resets_the_sheets_and_keeps_every_word', async ()
   });
 });
 
-browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_d2', async () => {
+browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_one_is_chosen', async () => {
   await withApp(async ({ page }) => {
     await openTitusPreview(page);
     const requests = recordRequests(page);
@@ -127,8 +134,9 @@ browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_d2', async
     const items = page.getByRole('menuitem');
     await items.first().waitFor();
     assert.deepEqual(await items.allTextContents(), ['USFM, aligned', 'USFM, plain', 'Scripture Burrito (.zip)'], 'a browser has no PDF item');
-    for (const item of await items.all()) assert.equal(await item.isDisabled(), true);
-    await items.first().click({ force: true });
+    const off = [];
+    for (const item of await items.all()) if (await item.isDisabled()) off.push(await item.textContent());
+    assert.deepEqual(off, ['Scripture Burrito (.zip)'], 'D2 runs the USFM exports; the Burrito zip waits for E2');
     await page.keyboard.press('Escape');
     assert.deepEqual(requests.api(mark), [], 'no export runs');
   });

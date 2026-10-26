@@ -320,7 +320,7 @@ const LISTED: &[(&str, &str, &str)] = &[
 /// What tC4's Check screen and aligner read of each verse of a draft
 /// (`fixtures/usfm/check-text-vectors.json`, made by `tools/gen-check-text-vectors.mjs` with
 /// tC4's own `verseTextIndex`): whether the verse is drafted, by the body tC4's indexer finds
-/// ([`tc_usfm::codec::is_drafted`]), and the text it shows ([`tc_usfm::shown_text_v1`]), for
+/// ([`tc_usfm::codec::tc4_indexer_drafted`]), and the text it shows ([`tc_usfm::shown_text_v1`]), for
 /// every verse of tC4's plain drafts and of drafts written for poetry, superscriptions,
 /// lists, notes and CRLF line ends. The differences are a verse whose `\v` stands inside a
 /// line, which tC4 does not index and the rebuild reads (§7.7), and the verses of [`LISTED`].
@@ -365,7 +365,7 @@ fn the_check_text_is_what_tc4_reads() {
                     // tC4's indexer reads a `\v` only at the start of a line, so it indexes
                     // no verse whose marker stands after `\q1 ` or after text; the rebuild
                     // reads it from its marker (§7.7).
-                    let ours = codec::is_drafted(verse.marker.term(), &content)
+                    let ours = codec::tc4_indexer_drafted(verse.marker.term(), &content)
                         .then(|| tc_usfm::shown_text_v1(&content));
                     let expected = match (*book, key.1.as_str()) {
                         ("midline", "13") => {
@@ -386,7 +386,7 @@ fn the_check_text_is_what_tc4_reads() {
                     continue;
                 };
                 seen += 1;
-                let ours = codec::is_drafted(verse.marker.term(), &content);
+                let ours = codec::tc4_indexer_drafted(verse.marker.term(), &content);
                 if ours != case["drafted"].as_bool().unwrap() {
                     wrong.push(format!("{book} {key:?}: drafted {ours} in {content:?}"));
                     continue;

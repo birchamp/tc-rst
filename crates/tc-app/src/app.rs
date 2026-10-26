@@ -80,7 +80,8 @@ pub struct AppDeps {
     pub sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange: unavailable until E2.
     pub exchange: Arc<dyn crate::ports::ExchangePort>,
-    /// Import of other projects: unavailable until F1.
+    /// Import of a tC3 project and Update a book (F1): tc-import and the store; scripted in
+    /// tests.
     pub import: Arc<dyn crate::ports::ImportPort>,
     /// What ends the process at a test crash point.
     #[cfg(feature = "test-hooks")]
@@ -109,7 +110,7 @@ impl AppDeps {
             store: StoreChoice::OnDisk,
             sync: Arc::new(crate::ports::UnavailableSync),
             exchange: Arc::new(crate::ports::usb::UsbExchange),
-            import: Arc::new(crate::ports::UnavailableImport),
+            import: Arc::new(crate::import::TcImport),
             #[cfg(feature = "test-hooks")]
             ender: Arc::new(ExitProcess),
             #[cfg(feature = "test-hooks")]
@@ -199,13 +200,14 @@ pub(crate) struct Inner {
     pub(crate) seed_job: Mutex<Option<JobId>>,
     /// Home's summaries (B2).
     pub(crate) home: crate::home::SummaryCache,
+    /// The start removed an import's part copy and Home has not said so yet (F1).
+    pub(crate) import_removed: Arc<std::sync::atomic::AtomicBool>,
     /// Sync, share and open from Door43 (UI-2).
     pub(crate) sync: Arc<dyn crate::ports::SyncPort>,
     /// USB exchange (E2 adds its use).
     #[allow(dead_code)]
     pub(crate) exchange: Arc<dyn crate::ports::ExchangePort>,
-    /// Import (F1 adds its use).
-    #[allow(dead_code)]
+    /// Import (F1).
     pub(crate) import: Arc<dyn crate::ports::ImportPort>,
     /// The client resources are read and downloaded with, on the production server whatever
     /// the account's server is (tC4 #120, B9a).
@@ -213,6 +215,10 @@ pub(crate) struct Inner {
     /// The (package, book) pairs this app session downloaded, which Get source texts counts
     /// per package (tC4 `installedSrc`, B9a).
     pub(crate) downloaded: Mutex<std::collections::BTreeSet<(String, tc_core::BookId)>>,
+    /// Each project's last sync result this app session, which Home reads again (`door43/lastSync`,
+    /// owner ruling H5: what a newer version replaced stays readable after the toast).
+    pub(crate) last_sync:
+        Mutex<std::collections::BTreeMap<tc_api::ids::ProjectRef, tc_api::jobs::SyncResultView>>,
     /// The plans a person is reading: upgrades, gateway changes and re-pins (C8).
     pub(crate) plans: crate::upgrades::KeptPlans,
     /// The offers and plans a test or a parity capture scripted (C8).
@@ -221,6 +227,10 @@ pub(crate) struct Inner {
     /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
     /// binary that runs the server.
     pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
+    /// The server's downloads, where an export's file goes (D2). Given once, as `uploads`.
+    pub(crate) downloads: std::sync::OnceLock<crate::export::Downloads>,
+    /// The print documents of print exports, served by `GET /print/{job}` (D2).
+    pub(crate) prints: crate::export::Prints,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -383,8 +393,15 @@ impl App {
             );
         }
 
+        let import_removed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         if let Some(backend) = on_disk {
-            crate::backend::store::report_removed_staging(backend, reports.clone(), clock.clone());
+            crate::backend::store::report_removed_staging(
+                backend,
+                reports.clone(),
+                clock.clone(),
+                bus.clone(),
+                import_removed.clone(),
+            );
         }
 
         // The keychain is read here and nowhere else (but a test relaunch): an
@@ -480,13 +497,17 @@ impl App {
             resources,
             seed_job: Mutex::new(None),
             home: crate::home::SummaryCache::default(),
+            import_removed,
             sync,
             exchange,
             import,
             resources_door43,
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
+            last_sync: Mutex::new(std::collections::BTreeMap::new()),
             plans: crate::upgrades::KeptPlans::default(),
             uploads: std::sync::OnceLock::new(),
+            downloads: std::sync::OnceLock::new(),
+            prints: crate::export::Prints::default(),
             #[cfg(feature = "test-hooks")]
             scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),
@@ -594,6 +615,12 @@ impl App {
     /// chose. Once; the first call wins.
     pub fn provide_uploads(&self, uploads: crate::fixes::Uploads) {
         let _ = self.inner.uploads.set(uploads);
+    }
+
+    /// Gives the app the server's downloads: an export registers its file there. Once; the
+    /// first call wins.
+    pub fn provide_downloads(&self, downloads: crate::export::Downloads) {
+        let _ = self.inner.downloads.set(downloads);
     }
 
     /// The request guard of a project-scoped query (§4.3): the screen's session at `at`, or

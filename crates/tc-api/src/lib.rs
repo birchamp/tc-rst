@@ -41,6 +41,7 @@ pub mod feedback;
 pub mod helps;
 pub mod home;
 pub mod ids;
+pub mod import;
 pub mod jobs;
 pub mod model;
 pub mod net;
@@ -91,6 +92,7 @@ macro_rules! endpoint_table {
             command "prefs/setLocale": $crate::prefs::SetLocale => ();
             command "prefs/setDraftUnit": $crate::prefs::SetDraftUnit => ();
             command "prefs/setAlignSuggestions": $crate::prefs::SetAlignSuggestions => ();
+            command "prefs/setRailFolded": $crate::prefs::SetRailFolded => ();
             command "prefs/recordPlace": $crate::prefs::RecordPlace => ();
 
             command "session/drafts": $crate::session::Drafts => $crate::session::OfferedDrafts;
@@ -122,6 +124,7 @@ macro_rules! endpoint_table {
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
             job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
+            query "door43/lastSync": $crate::door43::LastSync => $crate::door43::LastSyncView;
 
             query "exchange/identify": $crate::exchange::Identify => $crate::exchange::IdentifyView;
             job "exchange/export": $crate::exchange::Export => $crate::ids::JobId;
@@ -138,6 +141,14 @@ macro_rules! endpoint_table {
 
             job "session/open": $crate::session::Open => $crate::ids::JobId;
             command "session/close": $crate::session::Close => ();
+            command "session/retryCheckpoint": $crate::session::RetryCheckpoint => $crate::event::CheckpointOutcome;
+            command "session/leave": $crate::session::LeaveMode => ();
+            command "session/focus": $crate::session::Focus => $crate::session::OutsideEdits;
+            command "session/importKept": $crate::session::ImportKept
+                => $crate::session::KeptImported;
+            command "session/notNow": $crate::session::NotNow => $crate::session::OutsideEdits;
+            command "session/dismissNotice": $crate::session::DismissNotice
+                => $crate::session::OutsideEdits;
 
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;
@@ -177,7 +188,10 @@ macro_rules! endpoint_table {
             query "conflicts/list": $crate::conflicts::List => $crate::conflicts::ReviewView;
             query "conflicts/history": $crate::conflicts::History
                 => $crate::conflicts::HistoryView;
+            query "conflicts/versions": $crate::conflicts::Versions
+                => $crate::conflicts::HistoryView;
             command "conflicts/resolve": $crate::conflicts::Resolve => $crate::write::Ack;
+            command "conflicts/restore": $crate::conflicts::Restore => $crate::write::Ack;
             command "conflicts/resolveBulk": $crate::conflicts::ResolveBulk
                 => $crate::conflicts::BulkKept;
 
@@ -213,6 +227,15 @@ macro_rules! endpoint_table {
 
             query "export/book": $crate::export::Book => $crate::export::BookPrint;
             query "export/stories": $crate::export::Stories => $crate::export::StoriesPrint;
+            query "export/preflight": $crate::export::Preflight
+                => $crate::export::PreflightView;
+            job "export/run": $crate::export::RunExport => $crate::ids::JobId;
+
+            query "import/review": $crate::import::Review => $crate::import::ImportReview;
+            job [ImportVersions] "import/versions": $crate::import::Versions
+                => $crate::ids::JobId;
+            job "import/run": $crate::import::Run => $crate::ids::JobId;
+            job "import/updateBook": $crate::import::UpdateBook => $crate::ids::JobId;
         }
     };
 }

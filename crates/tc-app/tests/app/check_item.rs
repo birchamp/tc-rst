@@ -506,6 +506,46 @@ async fn words_tapped_on_a_verse_that_changed_are_not_saved() {
     assert_eq!(now.decision.value.status, None, "nothing was recorded");
 }
 
+/// H12 ("poetry - yes, everywhere"): a verse whose words start on a `\q1` line after its
+/// `\v` marker is drafted in Check as on Home. Check shows its words, and a mark on them is
+/// saved, so the store and the fold read it as Check does. tC4 4.0 leaves such a verse out.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_verse_on_poetry_lines_is_drafted_in_check_and_its_mark_is_saved() {
+    let (_dir, t, _fs) = on_the_store().await;
+    let at = open_on_store(&t).await;
+    let open = session(&t.app, &at, Tool::TranslationNotes).await;
+    let first = the_first(rows(&open), "for the faith of the chosen people of God");
+    let view = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    let verse = view.target.verse.clone().expect("the verse is drafted");
+    save_verse(
+        &t,
+        &at,
+        12,
+        &verse,
+        "\n\\q1 Pablo, siervo de Dios,\n\\q2 para la fe de los escogidos de Dios.",
+    )
+    .await;
+    let poem = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(
+        poem.target.words.first().map(String::as_str),
+        Some("Pablo"),
+        "Check shows the poem's words: {:?}",
+        poem.target
+    );
+    assert!(poem.target.verse.is_some(), "the verse is drafted");
+    let ack = post(
+        &t.app,
+        &decide(&at, 13, &poem, DecideEdit::Valid { words: vec![0] }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ack.stored, Stored::Written);
+    let now = item(&t.app, &at, Tool::TranslationNotes, first).await;
+    assert_eq!(now.decision.value.status, Some(DecisionStatus::Valid));
+    assert_eq!(now.target.selected, vec![0]);
+    assert!(!now.decision.value.invalidated, "{:?}", now.decision.value);
+}
+
 /// A mark for a check the list no longer has at that place is `LookAgain`, not another check.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_mark_for_another_check_is_look_again() {

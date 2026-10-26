@@ -611,7 +611,7 @@ fn release_has_no_pending_translation() {
     } else {
         assert!(
             pending.is_empty(),
-            "a release needs every rebuild key translated; still in English: {pending:?}"
+            "INV-NO-UNTRANSLATED-STRING-SHIPS: a release needs every rebuild key translated; still in English: {pending:?}"
         );
     }
 }

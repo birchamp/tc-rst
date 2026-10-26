@@ -1,0 +1,30 @@
+{
+  "path": "import/updateBook",
+  "kind": "startJob",
+  "net": null,
+  "request": {
+    "request": "3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    },
+    "book": "TIT",
+    "file": {
+      "upload": "00000000000000000000000000000008",
+      "name": "TIT.usfm"
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": 21
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

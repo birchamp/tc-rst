@@ -1,0 +1,27 @@
+{
+  "path": "session/retryCheckpoint",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "20202020202020202020202020202020",
+    "at": {
+      "project": "kr_ulb",
+      "epoch": 3
+    }
+  },
+  "reply": {
+    "type": "ok",
+    "value": {
+      "type": "committed"
+    }
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}

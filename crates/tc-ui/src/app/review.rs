@@ -7,9 +7,10 @@
 //! every teammate's version cream (owner ruling 2026-10-13, #679). One label function names a
 //! person here and on the sync result (#680, [`crate::app::sync::person_label`]).
 
+use tc_api::check::DecisionStatus;
 use tc_api::conflicts::{
     ConflictEntry, ConflictKind, KeepChoice, MadeBy, NoticeView, ReviewPlace, ReviewTab, TabCount,
-    Version, VersionCause,
+    Version, VersionCause, VersionValue,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, RecordRef, RequestId};
 use tc_api::shown::{PersonLabel, Who};
@@ -201,6 +202,9 @@ pub fn failure_text(error: &ApiError) -> String {
         }
         ApiError::NotSaved(NotSaved::Refused(SaveRefusal::LastBook)) => {
             t(keys::review::refused::LAST_BOOK, &[])
+        }
+        ApiError::NotSaved(NotSaved::Refused(SaveRefusal::NotKept)) => {
+            t(keys::outside::NOT_KEPT, &[])
         }
         ApiError::NotSaved(NotSaved::Disk(reason)) => {
             t(keys::review::refused::DISK, &[("reason", reason)])
@@ -588,6 +592,68 @@ pub fn tabs_shown(tabs: &[TabCount], shown: ReviewTab) -> Vec<TabCount> {
         .collect()
 }
 
+/// What a version of History holds, as its row draws it; nothing for a value no row draws.
+pub fn version_text(value: &VersionValue) -> Option<String> {
+    use keys::review::value as v;
+    match value {
+        VersionValue::Text(text) => Some(text.trim().to_owned()),
+        VersionValue::Joined { by } => Some(t(v::JOINED, &[("by", by)])),
+        VersionValue::Absent => Some(t(v::ABSENT, &[])),
+        VersionValue::Check {
+            selected,
+            nothing_to_select,
+            status,
+            bookmarked,
+            comment,
+        } => {
+            let mut line = vec![if *nothing_to_select {
+                t(v::NO_SELECTION_NEEDED, &[])
+            } else if selected.is_empty() {
+                t(v::NONE_SELECTED, &[])
+            } else {
+                t(v::SELECTED, &[("words", &selected.join(" … "))])
+            }];
+            line.extend(status.map(|status| {
+                t(
+                    match status {
+                        DecisionStatus::Valid => v::status::VALID,
+                        DecisionStatus::Invalid => v::status::INVALID,
+                        DecisionStatus::Todo => v::status::TODO,
+                    },
+                    &[],
+                )
+            }));
+            if *bookmarked {
+                line.push(t(v::BOOKMARKED, &[]));
+            }
+            let line = line.join(" · ");
+            Some(match comment {
+                Some(text) => format!("{line}\n{}", t(v::COMMENT, &[("text", text)])),
+                None => line,
+            })
+        }
+        VersionValue::Alignment {
+            pairs,
+            done,
+            marked_invalid,
+        } => {
+            let mut line = vec![if pairs.is_empty() {
+                t(v::NOTHING_ALIGNED, &[])
+            } else {
+                t(v::ALIGNED, &[("pairs", &pairs.join(" · "))])
+            }];
+            if *done {
+                line.push(t(v::ALIGN_DONE, &[]));
+            }
+            if *marked_invalid {
+                line.push(t(v::ALIGN_INVALID, &[]));
+            }
+            Some(line.join(" · "))
+        }
+        VersionValue::NotShown => None,
+    }
+}
+
 /// How a version of History came to be.
 pub fn cause_label(cause: VersionCause) -> String {
     use keys::review::cause as c;
@@ -648,5 +714,12 @@ pub fn notice_text(notice: &NoticeView) -> String {
             t(n::INCOMPLETE_CHANGES, &[("have", have), ("of", of)])
         }
         NoticeView::KeptApart { changes } => t(n::KEPT_APART, &[("changes", changes)]),
+        NoticeView::ChangedWhileReadOnly { file } => t(
+            n::CHANGED_WHILE_READ_ONLY,
+            &[(
+                "name",
+                &crate::app::outside::name_of(file, crate::app::outside::book_of_file(file)),
+            )],
+        ),
     }
 }

@@ -199,7 +199,7 @@ impl UsfmProblem {
             Self::NoId => "importer.usfm.noId",
             Self::NotText => "importer.usfm.notText",
             Self::Damaged { .. } => "addBook.usfmDamaged",
-            Self::Exists { .. } => "addBook.usfmExists",
+            Self::Exists { .. } => "addBook.usfmExistsUpdate",
             Self::TwoFiles { .. } => "importer.usfm.twoFiles",
         }
     }

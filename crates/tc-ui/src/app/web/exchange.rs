@@ -50,17 +50,16 @@ impl Actions {
 
     /// "Save work for a teammate" on a Home card.
     pub fn open_save_for_teammate(&self, card: &HomeCard) {
-        let s = self.s();
-        s.ex.try_set(Some(ExportForm::open(
-            Self::exchange_project(card),
-            js::random_request_id(),
-        )));
-        s.layers.dialog.try_set(Some(Dialog::SaveForTeammate));
+        let form = ExportForm::open(Self::exchange_project(card), js::random_request_id());
+        self.s()
+            .layers
+            .dialog
+            .try_set(Some(Dialog::SaveForTeammate(form)));
     }
 
     pub fn patch_ex(&self, patch: impl FnOnce(&mut ExportForm)) {
-        self.s().ex.try_update(|ex| {
-            if let Some(ex) = ex {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::SaveForTeammate(ex)) = dialog {
                 patch(ex);
             }
         });
@@ -79,9 +78,12 @@ impl Actions {
     pub fn save_for_teammate(&self) {
         let pressed = self
             .s()
-            .ex
-            .try_update(|ex| {
-                let ex = ex.as_mut()?;
+            .layers
+            .dialog
+            .try_update(|dialog| {
+                let Some(Dialog::SaveForTeammate(ex)) = dialog else {
+                    return None;
+                };
                 let project = ex.project.project.clone();
                 ex.press()
                     .map(|(request, destination)| (project, request, destination))
@@ -110,7 +112,7 @@ impl Actions {
                                 this.patch_ex(|ex| ex.progress(attempt, phase));
                             }
                         },
-                        || this.s().ex.with_untracked(Option::is_some),
+                        || this.s().export_form().with_untracked(Option::is_some),
                     )
                     .await
                 }
@@ -145,8 +147,7 @@ impl Actions {
             }
             _ => ReceiveForm::open(project, js::random_request_id()),
         };
-        s.rx.try_set(Some(form));
-        s.layers.dialog.try_set(Some(Dialog::ReceiveWork));
+        s.layers.dialog.try_set(Some(Dialog::ReceiveWork(form)));
     }
 
     pub fn type_new_project_name(&self, name: String) {
@@ -157,7 +158,7 @@ impl Actions {
     /// of a receive is never lost to the person (E2 step 4b).
     fn patch_rx_or_last(&self, patch: impl FnOnce(&mut ReceiveForm)) {
         let s = self.s();
-        if s.rx.with_untracked(Option::is_some) {
+        if s.receive_form().with_untracked(Option::is_some) {
             self.patch_rx(patch);
         } else {
             s.rx_last.try_update(|last| {
@@ -169,8 +170,8 @@ impl Actions {
     }
 
     pub fn patch_rx(&self, patch: impl FnOnce(&mut ReceiveForm)) {
-        self.s().rx.try_update(|rx| {
-            if let Some(rx) = rx {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::ReceiveWork(rx)) = dialog {
                 patch(rx);
             }
         });
@@ -231,8 +232,12 @@ impl Actions {
     pub fn receive_work(&self) {
         let pressed = self
             .s()
-            .rx
-            .try_update(|rx| rx.as_mut().and_then(ReceiveForm::press))
+            .layers
+            .dialog
+            .try_update(|dialog| match dialog {
+                Some(Dialog::ReceiveWork(rx)) => rx.press(),
+                _ => None,
+            })
             .flatten();
         let Some(press) = pressed else {
             return;
@@ -252,7 +257,7 @@ impl Actions {
                             return;
                         }
                         Ok(job) => {
-                            if let Some(form) = this.s().rx.get_untracked() {
+                            if let Some(form) = this.s().receive_form().get_untracked() {
                                 this.remember_receive_job(job, &form, None);
                             }
                             this.follow::<Receive>(
@@ -283,7 +288,7 @@ impl Actions {
                             return;
                         }
                         Ok(job) => {
-                            if let Some(form) = this.s().rx.get_untracked() {
+                            if let Some(form) = this.s().receive_form().get_untracked() {
                                 this.remember_receive_job(job, &form, Some(request.name.as_str()));
                             }
                             this.follow::<ReceiveNew>(

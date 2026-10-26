@@ -146,7 +146,7 @@ impl ExchangePort for UsbExchange {
             let result = receive_into(&app, &project, &path).await;
             // The upload is read once, whatever came of it; a file the shell chose stays.
             if let ExchangeFile::Upload(id) = &file {
-                app.remove_upload(id);
+                app.drop_upload(id);
             }
             result
         })
@@ -166,7 +166,7 @@ impl ExchangePort for UsbExchange {
                 .await
                 .map_err(JobEnd::Failed);
             if let ExchangeFile::Upload(id) = &file {
-                app.remove_upload(id);
+                app.drop_upload(id);
             }
             match made? {
                 // No project.json in the file: nothing for this computer to become.

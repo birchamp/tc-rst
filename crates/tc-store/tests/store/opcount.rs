@@ -3,7 +3,7 @@
 //! size of the project.
 
 use crate::common::*;
-use crate::corpus::{OnDisk, psalms, psalms_x10};
+use crate::corpus::{OnDisk, psalms, psalms_larger};
 use std::path::PathBuf;
 use tc_store::fault::{FaultFs, OpKind};
 use tc_store::{OpenOptions, StoreCounters};
@@ -82,7 +82,7 @@ fn open_costed(fs: &FaultFs, folder: &std::path::Path) -> OpenCost {
 /// pass for one that left the reading to O14.
 #[test]
 fn an_open_after_no_change_projects_no_file_and_reads_no_derived_file() {
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let (second, third) = no_change_opens(corpus);
         assert_eq!(
             second.usable.projected, 0,
@@ -111,7 +111,7 @@ fn an_open_after_no_change_projects_no_file_and_reads_no_derived_file() {
 
 #[test]
 fn an_open_reads_each_pack_once() {
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         // Without the fold cache, then with it.
         fs.delete(&corpus.folder.join(".tc/index.bin")).ok();
@@ -135,7 +135,7 @@ fn an_open_reads_each_pack_once() {
 #[test]
 fn a_save_reads_no_pack_and_writes_a_bounded_number_of_files() {
     let mut writes = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         let rig = rig_as(fs.clone(), APP, "host-1");
         let handle = rig
@@ -189,7 +189,7 @@ fn a_save_reads_no_pack_and_writes_a_bounded_number_of_files() {
 #[test]
 fn an_open_after_one_save_projects_only_that_books_files() {
     let mut counts = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         fs.advance(std::time::Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");
@@ -363,7 +363,7 @@ fn teammate_comment_pack(fs: &FaultFs, folder: &std::path::Path) {
 #[test]
 fn a_record_entering_a_files_scope_projects_it() {
     let mut counts = Vec::new();
-    for corpus in [psalms(), psalms_x10()] {
+    for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
         fs.advance(std::time::Duration::from_secs(5));
         open_once(&fs, &corpus.folder);
@@ -392,8 +392,8 @@ fn a_record_entering_a_files_scope_projects_it() {
 }
 
 /// `FaultFs` with 2 s modification times (FAT32, §6.2). A same-size edit within the tick of
-/// the app's own write is read and recorded; bytes that changed after the entry settled,
-/// with the old size and time put back, are held as storage damage. Neither is written over.
+/// the app's own write is read and held; bytes that changed after the entry settled, with the
+/// old size and time put back, are held too. Neither is written over.
 #[test]
 fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     use tc_journal::fold::Notice;
@@ -424,17 +424,12 @@ fn a_racy_or_mtime_restored_file_is_never_overwritten() {
     fs.put(&usfm, &edited, Some(mtime));
     let handle = rig1.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
-    assert!(!held(&handle), "an edit is recorded, not held");
-    assert!(
-        handle.notices().iter().any(|n| matches!(
-            &n.notice,
-            Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/TIT.usfm"
-        )),
-        "the racy edit is read and recorded: {:?}",
-        handle.notices()
-    );
-    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
+    // The racy edit is read, kept and asked about; *Import* takes it in.
+    assert!(held(&handle), "the racy edit is read and held");
+    assert_eq!(fs.peek(&usfm).as_deref(), Some(edited.as_slice()));
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("paul, a servant"));
     assert_eq!(copies.len(), 1);
     assert_eq!(
         fs.peek(&folder.join(&copies[0])).as_deref(),
