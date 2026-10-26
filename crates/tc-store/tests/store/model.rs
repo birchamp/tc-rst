@@ -623,6 +623,25 @@ impl Run {
         for notice in &notices {
             self.observe_notice(fs, notice);
         }
+        // A kept copy is told in the conflict review's notices, with Import and Dismiss.
+        let kept = self
+            .handle
+            .as_ref()
+            .map(ProjectHandle::kept_copies)
+            .unwrap_or_default();
+        for kept in kept {
+            let Some(bytes) = fs.peek(&self.path(&kept.copy)) else {
+                continue;
+            };
+            let seen = ObservedCopy {
+                source: kept.path,
+                copy: kept.copy,
+                bytes,
+            };
+            if !self.observed_copies.contains(&seen) {
+                self.observed_copies.push(seen);
+            }
+        }
     }
 
     fn observe_notice_events(
@@ -635,6 +654,17 @@ impl Run {
                 self.observe_notice(fs, &notice);
             }
         }
+    }
+
+    fn in_lost_copy(&self, fs: &FaultFs, save: &Save) -> bool {
+        self.handle.as_ref().is_some_and(|handle| {
+            handle.kept_copies().into_iter().any(|kept| {
+                kept.why == tc_store::KeptWhy::Lost
+                    && fs
+                        .peek(&self.path(&kept.copy))
+                        .is_some_and(|b| contains(&b, &save.text))
+            })
+        })
     }
 
     fn save_in_notified_copy(&self, save: &Save) -> bool {
@@ -1792,6 +1822,11 @@ impl Run {
                 continue;
             }
             if save.fate == Fate::InMemory && !settled {
+                continue;
+            }
+            // Work the journal lost that a file the app wrote still shows: it is kept in a copy
+            // listed with *Bring it back* until the person answers (H22 part 1, row N4).
+            if self.in_lost_copy(&fs, save) {
                 continue;
             }
             lost.push(format!(
@@ -3275,13 +3310,13 @@ fn a_metadata_revert_is_kept_when_a_book_revert_triggers_its_materialization() {
         run.handle.is_none(),
         "the metadata rename must trigger the crash"
     );
-    let metadata = run.puts.iter().find(|put| put.rel == META).unwrap();
-    assert_eq!(run.fs().peek(&run.path(META)), Some(metadata.bytes.clone()));
-    assert!(
-        metadata.retired,
-        "the complete folder established actual convergence"
-    );
+    // The book revert is held for the person's answer (delta §2.4), so `metadata.json` lists
+    // the held bytes and is written over the put-back version; the oracle checks that version
+    // is kept.
+    assert!(run.puts.iter().any(|put| put.rel == META));
     assert_valid_burrito(&run.fs(), &run.folder);
+    run.open().unwrap();
+    assert_eq!(run.handle().waiting_books().len(), 1);
     run.finish().unwrap();
 }
 
@@ -3322,67 +3357,6 @@ fn a_valid_outside_metadata_name_is_not_retired_as_converged_at_a_crash() {
 #[test]
 fn unreadable_metadata_is_preserved_before_a_permitted_replacement() {
     assert_kept(&metadata_unreadable_but_replaceable());
-}
-
-#[test]
-fn an_incomplete_outside_batch_is_recorded_again_without_a_retry_loop() {
-    let mut run = Run::new();
-    let mut original = None;
-    for step in an_incomplete_outside_batch() {
-        if let Step::Cut {
-            journal: Journal::Pending,
-            which,
-            ..
-        } = &step
-        {
-            let (_, bytes) = run.journal_file(Journal::Pending, *which).unwrap();
-            let read =
-                tc_journal::pending::read_pending(&bytes, project_of(&run.fs(), &run.folder));
-            assert_eq!(read.entries.len(), 2);
-            let tc_journal::Verified::Change(change) = &read.entries[0] else {
-                panic!("the original outside batch was quarantined");
-            };
-            original = Some((
-                change.body().batch.id,
-                read.entries
-                    .iter()
-                    .map(tc_journal::Verified::id)
-                    .collect::<Vec<_>>(),
-            ));
-        }
-        run.step(&step).unwrap();
-    }
-    let (batch, original_ids) = original.unwrap();
-    let snapshot = run.handle().snapshot();
-    let fold = snapshot.fold();
-    assert!(fold.anomalies().any(|anomaly| matches!(
-        anomaly,
-        tc_journal::fold::Anomaly::IncompleteBatch { batch: held, .. } if *held == batch
-    )));
-    for (verse, text) in [(1, "zq1x"), (2, "zq2x")] {
-        let key = verse_key(verse);
-        let has_text = |id: &tc_journal::ChangeId| {
-            matches!(
-                fold.body(id).map(|body| body.record),
-                Some(Record::Verse { value: VerseValue::Text { words, .. }, .. }) if words == text
-            )
-        };
-        assert!(
-            fold.history(&key).iter().any(has_text),
-            "{text} is not readable in History"
-        );
-        let heads = fold.heads(&key);
-        assert!(
-            heads.iter().any(has_text),
-            "{text} is not a recovery candidate"
-        );
-        for head in heads {
-            let view = fold.change(&head).unwrap();
-            assert!(view.folded);
-            assert!(view.parents.iter().all(|id| !original_ids.contains(id)));
-        }
-    }
-    run.finish().unwrap();
 }
 
 fn a_revert_after_a_quarantined_pending_and_a_killed_save() -> Vec<Step> {
@@ -4274,4 +4248,85 @@ fn a_retired_put_of_an_earlier_write_before_a_power_cut() -> Vec<Step> {
 #[test]
 fn a_retired_put_of_an_earlier_write_before_a_power_cut_is_no_loss() {
     assert_kept(&a_retired_put_of_an_earlier_write_before_a_power_cut());
+}
+
+/// Found by the nightly model run 40085200557 (2026-10-24): a program puts an older book file
+/// back, the next checkpoint keeps and holds it, and `.tc/materialized.json` is lost before
+/// the next open. The copy in `.tc/external/` is listed again for the person (the notice is
+/// not lost with the manifest).
+fn a_kept_book_copy_after_a_lost_manifest() -> Vec<Step> {
+    vec![
+        act(Act::Save(3)),
+        Step::KillAfterRename { file: File::Meta },
+        act(Act::Leave),
+        Step::Revert {
+            file: File::Meta,
+            back: 0,
+            told: false,
+        },
+        act(Act::Checkpoint),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(3)),
+        lock(Holdable::File(File::Usfm), false),
+        killed(Act::Save(1), 5),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        killed(Act::Checkpoint, 0),
+        Step::LoseTc { heads: false },
+    ]
+}
+
+#[test]
+fn a_kept_book_copy_after_a_lost_manifest_is_listed_again() {
+    assert_kept(&a_kept_book_copy_after_a_lost_manifest());
+}
+
+/// The history `random_histories_lose_no_work` shrank to after the merge of track-D1 and main
+/// (2026-10-25): a book file the open could not read, a crash, saves and kills, then the file
+/// reverted twice to earlier versions of itself while the project is open.
+fn two_reverts_of_a_book_file_after_crashes() -> Vec<Step> {
+    vec![
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        killed(Act::Close, 0),
+        Step::Open,
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+        killed(Act::Close, 0),
+        Step::Delete { file: File::Usfm },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(1)),
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Leave),
+        Step::Revert {
+            file: File::Usfm,
+            back: 1,
+            told: false,
+        },
+    ]
+}
+
+#[test]
+fn two_reverts_of_a_book_file_after_crashes_lose_nothing() {
+    assert_kept(&two_reverts_of_a_book_file_after_crashes());
 }

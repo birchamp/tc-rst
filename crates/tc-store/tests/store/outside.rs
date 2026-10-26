@@ -1,7 +1,9 @@
-//! Edits made outside the app are recorded (`docs/STORAGE.md` §11.1, §6.2): a derived file
-//! another program changed is decoded, compared with what the app wrote, and recorded as
-//! changes of its own kind with the app's version as their parents; a destructive or
-//! reverting edit is a conflict; the bytes found are kept whole in `.tc/external/`; the
+//! Edits made outside the app (`docs/STORAGE.md` §11.1, §6.2, and the owner's ruling OE 3 in
+//! `docs/STORAGE-DELTA-2026-10-21.md`): a book file or story another program changed is kept
+//! whole in `.tc/external/`, held as it is and asked about; *Import* compares it with what the
+//! app wrote and takes in what the file changed, with the app's version as the parents, and a
+//! verse changed on both sides is a conflict; nothing removes or reverts the project's text. A
+//! sidecar or `metadata.json` is still recorded on its own (S3 step 9 changes those). The
 //! folder is a valid burrito after every step.
 
 use crate::common::*;
@@ -84,10 +86,11 @@ fn saved_and_closed() -> (Rig, PathBuf) {
 // X1 to X3: an edit of a verse
 // ---------------------------------------------------------------------------------------
 
-/// The edit made while the app was closed is recorded with the version the app wrote as its
-/// parent, so it is no conflict; the bytes found are kept; the file shows the project again.
+/// The edit made while the app was closed is kept and asked about; *Import* takes it in with
+/// the version the app wrote as its parent, so it is no conflict; the bytes found are kept;
+/// the file shows the project again.
 #[test]
-fn an_edit_made_while_the_app_was_closed_is_recorded_and_agrees_with_the_project() {
+fn an_edit_made_while_the_app_was_closed_is_imported_and_agrees_with_the_project() {
     let (rig, folder) = saved_and_closed();
     let edited = set_verse(
         &rig.fs.peek(&usfm_path(&folder)).unwrap(),
@@ -97,19 +100,20 @@ fn an_edit_made_while_the_app_was_closed_is_recorded_and_agrees_with_the_project
     );
     rig.fs.put(&usfm_path(&folder), &edited, None);
     let handle = open(&rig, &folder);
+    assert_ne!(
+        words(&handle, 1, 2).as_deref(),
+        Some("in hope of eternal life"),
+        "nothing enters without Import"
+    );
+    let copies = copies_of(&handle, USFM);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("in hope of eternal life")
     );
     assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a servant"));
-    assert_eq!(
-        recorded(&handle),
-        vec![(1, false)],
-        "{:?}",
-        handle.notices()
-    );
+    assert!(recorded(&handle).is_empty(), "{:?}", handle.notices());
     assert!(verse_conflicts(&handle).is_empty(), "the edit has a parent");
-    let copies = copies_of(&handle, USFM);
     assert_eq!(copies.len(), 1);
     assert_eq!(
         rig.fs.peek(&folder.join(&copies[0])),
@@ -131,8 +135,8 @@ fn an_edit_made_while_the_app_was_closed_is_recorded_and_agrees_with_the_project
     handle.close().unwrap();
 }
 
-/// L40: an edit made after a save and before the save's materialization is recorded, never
-/// overwritten, and the save stays.
+/// L40: an edit made after a save and before the save's materialization is kept and asked
+/// about, never overwritten, and the save stays; *Import* takes it in beside the save.
 #[test]
 fn loss_materializer_never_overwrites_outside_edit() {
     let hooks = Arc::new(Hooks::default());
@@ -154,25 +158,30 @@ fn loss_materializer_never_overwrites_outside_edit() {
     hooks.release(Point::BeforeMaterialize);
     left.wait().unwrap();
     handle.wait_idle();
+    let copies = copies_of(&handle, USFM);
+    assert_eq!(copies.len(), 1, "{:?}", handle.notices());
+    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(edited.clone()));
+    assert_eq!(
+        rig.fs.peek(&usfm_path(&folder)),
+        Some(edited),
+        "never overwritten"
+    );
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("in hope of eternal life")
     );
     assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a servant"));
-    let copies = copies_of(&handle, USFM);
-    assert_eq!(copies.len(), 1, "{:?}", handle.notices());
-    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(edited));
     let written = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
     assert!(written.contains("Paul, a servant") && written.contains("in hope of eternal life"));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L41: a file cut down to its first chapter records no deletion that overrides the
-/// project's text: each verse with text that it lost is an unknown-base removal that
-/// conflicts with that text, which stays what the project shows; the words are written again.
+/// L41: a file cut down to its first chapter removes nothing: it is kept and asked about, and
+/// its *Import* leaves each verse the file lacks as it was (I11); the words are written again.
 #[test]
-fn loss_outside_mass_delete_is_conflict() {
+fn loss_outside_mass_delete_removes_nothing() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
@@ -186,6 +195,17 @@ fn loss_outside_mass_delete_is_conflict() {
     rig.fs.put(&usfm_path(&folder), &truncated, None);
 
     let handle = open(&rig, &folder);
+    let copies = copies_of(&handle, USFM);
+    assert_eq!(copies.len(), 1);
+    assert!(
+        rig.fs.peek(&folder.join(&copies[0])) == Some(truncated),
+        "the cut file is kept whole"
+    );
+    // Every verse the file lacks is left as it was; the two chapter fronts it lacks are rows
+    // to review, never removals, and the project's text stays shown.
+    let reports = import_waiting(&handle);
+    assert_eq!(counts(&reports), vec![(0, 2)], "{reports:?}");
+    assert!(reports[0].left_as_it_was > 2, "{reports:?}");
     assert_eq!(
         words(&handle, 2, 1).as_deref(),
         Some("speak what fits sound teaching"),
@@ -195,27 +215,8 @@ fn loss_outside_mass_delete_is_conflict() {
         words(&handle, 3, 1).as_deref(),
         Some("remind them to be subject")
     );
-    let conflicts = verse_conflicts(&handle);
-    assert!(
-        conflicts
-            .iter()
-            .any(|k| matches!(k, RecordKey::Verse(_, c, v) if c.get() == 2 && v.get() == 1)),
-        "{conflicts:?}"
-    );
-    assert!(
-        conflicts
-            .iter()
-            .any(|k| matches!(k, RecordKey::Verse(_, c, v) if c.get() == 3 && v.get() == 1)),
-        "{conflicts:?}"
-    );
-    let copies = copies_of(&handle, USFM);
-    assert_eq!(copies.len(), 1);
-    assert!(
-        rig.fs.peek(&folder.join(&copies[0])) == Some(truncated),
-        "the cut file is kept whole"
-    );
-    // The written file keeps every word the person typed. The blank verses the cut file
-    // lost carry no text and follow the file; *Undo the outside edit* brings them back.
+    assert!(verse_conflicts(&handle).is_empty());
+    // The written file keeps every word the person typed.
     let written = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
     for typed in [
         "Paul, a servant",
@@ -228,10 +229,12 @@ fn loss_outside_mass_delete_is_conflict() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L42: an older copy of the file put back is a revert, a conflict with the newer text and
-/// not a quiet return to the old words.
+/// L42, L140: an older copy of the file put back is kept and asked about, never a quiet return
+/// to the old words. Its *Import* makes the old words a version to review beside the person's
+/// latest text (§13.6 U3: a file that sets an older version back is a conflict); the latest
+/// text stays shown.
 #[test]
-fn loss_outside_revert_is_conflict() {
+fn loss_outside_revert_never_returns_to_the_old_words() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
@@ -245,22 +248,26 @@ fn loss_outside_revert_is_conflict() {
     rig.fs.put(&usfm_path(&folder), &older, None);
 
     let handle = open(&rig, &folder);
+    assert_eq!(copies_of(&handle, USFM).len(), 1);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(0, 1)]);
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("Paul, a slave of God"),
         "the text the person wrote last is the one shown"
     );
-    let conflicts = verse_conflicts(&handle);
-    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    assert_eq!(
+        verse_conflicts(&handle).len(),
+        1,
+        "the old words are to review"
+    );
     assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(newer));
-    assert_eq!(copies_of(&handle, USFM).len(), 1);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L61: a file the decoder cannot read (a verse number twice) is told in words with the
-/// copy's name, the project keeps its text, and the file is written again so that the folder
-/// is a burrito whose files say what the project says.
+/// L61: a file the decoder cannot read (a verse number twice) is kept and asked about with the
+/// reason in words, the project keeps its text, and *Not now* writes the file again so that
+/// the folder is a burrito whose files say what the project says.
 #[test]
 fn loss_unreadable_outside_edit_copy_kept() {
     let (rig, folder) = saved_and_closed();
@@ -269,16 +276,13 @@ fn loss_unreadable_outside_edit_copy_kept() {
     assert_ne!(broken, text.as_bytes());
     rig.fs.put(&usfm_path(&folder), &broken, None);
     let handle = open(&rig, &folder);
-    let told = handle.notices().into_iter().find_map(|n| match n.notice {
-        Notice::OutsideEditUnreadable { path, copy, reason } if path.as_str() == USFM => {
-            Some((copy, reason))
-        }
-        _ => None,
-    });
-    let (copy, reason) = told.expect("the person is told");
+    let book = handle.waiting_books().pop().expect("the person is asked");
+    let reason = book.kept.unreadable.expect("with the reason");
     assert!(!reason.is_empty());
-    assert_eq!(rig.fs.peek(&folder.join(&*copy)), Some(broken));
+    assert_eq!(rig.fs.peek(&folder.join(&book.kept.copy)), Some(broken));
     assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a servant"));
+    handle.not_now(USFM).wait().unwrap();
+    handle.wait_idle();
     assert_eq!(
         rig.fs.peek(&usfm_path(&folder)),
         Some(text.into_bytes()),
@@ -318,9 +322,10 @@ fn a_whitespace_only_rewrite_records_nothing() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// One real typo among a file's rewritten line endings records exactly one change.
+/// One real typo among a file's rewritten line endings is asked about, and imports exactly one
+/// change.
 #[test]
-fn a_typo_fixed_in_a_file_with_rewritten_line_ends_records_one_change() {
+fn a_typo_fixed_in_a_file_with_rewritten_line_ends_imports_one_change() {
     let (rig, folder) = saved_and_closed();
     let text = String::from_utf8(rig.fs.peek(&usfm_path(&folder)).unwrap()).unwrap();
     let crlf = text
@@ -329,8 +334,8 @@ fn a_typo_fixed_in_a_file_with_rewritten_line_ends_records_one_change() {
     rig.fs.put(&usfm_path(&folder), crlf.as_bytes(), None);
     let handle = open(&rig, &folder);
     assert_eq!(
-        recorded(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "{:?}",
         handle.notices()
     );
@@ -481,9 +486,10 @@ fn loss_metadata_unmodelled_fields_kept() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L92: a link edited in an Open Bible Stories template is recorded as an edit of the story.
+/// L92: a link edited in an Open Bible Stories template is kept and asked about; *Import*
+/// takes it in as an edit of the story.
 #[test]
-fn loss_obs_template_edit_recorded() {
+fn loss_obs_template_edit_imported() {
     let (fs, folder) = crate::commands::stories();
     let (rig, handle) = crate::commands::open(&fs, &folder);
     handle.close().unwrap();
@@ -496,12 +502,8 @@ fn loss_obs_template_edit_recorded() {
         "obs-en-01-02-new.jpg",
     );
     let handle = open(&rig, &folder);
-    assert_eq!(
-        recorded_for(&handle, rel).len(),
-        1,
-        "{:?}",
-        handle.notices()
-    );
+    assert_eq!(handle.waiting_books().len(), 1, "{:?}", handle.notices());
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     let written = rig.fs.peek(&folder.join(rel)).unwrap();
     assert!(written == edited, "the story shows its edit");
     handle.close().unwrap();
@@ -512,10 +514,10 @@ fn loss_obs_template_edit_recorded() {
 // The heads file as the base, and what an outside edit costs
 // ---------------------------------------------------------------------------------------
 
-/// A heads file whose records hold no digests (as S1's did): the edit is recorded just the
-/// same, and the cost is the book's, by design (every record is compared).
+/// A heads file whose records hold no digests (as S1's did): the edit is imported with its base
+/// just the same, and the cost is the book's, by design (every record is compared).
 #[test]
-fn a_heads_file_without_digests_still_records_an_outside_edit() {
+fn a_heads_file_without_digests_still_imports_an_outside_edit() {
     let (rig, folder) = saved_and_closed();
     let heads = folder.join(".tc/heads/ingredients%2FTIT.usfm.bin");
     let mut file = tc_store::manifest::HeadsFile::parse(&rig.fs.peek(&heads).unwrap()).unwrap();
@@ -538,8 +540,8 @@ fn a_heads_file_without_digests_still_records_an_outside_edit() {
     rig.fs.put(&usfm_path(&folder), &edited, None);
     let handle = open(&rig, &folder);
     assert_eq!(
-        recorded(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "{:?}",
         handle.notices()
     );
@@ -557,8 +559,8 @@ fn a_heads_file_without_digests_still_records_an_outside_edit() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// With the heads file gone the base is unknown: the changed record is recorded without
-/// parents and so conflicts with the project's text, which stays what is shown.
+/// With the heads file gone the base is unknown: *Import* takes the changed record in without
+/// parents, so it conflicts with the project's text, which stays what is shown.
 #[test]
 fn an_edit_with_no_heads_file_is_an_unknown_base_conflict() {
     let (rig, folder) = saved_and_closed();
@@ -571,7 +573,12 @@ fn an_edit_with_no_heads_file_is_an_unknown_base_conflict() {
         .into_bytes();
     rig.fs.put(&usfm_path(&folder), &edited, None);
     let handle = open(&rig, &folder);
-    assert_eq!(recorded(&handle), vec![(1, true)], "{:?}", handle.notices());
+    assert_eq!(
+        counts(&import_waiting(&handle)),
+        vec![(0, 1)],
+        "{:?}",
+        handle.notices()
+    );
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("Paul, a servant"),
@@ -638,9 +645,9 @@ fn reconciling_an_outside_edit_costs_what_it_changed() {
 }
 
 /// The same edit told by the watcher to a project that is open: one event for the file, and
-/// the examination reads that file and its heads file, decodes once, compares the three
-/// records that differ and writes three changes, however large the project is; no other path
-/// is looked at.
+/// the look reads that file and its heads file, decodes once and compares the three records
+/// that differ before it holds the file, however large the project is; *Import* then writes
+/// three changes.
 #[test]
 fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
     use crate::corpus::{psalms, psalms_larger};
@@ -662,13 +669,8 @@ fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
         }
         let before = handle.counters();
         fs.put(&path, &bytes, None);
-        eventually("the watcher never recorded the edit", || {
-            handle.notices().iter().any(|n| {
-                matches!(
-                    &n.notice,
-                    Notice::OutsideEditRecorded { path, .. } if path.as_str() == "ingredients/PSA.usfm"
-                )
-            })
+        eventually("the watcher never held the edit", || {
+            !handle.waiting_books().is_empty()
         });
         handle.wait_idle();
         let cost = handle.counters().since(&before);
@@ -681,15 +683,7 @@ fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
         assert!(cost.heads_read >= 1, "{cost:?}");
         assert_eq!(cost.outside_decodes, 1, "{cost:?}");
         assert_eq!(cost.outside_keys_examined, 3, "{cost:?}");
-        let changes: Vec<u32> = handle
-            .notices()
-            .into_iter()
-            .filter_map(|n| match n.notice {
-                Notice::OutsideEditRecorded { changes, .. } => Some(changes),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(changes, vec![3]);
+        assert_eq!(counts(&import_waiting(&handle)), vec![(3, 0)]);
         costs.push((
             cost.heads_read,
             cost.outside_decodes,
@@ -723,10 +717,10 @@ fn eventually(what: &str, mut ready: impl FnMut() -> bool) {
     }
 }
 
-/// §11.1: a program that saves a derived file while the app is open is told by the
-/// filesystem; the edit is recorded without anyone looking at the window.
+/// §11.1: a program that saves a book file while the app is open is told by the filesystem;
+/// the edit is kept and asked about without anyone looking at the window.
 #[test]
-fn the_watcher_records_an_edit_without_a_focus() {
+fn the_watcher_holds_an_edit_without_a_focus() {
     let (rig, folder) = saved_and_closed();
     let handle = open(&rig, &folder);
     let edited = set_verse(
@@ -736,11 +730,12 @@ fn the_watcher_records_an_edit_without_a_focus() {
         "in hope of eternal life",
     );
     rig.fs.put(&usfm_path(&folder), &edited, None);
-    eventually("the watcher never recorded the edit", || {
-        !recorded(&handle).is_empty()
+    eventually("the watcher never held the edit", || {
+        !handle.waiting_books().is_empty()
     });
     handle.wait_idle();
-    assert_eq!(recorded(&handle), vec![(1, false)]);
+    assert_eq!(rig.fs.peek(&usfm_path(&folder)), Some(edited.clone()));
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("in hope of eternal life")
@@ -797,8 +792,8 @@ fn a_focus_reads_only_what_is_not_clean_by_stat() {
     assert_eq!(report.found, vec![USFM.to_owned()]);
     handle.wait_idle();
     assert_eq!(
-        recorded(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "{:?}",
         handle.notices()
     );
@@ -810,8 +805,8 @@ fn a_focus_reads_only_what_is_not_clean_by_stat() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L67: a book file put into `ingredients/` adds the book, its text is the project's, and
-/// `metadata.json` lists it.
+/// L67: a book file put into `ingredients/` is asked about (delta §2.11); *Import* adds the
+/// book, its text is the project's, and `metadata.json` lists it.
 #[test]
 fn loss_local_book_file_added_projects() {
     let (rig, folder) = saved_and_closed();
@@ -823,6 +818,10 @@ fn loss_local_book_file_added_projects() {
     rig.fs
         .put_unseen(&folder.join("ingredients/JON.usfm"), &jonah, None);
     let handle = open(&rig, &folder);
+    assert!(!handle.snapshot().fold().book(BookId::Jonah).projects());
+    assert!(handle.waiting_books()[0].added);
+    let reports = import_waiting(&handle);
+    assert!(reports[0].book_added, "{reports:?}");
     assert!(handle.snapshot().fold().book(BookId::Jonah).projects());
     let fold = handle.snapshot().fold().clone();
     let text = fold.book_usfm(BookId::Jonah).expect("the book has text");
@@ -840,6 +839,8 @@ fn loss_local_book_file_added_projects() {
     let report = handle.focus().wait().unwrap();
     assert_eq!(report.found, vec!["ingredients/JON.usfm".to_owned()]);
     handle.wait_idle();
+    assert!(!handle.snapshot().fold().book(BookId::Jonah).projects());
+    import_waiting(&handle);
     assert!(handle.snapshot().fold().book(BookId::Jonah).projects());
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
@@ -908,20 +909,22 @@ fn a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// *Take in the file as an edit* (§6.2): the held bytes are recorded with no base, each
-/// record that differs is a conflict with the project's text, and the hold ends.
+/// *Take in the file as an edit* goes for a book file (delta §3): a held book comes in only by
+/// *Import* of its kept copy, compared with the version it was found against, and the hold
+/// ends.
 #[test]
-fn take_in_held_records_as_conflicts_and_ends_the_hold() {
+fn a_held_book_comes_in_by_import_not_take_in() {
     let (rig, folder) = saved_and_closed();
     settle_entries(&rig, &folder);
     let damaged = damage_text(&rig, &folder, USFM, "a servant", "a SERVANT");
     let handle = open(&rig, &folder);
     let held = copies_of(&handle, USFM);
     assert_eq!(held.len(), 1, "{:?}", handle.notices());
-    let taken = handle.take_in_held(USFM).wait().unwrap();
-    assert!(taken.batch.is_some(), "{taken:?}");
-    assert!(taken.changes >= 1);
-    handle.wait_idle();
+    assert!(
+        handle.take_in_held(USFM).wait().is_err(),
+        "no Take in for a book"
+    );
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert!(
         !handle.notices().iter().any(|n| matches!(
             &n.notice,
@@ -930,15 +933,16 @@ fn take_in_held_records_as_conflicts_and_ends_the_hold() {
         "the hold ended: {:?}",
         handle.notices()
     );
-    assert_eq!(verse_conflicts(&handle).len(), 1);
+    assert!(verse_conflicts(&handle).is_empty());
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a SERVANT"));
     // The copy of the held bytes stays.
     assert_eq!(rig.fs.peek(&folder.join(&held[0])), Some(damaged));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// §8.1 `OutsideEditLarge`: *Accept all from the file* and *Keep translationCore's text*
-/// each resolve the rows an edit made, in one batch.
+/// §8.1, one row per import: *Accept all from the file* and *Keep translationCore's text*
+/// each resolve the rows an import with no base made, in one batch.
 #[test]
 fn accept_all_from_the_file_and_keep_the_projects_text_resolve_the_rows() {
     use tc_journal::command::{Command, OutsideKeep};
@@ -956,18 +960,9 @@ fn accept_all_from_the_file_and_keep_the_projects_text_resolve_the_rows() {
         bytes = set_verse(&bytes, 1, 2, "in the hope");
         rig.fs.put(&usfm_path(&folder), &bytes, None);
         let handle = open(&rig, &folder);
-        let batch = handle
-            .notices()
-            .into_iter()
-            .find_map(|n| match n.notice {
-                Notice::OutsideEditRecorded {
-                    batch,
-                    unknown_base: true,
-                    ..
-                } => Some(batch),
-                _ => None,
-            })
-            .expect("an unknown-base edit was recorded");
+        let reports = import_waiting(&handle);
+        assert_eq!(counts(&reports), vec![(0, 2)]);
+        let batch = reports[0].review.expect("the import's row to review");
         let conflicts: Vec<_> = handle
             .snapshot()
             .fold()
@@ -1002,10 +997,10 @@ fn accept_all_from_the_file_and_keep_the_projects_text_resolve_the_rows() {
 }
 
 /// §11.1 on a real folder: the operating system's watcher tells the app (inotify,
-/// FSEvents, ReadDirectoryChangesW), and an edit saved by another program is recorded
-/// without a focus. Polls for up to ten seconds.
+/// FSEvents, ReadDirectoryChangesW), and an edit saved by another program is held and asked
+/// about without a focus. Polls for up to ten seconds.
 #[test]
-fn the_watcher_on_a_real_folder_records_an_edit() {
+fn the_watcher_on_a_real_folder_holds_an_edit() {
     use tc_store::{FakePlatform, Store, StoreConfig};
     let dir = tempfile::tempdir().unwrap();
     let store = Store::start(StoreConfig {
@@ -1044,10 +1039,11 @@ fn the_watcher_on_a_real_folder_records_an_edit() {
         "in hope of eternal life",
     );
     std::fs::write(&path, &edited).unwrap();
-    eventually("the watcher never recorded the edit", || {
-        recorded(&handle).len() == 1
+    eventually("the watcher never held the edit", || {
+        !handle.waiting_books().is_empty()
     });
     handle.wait_idle();
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
     assert_eq!(
         words(&handle, 1, 2).as_deref(),
         Some("in hope of eternal life")
@@ -1057,13 +1053,18 @@ fn the_watcher_on_a_real_folder_records_an_edit() {
     leave(&handle);
     std::thread::sleep(std::time::Duration::from_millis(300));
     handle.wait_idle();
-    assert_eq!(recorded(&handle).len(), 1, "{:?}", handle.notices());
+    assert!(recorded(&handle).is_empty(), "{:?}", handle.notices());
+    assert!(
+        handle.waiting_books().is_empty(),
+        "{:?}",
+        handle.waiting_books()
+    );
     handle.close().unwrap();
     assert!(store.hooks().burrito_problems().is_empty());
 }
 
 /// §6.2: with `.tc/` gone (a copy of the folder without it) the last commit of this app says
-/// what the files were made from. An edit of a verse HEAD has is recorded with its parents;
+/// what the files were made from. An edit of a verse HEAD has is imported with its parents;
 /// a verse saved since HEAD is newer than the file the person started from, so the edit and
 /// the save are a conflict and neither replaces the other.
 #[test]
@@ -1096,8 +1097,8 @@ fn an_outside_edit_found_without_a_manifest_uses_the_head_base() {
     let rig_a = rig_as(copy.clone(), APP, "host-1");
     let handle = open(&rig_a, &folder);
     assert_eq!(
-        recorded(&handle),
-        vec![(1, false)],
+        counts(&import_waiting(&handle)),
+        vec![(1, 0)],
         "{:?}",
         handle.notices()
     );
@@ -1127,6 +1128,7 @@ fn an_outside_edit_found_without_a_manifest_uses_the_head_base() {
     stopped.put(&usfm_path(&folder), &edited, None);
     let rig_b = rig_as(stopped.clone(), APP, "host-1");
     let handle = open(&rig_b, &folder);
+    assert_eq!(counts(&import_waiting(&handle)), vec![(0, 1)]);
     assert_eq!(verse_conflicts(&handle).len(), 1, "{:?}", handle.notices());
     assert_eq!(words(&handle, 1, 2).as_deref(), Some("in the hope"));
     handle.close().unwrap();
@@ -1332,11 +1334,27 @@ mod conserves {
     ) -> Option<(bool, Vec<ChangeId>, Record)> {
         let body = fold.body(id)?;
         match body.cause {
-            tc_journal::Cause::External { unknown_base, .. } => {
-                Some((unknown_base, body.parents, body.record))
-            }
+            tc_journal::Cause::External { unknown_base, .. }
+            | tc_journal::Cause::Import(tc_journal::change::ImportSource::Usfm {
+                unknown_base,
+                ..
+            }) => Some((unknown_base, body.parents, body.record)),
             _ => None,
         }
+    }
+
+    /// The person's answer to the one question: *Import* of every book that waits, or *Not
+    /// now* for one that cannot be read (the question offers only that).
+    fn answer(handle: &ProjectHandle) {
+        handle.wait_idle();
+        for book in handle.waiting_books() {
+            if book.kept.unreadable.is_some() {
+                handle.not_now(&book.path).wait().unwrap();
+            } else {
+                handle.import_kept(&book.kept.copy).wait().unwrap();
+            }
+        }
+        handle.wait_idle();
     }
 
     /// A program changes the status of a decision in a sidecar: the edit is one change, the
@@ -1382,8 +1400,8 @@ mod conserves {
         handle.close().unwrap();
     }
 
-    /// A program changes a link in the template of a story: the story records it, and the file
-    /// shows it.
+    /// A program changes a link in the template of a story: the story is kept and asked about,
+    /// *Import* takes the link in, and the file shows it.
     fn story_edit(rig: &Rig, folder: &Path) {
         let rel = "ingredients/content/01.md";
         let text = String::from_utf8(rig.fs.peek(&folder.join(rel)).unwrap()).unwrap();
@@ -1394,13 +1412,13 @@ mod conserves {
         };
         let edited = super::replaced(rig, folder, rel, from, to);
         let handle = open(rig, folder);
-        assert_eq!(
-            super::recorded_for(&handle, rel).len(),
-            1,
-            "{:?}",
-            handle.notices()
-        );
-        let copies = copies_of(&handle, rel);
+        // The story waits for the answer; *Import* takes the link in.
+        let waiting = handle.waiting_books();
+        assert_eq!(waiting.len(), 1, "{:?}", handle.notices());
+        let copies = vec![waiting[0].kept.copy.clone()];
+        let report = handle.import_kept(&copies[0]).wait().unwrap();
+        assert_eq!(report.imported + report.to_review, 1, "{report:?}");
+        handle.wait_idle();
         assert!(
             copies
                 .iter()
@@ -1582,8 +1600,10 @@ mod conserves {
                 rig.fs.put_unseen(path, bytes, None);
             }
 
-            // The next open finds it.
+            // The next open finds it, keeps it and asks; the person answers.
             let handle = open(&rig, &folder);
+            let undecodable = files(&rig.fs, &folder);
+            answer(&handle);
             let fold = handle.snapshot().fold().clone();
             let after_ids = ids_on_disk(&rig.fs, &folder);
             // No change held before is gone: it is on disk and folded.
@@ -1659,6 +1679,25 @@ mod conserves {
                 .filter(|(_, _, _, record)| held_text(&record.key()))
                 .collect();
             if let Op::Revert | Op::Delete { .. } = op {
+                // The person's text stays shown: the file's version never replaces it.
+                for (v, before) in &before_text {
+                    if before
+                        .as_deref()
+                        .is_some_and(|w| w != "___" && !w.is_empty())
+                    {
+                        assert_eq!(
+                            &words(&handle, 1, *v),
+                            before,
+                            "{op:?}: 1:{v} lost its text"
+                        );
+                    }
+                }
+                let claim = if matches!(op, Op::Revert) {
+                    REVERT_UNKNOWN
+                } else {
+                    DELETE_UNKNOWN
+                };
+                census.checked[claim].fetch_add(1, Ordering::Relaxed);
                 for (id, unknown, parents, record) in &destructive {
                     assert!(
                         *unknown && parents.is_empty(),
@@ -1675,14 +1714,6 @@ mod conserves {
                             "{op:?}: the file's text is provisional"
                         );
                     }
-                }
-                if !destructive.is_empty() {
-                    let claim = if matches!(op, Op::Revert) {
-                        REVERT_UNKNOWN
-                    } else {
-                        DELETE_UNKNOWN
-                    };
-                    census.checked[claim].fetch_add(1, Ordering::Relaxed);
                 }
             }
             match op {
@@ -1704,18 +1735,39 @@ mod conserves {
                     assert!(new.is_empty(), "{op:?}: nothing is recorded");
                     let bytes = &put[0].1;
                     assert!(
-                        files(&rig.fs, &folder)
+                        undecodable
                             .iter()
                             .any(|(rel, b)| rel.starts_with(".tc/external/") && b == bytes),
                         "{op:?}: the bytes are kept"
                     );
+                    assert!(
+                        handle.kept_copies().iter().any(|k| rig
+                            .fs
+                            .peek(&folder.join(&k.copy))
+                            .as_ref()
+                            == Some(bytes)),
+                        "{op:?}: the copy stays listed"
+                    );
                     census.checked[COPY_KEPT].fetch_add(1, Ordering::Relaxed);
                 }
                 Op::Many if externals.len() > 50 => {
-                    assert!(
-                        externals.iter().all(|(_, unknown, ..)| *unknown),
-                        "{op:?}: more than fifty keys are recorded with no parents"
-                    );
+                    // The person chose the import, so the fifty-key rule does not apply
+                    // (delta §2.16 U3): each change fills a verse that was empty, or is one
+                    // to review with no parents. None replaces text without a question.
+                    for (_, unknown, _, record) in &externals {
+                        let empty_before = match before_fold.projected(&record.key()) {
+                            Some(Record::Verse {
+                                value: VerseValue::Text { words, .. },
+                                ..
+                            }) => words.trim().is_empty() || words.trim() == "___",
+                            Some(_) => false,
+                            None => true,
+                        };
+                        assert!(
+                            *unknown || empty_before,
+                            "{op:?}: {record:?} replaced text with no question"
+                        );
+                    }
                     census.checked[OVER_FIFTY].fetch_add(1, Ordering::Relaxed);
                 }
                 _ => {}
@@ -1823,9 +1875,10 @@ fn every_kind_of_outside_edit_in_one_project_conserves() {
 // D7: a program that keeps the file open saves it twice
 // ---------------------------------------------------------------------------------------
 
-/// Paratext on Windows keeps the file open: the app records the first save but cannot write
-/// the file back, and the program saves the file again, from its own text. The second save
-/// continues the first (§11.1 D7); it is no conflict between the person's own edits.
+/// Paratext on Windows keeps the file open and saves it twice. Each save is kept under its own
+/// entry with the base of the bytes the app wrote (delta §2.11); *Import* of the newest takes
+/// both edits in with no conflict between the person's own edits, and the first copy stays
+/// listed.
 #[test]
 fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
     let (rig, folder) = saved_and_closed();
@@ -1845,7 +1898,7 @@ fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
     rig.fs.put_unseen(&usfm, &first, None);
     handle.focus().wait().unwrap();
     handle.wait_idle();
-    assert_eq!(recorded(&handle), vec![(1, false)]);
+    assert_eq!(handle.waiting_books().len(), 1);
     assert_eq!(
         rig.fs.peek(&usfm),
         Some(first.clone()),
@@ -1857,21 +1910,17 @@ fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
     handle.focus().wait().unwrap();
     handle.wait_idle();
     rig.fs.set_busy(&usfm, false);
-    // The writer's own retry reads the second save and records it.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    while recorded(&handle).len() < 2 {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "never recorded: {:?}",
-            handle.notices()
-        );
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    handle.wait_idle();
+    let kept = handle.kept_copies();
+    assert_eq!(kept.len(), 2, "{kept:?}");
     assert_eq!(
-        recorded(&handle),
-        vec![(1, false), (1, false)],
-        "both with the base of the bytes before them"
+        kept[0].base, kept[1].base,
+        "both with the base of the app's bytes"
+    );
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
+    assert_eq!(
+        handle.kept_copies(),
+        vec![kept[0].clone()],
+        "the first stays listed"
     );
     assert!(
         verse_conflicts(&handle).is_empty(),
@@ -1888,11 +1937,11 @@ fn two_saves_from_a_program_that_keeps_the_file_open_are_no_conflict() {
 
 /// A placement whose record named two heads, one of which a journal loss took (the bounded
 /// model reached this, 2026-10-21): the file edited back to the value of the head the fold
-/// kept is no unchanged record. The edit replaced what the placement showed, so it is
-/// recorded without a base and conflicts with the project's text, which stays shown; the file
-/// is not silently written over with the project's text (§11.1 X3, L42).
+/// kept is no unchanged record. The file is kept and asked about, not silently written over
+/// with the project's text (L42); its *Import* leaves the verse as it was, since the file's
+/// verse is empty (H20 rule 3), and the project's text stays shown.
 #[test]
-fn an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded() {
+fn an_edit_back_to_a_kept_head_after_a_lost_one_is_kept_and_asked() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
@@ -1930,12 +1979,14 @@ fn an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded() {
 
     let handle = open(&rig, &folder);
     assert_eq!(
-        recorded(&handle),
-        vec![(1, true)],
-        "the edit back to the seed's text is recorded: {:?}",
-        handle.notices()
+        rig.fs.peek(&usfm_path(&folder)),
+        Some(edited),
+        "not written over"
     );
-    assert_eq!(verse_conflicts(&handle), vec![key]);
+    let reports = import_waiting(&handle);
+    assert_eq!(counts(&reports), vec![(0, 0)], "{reports:?}");
+    assert_eq!(reports[0].left_as_it_was, 1, "{reports:?}");
+    assert!(verse_conflicts(&handle).is_empty(), "{key:?}");
     assert_eq!(words(&handle, 1, 1).as_deref(), Some("Paul, a servant"));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);

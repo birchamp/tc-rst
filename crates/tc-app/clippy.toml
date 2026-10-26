@@ -44,6 +44,7 @@ disallowed-methods = [
   { path = "tc_journal::fold::FoldState::metadata_heads", reason = "walks every metadata record's heads: the store's heads file" },
   { path = "tc_journal::fold::FoldState::plan_outside_edit", reason = "decodes a whole file against the project: the store's import" },
   { path = "tc_journal::fold::FoldState::plan_update_book", reason = "decodes a whole book file against the project: the store's Update a book" },
+  { path = "tc_journal::fold::FoldState::plan_update_book_from", reason = "decodes a whole book file against a kept copy's base: the store's Import" },
   { path = "tc_journal::fold::FoldState::undo_outside", reason = "walks an outside batch's changes: the store's" },
   # The store adapter (unit C0) puts tc-store behind the seam; these three of tc-store's own
   # handle are never called in tc-app.

@@ -958,6 +958,8 @@ fn a_book_file_saved_during_the_sharing_wait_of_its_removal_is_kept() {
         "the unlink removed bytes saved after its comparison; notices: {:?}",
         handle.notices()
     );
+    // The kept file of a removed book is asked about; *Import* brings the colleague's save in.
+    assert_eq!(counts(&import_waiting(&handle)).len(), 1);
     let snapshot = handle.snapshot();
     let fold = snapshot.fold();
     let first = RecordKey::Verse(PHM, ChapterNo::new(1).unwrap(), VerseNo::new(1).unwrap());

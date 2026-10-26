@@ -1633,6 +1633,40 @@ fn bulk_choice_by_computer_skips_shared_username() {
     assert_eq!(state.conflict_count(), 1);
 }
 
+/// L59: no bulk choice hands the decision to the clock. A bulk keep names computers: it keeps
+/// their version in every conflict, whether that version is the older or the newer one.
+#[test]
+fn review_has_no_keep_newest() {
+    let mut ana = Dev::new(1);
+    let mut juan = Dev::new(2);
+    let book = imported_book(&mut ana, &[3]);
+    let v = |n| latest(&book, &verse_key(1, n)).id();
+    let hour = 3_600_000;
+    let mut changes = vec![juan.one(verse(1, 1, text("Juan one", 1)), vec![v(1)])];
+    ana.at = juan.at - 10 * hour;
+    changes.push(ana.one(verse(1, 1, text("Ana one, the older", 1)), vec![v(1)]));
+    changes.push(juan.one(verse(1, 2, text("Juan two", 2)), vec![v(2)]));
+    ana.at = juan.at + 10 * hour;
+    changes.push(ana.one(verse(1, 2, text("Ana two, the newer", 2)), vec![v(2)]));
+    let all = all_of(&[&book, &changes]);
+    let state = assert_converges(&all);
+    let ids: Vec<_> = state.conflicts().map(|c| c.id).collect();
+    assert_eq!(ids.len(), 2);
+    for (who, one, two) in [
+        (&mut ana, "Ana one, the older", "Ana two, the newer"),
+        (&mut juan, "Juan one", "Juan two"),
+    ] {
+        let (resolved, skipped) = state.bulk_resolution(&[who.id].into(), &ids);
+        assert!(skipped.is_empty(), "{skipped:?}");
+        let mut after = all.clone();
+        after.extend(who.apply(resolved.into_iter().flat_map(|(_, p)| p).collect()));
+        let state = assert_converges(&after);
+        assert_eq!(state.conflict_count(), 0);
+        assert_eq!(projected_words(&state, 1, 1).as_deref(), Some(one));
+        assert_eq!(projected_words(&state, 1, 2).as_deref(), Some(two));
+    }
+}
+
 /// L63: half of an action that arrived is held whole and listed; the rest completes it.
 #[test]
 fn loss_incomplete_batch_held_and_listed() {

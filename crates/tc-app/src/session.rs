@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex, Weak};
 use serde_json::json;
 use tc_api::app::{OpenSession, SessionRole};
 use tc_api::event::{CheckpointOutcome, Event, SessionEvent, SessionMode};
-use tc_api::ids::{Epoch, ProjectId, ProjectRef, Scope, ViewSeq};
+use tc_api::ids::{Epoch, ProjectId, ProjectRef, Scope, ViewSeq, WallMs};
 use tc_api::{ApiError, Message};
 use tc_journal::record::CommentTarget;
 use tc_journal::{Record, RecordKey};
@@ -243,6 +243,50 @@ impl Slot {
     }
 }
 
+/// When a mode switch checkpoints (D1, Q-5): every switch (R17, once P measures R9), or at most
+/// once in a span, the fallback used until then.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckpointPolicy {
+    EveryModeSwitch,
+    AtMostEvery(std::time::Duration),
+}
+
+/// The policy in force: at most once every two minutes, so a checker who switches mode after
+/// every decision does not wait behind a checkpoint each time (Q-5's fallback).
+pub const MODE_SWITCH_POLICY: CheckpointPolicy =
+    CheckpointPolicy::AtMostEvery(std::time::Duration::from_secs(120));
+
+/// Whether a checkpoint for `reason` runs now: leaving the project always checks for changes;
+/// a mode switch follows `policy`, from the start of the folder's last mode-switch checkpoint
+/// that committed.
+pub fn checkpoint_due(
+    policy: CheckpointPolicy,
+    last: Option<WallMs>,
+    now: WallMs,
+    reason: &CheckpointReason,
+) -> bool {
+    match reason {
+        CheckpointReason::LeavingProject
+        | CheckpointReason::BeforeExport
+        | CheckpointReason::Other(_) => true,
+        CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => match policy {
+            CheckpointPolicy::EveryModeSwitch => true,
+            CheckpointPolicy::AtMostEvery(span) => last.is_none_or(|last| {
+                u128::try_from(now.0.saturating_sub(last.0)).unwrap_or(0) >= span.as_millis()
+            }),
+        },
+    }
+}
+
+/// Where a folder's last checkpoint stands (D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckpointState {
+    /// None has run in this server run.
+    Never,
+    Running,
+    Ended(CheckpointOutcome),
+}
+
 struct RegistryInner {
     store: Arc<dyn ProjectStore>,
     bus: EventBus,
@@ -254,8 +298,16 @@ struct RegistryInner {
     epochs: AtomicU64,
     slot_ids: AtomicU64,
     slots: Mutex<BTreeMap<ProjectRef, Slot>>,
+    /// Each folder's last checkpoint, kept after its session closes so a reload finds it (D1).
+    checkpoints: Mutex<BTreeMap<ProjectRef, CheckpointState>>,
+    /// When each folder's last mode-switch checkpoint that committed started (D1, the policy's
+    /// clock).
+    switched: Mutex<BTreeMap<ProjectRef, WallMs>>,
     /// Woken whenever an open, a leave checkpoint or a close ends.
     changed: tokio::sync::Notify,
+    /// The folders whose next checkpoint fails as `test/script` said.
+    #[cfg(feature = "test-hooks")]
+    scripted_failures: Mutex<std::collections::BTreeSet<ProjectRef>>,
 }
 
 /// Every open project of this server run. Clones share the registry.
@@ -353,9 +405,141 @@ impl SessionRegistry {
                 epochs: AtomicU64::new(1),
                 slot_ids: AtomicU64::new(1),
                 slots: Mutex::new(BTreeMap::new()),
+                checkpoints: Mutex::new(BTreeMap::new()),
+                switched: Mutex::new(BTreeMap::new()),
                 changed: tokio::sync::Notify::new(),
+                #[cfg(feature = "test-hooks")]
+                scripted_failures: Mutex::new(std::collections::BTreeSet::new()),
             }),
         }
+    }
+
+    /// INV-A-LEAVE-WITH-CHANGES-MAKES-ONE-COMMIT (D1): the one caller of
+    /// `ProjectHandle::checkpoint`. It keeps the folder's state, reports a failure, and tells
+    /// the screens the outcome.
+    pub async fn checkpoint(
+        &self,
+        session: &ProjectSession,
+        reason: CheckpointReason,
+    ) -> CheckpointOutcome {
+        let folder = session.scope.project.clone();
+        let label = match &reason {
+            CheckpointReason::LeavingProject => "leavingProject",
+            CheckpointReason::BeforeExport => "beforeExport",
+            CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => "leavingMode",
+            CheckpointReason::Other(_) => "other",
+        };
+        let before = lock(&self.inner.checkpoints).insert(folder.clone(), CheckpointState::Running);
+        let started = self.inner.clock.now();
+        let mut outcome = match self.scripted_failure(&folder) {
+            Some(failed) => failed,
+            None => session.handle.checkpoint(reason).await,
+        };
+        // A read-only project (a second writer appeared) skips the checkpoint without looking:
+        // an earlier failure's work may still be missing from the history, so it stays shown.
+        if let (
+            CheckpointOutcome::Unchanged,
+            Some(CheckpointState::Ended(failed @ CheckpointOutcome::Failed { .. })),
+        ) = (&outcome, before)
+            && matches!(session.handle.facts().mode, SessionMode::ReadOnly(_))
+        {
+            outcome = failed;
+        }
+        lock(&self.inner.checkpoints)
+            .insert(folder.clone(), CheckpointState::Ended(outcome.clone()));
+        if let CheckpointOutcome::Failed { reason, .. } = &outcome {
+            self.inner.reports.add(
+                ReportOp::Checkpoint,
+                ReportOutcome::Failed {
+                    reason: reason.clone(),
+                },
+                facts(json!({"project": folder.as_str(), "reason": label})),
+                started,
+                self.inner.clock.now(),
+            );
+        }
+        self.inner.bus.publish(Event::Session {
+            at: session.scope.clone(),
+            event: SessionEvent::Checkpoint(outcome.clone()),
+        });
+        outcome
+    }
+
+    /// `test/script`: the next checkpoint of `folder` fails.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) fn script_checkpoint_failure(&self, folder: ProjectRef) {
+        lock(&self.inner.scripted_failures).insert(folder);
+    }
+
+    #[cfg(feature = "test-hooks")]
+    fn scripted_failure(&self, folder: &ProjectRef) -> Option<CheckpointOutcome> {
+        lock(&self.inner.scripted_failures)
+            .remove(folder)
+            .then(|| CheckpointOutcome::Failed {
+                reason: "Failed to fetch".to_owned(),
+                code: None,
+            })
+    }
+
+    #[cfg(not(feature = "test-hooks"))]
+    fn scripted_failure(&self, _folder: &ProjectRef) -> Option<CheckpointOutcome> {
+        None
+    }
+
+    /// A mode switch (`session/leave`): the checkpoint runs when the policy says it is due.
+    pub async fn mode_switch(
+        &self,
+        session: &ProjectSession,
+        reason: CheckpointReason,
+    ) -> Option<CheckpointOutcome> {
+        let folder = session.scope.project.clone();
+        let now = self.inner.clock.now();
+        let last = lock(&self.inner.switched).get(&folder).copied();
+        if !checkpoint_due(MODE_SWITCH_POLICY, last, now, &reason) {
+            return None;
+        }
+        let outcome = self.checkpoint(session, reason).await;
+        // Only a commit starts the wait: after a switch with nothing to commit, or a failed
+        // one, the next switch's work is committed at once.
+        if outcome == CheckpointOutcome::Committed {
+            lock(&self.inner.switched).insert(folder, now);
+        }
+        Some(outcome)
+    }
+
+    /// The session's outside edits as the store lists them now, told to every page (D1).
+    pub fn publish_outside(&self, session: &ProjectSession) -> tc_api::session::OutsideEdits {
+        let outside = session.handle.outside_edits();
+        self.inner.bus.publish(Event::Session {
+            at: session.scope.clone(),
+            event: SessionEvent::OutsideEdits(outside.clone()),
+        });
+        outside
+    }
+
+    /// The projects whose last checkpoint failed, for `hello`.
+    pub fn failed_checkpoints(&self) -> Vec<tc_api::app::FailedCheckpoint> {
+        lock(&self.inner.checkpoints)
+            .iter()
+            .filter_map(|(project, state)| match state {
+                CheckpointState::Ended(CheckpointOutcome::Failed { reason, code }) => {
+                    Some(tc_api::app::FailedCheckpoint {
+                        project: project.clone(),
+                        reason: reason.clone(),
+                        code: code.clone(),
+                    })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where `folder`'s last checkpoint stands.
+    pub fn checkpoint_state(&self, folder: &ProjectRef) -> CheckpointState {
+        lock(&self.inner.checkpoints)
+            .get(folder)
+            .cloned()
+            .unwrap_or(CheckpointState::Never)
     }
 
     /// The project store every session is opened from (Home lists its projects through it).
@@ -385,6 +569,7 @@ impl SessionRegistry {
     ) -> Result<OpenSession, OpenFailure> {
         let (session, mut guard) = self.join(folder, Role::Screen, progress).await?;
         self.claim_screen(folder, guard.slot);
+        self.retry_owed_checkpoint(&session);
         // The screen stays a user until it leaves: `leave_screen`, a screen open elsewhere,
         // or `close_all`.
         guard.armed = false;
@@ -393,7 +578,28 @@ impl SessionRegistry {
             id: session.id.clone(),
             mode: session.handle.facts().mode,
             role: SessionRole::Screen,
+            outside: session.handle.outside_edits(),
         })
+    }
+
+    /// The project just opened owes the checkpoint that failed when it was last left or
+    /// switched: it runs again now, behind the open (tC4 `retryOwedCheckpoint`), as Home's
+    /// "Open the project again to retry" says.
+    fn retry_owed_checkpoint(&self, session: &ProjectSession) {
+        let owed = matches!(
+            self.checkpoint_state(&session.scope.project),
+            CheckpointState::Ended(CheckpointOutcome::Failed { .. })
+        );
+        // The lease keeps the session open until the retry ends.
+        let Some(lease) = owed.then(|| self.writer(&session.scope)).flatten() else {
+            return;
+        };
+        let registry = self.clone();
+        self.inner.runtime.spawn(async move {
+            registry
+                .checkpoint(lease.session(), CheckpointReason::Other("retry".to_owned()))
+                .await;
+        });
     }
 
     /// A screen open returns: the screen is the person's, unless it was given away while the
@@ -719,26 +925,9 @@ impl SessionRegistry {
                     session.scope.project.as_str(),
                 )
                 .await;
-            let started = registry.inner.clock.now();
-            let outcome = session
-                .handle
-                .checkpoint(CheckpointReason::LeavingProject)
+            registry
+                .checkpoint(&session, CheckpointReason::LeavingProject)
                 .await;
-            if let CheckpointOutcome::Failed { reason } = &outcome {
-                registry.inner.reports.add(
-                    ReportOp::Checkpoint,
-                    ReportOutcome::Failed {
-                        reason: reason.clone(),
-                    },
-                    facts(json!({"project": session.scope.project.as_str(), "reason": "leavingProject"})),
-                    started,
-                    registry.inner.clock.now(),
-                );
-            }
-            registry.inner.bus.publish(Event::Session {
-                at: session.scope.clone(),
-                event: SessionEvent::Checkpoint(outcome),
-            });
             // Home is already showing: its card was read before this checkpoint wrote the
             // files its counts come from (a kept verse's conflict among them, J18).
             registry.inner.bus.publish(Event::HomeCard {
@@ -823,6 +1012,7 @@ impl SessionRegistry {
                     } else {
                         SessionRole::Side
                     },
+                    outside: session.handle.outside_edits(),
                 })
             })
             .collect()
@@ -1017,6 +1207,7 @@ async fn pump(
     mut events: mpsc::UnboundedReceiver<StoreEvent>,
 ) {
     let mut previous = session.read();
+    let mut outside = session.handle.outside_edits();
     session.checks().begin(previous.seq());
     while let Some(event) = events.recv().await {
         let event = match event {
@@ -1058,9 +1249,18 @@ async fn pump(
                 }
             }
             StoreEvent::Mode(mode) => SessionEvent::Mode(mode),
-            // Shown by `session/notices`, which reads the store's list, and D1 (what could not
-            // be written); a skipped event never ends the pump.
-            StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => continue,
+            // The question and the kept copies change with the store's looks at the files: a
+            // hold (a notice), lost work kept at a look (only a write follows it, H22 part 1),
+            // a hold that ended. Each notice and write reads the two lists again, which costs
+            // the entries listed; the pages hear of it only when they changed (D1).
+            StoreEvent::Notice(_) | StoreEvent::Materialized { .. } => {
+                let now = session.handle.outside_edits();
+                if now == outside {
+                    continue;
+                }
+                outside = now.clone();
+                SessionEvent::OutsideEdits(now)
+            }
         };
         bus.publish(Event::Session {
             at: session.scope.clone(),

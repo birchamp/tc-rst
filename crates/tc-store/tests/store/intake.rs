@@ -245,6 +245,65 @@ fn a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree() {
     a.close().unwrap();
 }
 
+/// L77 (§5.0): lines salvaged from a teammate's damaged pack are kept as that teammate made
+/// them: the same change, device, number, time and batch, never this device's, after the
+/// salvage, after this device seals them into a pack of its own, and after a reopen.
+#[test]
+fn salvage_keeps_original_batch_ref() {
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 2, "in hope").unwrap();
+    save_verse(&b, 1, 3, "in his time").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (theirs, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    assert_eq!(packs.len(), 1);
+    let project = project_of(&rig_a.fs, &folder);
+    let whole = tc_store::read_received_pack(&packs[0].path, &packs[0].bytes, project).changes;
+    let damaged = packs[0].bytes[..packs[0].bytes.len() - 7].to_vec();
+    let readable = tc_store::read_received_pack(&packs[0].path, &damaged, project).changes;
+    assert!(!readable.is_empty() && readable.len() < whole.len());
+    let blob = repo_a.blob(&damaged).unwrap();
+    let a = open(&rig_a, &folder);
+    let me = a.facts().device;
+    let remote = tc_journal::GitOid::from_bytes(theirs.as_bytes().try_into().unwrap());
+    let received = vec![ReceivedPack {
+        path: packs[0].path.clone(),
+        bytes: damaged,
+        blob: tc_journal::GitOid::from_bytes(blob.as_bytes().try_into().unwrap()),
+    }];
+    let report = a.sync_merge(remote, received).wait().unwrap();
+    assert_eq!(report.intake.salvaged, 1, "{report:?}");
+    let as_made = |handle: &ProjectHandle| {
+        let snapshot = handle.snapshot();
+        for change in &readable {
+            let body = change.body();
+            let view = snapshot
+                .fold()
+                .change(&change.id())
+                .expect("the salvaged change, by its own id");
+            assert_ne!(view.device, me);
+            assert_eq!(
+                (view.device, view.seq, view.at, view.batch),
+                (body.device, body.seq, body.at, body.batch.id)
+            );
+        }
+    };
+    as_made(&a);
+    checkpoint(&a);
+    as_made(&a);
+    a.close().unwrap();
+    let a = open(&rig_a, &folder);
+    as_made(&a);
+    a.close().unwrap();
+}
+
 /// §6.4 Y2 to Y4: a sync's merge killed at any write point, with or without a power cut,
 /// leaves this computer's own work, a teammate's verse whole or absent (never half a batch),
 /// a valid folder, and a retry that takes the teammate's work and commits.
@@ -341,4 +400,90 @@ fn crash_usb_receive_takes_whole_batches_and_the_rest_on_retry() {
         );
     });
     assert!(points > 5, "{points}");
+}
+
+/// The storage lane's attack on *Bring it back*: Ana's save S reaches the book file while only
+/// a pending file holds it, and Juan's change T of the same verse, made over the same text,
+/// arrives by an exchange file. The receive is killed at each write point; at a point after
+/// T's pack is written and before S is sealed, another program then deletes S's pending file
+/// while the app is closed. The reopened project has T, and the book file shows S, which is
+/// kept to bring back. T is newer than what S was made over: *Bring it back* never puts S
+/// over T, T stays a version shown or in conflict.
+#[test]
+fn bring_it_back_never_replaces_a_teammates_verse_received_after_the_save() {
+    use crate::crash::{Outcome, kill_everywhere_between};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "the text before").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 1, "Juan's verse").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (_, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    let base = rig_a.fs.crash(false);
+    drop(rig_a);
+    let before = pending_files(&base, &folder);
+    let setup = |_: &tc_store::fault::FaultFs, handle: &ProjectHandle| {
+        save_verse(handle, 1, 1, "Ana's save").unwrap();
+        handle.leave(tc_store::Leave::Mode).wait().unwrap();
+        handle.wait_idle();
+    };
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.receive_packs("Juan".into(), packs.clone()).wait();
+        Outcome::NotSaved
+    };
+    let between = |fs: &tc_store::fault::FaultFs| {
+        for pending in pending_files(fs, &folder) {
+            if !before.contains(&pending) {
+                fs.delete(&folder.join(pending)).unwrap();
+            }
+        }
+    };
+    let attacked = std::cell::Cell::new(0);
+    let points = kill_everywhere_between(
+        &base,
+        &folder,
+        &setup,
+        &action,
+        &between,
+        &|handle, _, _| {
+            let juan_folded = {
+                let snapshot = handle.snapshot();
+                let fold = snapshot.fold();
+                let key = verse(1, 1);
+                fold.history(&key).iter().any(|id| {
+                    fold.body(id)
+                        .is_some_and(|b| format!("{:?}", b.record).contains("Juan's verse"))
+                })
+            };
+            let lost: Vec<_> = handle
+                .kept_copies()
+                .into_iter()
+                .filter(|k| k.why == tc_store::KeptWhy::Lost)
+                .collect();
+            if !juan_folded || lost.is_empty() {
+                return;
+            }
+            attacked.set(attacked.get() + 1);
+            handle.import_kept(&lost[0].copy).wait().unwrap();
+            handle.wait_idle();
+            let shown = words(handle, 1, 1);
+            let snapshot = handle.snapshot();
+            let in_conflict = snapshot.fold().conflicts().any(|c| {
+                c.candidates
+                    .iter()
+                    .any(|v| format!("{:?}", v.value).contains("Juan's verse"))
+            });
+            assert!(
+                shown.as_deref() == Some("Juan's verse") || in_conflict,
+                "Ana's lost save replaced Juan's verse: {shown:?}"
+            );
+        },
+    );
+    assert!(points > 5, "{points}");
+    assert!(attacked.get() > 0, "no kill point gave the attack");
 }

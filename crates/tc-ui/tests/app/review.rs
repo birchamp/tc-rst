@@ -505,6 +505,7 @@ fn every_notice_has_its_own_sentence() {
         NoticeView::ImportUnfinished,
         NoticeView::IncompleteChanges { have: 3, of: 5 },
         NoticeView::KeptApart { changes: 2 },
+        NoticeView::ChangedWhileReadOnly { file: file() },
     ];
     let texts: Vec<String> = all.iter().map(notice_text).collect();
     for (notice, text) in all.iter().zip(&texts) {
@@ -517,7 +518,17 @@ fn every_notice_has_its_own_sentence() {
     assert!(texts[2].contains("another computer") && texts[2].contains('3'));
     assert!(texts[3].contains("ingredients/TIT.usfm"));
     let unique: std::collections::BTreeSet<&String> = texts.iter().collect();
-    assert_eq!(unique.len(), texts.len());
+    assert_eq!(unique.len(), texts.len()); // H22 part 4: a read-only open names the book, or a story's file.
+    assert_eq!(
+        texts.last().unwrap(),
+        "Titus was changed outside translationCore. Open the project normally to import it."
+    );
+    assert_eq!(
+        notice_text(&NoticeView::ChangedWhileReadOnly {
+            file: "ingredients/content/01.md".into()
+        }),
+        "01.md was changed outside translationCore. Open the project normally to import it."
+    );
 }
 
 /// INV-EVERY-KIND-HAS-A-CHOICE: every kind of conflict has its choices, from one match with
@@ -596,6 +607,7 @@ fn a_look_again_refusal_says_another_version_was_kept() {
     let every = [
         api(NotSaved::Refused(SaveRefusal::IncoherentView)),
         api(NotSaved::Refused(SaveRefusal::LastBook)),
+        api(NotSaved::Refused(SaveRefusal::NotKept)),
         api(NotSaved::Disk("the disk is full".into())),
         api(NotSaved::ReadOnly(
             tc_api::write::ReadOnlyReason::SecondWriter,

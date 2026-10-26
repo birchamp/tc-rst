@@ -1077,6 +1077,9 @@ pub enum StoreError {
     /// `project.json`, since it was listed.
     #[error("not a project")]
     NotAProject,
+    /// The kept copy was imported or dismissed already.
+    #[error("the copy is no kept copy any more")]
+    NotKept,
     #[error("{0}")]
     Other(String),
 }
@@ -1086,6 +1089,10 @@ pub enum StoreError {
 pub enum CheckpointReason {
     /// tC4's "leaving the project" checkpoint, when the person goes Home.
     LeavingProject,
+    /// tC4's "leaving Translate" checkpoint, at a mode switch (D1).
+    LeavingTranslate,
+    /// A mode switch from another mode: its words name it ("leaving Check").
+    LeavingMode(String),
     /// tC4's "before export" checkpoint: an export reads the project as committed (D2).
     BeforeExport,
     Other(String),
@@ -1260,6 +1267,34 @@ pub trait ProjectHandle: Send + Sync {
     /// the fold does not list. A backend with no files has none.
     fn notices(&self) -> Vec<StoreNotice> {
         Vec::new()
+    }
+
+    /// The books another program changed that wait for the question, and every kept copy
+    /// (D1, delta §2.3, §2.11), as the store's manifest lists them. A backend with no files has
+    /// none.
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        tc_api::session::OutsideEdits::default()
+    }
+
+    /// The window got focus: the store looks for files another program changed and holds them
+    /// (STORAGE §11.1). A backend with no files finds none.
+    fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// *Import* of the kept copy `copy` (delta §2.11 Q4).
+    fn import_kept(&self, _copy: &str) -> BoxFuture<Result<tc_store::ImportReport, StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Not now* for the waiting file `file`: the project keeps its text (delta §2.11 Q5).
+    fn not_now(&self, _file: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Dismiss* of the kept copy `copy`; refused while its book still waits.
+    fn dismiss_kept(&self, _copy: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
     }
 
     /// Drafts from an earlier session that differ from what their records hold (O12).

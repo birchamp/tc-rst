@@ -38,6 +38,7 @@ pub mod load;
 pub mod net;
 pub mod offer;
 pub mod open_door43;
+pub mod outside;
 pub mod print;
 pub mod q9;
 pub mod recovery;

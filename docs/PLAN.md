@@ -138,6 +138,31 @@ Under AGENTS.md "Matching tC4" (2026-10-19):
   keeps the 28 words the import placed at open and at the next verse save, where tC4's text
   drops 11.
 
+Under the same rule, for checkpoints and files changed outside the app (D1, owner ruling OE 3
+of 2026-10-21, `docs/STORAGE-DELTA-2026-10-21.md` §2.11, §2.17):
+
+- A book file another program changed is kept and asked about, at open, when the watcher finds
+  it and when the window gets focus: "This book has been changed externally. Would you like to
+  import it into this project?" with *Import* and *Not now*. tC4 takes an out-of-band USFM edit
+  in on its own at the next open (`reconcileDivergence`), has no watcher or focus check, and
+  refuses its checkpoint while the project is open ("A file changed outside the app…").
+- A story file another program changed is asked about the same way. tC4 refuses to open the
+  project (`open.story-divergence`); a story must not lock the project.
+- *Not now* writes the file again from the project and keeps the outside file as a copy in
+  `.tc/external`, listed in the conflict review's notices with *Import* and *Dismiss* until one
+  is chosen; the toolbar's conflicts button counts these copies too, where tC4's counts verse
+  conflicts only. No *Undo* follows an import (delta Q7).
+- A mode switch checkpoints at most once every two minutes after one that committed; leaving
+  the project always checks. tC4 checkpoints at every mode switch (Q-5's fallback, A-11, until
+  P reports R9).
+- The checkpoint commit message, visible in Door43's history, ends with the books:
+  "Checkpoint, leaving Translate: TIT (tC)", where tC4's reads "…: TIT text (tC4)".
+- Work found only in a book or story file the app wrote (a save missing from the project's
+  records) is asked about once: "Some recent work was missing from this project's records.
+  Bring it back?" with *Bring it back* and *Not now*; after *Not now* the review lists it with
+  *Bring it back* only, never *Dismiss*. tC4 takes it in on its own at the next open
+  (`reconcileDivergence`) (H22 part 1).
+
 Under the same rule, in the conflict review (B11 and C7a, 2026-10-23):
 
 - The Text tab's conflict says when one set of changes made other conflicts ("Changed together

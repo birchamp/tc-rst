@@ -546,6 +546,151 @@ impl Handle<Close> for App {
     }
 }
 
+/// The save indicator's Retry after a failed checkpoint (D1): the same checkpoint again.
+impl Handle<tc_api::session::RetryCheckpoint> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::RetryCheckpoint,
+    ) -> Result<tc_api::event::CheckpointOutcome, ApiError> {
+        let session = self.read(&req.at)?;
+        Ok(self
+            .inner
+            .sessions
+            .checkpoint(
+                &session,
+                crate::backend::CheckpointReason::Other("retry".to_owned()),
+            )
+            .await)
+    }
+}
+
+/// A mode switch (D1, tC4 `go`): the checkpoint of the mode left, when the policy says so.
+impl Handle<tc_api::session::LeaveMode> for App {
+    async fn handle(&self, req: tc_api::session::LeaveMode) -> Result<(), ApiError> {
+        use crate::backend::CheckpointReason;
+        use tc_api::session::ScreenMode;
+        let session = self.read(&req.at)?;
+        let reason = match req.from {
+            ScreenMode::Translate => CheckpointReason::LeavingTranslate,
+            ScreenMode::Understand => CheckpointReason::LeavingMode("Understand".to_owned()),
+            ScreenMode::Check => CheckpointReason::LeavingMode("Check".to_owned()),
+            ScreenMode::CommunityChecking => {
+                CheckpointReason::LeavingMode("Community Checking".to_owned())
+            }
+        };
+        let sessions = self.inner.sessions.clone();
+        // The switch does not wait for the commit: tC4 starts it and moves on.
+        tokio::spawn(async move {
+            sessions.mode_switch(&session, reason).await;
+        });
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// D1: the question about changed books, and the kept copies
+// ---------------------------------------------------------------------------------------
+
+impl App {
+    /// The session of a write about outside edits, by its scope.
+    fn outside_session(&self, at: &tc_api::Scope) -> Result<Arc<ProjectSession>, ApiError> {
+        self.inner
+            .sessions
+            .reader(at)
+            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))
+    }
+
+    /// The lists after a store call, also told to every page of the session.
+    fn outside_after(
+        &self,
+        session: &ProjectSession,
+        done: Result<(), crate::backend::StoreError>,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        done.map_err(outside_refusal)?;
+        Ok(self.inner.sessions.publish_outside(session))
+    }
+}
+
+/// A refused answer about a kept copy: one imported or dismissed already is `NotKept`, never
+/// a 0/0 report; any other is a disk refusal with the store's words.
+fn outside_refusal(error: crate::backend::StoreError) -> ApiError {
+    match error {
+        crate::backend::StoreError::NotKept => {
+            ApiError::NotSaved(NotSaved::Refused(tc_api::write::SaveRefusal::NotKept))
+        }
+        error => ApiError::NotSaved(NotSaved::Disk(error.to_string())),
+    }
+}
+
+impl Handle<tc_api::session::Focus> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::Focus,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().focus().await;
+        self.outside_after(&session, done)
+    }
+}
+
+impl Handle<tc_api::session::ImportKept> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::ImportKept,
+    ) -> Result<tc_api::session::KeptImported, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let file = session
+            .handle()
+            .outside_edits()
+            .kept
+            .iter()
+            .find(|k| k.copy == req.copy)
+            .map(|k| k.file.clone())
+            .ok_or(ApiError::NotSaved(NotSaved::Refused(
+                tc_api::write::SaveRefusal::NotKept,
+            )))?;
+        let book = book_of_file(&file);
+        let report = session.handle().import_kept(&req.copy).await;
+        let report = report.map_err(outside_refusal)?;
+        Ok(tc_api::session::KeptImported {
+            file,
+            book,
+            imported: report.imported,
+            to_review: report.to_review,
+            book_added: report.book_added,
+            outside: self.inner.sessions.publish_outside(&session),
+        })
+    }
+}
+
+impl Handle<tc_api::session::NotNow> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::NotNow,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().not_now(&req.file).await;
+        self.outside_after(&session, done)
+    }
+}
+
+impl Handle<tc_api::session::DismissNotice> for App {
+    async fn handle(
+        &self,
+        req: tc_api::session::DismissNotice,
+    ) -> Result<tc_api::session::OutsideEdits, ApiError> {
+        let session = self.outside_session(&req.at)?;
+        let done = session.handle().dismiss_kept(&req.copy).await;
+        self.outside_after(&session, done)
+    }
+}
+
+/// The book an `ingredients/<CODE>.usfm` path is.
+fn book_of_file(file: &str) -> Option<BookId> {
+    let code = file.strip_prefix("ingredients/")?.strip_suffix(".usfm")?;
+    code.parse().ok()
+}
+
 // ---------------------------------------------------------------------------------------
 // editor/book, editor/sources
 // ---------------------------------------------------------------------------------------

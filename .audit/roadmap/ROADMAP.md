@@ -125,6 +125,8 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | T | The storage side of the tC4 issue sweep (what is left of it) | S2 | 0.5-1 d |
 | P | Scale: re-apply on post-S2 main; tooling first, speed-ups after S3's core | S2 | 2-3 d |
 | X | Door43 sync and USB exchange (`tc-sync`). Steps 1-3 run beside S3; intake waits for S3's core | S2, DOM-1, T | 4-6 d |
+| LOSS-1 | Write the loss tests STORAGE §15 promises that no card wrote | CHK-3 | 2 d |
+| PUSH-1 | A large push goes to Door43 as a chain of commits, so a poor link can finish it | LOSS-1, E1a | 2-3 d |
 | I | Import (`tc-import`). The pure core can start after DOM-2; the store write after S3's core; the team move after X | S2, DOM-2 | 4-7 d |
 | V | Old projects keep working; the owner freezes format 1.0 | X, I, T, S3, owner H9 | 1.5-3 d |
 

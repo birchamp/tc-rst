@@ -270,15 +270,21 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     };
     assert_eq!(
         rig.fs.peek(&folder.join(&copy)),
-        Some(outside),
+        Some(outside.clone()),
         "the outside save is kept whole"
     );
+    handle.wait_idle();
+    // The book waits for the person's answer, and is not written over meanwhile.
+    assert_eq!(handle.waiting_books().len(), 1);
+    assert_eq!(rig.fs.peek(&usfm), Some(outside.clone()));
+    handle.not_now("ingredients/TIT.usfm").wait().unwrap();
     handle.wait_idle();
     let written = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
     assert!(
         written.contains("a new first verse"),
         "the project's save is written after the copy: {written}"
     );
+    assert_eq!(handle.kept_copies().len(), 1, "the copy stays listed");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -348,12 +354,15 @@ fn loss_bit_rot_not_recorded_as_edit() {
         h.wait_idle();
         let n = h.snapshot().fold().len();
         let notices = notices_of(&h);
+        // Kept and asked about like any change (delta §2.5: R10's own hold goes); nothing
+        // enters the project without *Import*.
         assert!(
             notices
                 .iter()
-                .any(|n| matches!(n, Notice::StorageDamage { .. })),
+                .any(|n| matches!(n, Notice::OutsideEditHeld { .. })),
             "{notices:?}"
         );
+        assert_eq!(h.waiting_books().len(), 1);
         h.close().unwrap();
         n
     };
@@ -467,4 +476,412 @@ fn a_project_created_through_a_symlinked_projects_folder_keeps_its_device() {
     );
     handle.close().unwrap();
     assert!(store.hooks().burrito_problems().is_empty());
+}
+
+fn open_ok(rig: &Rig, folder: &Path) -> tc_store::ProjectHandle {
+    let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    handle
+}
+
+/// L16 (F7): an older backup of the folder is put back over newer work. This computer's ledger
+/// says it saved more than the folder holds, so the open starts a new device and says how
+/// many changes the copy is missing; the backup's own saves stay, and a new save never
+/// reuses a number the lost work used.
+#[test]
+fn loss_f7_restored_backup_warns() {
+    let (rig, folder) = titus();
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "in the backup").unwrap();
+    handle.close().unwrap();
+    let backup = rig.fs.copy();
+    let handle = open_ok(&rig, &folder);
+    let device = handle.facts().device;
+    save_verse(&handle, 1, 2, "after the backup").unwrap();
+    save_verse(&handle, 1, 3, "after the backup too").unwrap();
+    handle.close().unwrap();
+    // The folder goes back to the backup; the application data stays this computer's.
+    let restored = backup.copy();
+    for (path, bytes) in rig.fs.files_under(Path::new(APP)) {
+        restored.put(&path, &bytes, None);
+    }
+    drop(rig);
+    let rig = rig_as(restored, APP, "host-1");
+    let handle = open_ok(&rig, &folder);
+    assert_ne!(handle.facts().device, device, "a new device");
+    assert!(
+        notices_of(&handle)
+            .iter()
+            .any(|n| matches!(n, Notice::RestoredBackup { missing: 2, .. })),
+        "{:?}",
+        notices_of(&handle)
+    );
+    assert_eq!(words(&handle, 1, 1).as_deref(), Some("in the backup"));
+    save_verse(&handle, 1, 4, "after the restore").unwrap();
+    assert!(
+        !handle
+            .snapshot()
+            .fold()
+            .anomalies()
+            .any(|a| matches!(a, tc_journal::fold::Anomaly::DuplicateDevice { .. })),
+        "the new save collides with nothing"
+    );
+    handle.close().unwrap();
+}
+
+/// L17 (F8): the installation secret is lost (`installation.json` deleted or damaged).
+/// Saves not yet sealed are files in the project folder, so they are all there at the next
+/// open, and new saves work.
+#[test]
+fn loss_f8_secret_lost_pending_survives() {
+    let (rig, folder) = titus();
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before the secret was lost").unwrap();
+    save_verse(&handle, 1, 2, "this one too").unwrap();
+    let device = handle.facts().device;
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    drop(rig);
+    assert!(!pending_files(&fs, &folder).is_empty(), "unsealed saves");
+    fs.delete(&Path::new(APP).join("installation.json"))
+        .unwrap();
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before the secret was lost")
+    );
+    assert_eq!(words(&handle, 1, 2).as_deref(), Some("this one too"));
+    assert_ne!(handle.facts().device, device, "only a new device");
+    assert_eq!(handle.facts().mode, Mode::Writable);
+    save_verse(&handle, 1, 3, "after").unwrap();
+    handle.close().unwrap();
+}
+
+/// L19 (F10): no content can lock the project. Every file the open reads is damaged at once
+/// (the journal's files, the project and device files, the format, the lock, the derived
+/// files); the open still opens it for writing, keeps what can be read, and saves work.
+#[test]
+fn loss_f10_nothing_can_lock_open() {
+    let (rig, folder) = titus();
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "sealed into a pack").unwrap();
+    handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait()
+        .unwrap();
+    save_verse(&handle, 1, 2, "still pending").unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    drop(rig);
+    let garbage = b"\x00\xffnot what this file should hold\n{";
+    let mut damaged = vec![
+        ".tc/device.json".to_owned(),
+        ".tc/lock".to_owned(),
+        "ingredients/tc/format.json".to_owned(),
+        "ingredients/tc/project.json".to_owned(),
+        "metadata.json".to_owned(),
+    ];
+    let pending = pending_files(&fs, &folder);
+    assert!(!pending.is_empty(), "a save not sealed yet");
+    damaged.extend(pending);
+    damaged.extend(packs(&fs, &folder));
+    for rel in &damaged {
+        fs.put(&folder.join(rel), garbage, None);
+    }
+    let rig = rig_as(fs, APP, "host-1");
+    damaged_on_purpose(&rig);
+    let handle = rig
+        .store
+        .open(&folder, &OpenOptions::default())
+        .unwrap_or_else(|e| panic!("damaged content refused the open: {e}"));
+    handle.wait_idle();
+    assert_eq!(handle.facts().mode, Mode::Writable);
+    save_verse(&handle, 1, 3, "a save after the damage").unwrap();
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("a save after the damage")
+    );
+    handle.close().unwrap();
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("a save after the damage"),
+        "and the next open too"
+    );
+    handle.close().unwrap();
+}
+
+/// L25 (F6, RISKS 10): a project of a newer major format is refused in words before the open
+/// writes anything into it.
+#[test]
+fn loss_newer_major_refused_before_write() {
+    let (rig, folder) = titus();
+    let newer = std::fs::read(repo_root().join("fixtures/journal/format-2.0.json")).unwrap();
+    rig.fs
+        .put(&folder.join("ingredients/tc/format.json"), &newer, None);
+    let before = files(&rig.fs, &folder);
+    let outside = tc_store::Vfs::outside_dir(&rig.fs, &folder).unwrap();
+    let git_before = dir_bytes(&outside);
+    match rig.store.open(&folder, &OpenOptions::default()) {
+        Err(tc_store::OpenError::NewerMajor { major }) => assert_eq!(major, "2"),
+        Err(other) => panic!("{other}"),
+        Ok(_) => panic!("a project of format 2 opened"),
+    }
+    assert_eq!(files(&rig.fs, &folder), before, "nothing written");
+    assert_eq!(dir_bytes(&outside), git_before, "nothing written to git");
+}
+
+fn dir_bytes(dir: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![dir.to_owned()];
+    while let Some(at) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&at) else {
+            continue;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                out.insert(path.clone(), std::fs::read(&path).unwrap());
+            }
+        }
+    }
+    out
+}
+
+/// Reads every pack with its last byte changed while `garble` is on: a disk that does not
+/// give back what was written.
+#[derive(Debug, Clone)]
+struct GarblesPacks {
+    fs: FaultFs,
+    garble: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl tc_store::Vfs for GarblesPacks {
+    fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+        let mut bytes = self.fs.read(path)?;
+        if self.garble.load(std::sync::atomic::Ordering::SeqCst)
+            && slashed(path).contains("/ingredients/tc/changes/")
+            && let Some(last) = bytes.last_mut()
+        {
+            *last ^= 0x55;
+        }
+        Ok(bytes)
+    }
+    fn open(&self, path: &Path) -> std::io::Result<Box<dyn tc_store::vfs::ReadHandle>> {
+        self.fs.open(path)
+    }
+    fn metadata(&self, path: &Path) -> std::io::Result<tc_store::vfs::FileMeta> {
+        self.fs.metadata(path)
+    }
+    fn read_dir(&self, path: &Path) -> std::io::Result<Vec<tc_store::vfs::DirEntry>> {
+        self.fs.read_dir(path)
+    }
+    fn create_new(&self, path: &Path) -> std::io::Result<Box<dyn tc_store::vfs::WriteHandle>> {
+        self.fs.create_new(path)
+    }
+    fn rename(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        self.fs.rename(from, to)
+    }
+    fn rename_file_noreplace(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        self.fs.rename_file_noreplace(from, to)
+    }
+    fn rename_dir_noreplace(&self, from: &Path, to: &Path) -> std::io::Result<()> {
+        self.fs.rename_dir_noreplace(from, to)
+    }
+    fn remove_file(&self, path: &Path) -> std::io::Result<()> {
+        self.fs.remove_file(path)
+    }
+    fn remove_dir_all(&self, path: &Path) -> std::io::Result<()> {
+        self.fs.remove_dir_all(path)
+    }
+    fn create_dir(&self, path: &Path) -> std::io::Result<()> {
+        self.fs.create_dir(path)
+    }
+    fn sync_dir(&self, path: &Path) -> std::io::Result<()> {
+        self.fs.sync_dir(path)
+    }
+    fn sync_file(&self, path: &Path) -> std::io::Result<()> {
+        self.fs.sync_file(path)
+    }
+    fn lock(&self, path: &Path) -> std::io::Result<Option<Box<dyn tc_store::vfs::LockHandle>>> {
+        self.fs.lock(path)
+    }
+    fn canonicalize(&self, path: &Path) -> std::io::Result<std::path::PathBuf> {
+        self.fs.canonicalize(path)
+    }
+    fn secure_dir_chain(&self, path: &Path, made: &[std::path::PathBuf]) -> std::io::Result<()> {
+        self.fs.secure_dir_chain(path, made)
+    }
+    fn outside_dir(&self, path: &Path) -> std::io::Result<std::path::PathBuf> {
+        self.fs.outside_dir(path)
+    }
+    fn is_held(&self, error: &std::io::Error) -> bool {
+        self.fs.is_held(error)
+    }
+    fn watch(
+        &self,
+        root: &Path,
+        recursive: bool,
+        sink: tc_store::vfs::WatchSink,
+    ) -> std::io::Result<Option<tc_store::vfs::WatchGuard>> {
+        self.fs.watch(root, recursive, sink)
+    }
+    fn wait_held(&self, delay: std::time::Duration) {
+        self.fs.wait_held(delay);
+    }
+}
+
+/// L47, crash rows K2 and K3: a seal reads its new pack back and verifies it before it
+/// removes a pending file. A pack that does not read back as written removes nothing, and
+/// every save stays.
+#[test]
+fn crash_seal_verifies_before_delete() {
+    let fs = FaultFs::new();
+    let garble = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (mut cfg, _) = config(&fs, APP, "host-1");
+    cfg.vfs = std::sync::Arc::new(GarblesPacks {
+        fs: fs.clone(),
+        garble: garble.clone(),
+    });
+    let store = Store::start(cfg).unwrap();
+    store.wait_cleanup();
+    let rig = Rig { fs, store };
+    damaged_on_purpose(&rig);
+    let folder = create_titus(&rig, "Titus");
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    save_verse(&handle, 1, 2, "in hope of eternal life").unwrap();
+    let pending = pending_files(&rig.fs, &folder);
+    assert!(!pending.is_empty());
+    let packs_before = packs(&rig.fs, &folder);
+    garble.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _ = handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait();
+    garble.store(false, std::sync::atomic::Ordering::SeqCst);
+    for rel in &pending {
+        assert!(
+            rig.fs.peek(&folder.join(rel)).is_some(),
+            "{rel} was removed though its pack did not verify"
+        );
+    }
+    assert_eq!(
+        packs(&rig.fs, &folder),
+        packs_before,
+        "no unverified pack is left"
+    );
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    drop(rig);
+    let rig = rig_as(fs, APP, "host-1");
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God")
+    );
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("in hope of eternal life")
+    );
+    handle.close().unwrap();
+}
+
+/// L66 (§4.4 "All copies damaged", §9.2 N3): no valid copy of a pack is left. The copy in the
+/// folder and the one the last commit holds are damaged in different lines; the open keeps
+/// the union of their readable lines, so every save is still there, and seals them again.
+#[test]
+fn loss_all_copies_damaged_union_salvaged() {
+    let (rig, folder) = titus();
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    save_verse(&handle, 1, 2, "in hope of eternal life").unwrap();
+    save_verse(&handle, 1, 3, "at the right time").unwrap();
+    handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait()
+        .unwrap();
+    // The saves themselves, by id: a verse that came back only as an outside edit of the
+    // book file (a new change) would not be its save.
+    let saves = |handle: &tc_store::ProjectHandle| -> Vec<Vec<tc_journal::ChangeId>> {
+        (1..=3)
+            .map(|v| handle.snapshot().fold().heads(&verse(1, v)))
+            .collect()
+    };
+    let saved = saves(&handle);
+    handle.close().unwrap();
+    let rel = packs(&rig.fs, &folder)
+        .into_iter()
+        .find(|rel| {
+            String::from_utf8_lossy(&rig.fs.peek(&folder.join(rel)).unwrap())
+                .contains("servant of God")
+        })
+        .expect("the pack of the saves");
+    let good = rig.fs.peek(&folder.join(&rel)).unwrap();
+    let damage = |from: &str, to: &str| -> Vec<u8> {
+        let text = String::from_utf8(good.clone()).unwrap();
+        assert!(text.contains(from));
+        text.replacen(from, to, 1).into_bytes()
+    };
+    let in_the_commit = damage("servant of God", "servant of Gxd");
+    let in_the_folder = damage("right time", "right tome");
+    // The commit's copy is damaged too, and no other copy of the good bytes is left.
+    let outside = tc_store::Vfs::outside_dir(&rig.fs, &folder).unwrap();
+    let repo = git2::Repository::open(outside.join(".git")).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    let blob = repo.blob(&in_the_commit).unwrap();
+    let mut update = git2::build::TreeUpdateBuilder::new();
+    update.upsert(&rel, blob, git2::FileMode::Blob);
+    let tree = repo
+        .find_tree(update.create_updated(&repo, &head.tree().unwrap()).unwrap())
+        .unwrap();
+    let sig = git2::Signature::now("disk", "disk@example.org").unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "a damaged copy", &tree, &[&head])
+        .unwrap();
+    let good_oid = git2::Oid::hash_object(git2::ObjectType::Blob, &good)
+        .unwrap()
+        .to_string();
+    let loose = outside
+        .join(".git/objects")
+        .join(&good_oid[..2])
+        .join(&good_oid[2..]);
+    std::fs::remove_file(&loose).unwrap();
+    assert!(
+        !repo
+            .odb()
+            .unwrap()
+            .exists(git2::Oid::from_str(&good_oid).unwrap())
+    );
+    rig.fs.put_unseen(&folder.join(&rel), &in_the_folder, None);
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God"),
+        "the line only the folder's copy still reads"
+    );
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("at the right time"),
+        "the line only the commit's copy still reads"
+    );
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("in hope of eternal life")
+    );
+    assert_eq!(saves(&handle), saved, "each verse is its own save");
+    handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God")
+    );
+    assert_eq!(words(&handle, 1, 3).as_deref(), Some("at the right time"));
+    assert_eq!(saves(&handle), saved);
+    handle.close().unwrap();
 }

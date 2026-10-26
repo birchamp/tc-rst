@@ -111,7 +111,7 @@ fn the_opens_first_materialization_runs_after_the_open_returns() {
 
 /// Owner ruling 2026-10-18: the compare-and-swap reads the path's bytes before it
 /// overwrites. An outside edit that keeps the file's size and modification time, found by no
-/// stat, is read, held as storage damage with a copy of its bytes, and not written over.
+/// stat, is read, held with a copy of its bytes and asked about, and not written over.
 #[test]
 fn the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged() {
     let (rig, folder) = titus();
@@ -145,7 +145,9 @@ fn the_compare_and_swap_reads_a_file_whose_size_and_mtime_are_unchanged() {
         "never written over"
     );
     let (damage, copy) = held_notice(&handle).expect("a hold is listed");
-    assert!(damage, "the bytes changed although size and time did not");
+    // A changed book file is kept and asked about whatever its stat says (delta §2.5).
+    assert!(!damage, "no separate damage hold");
+    assert_eq!(handle.waiting_books().len(), 1);
     assert_eq!(rig.fs.peek(&folder.join(&copy)), Some(edited));
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
@@ -173,7 +175,11 @@ fn an_outside_save_during_the_rename_window_is_never_overwritten() {
     handle.wait_idle();
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
     assert_eq!(copies.len(), 1, "{:?}", handle.notices());
-    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(outside));
+    assert_eq!(rig.fs.peek(&folder.join(&copies[0])), Some(outside.clone()));
+    // Held until the person answers; *Not now* writes the project's save over it.
+    assert_eq!(rig.fs.peek(&path), Some(outside));
+    handle.not_now("ingredients/TIT.usfm").wait().unwrap();
+    handle.wait_idle();
     let written = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
     assert!(written.contains("Paul, a servant"), "{written}");
     handle.close().unwrap();

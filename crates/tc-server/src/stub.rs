@@ -154,6 +154,7 @@ impl Stub {
                 app_locale: LocaleId::ENGLISH,
             },
             startup: StartupState::Ready,
+            checkpoints: Vec::new(),
         }
     }
 
