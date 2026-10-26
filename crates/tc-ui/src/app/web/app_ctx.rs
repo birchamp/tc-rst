@@ -1099,7 +1099,11 @@ impl Actions {
 
     /// The toast's Download (D88 point 6): B3 opens the project and B9a its Source texts,
     /// which offer the missing versions; the toast stays until they are open (tC4 #724).
-    pub fn sync_download(&self) {}
+    pub fn sync_download(&self) {
+        if let Some(toast) = self.s().sync_result.get_untracked() {
+            self.open_then_sources(toast.project);
+        }
+    }
 
     // ---- Share on Door43 (B9b; the run is E1b's) --------------------------------------------
 

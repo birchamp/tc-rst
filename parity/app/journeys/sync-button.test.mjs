@@ -139,3 +139,18 @@ browserTest('E1a. A real sync pushes the project to Door43; a cut connection fai
     assert.notEqual(await page.getByTestId('sync-message').textContent(), en['syncResult.error.keptStopped'], 'nothing came in, so nothing is said to be kept');
   }, { ...opts, realSync: true });
 });
+
+// D88 point 6, #724: a sync whose project now pins versions this computer lacks offers Download;
+// it opens the project and its Source texts, and the toast closes once they are open.
+browserTest('E1a. Download on the sync toast opens the project\'s Source texts and then closes the toast', async () => {
+  await withApp(async ({ page, env }) => {
+    await button(page).waitFor();
+    await env.pushToDoor43(BIBLE);
+    await syncSignedIn(page);
+    await toast(page).waitFor();
+    assert.equal(await page.getByTestId('sync-download').count(), 1, 'Download is offered');
+    await page.getByTestId('sync-download').click();
+    await page.getByTestId('sources-modal').waitFor();
+    await toast(page).waitFor({ state: 'detached' });
+  }, { ...opts, realSync: true });
+});

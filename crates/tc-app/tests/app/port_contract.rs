@@ -847,3 +847,43 @@ async fn a_change_door43_lost_is_sent_again_and_counted_once() {
         "the lost change is sent again: {again:?}"
     );
 }
+
+/// #791: two teammates' different alignments of one verse are listed once, as one verse to
+/// review, never once per change. A and B each change aligned Titus 1:1, which rewrites its
+/// alignment two ways; A's sync names the verse conflict and the alignment once each.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn two_different_alignments_of_one_verse_are_listed_once() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let a = &w.t.app;
+    internet_on(a).await;
+    sign_in(a).await;
+    synced(a, 80).await;
+    let b = teammate_b(&w).await;
+    save_titus(
+        &b.t.app,
+        &b.project,
+        1,
+        81,
+        "Pablo, siervo, como B lo alineo",
+    )
+    .await;
+    sign_in_again(&b.t.app, 83).await;
+    let job = post(
+        &b.t.app,
+        &SyncProject {
+            request: rid(84),
+            project: b.project.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(ended(&b.t.app, job).await, JobState::Done(_)));
+    save_titus_1_1(a, &folder(SAMPLE), 85, "Pablo, siervo, como A lo alineo").await;
+    sign_in_again(a, 87).await;
+    let view = synced(a, 88).await;
+    assert_eq!(view.verse_conflicts, 1, "{view:?}");
+    assert_eq!(
+        view.alignments, 1,
+        "one verse with two alignments, listed once: {view:?}"
+    );
+}
