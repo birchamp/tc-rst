@@ -70,8 +70,7 @@ struct Asked {
 impl Actions {
     fn patch_fix<R>(&self, id: u64, change: impl FnOnce(&mut FixScreen) -> R) -> Option<R> {
         self.s()
-            .c
-            .fix
+            .fix_slot()
             .try_update(|f| fix::patch(f, id, change))
             .flatten()
     }
@@ -79,7 +78,7 @@ impl Actions {
     /// The screen shown, when it can start a way: its id and what its requests name.
     fn fix_screen(&self) -> Option<(u64, Asked)> {
         let s = self.s();
-        let (id, tool) = s.c.fix.with_untracked(|f| match f {
+        let (id, tool) = s.fix_slot().with_untracked(|f| match f {
             Some(Fix::Ready(screen)) if screen.busy.is_none() => Some((screen.id, screen.tool)),
             _ => None,
         })?;

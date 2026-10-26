@@ -34,7 +34,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use super::app_ctx::{Actions, Dialog};
 use super::js;
-use super::saves::{FieldWriter, LocalBoxFuture};
+use super::saves::{FieldWriter, LocalBoxFuture, WriteCap};
 use super::{Api, ListenerId};
 use crate::app::check::CheckView;
 use crate::app::check_item::{self, DecisionWrites, MarkFailure};
@@ -98,7 +98,6 @@ pub struct CheckState {
     pub folded: ArcRwSignal<BTreeSet<String>>,
     /// The selected check, by its index in the list (tC4 `activeIndex`).
     pub active: ArcRwSignal<Option<u32>>,
-    pub fix: ArcRwSignal<Option<Fix>>,
     /// The tool whose card gets the focus back after Back (#42).
     pub return_to: ArcRwSignal<Option<Tool>>,
     /// The tool whose rail took the focus once when it opened (#42, `useFocusOnOpen`).
@@ -123,7 +122,6 @@ impl CheckState {
             sort: ArcRwSignal::new(None),
             folded: ArcRwSignal::new(BTreeSet::new()),
             active: ArcRwSignal::new(None),
-            fix: ArcRwSignal::new(None),
             return_to: ArcRwSignal::new(None),
             focused_for: ArcRwSignal::new(None),
             detail: ArcRwSignal::new(None),
@@ -436,7 +434,8 @@ impl Actions {
         c.view.try_set(CheckView::Picker);
         c.session.try_set(None);
         c.active.try_set(None);
-        c.fix.try_set(None);
+        // The guided fix is the tool's: it goes with the tool.
+        self.s().fix_slot().try_set(None);
         c.return_to.try_set(None);
         c.focused_for.try_set(None);
     }
@@ -537,8 +536,9 @@ impl Actions {
             return;
         };
         let s = self.s();
-        s.c.fix.try_set(Some(Fix::Loading(tool)));
-        s.layers.dialog.try_set(Some(Dialog::GuidedFix));
+        s.layers
+            .dialog
+            .try_set(Some(Dialog::GuidedFix(Fix::Loading(tool))));
         let this = self.clone();
         spawn_local(async move {
             let result = this
@@ -549,7 +549,7 @@ impl Actions {
                     unit: list.unit,
                 })
                 .await;
-            let fix = &this.s().c.fix;
+            let fix = this.s().fix_slot();
             if !fix.with_untracked(|f| matches!(f, Some(Fix::Loading(t)) if *t == tool)) {
                 return;
             }
@@ -778,7 +778,7 @@ impl Actions {
     /// One act on the shown check, saved at once (AD20). The writes of decisions go one at a time
     /// (`write_decision`); a reply that comes after the person moved to another check is not for
     /// the check now shown, so it changes the rail's rows and nothing on screen.
-    pub fn mark(&self, edit: DecideEdit) {
+    pub fn mark(&self, _cap: WriteCap, edit: DecideEdit) {
         let c = self.s().c.clone();
         let (Some((at, list)), Some(Detail::Ready(view))) =
             (self.detail_target(), c.detail.get_untracked())

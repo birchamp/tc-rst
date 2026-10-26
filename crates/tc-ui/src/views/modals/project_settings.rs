@@ -25,13 +25,12 @@ pub fn ProjectSettings() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let st = s.st.clone();
+    let st = s.settings_form();
     let read = move |get: fn(&SettingsForm) -> String| {
-        let st = st.clone();
         Signal::derive(move || st.with(|st| st.as_ref().map(get).unwrap_or_default()))
     };
     let save_disabled = {
-        let st = s.st.clone();
+        let st = s.settings_form();
         Signal::derive(move || st.with(|st| st.as_ref().is_none_or(SettingsForm::save_disabled)))
     };
     let footer: ChildrenFn = {
@@ -50,13 +49,13 @@ pub fn ProjectSettings() -> impl IntoView {
         })
     };
     let children: ChildrenFn = {
-        let (actions, st) = (actions.clone(), s.st.clone());
+        let (actions, st) = (actions.clone(), s.settings_form());
         let name = read(|st| st.name.clone());
         let lang_name = read(|st| st.lang_name.clone());
         let code = read(|st| st.code.clone());
         let font = read(|st| st.font.clone());
         Arc::new(move || {
-            let (actions, st) = (actions.clone(), st.clone());
+            let (actions, st) = (actions.clone(), st);
             let on_font = {
                 let actions = actions.clone();
                 Callback::new(move |value: String| actions.patch_st(|st| st.font = value))
@@ -66,7 +65,6 @@ pub fn ProjectSettings() -> impl IntoView {
                 .map(|f| SelectOption::from(*f))
                 .collect();
             let error = {
-                let st = st.clone();
                 move || {
                     st.with(|st| st.as_ref().and_then(|st| st.error.clone())).map(|error| {
                         view! { <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert")])>{error}</Callout> }
@@ -97,7 +95,7 @@ pub fn ProjectSettings() -> impl IntoView {
         })
     };
     let subtitle = {
-        let st = s.st.clone();
+        let st = s.settings_form();
         move || {
             st.with(|st| {
                 st.as_ref().map(|st| {
@@ -115,7 +113,7 @@ pub fn ProjectSettings() -> impl IntoView {
     let close = actions.clone();
     crate::ds::Modal(crate::ds::ModalProps {
         title: Some((move || move || t(keys::settings::TITLE, &[])).into()),
-        subtitle: Some((move || subtitle.clone()).into()),
+        subtitle: Some((move || subtitle).into()),
         close_label: Some(Signal::derive(|| t(keys::new_bible::CLOSE, &[]))),
         on_close: Some(Callback::new(move |()| close.close_modal())),
         footer: Some(footer),
@@ -126,9 +124,9 @@ pub fn ProjectSettings() -> impl IntoView {
 }
 
 /// The direction chips.
-fn direction(actions: &Actions, st: &ArcRwSignal<Option<SettingsForm>>) -> impl IntoView + use<> {
+fn direction(actions: &Actions, st: &Signal<Option<SettingsForm>>) -> impl IntoView + use<> {
     let chip = |dir: Direction, label: crate::i18n::Key| {
-        let (actions, st) = (actions.clone(), st.clone());
+        let (actions, st) = (actions.clone(), *st);
         let selected =
             Signal::derive(move || st.with(|st| st.as_ref().is_some_and(|st| st.dir == dir)));
         view! {
@@ -162,12 +160,9 @@ fn dir_attr(dir: Direction) -> &'static str {
 }
 
 /// The Checking language card (tC4 `GatewayCard`).
-fn gateway_card(
-    actions: &Actions,
-    st: &ArcRwSignal<Option<SettingsForm>>,
-) -> impl IntoView + use<> {
+fn gateway_card(actions: &Actions, st: &Signal<Option<SettingsForm>>) -> impl IntoView + use<> {
     let state = {
-        let st = st.clone();
+        let st = *st;
         Memo::new(move |_| st.with(|st| st.as_ref().map(|st| st.gateway.clone())))
     };
     let line = move || {
