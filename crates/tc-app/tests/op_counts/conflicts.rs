@@ -194,7 +194,10 @@ async fn a_restore_costs_its_record() {
             },
         )
         .await;
-        for (cost, scale) in [(small, "Psalms"), (large, "ten times")] {
+        for (cost, scale) in [
+            (small, "Psalms".to_owned()),
+            (large, format!("{} times", tc_corpus::Spec::test_factor())),
+        ] {
             // The old version's body, the token checks and the reply's token: a constant.
             assert!(
                 cost.app.records_read <= 2 * READS_PER_CONFLICT,
@@ -281,8 +284,12 @@ async fn a_bulk_keep_costs_its_conflicts() {
         .await;
         let listed = listed.lock().unwrap().clone();
         for (cost, (n, left), scale) in [
-            (small, listed[0], "Psalms"),
-            (large, listed[1], "ten times"),
+            (small, listed[0], "Psalms".to_owned()),
+            (
+                large,
+                listed[1],
+                format!("{} times", tc_corpus::Spec::test_factor()),
+            ),
         ] {
             assert!(
                 n > 0 && left < n,
@@ -309,7 +316,8 @@ async fn a_bulk_keep_costs_its_conflicts() {
         }
         assert!(
             listed[1].0 > listed[0].0,
-            "{backing:?}: ten times the conflicts: {listed:?}"
+            "{backing:?}: {} times the conflicts: {listed:?}",
+            tc_corpus::Spec::test_factor()
         );
     }
 }

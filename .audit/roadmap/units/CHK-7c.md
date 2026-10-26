@@ -15,7 +15,7 @@ no_loss: false
 size: 0.25 d (basis: one helper, four call sites, one gate step)
 merged: none
 updated: 2026-10-26
-next: Time tc-app's op-count tests at 10 and at 2, one verify pass, then the batch.
+next: Make the six op-count tests hold at 2 (each corpus's own expected size); find whether the bulk keep that writes nothing at 2 is a bug.
 blocked_by: none
 ---
 
@@ -60,3 +60,6 @@ run still proves a whole Bible's scale.
 
 - 2026-10-26 | integration lane (Claude Code 3d07d5f8) | created | none | from the owner's ruling, assigned by the orchestrator | rulings/2026-10-26-test-scale.md
 - 2026-10-26 08:55 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | none | Spec::test_factor reads TC_SCALE_FACTOR (2 by default, at least 2); tc-app's op_counts corpus (twice), tc-journal's operation_counts and tc-store's corpus use it; the conflicts test and the tc-journal size test name the factor; gates.sh NIGHTLY step scale-long runs the three at 10, and the nightly job calls it. Also j07-export: the export journeys settle the store through test/validate before their first snapshot (batch 7's app-e2e saw .tc/materialized.json change during the PDF export) | node --test .audit/tools/*.test.mjs; cargo clippy
+- 2026-10-26 10:51 EDT | integration lane (Claude Code 3d07d5f8) | verify | 82872631 | one pass by a fresh read-only reviewer agent: test_factor defaults to 2 and is at least 2; all four Spec::scaled test sites use it; the other 10x uses are outside the ruling; the nightly job runs scale-long at 10 and gates-sync passes; every j07 unchanged call passes env. §8: code held by a grep; checks: the renamed size test; reach N/A; siblings: the major; no-loss N/A; prose fine. One major: nine failure messages still said "ten times". Minors: a bad TC_SCALE_FACTOR silently ran at 2; psalms_x10 kept its name; the ruling arrives with RULING-H11; scale-long runs the whole tc-store binary at night | reviewer report in this session
+- 2026-10-26 10:51 EDT | integration lane (Claude Code 3d07d5f8) | fix | none | the nine messages name the factor; a set but bad TC_SCALE_FACTOR stops the run; psalms_x10 is psalms_larger. The tc-arch fix for tc-sync (pack_sealer) and the export journeys' snapshot fix went to main in batch 8 | cargo clippy; cargo test -p tc-arch
+- 2026-10-26 10:51 EDT | integration lane (Claude Code 3d07d5f8) | note | none | dropped from batch 8 (orchestrator): at 2, six tc-app op-count tests fail (CI run 40328011229): four "same count on both" comparisons see +1..6 fold values, understand.rs:144 subtracts a smaller conflict count from a larger one and underflows (the larger corpus at 2 holds fewer conflicts in that book), and a bulk keep stores Unchanged. tc-app op_counts: 534 s at 10, 102 s at 2 (this PC, 4 threads) | CI run 40328011229

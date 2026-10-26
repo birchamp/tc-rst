@@ -289,7 +289,10 @@ pub fn growth(small: &Cost, large: &Cost) -> Vec<String> {
         .exceeding(&small.app)
         .into_iter()
         .map(|(name, big, little)| {
-            format!("app {name}: {little} on Psalms, {big} ten times larger")
+            format!(
+                "app {name}: {little} on Psalms, {big} {} times larger",
+                tc_corpus::Spec::test_factor()
+            )
         });
     let grew =
         |kind: &'static str, big: Vec<(&'static str, u64)>, little: Vec<(&'static str, u64)>| {
@@ -297,7 +300,10 @@ pub fn growth(small: &Cost, large: &Cost) -> Vec<String> {
                 .zip(little)
                 .filter(|((_, big), (_, little))| big > little)
                 .map(move |((name, big), (_, little))| {
-                    format!("{kind} {name}: {little} on Psalms, {big} ten times larger")
+                    format!(
+                        "{kind} {name}: {little} on Psalms, {big} {} times larger",
+                        tc_corpus::Spec::test_factor()
+                    )
                 })
                 .collect::<Vec<_>>()
         };

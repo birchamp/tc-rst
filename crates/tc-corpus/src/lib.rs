@@ -109,12 +109,15 @@ impl Spec {
     /// The factor the scale tests run with (owner ruling, rulings/2026-10-26-test-scale.md):
     /// `TC_SCALE_FACTOR`, 2 by default; the nightly job sets 10. Below 2 the larger corpus would
     /// be Psalms itself and the tests would compare nothing, so 2 is the least.
+    #[allow(clippy::panic)] // Tests' support: a mistyped factor must stop the run, not run at 2.
     pub fn test_factor() -> usize {
-        // A value that is not a number of at least 2 runs at 2; every message names the factor.
-        std::env::var("TC_SCALE_FACTOR")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map_or(2, |factor: usize| factor.max(2))
+        match std::env::var("TC_SCALE_FACTOR") {
+            Err(_) => 2,
+            Ok(s) => match s.parse::<usize>() {
+                Ok(factor) if factor >= 2 => factor,
+                _ => panic!("TC_SCALE_FACTOR={s}: a whole number of at least 2"),
+            },
+        }
     }
 
     /// The Psalms corpus made about `factor` times larger: Psalms plus Old Testament books

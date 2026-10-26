@@ -191,11 +191,12 @@ fn assert_no_growth(action: &str, small: Counters, big: Counters) {
         ),
     ];
     eprintln!("{action}, Psalms: {small:?}");
-    eprintln!("{action}, ten times larger: {big:?}");
+    eprintln!("{action}, {} times larger: {big:?}", Spec::test_factor());
     for (name, s, b) in rows {
         assert!(
             b <= s,
-            "{action}: {name} grows with the project: {s} on Psalms, {b} on the corpus ten times larger"
+            "{action}: {name} grows with the project: {s} on Psalms, {b} on the corpus {} times larger",
+            Spec::test_factor()
         );
     }
 }
@@ -415,7 +416,8 @@ fn a_book_renders_as_its_files_do() {
 /// that belong to Psalms (and the comments, which are placed by their target).
 #[test]
 fn a_book_lists_its_files_from_its_own_records() {
-    for (corpus, state) in [("Psalms", psalms()), ("ten times larger", larger())] {
+    let larger_name = format!("{} times larger", Spec::test_factor());
+    for (corpus, state) in [("Psalms", psalms()), (larger_name.as_str(), larger())] {
         let state = fork(state);
         let before = state.counters();
         let files = state.render_book(PSALMS);

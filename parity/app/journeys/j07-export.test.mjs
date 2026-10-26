@@ -26,13 +26,15 @@ const BIBLE = 'sample_burrito';
 const OBS = 'sample_burrito_obs';
 const DATE = String.raw`\d{4}-\d{2}-\d{2}`;
 
-/** sha256 of every file of `dir` but `.git/`, by relative path. */
+/** sha256 of every file of `dir` but `.git/` and the store's materialized record, by relative path. */
 function hashes(dir) {
   const out = {};
   const walk = (d, base) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       const rel = base ? `${base}/${e.name}` : e.name;
       if (rel === '.git') continue;
+      // The store's own record of what it has materialized; a read may bring it up to date.
+      if (rel === '.tc/materialized.json') continue;
       if (e.isDirectory()) walk(path.join(d, e.name), rel);
       else out[rel] = crypto.createHash('sha256').update(fs.readFileSync(path.join(d, e.name))).digest('hex');
     }

@@ -95,7 +95,7 @@ pub fn psalms() -> &'static OnDisk {
     ONE.get_or_init(|| build(&Spec::psalms(1)))
 }
 
-pub fn psalms_x10() -> &'static OnDisk {
+pub fn psalms_larger() -> &'static OnDisk {
     static ONE: OnceLock<OnDisk> = OnceLock::new();
     ONE.get_or_init(|| build(&Spec::scaled(1, Spec::test_factor())))
 }
