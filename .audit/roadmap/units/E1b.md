@@ -4,20 +4,20 @@ title: Share and open from Door43
 track: A
 lane: app
 milestone: M3
-state: blocked
-owner: REF1 session (Claude Code 56b3f56d)
-branch: track-E1b
-worktree: .worktrees/track-REF1
+state: gating
+owner: E1b session (Claude Code fd622395)
+branch: track-E1b2
+worktree: .worktrees/track-E1b2
 depends: [E1a]
 needs_owner: []
-later: ["H14 from step 6"]
+later: []
 proves: [P1, P2]
 no_loss: true
 size: 3-4 sessions (basis: B9b)
 merged: none
 updated: 2026-10-26
-next: Step 6 waits for H14 (#837): build only what the owner rules. Everything else is ready for a batch once E1a lands.
-blocked_by: E1a note "E1b is ready on track-E1b at 0cae70af and merges with or after E1a; step 6 waits for H14"
+next: Ready for a batch with E1a (track-E1a2 at 97df12e3, merged in). Step 6 moved to card E1c.
+blocked_by: none
 ---
 
 # E1b: Share and open from Door43
@@ -271,3 +271,6 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 - 2026-10-26 15:10 EDT | REF1 session (Claude Code 56b3f56d) | note | none | Merged track-E1a at 45c00a00 (e8b3b983). The lens minors are in .audit/minors.tsv. Step 6 (#837) waits for H14; the card lands without it only if the owner says so. Hand-off: side-session-notes E1b-handoff.md | git log --oneline -1 e8b3b983
 - 2026-10-26 16:00 EDT | REF1 session (Claude Code 56b3f56d) | note | none | After the merge, the journeys follow E1a's final environment (team repositories are the parity user's own, teammates collaborators: DOOR43_OWNER), so J11 1 shares to the person's account. Every journey file once: 243 of 245, the two failures being these files before the rename; then share and open-door43 3 runs in a row, 5 of 5, skipped 0; share-open, sync-button and j11-sign-in 3 of 3, 3 of 3, 8 of 8 | node --test parity/app/journeys/share.test.mjs parity/app/journeys/open-door43.test.mjs
 - 2026-10-26 16:20 EDT | REF1 session (Claude Code 56b3f56d) | block | none | Ready for a batch on track-E1b (0cae70af, pushed), but the board refuses gating before E1a is done: E1b merges with or after E1a. Step 6 waits for H14 | python3 -I -B .audit/tools/board.py --check
+- 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | takeover | 8043ef7b | Taken over from the REF1 session at the audit session's request; cut track-E1b2 from track-E1b, merged main (30da7cf0, with a fix for its tc-app manifest and lock, e79b6b86) and track-E1a2 at 97df12e3 | git log --oneline -4 track-E1b2
+- 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | note | d5adc536 | Step 6 (#837) moved to card E1c at the audit session's request, so E1b lands without it; the owner ruled H14 the same day (rulings/2026-10-26-H14.md). Dropped check.sort.byCategory, which main removed and the merge brought back | .audit/roadmap/units/E1c.md
+- 2026-10-26 14:40 EDT | E1b session (Claude Code fd622395) | gate | d5adc536 | scripts/gates.sh --touched on 8043ef7b: 17 crates, 13 journey files, app-e2e 102 tests 0 skipped; its one failure, tc-api refusals' pending lists, is the key d5adc536 drops, and that test passes on d5adc536; cargo fmt --check passes | scripts/gates.sh --touched
