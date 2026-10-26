@@ -3,12 +3,10 @@
 // Teammates 1 and 2's changes, from one version, of the first Translation Notes decision of Titus
 // and of the first alignment (tc-app backend/memory.rs `Teammates::change_kind`), Teammate 2's
 // newer: the toast says tC4's "2 conflicts kept the newest version", the review asks nothing,
-// and the Check screen and the decision file hold Teammate 2's comment.
+// and the Check screen holds Teammate 2's comment.
 //
-// Not here yet: History and *Restore this version* for a check. The Check screen has no History
-// (only views/review.rs draws one, for a listed conflict), and the API's restore is a choice of
-// `conflicts/resolve`, which needs a conflict id (tc-api conflicts.rs `Resolve`); a check that
-// settled newest-wins has none, and no check view names its record for `conflicts/history`.
+// Then the Check screen's History (HIST-1) lists both versions, and *Restore this version* on
+// Teammate 1's brings it back: the Check screen and the decision file hold Teammate 1's comment.
 //
 //   TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake \
 //     node --test parity/app/journeys/conflict-kinds.test.mjs
@@ -42,7 +40,7 @@ async function comments(env) {
   }
 }
 
-browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s newer check and alignment arrive with no question, and the Check screen and the decision file hold the newer comment', async () => {
+browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s newer check and alignment arrive with no question; the Check screen\'s History restores the older decision, and the decision file holds it', async () => {
   await withApp(async ({ page, env }) => {
     await page.getByTestId(`share-${FOLDER}`).waitFor();
     await env.call('test/script', {
@@ -78,9 +76,29 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
     });
     const teammate = (n) => ({ who: { type: 'teammate', value: n }, computer: null });
     assert.deepEqual(done.value.replaced, [
-      { by: teammate(2), whose: teammate(1), kind: 'check', place: { type: 'check', value: { tool: 'translationNotes', place: 'TIT 1:4' } }, count: 1 },
-      { by: teammate(2), whose: teammate(1), kind: 'alignment', place: { type: 'verse', value: { book: 'TIT', chapter: 1, verse: 1 } }, count: 1 },
+      { by: teammate(2), whose: teammate(1), kind: 'check', place: { type: 'check', value: { tool: 'translationNotes', place: 'TIT 1:4' } }, count: 1, was: null },
+      { by: teammate(2), whose: teammate(1), kind: 'alignment', place: { type: 'verse', value: { book: 'TIT', chapter: 1, verse: 1 } }, count: 1, was: null },
     ], 'Teammate 2\'s newer check and alignment replaced Teammate 1\'s');
+    // The Received sheet names each replaced version and where the older one is (HIST-1).
+    const olderSaid = en['syncResult.replaced.olderInHistory'];
+    const said = (key, place) => `${en[key].replace('{place}', place).replace('{name}', 'Teammate 2').replace('{whose}', 'Teammate 1\'s')} ${olderSaid}`;
+    assert.deepEqual(await toast(page).getByTestId('sync-replaced').allTextContents(), [
+      said('syncResult.replaced.check', 'Titus 1:4 · Translation Notes'),
+      said('syncResult.replaced.alignment', 'Titus 1:1'),
+    ]);
+    await toast(page).getByTestId('sync-dismiss').click();
+    // The rows stay readable after the toast: the card's link shows them again, after a reload too.
+    const rows = await toast(page).count();
+    assert.equal(rows, 0);
+    await page.reload();
+    const again = page.getByTestId(`last-sync-${FOLDER}`);
+    await again.waitFor();
+    assert.equal(await again.getAttribute('data-count'), '2');
+    await again.click();
+    assert.deepEqual(await toast(page).getByTestId('sync-replaced').allTextContents(), [
+      said('syncResult.replaced.check', 'Titus 1:4 · Translation Notes'),
+      said('syncResult.replaced.alignment', 'Titus 1:1'),
+    ]);
     await toast(page).getByTestId('sync-dismiss').click();
 
     await page.getByTestId(`project-${FOLDER}`).getByRole('button', { name: /Titus/ }).click();
@@ -108,11 +126,93 @@ browserTest('newest_version_wins_and_history_restores_the_older: a teammate\'s n
     await until('the comment shows', async () => (await page.getByTestId('comment-text').inputValue()) === TWO);
     await page.keyboard.press('Escape');
 
+    // History keeps Teammate 1's older decision, and *Restore this version* brings it back.
+    await page.getByTestId('check-history').getByTestId('history-toggle').click();
+    const versions = page.getByTestId('check-history').getByTestId('history-version');
+    await until('the check\'s History lists both versions', async () => (await versions.count()) >= 2);
+    assert.equal(await versions.first().getAttribute('data-shown'), 'true', 'the newest is shown, first');
+    assert.match(await versions.first().textContent(), new RegExp(TWO));
+    const older = versions.filter({ hasText: ONE });
+    assert.equal(await older.getAttribute('data-shown'), 'false');
+    await older.getByTestId('history-restore').click();
+    await until('the restored comment shows', async () => (await comments(env)).some((c) => c.comment === ONE));
+    await until('History shows the restored version', async () => (await versions.first().textContent()).includes(ONE));
+    if (!(await page.getByTestId('comment-text').isVisible())) await page.getByTestId('comment-toggle').click();
+    await until('the comment shows the restored text', async () => (await page.getByTestId('comment-text').inputValue()) === ONE);
+    await page.keyboard.press('Escape');
+
     await page.getByTitle(/Switch project/).click();
     await page.getByTestId(`project-${FOLDER}`).waitFor();
     await env.call('settings/viewFromHome', { project: FOLDER });
     const file = JSON.parse(fs.readFileSync(path.join(env.projectsDir, FOLDER, 'ingredients', 'checking', 'translationNotes', 'TIT.json'), 'utf8'));
     const held = file.decisions.map((d) => d.comments).filter((c) => c === ONE || c === TWO);
-    assert.deepEqual(held, [TWO], 'the decision file holds the newest comment');
+    assert.deepEqual(held, [ONE], 'the decision file holds the restored comment');
+
+    // The aligner's History keeps Teammate 1's alignment of Titus 1:1, and Restore brings it back.
+    await page.getByTestId(`project-${FOLDER}`).getByRole('button', { name: /Titus/ }).click();
+    await checkTab(page).click();
+    const align = page.getByTestId('open-align');
+    await align.or(allTools(page)).first().waitFor();
+    if (!(await align.count())) await allTools(page).click();
+    await align.click();
+    await page.getByTestId('align-session').waitFor();
+    await page.locator('[data-testid="align-verse-list"] [data-ref="1:1"]').click();
+    await until('Titus 1:1 is open', async () => (await page.getByTestId('align-verse-list').locator('[data-selected="true"]').getAttribute('data-ref')) === '1:1');
+    const versionsOf11 = async () => {
+      const opened = await env.call('align/open', { at: await scopeOf(env), request: newRequestId(), book: 'TIT', verse: { chapter: 1, verse: 1 } });
+      return (await env.call('conflicts/versions', { at: await scopeOf(env), shown: opened.value.history })).versions;
+    };
+    const byTeammate = (n) => (v) => v.version.by.type === 'person' && v.version.by.value.who.type === 'teammate' && v.version.by.value.who.value === n;
+    const before = await versionsOf11();
+    assert.ok(byTeammate(2)(before[0]) && before[0].version.shown, 'Teammate 2\'s newer alignment is shown');
+    const one = before.find(byTeammate(1));
+    assert.ok(one && !one.version.shown, 'Teammate 1\'s alignment is in History');
+    await page.getByTestId('align-history').getByTestId('history-toggle').click();
+    await page.getByTestId('align-history').locator(`[data-testid="history-restore"][data-ts="${one.version.change}"]`).click();
+    await until('the aligner opens again on the restored alignment', async () => {
+      const [shown] = await versionsOf11();
+      return shown.cause === 'restored' && shown.version.shown;
+    });
+    await page.getByTestId('align-session').waitFor();
+    const after = await versionsOf11();
+    assert.equal(after.filter((v) => v.version.shown).length, 1);
+    assert.ok(after.some(byTeammate(2)), 'Teammate 2\'s alignment stays in History');
+  }, opts);
+});
+
+browserTest('a_teammates_newer_comment_wins_and_history_restores_mine: Understand shows the newer verse comment, and its History restores the older one', async () => {
+  await withApp(async ({ page, env }) => {
+    await page.getByTestId(`share-${FOLDER}`).waitFor();
+    await env.call('test/script', {
+      request: newRequestId(),
+      next: { type: 'sync', value: { project: FOLDER, outcome: { type: 'synced', value: { teammates: null, kinds: ['comment'], restored: 0 } } } },
+    });
+    await page.getByTestId(`share-${FOLDER}`).click();
+    await page.getByTestId('net-confirm').click();
+    await page.getByTestId('share-signin').waitFor();
+    await page.getByLabel(en['signIn.login']).fill(FAKE_USER.username);
+    await page.getByLabel(en['signIn.password'], { exact: true }).fill(FAKE_USER.password);
+    await page.getByTestId('signin-submit').click();
+    await toast(page).waitFor({ timeout: 60_000 });
+    const olderSaid = en['syncResult.replaced.olderInHistory'];
+    assert.deepEqual(await toast(page).getByTestId('sync-replaced').allTextContents(), [
+      `${en['syncResult.replaced.comment'].replace('{place}', 'Titus 1:1').replace('{name}', 'Teammate 2').replace('{whose}', 'Teammate 1\'s')} ${olderSaid}`,
+    ]);
+    await toast(page).getByTestId('sync-dismiss').click();
+
+    await page.getByTestId(`project-${FOLDER}`).getByRole('button', { name: /Titus/ }).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
+    await page.getByRole('tab', { name: en['understand.byVerse'], exact: true }).click();
+    const field = page.getByPlaceholder(en['understand.commentsPlaceholderVerse']).first();
+    await until('the newer comment shows', async () => (await field.inputValue()) === TWO);
+    const history = page.getByTestId('comment-history').first();
+    await history.getByTestId('history-toggle').click();
+    const versions = history.getByTestId('history-version');
+    await until('the comment\'s History lists both versions', async () => (await versions.count()) >= 2);
+    const older = versions.filter({ hasText: ONE });
+    assert.equal(await older.getAttribute('data-shown'), 'false');
+    await older.getByTestId('history-restore').click();
+    await until('the restored comment shows', async () => (await field.inputValue()) === ONE);
+    assert.equal(await history.getByTestId('history-not-restored').count(), 0);
   }, opts);
 });

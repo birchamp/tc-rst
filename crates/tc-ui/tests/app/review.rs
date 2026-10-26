@@ -20,7 +20,7 @@ use tc_ui::app::net::NetEnd;
 use tc_ui::app::review::{
     BackTo, Choices, KeepOutcome, KeepPhase, KeepReply, Owner, Press, ReviewState, back_label,
     choices, consequence, failure_text, group_others, keep_passage_label, kept_name, made_by,
-    notice_text, persons, picks_of, place_book, place_label, tabs_shown,
+    notice_text, persons, picks_of, place_book, place_label, tabs_shown, version_text,
 };
 use tc_ui::app::sync::{SyncEnd, SyncToast, person_label};
 
@@ -669,4 +669,49 @@ fn the_packet_draws_every_screen_the_ruling_kept() {
     ] {
         assert!(screen(gone).is_none(), "{gone}");
     }
+}
+
+/// A version in History says what the person chose, so the one to restore can be told apart
+/// (owner ruling H5): a check's words, status, bookmark and comment; an alignment's pairs.
+#[test]
+fn a_checks_version_names_its_selection_and_comment() {
+    use tc_api::check::DecisionStatus;
+    let check = |selected: &[&str], nothing: bool, status, bookmarked, comment: Option<&str>| {
+        version_text(&VersionValue::Check {
+            selected: selected.iter().map(|w| (*w).to_owned()).collect(),
+            nothing_to_select: nothing,
+            status,
+            bookmarked,
+            comment: comment.map(str::to_owned),
+        })
+    };
+    assert_eq!(
+        check(
+            &["siervo", "Dios"],
+            false,
+            Some(DecisionStatus::Valid),
+            true,
+            Some("Revisar")
+        )
+        .as_deref(),
+        Some("Selected: siervo … Dios · Valid · Bookmarked\nComment: Revisar")
+    );
+    assert_eq!(
+        check(&[], false, None, false, None).as_deref(),
+        Some("Nothing selected")
+    );
+    assert_eq!(
+        check(&[], true, Some(DecisionStatus::Todo), false, None).as_deref(),
+        Some("No selection needed · To do")
+    );
+    assert_eq!(
+        version_text(&VersionValue::Alignment {
+            pairs: vec!["Παῦλος = Pablo".into(), "δοῦλος = siervo".into()],
+            done: true,
+            marked_invalid: false,
+        })
+        .as_deref(),
+        Some("Aligned: Παῦλος = Pablo · δοῦλος = siervo · Marked done")
+    );
+    assert_eq!(version_text(&VersionValue::NotShown), None);
 }

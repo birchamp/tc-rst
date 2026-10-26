@@ -162,6 +162,28 @@
       "type": "absent"
     },
     {
+      "type": "check",
+      "value": {
+        "selected": [
+          "siervo"
+        ],
+        "nothingToSelect": false,
+        "status": "valid",
+        "bookmarked": true,
+        "comment": "Revisar"
+      }
+    },
+    {
+      "type": "alignment",
+      "value": {
+        "pairs": [
+          "Παῦλος = Pablo"
+        ],
+        "done": true,
+        "markedInvalid": false
+      }
+    },
+    {
       "type": "notShown"
     }
   ],

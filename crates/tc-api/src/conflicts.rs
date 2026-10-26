@@ -235,7 +235,24 @@ pub enum VersionValue {
     Joined { by: u16 },
     /// The record holds nothing: an absent verse, a removed book.
     Absent,
-    /// A value the review does not draw (an alignment, a decision, a setting).
+    /// A check's decision: what the person chose, so two versions can be told apart.
+    Check {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        selected: Vec<String>,
+        nothing_to_select: bool,
+        status: Option<crate::check::DecisionStatus>,
+        bookmarked: bool,
+        comment: Option<String>,
+    },
+    /// A verse's alignment: each card's original words and the words placed on it, as
+    /// `Παῦλος = Paul`, and its marks.
+    Alignment {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        pairs: Vec<String>,
+        done: bool,
+        marked_invalid: bool,
+    },
+    /// A value the review does not draw (a setting).
     NotShown,
 }
 
@@ -330,6 +347,17 @@ pub enum NoticeView {
 pub struct History {
     pub at: Scope,
     pub record: RecordRef,
+}
+
+/// `conflicts/versions`: the History of the record a screen shows by its token (owner ruling
+/// H5), for a check, an alignment, a setting or a pin that holds no conflict; the review names
+/// its records instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Versions {
+    pub at: Scope,
+    pub shown: crate::ShownToken,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

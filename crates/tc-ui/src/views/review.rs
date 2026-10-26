@@ -14,19 +14,20 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use tc_api::conflicts::{
     ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, List, NoticeEntry,
-    ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version, VersionValue,
+    ReviewEntries, ReviewPlace, ReviewTab, TabCount, Version,
 };
 use tc_api::editor::{PaneText, SourceFrame, Sources};
-use tc_api::ids::Scope;
+use tc_api::ids::{ChangeRef, Scope};
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use wasm_bindgen::JsValue;
 
 use super::draft_chrome::HAIR;
+use crate::app::load::Load;
 use crate::app::q9::{Q9Body, Q9Question, Q9Review, Q9Row, Q9Screen};
 use crate::app::review::{
     BackTo, Choices, KeepOutcome, Owner, back_label, cause_label, choices, consequence,
     group_others, keep_all_label, keep_passage_label, kept_all_text, kept_name, made_by,
-    notice_text, persons, place_label, tab_label, tabs_shown,
+    notice_text, persons, place_label, tab_label, tabs_shown, version_text,
 };
 use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
@@ -841,12 +842,7 @@ fn version_card(
         }
         .to_style()
     };
-    let text = match &version.value {
-        VersionValue::Text(text) => Some(text.trim().to_owned()),
-        VersionValue::Joined { by } => Some(t(keys::review::value::JOINED, &[("by", by)])),
-        VersionValue::Absent => Some(t(keys::review::value::ABSENT, &[])),
-        VersionValue::NotShown => None,
-    };
+    let text = version_text(&version.value);
     let text = text.map(|text| {
         view! { <span data-testid="conflict-text" dir=dir style=text_style>{text}</span> }
     });
@@ -1219,47 +1215,51 @@ fn history_list(
         record: entry.record.clone(),
     });
     let title = t(keys::review::HISTORY_OF, &[("ref", &reference)]);
-    let label = title.clone();
     let (actions, entry) = (actions.clone(), entry.clone());
+    let restore = Callback::new(move |from| {
+        actions.restore_version(entry.clone(), position, from);
+    });
+    Some(history_section(read, title, restore, busy))
+}
+
+/// Every version of a record, newest first, each with *Restore this version* but the one shown
+/// (#78; owner ruling H5 for a record in no conflict).
+pub(crate) fn history_section(
+    read: Signal<Load<Arc<tc_api::conflicts::HistoryView>>>,
+    title: String,
+    restore: Callback<ChangeRef>,
+    busy: Signal<bool>,
+) -> AnyView {
+    let label = title.clone();
     let rows = move || {
         read.with(|l| {
             l.value().map(|view: &Arc<tc_api::conflicts::HistoryView>| {
                 view.versions
                     .iter()
                     .map(|v| {
-                        let restore = (!v.version.shown).then(|| {
-                            let (actions, entry) = (actions.clone(), entry.clone());
-                            let from = v.version.change.clone();
-                            let on_click = Callback::new(move |_| {
-                                actions.restore_version(entry.clone(), position, from.clone());
-                            });
-                            view! {
-                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
-                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
-                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned())>
-                                    {t(keys::review::RESTORE, &[])}
-                                </Button>
-                            }
-                        });
-                        let text = match &v.version.value {
-                            VersionValue::Text(text) => text.trim().to_owned(),
-                            VersionValue::Joined { by } => {
-                                t(keys::review::value::JOINED, &[("by", by)])
-                            }
-                            VersionValue::Absent => t(keys::review::value::ABSENT, &[]),
-                            VersionValue::NotShown => String::new(),
-                        };
                         let meta = format!(
                             "{} · {} · {}",
                             made_by(&v.version.by),
                             version_date(v.version.at.0),
                             cause_label(v.cause)
                         );
+                        let restore = (!v.version.shown).then(|| {
+                            let from = v.version.change.clone();
+                            let on_click = Callback::new(move |_| restore.run(from.clone()));
+                            view! {
+                                <Button variant=ButtonVariant::Ghost size=Size::Sm disabled=busy on_click=on_click
+                                    style=crate::css! { "align-self": "flex-start", "padding": 0, "height": "auto" }
+                                    attrs=Attrs::new().with("data-testid", "history-restore").with("data-ts", v.version.change.as_str().to_owned()).with("aria-label", format!("{} · {}", t(keys::review::RESTORE, &[]), meta.clone()))>
+                                    {t(keys::review::RESTORE, &[])}
+                                </Button>
+                            }
+                        });
+                        let text = version_text(&v.version.value).unwrap_or_default();
                         view! {
                             <li data-testid="history-version" data-shown=v.version.shown.to_string()
                                 style="display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: var(--stroke-hair) solid var(--border-hair);">
                                 <span style="font-size: var(--fs-caption); font-weight: var(--fw-bold); color: var(--uw-slate);">{meta}</span>
-                                <span style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
+                                <span dir="auto" style="font-family: var(--font-scripture); font-size: var(--fs-verse); line-height: var(--lh-verse); color: var(--text-scripture); white-space: pre-wrap;">{text}</span>
                                 {restore}
                             </li>
                         }
@@ -1274,15 +1274,13 @@ fn history_list(
         "background": "var(--surface-card)",
         "border": "var(--stroke-hair) solid var(--border)",
     };
-    Some(
-        view! {
-            <section data-testid="conflict-history-list" aria-label=label style=style.to_style()>
-                <Overline tone=OverlineTone::Muted>{title}</Overline>
-                <ul style="list-style: none; margin: 6px 0 0; padding: 0;">{rows}</ul>
-            </section>
-        }
-        .into_any(),
-    )
+    view! {
+        <section data-testid="conflict-history-list" aria-label=label style=style.to_style()>
+            <Overline tone=OverlineTone::Muted>{title}</Overline>
+            <ul style="list-style: none; margin: 6px 0 0; padding: 0;">{rows}</ul>
+        </section>
+    }
+    .into_any()
 }
 
 fn list_box(rows: Vec<(String, String)>, test_id: &'static str, about: Option<String>) -> AnyView {

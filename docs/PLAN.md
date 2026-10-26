@@ -294,8 +294,17 @@ And this (unit B11):
   show only while one of them holds something, so a project with verse conflicts alone shows
   tC4's review.
 - The Received sheet says what a newer version replaced: "Juan's alignment of Titus 1:1 replaced
-  yours. Your version is in History." tC4's sync result only counts "{n} conflicts kept the
-  newest version" (H5).
+  yours. Your version is in History.", one line per record a newer version replaced, of every
+  kind. tC4's sync result counts "{n} conflicts kept the newest version" and lists only the
+  replaced alignments of the person's own (#791) (H5).
+- History with *Restore this version* sits under a check's marks, under the aligner's verse
+  reference and under a verse or frame comment (HIST-1). A project setting (the text font or
+  direction) or a resource pin has no History list: its Received row names the older value
+  ("Juan's text font replaced yours (was Noto Sans). Project settings can set it back."), and Project
+  settings sets it again, because those dialogs already offer the older value as a choice
+  (orchestrator, 2026-10-25). The Home card's "Last sync: n versions replaced" shows the last
+  sync's rows again after the toast and after a reload, until the app quits. tC4 shows them
+  only in the toast.
 - Two versions of an audio or other carried file are both kept. The newest keeps the name, the
   other is saved beside it under its author's name, `jon_01-Juan.wav` (`-2`, `-3` while the name
   is taken). tC4 does not journal `audio/` and keeps one copy (H5 rule 3).

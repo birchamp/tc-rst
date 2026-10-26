@@ -14,7 +14,7 @@ use tc_api::conflicts::{
     BulkKept, ConflictEntry, ConflictKind, DetachedEntry, DetachedKind, History, HistoryVersion,
     HistoryView, KeepChoice, List, MadeBy, NoticeEntry, NoticeView, Resolve, ResolveBulk, Restore,
     ReviewEntries, ReviewPlace, ReviewTab, ReviewView, TabCount, Version, VersionCause,
-    VersionValue,
+    VersionValue, Versions,
 };
 use tc_api::ids::{ChangeRef, ConflictRef, WallMs};
 use tc_api::shown::{Computer, PersonLabel, Who};
@@ -22,7 +22,7 @@ use tc_api::write::{Ack, SaveRefusal};
 use tc_api::{ApiError, NotSaved};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Anomaly, Conflict, ConflictId, ConflictKind as Kind, Notice};
-use tc_journal::record::{BookPresence, ChapterFront, VerseValue};
+use tc_journal::record::{BookPresence, ChapterFront, CheckValue, VerseValue};
 use tc_journal::{Cause, ChangeId, DeviceId, DeviceKind, Record, RecordKey, WallTime};
 
 use crate::app::App;
@@ -189,6 +189,38 @@ fn value_of(record: &Record) -> VersionValue {
             value: BookPresence::Removed { .. },
             ..
         } => VersionValue::Absent,
+        Record::Check {
+            value: CheckValue::Decision(d),
+            ..
+        } => VersionValue::Check {
+            selected: (d.judgement.selections.iter().flatten())
+                .map(|s| s.text.clone())
+                .collect(),
+            nothing_to_select: d.judgement.nothing_to_select,
+            status: d.judgement.status.map(|s| match s {
+                tc_journal::record::UserStatus::Valid => tc_api::check::DecisionStatus::Valid,
+                tc_journal::record::UserStatus::Invalid => tc_api::check::DecisionStatus::Invalid,
+                tc_journal::record::UserStatus::Todo => tc_api::check::DecisionStatus::Todo,
+            }),
+            bookmarked: d.bookmarked,
+            comment: d.comment.clone(),
+        },
+        Record::Comment { value, .. } => VersionValue::Text(value.text.trim().to_owned()),
+        Record::Alignment { value, .. } => VersionValue::Alignment {
+            pairs: (value.alignments.iter())
+                .filter(|g| !g.bottom_words.is_empty())
+                .map(|g| {
+                    let words = |w: Vec<&str>| w.join(" ");
+                    format!(
+                        "{} = {}",
+                        words(g.top_words.iter().map(|w| w.word.as_str()).collect()),
+                        words(g.bottom_words.iter().map(|w| w.word.as_str()).collect())
+                    )
+                })
+                .collect(),
+            done: value.done,
+            marked_invalid: value.marked_invalid,
+        },
         _ => VersionValue::NotShown,
     }
 }
@@ -543,9 +575,25 @@ impl Handle<List> for App {
 
 impl Handle<History> for App {
     async fn handle(&self, req: History) -> Result<HistoryView, ApiError> {
-        let session = self.read(&req.at)?;
-        let read = session.read();
         let key = wire::scope::record_key(&req.record)?;
+        self.history(&req.at, &key)
+    }
+}
+
+impl Handle<Versions> for App {
+    async fn handle(&self, req: Versions) -> Result<HistoryView, ApiError> {
+        let session = self.read(&req.at)?;
+        let shown = wire::token::edit_token(session.handle().as_ref(), &req.shown)?;
+        drop(session);
+        self.history(&req.at, shown.key())
+    }
+}
+
+impl App {
+    fn history(&self, at: &tc_api::ids::Scope, key: &RecordKey) -> Result<HistoryView, ApiError> {
+        let session = self.read(at)?;
+        let read = session.read();
+        let key = key.clone();
         let me = session.handle().facts().device;
         let labels = read.person_labels(me);
         let now = self.inner.clock.now();

@@ -328,3 +328,86 @@ fn one_label_for_a_person() {
     );
     assert_eq!(person_label(&label(Who::Teammate(2))), "Teammate 2");
 }
+
+/// INV-NO-SILENT-REPLACEMENT (owner ruling H5): every version a sync replaced with no question
+/// is named on the Received sheet, with the person, the place and where the older version is;
+/// the person's own alignment of one verse is tC4's sentence.
+#[test]
+fn the_received_sheet_names_each_replaced_version() {
+    use tc_api::check::{CheckPlace, Tool};
+    use tc_api::conflicts::ReviewPlace;
+    use tc_api::jobs::{ReplacedKind, ReplacedValue, ReplacedView};
+    use tc_core::BookId;
+    let titus_1 = |verse| ReviewPlace::Verse {
+        book: BookId::Titus,
+        chapter: 1,
+        verse,
+    };
+    let row = |whose, kind, place, count| ReplacedView {
+        by: label(Who::Username("juan".into())),
+        whose: label(whose),
+        kind,
+        place,
+        count,
+        was: None,
+    };
+    let check = ReviewPlace::Check {
+        tool: Some(Tool::TranslationNotes),
+        place: CheckPlace::Verse {
+            book: BookId::Titus,
+            chapter: tc_api::ids::RefPart::parse("1").unwrap(),
+            verse: tc_api::ids::RefPart::parse("4").unwrap(),
+        },
+    };
+    let toast = synced(SyncResultView {
+        replaced: vec![
+            row(Who::Mine, ReplacedKind::Alignment, titus_1(1), 1),
+            row(Who::Mine, ReplacedKind::Alignment, titus_1(2), 3),
+            row(Who::Teammate(2), ReplacedKind::Check, check, 1),
+            row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1),
+            ReplacedView {
+                was: Some(ReplacedValue::Font("Noto Sans".into())),
+                ..row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1)
+            },
+            ReplacedView {
+                was: Some(ReplacedValue::Direction(tc_api::shown::Direction::Rtl)),
+                ..row(Who::Mine, ReplacedKind::Setting, titus_1(1), 1)
+            },
+            ReplacedView {
+                was: Some(ReplacedValue::Resources(vec![
+                    "en_tn v90".into(),
+                    "en_ta v90".into(),
+                ])),
+                ..row(Who::Mine, ReplacedKind::Resources, titus_1(1), 1)
+            },
+            row(
+                Who::Mine,
+                ReplacedKind::Book,
+                ReviewPlace::Book {
+                    book: BookId::Jonah,
+                },
+                1,
+            ),
+        ],
+        ..ok_sync()
+    });
+    let rows: Vec<(&str, u32, String)> = toast
+        .replaced()
+        .into_iter()
+        .map(|r| (r.test_id, r.n, r.text))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            ("sync-replaced", 1, "Titus 1:1: juan's alignment replaced yours. Your version is in History.".to_owned()),
+            ("sync-replaced", 3, "Titus 1:2 and 2 more: juan's alignments replaced yours. Your version is in History.".to_owned()),
+            ("sync-replaced", 1, "Titus 1:4 · Translation Notes: juan's check replaced Teammate 2's. The older version is in History.".to_owned()),
+            ("sync-replaced", 1, "juan's project settings replaced yours. Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text font replaced yours (was Noto Sans). Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's text direction replaced yours (was Right to left). Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "juan's resource choices replaced yours (was en_tn v90, en_ta v90). Project settings can set it back.".to_owned()),
+            ("sync-replaced", 1, "Jonah: juan removed this book.".to_owned()),
+        ]
+    );
+    assert!(synced(ok_sync()).replaced().is_empty());
+}

@@ -1128,11 +1128,30 @@ async fn a_record_outside_a_conflict_restores_an_older_version_from_history() {
     )
     .await
     .unwrap();
+    let from_screen: tc_api::conflicts::HistoryView = post(
+        app,
+        &tc_api::conflicts::Versions {
+            at: at.clone(),
+            shown: shown.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        from_screen, history,
+        "the screen's token reaches the same History"
+    );
     let older = history
         .versions
         .iter()
         .find(|v| v.version.by == MadeBy::Person(teammate(1)))
         .expect("Teammate 1's version is in History");
+    assert!(
+        matches!(&older.version.value, tc_api::conflicts::VersionValue::Check { comment, .. }
+            if comment.as_deref() == Some("Comentario del compañero 1.")),
+        "{:?}",
+        older.version.value
+    );
     let _: tc_api::write::Ack = post(
         app,
         &Restore {
