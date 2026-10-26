@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "787affc05a46eaf4",
+      "ui": "766046edeaa48eb2",
       "commit": "dev",
       "api": 1
     }
@@ -168,15 +168,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "75336321e43076b017c517cfe80e7b5d2bdcfdc82b6ff719bc9cd5d0dd2eb328",
-        "rustSha256": "7583b8fffa79b360f867d08e0a6b40134b768fcfae38d3873d728d76f3f03fd9",
-        "mismatched": 519,
-        "outsideMasks": 519,
+        "rustSha256": "15a5bcf1a74d7720a3f0a1bd687942047299720da351ca77b8ce16aa69ba8872",
+        "mismatched": 5182,
+        "outsideMasks": 5182,
         "masks": [],
         "diff": "diffs/check-tn-session.png"
       },
       "dom": {
         "tc4Sha256": "917876683a0729babf0b18b9a20187d2a2052b035b12f4557250f1ae778689aa",
-        "rustSha256": "ea990e99f9bbaf1957b54b1d3cb0bd28e3a02a846031baec4e0b18f04c903a10",
+        "rustSha256": "a97a35f6be4b1699e5279830df52c4162554cd81dcf4b2edbea67ad14f22e334",
         "scope": null,
         "same": false,
         "declared": [],
@@ -185,7 +185,7 @@
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…"
+          "line 772: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">"
         ]
       },
       "meaning": {
@@ -1384,24 +1384,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "29ec9ec0455941e8c930a6a82d9a24470bb13aa93c843a5687f2b47852bba626",
-        "rustSha256": "6d43e30102ddd6fd92a59320aa52f5fe8912260d5ae8f80b889648c7babd5189",
-        "mismatched": 17038,
-        "outsideMasks": 17038,
+        "rustSha256": "a845b16d987ec8caf92606fa1a76d2547763b3bd4dffa854f2fc89401038393b",
+        "mismatched": 4905,
+        "outsideMasks": 4905,
         "masks": [],
         "diff": "diffs/en-check-tw-session.png"
       },
       "dom": {
         "tc4Sha256": "26064a98a81de97a5e9e101d1eb574f43bf29d3d0d423f6d0b4b28498280c54f",
-        "rustSha256": "96407ffb71b15016747e0edfb7b6f907733dcb56091b524365f2ac8d070593c1",
+        "rustSha256": "43ff7ec6c72b2da9cb2120a1342295e58ee72c7d5b12099ea83faf59bbea2a6b",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
-          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
-          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
+          "line 2030: tC4                 <p dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align: start\"> | rust                 <p data-testid=\"orig-pane-text\" dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align:…",
+          "line 2031: tC4                   \"Παῦλος, δοῦλος Θεοῦ, ἀπόστολος δὲ Ἰησοῦ Χριστοῦ, κατὰ πίστιν ἐκλεκτῶν Θεοῦ, καὶ ἐπίγνωσιν ἀληθείας, τῆς κατ’ εὐσέβειαν\" | rust                   <mark data-testid=\"orig-hl\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-rad…",
+          "line 2032: tC4               <div data-testid=\"ult-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; bord… | rust                     \"Παῦλος\""
         ]
       },
       "meaning": {
@@ -1420,24 +1420,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "4d8f6a97acf363a2645134b4ddc3f1d83eb32e8d6d039f6327c681bbd1d64e22",
-        "rustSha256": "4318772b0143dcc636f96e4536e1f34abf7fb6b5fd09932c17c33aaa5c45c8dd",
-        "mismatched": 6888,
-        "outsideMasks": 6888,
+        "rustSha256": "4e3476b38cdcd8011960f58abffce8721ecf0f6d4272c1a77ac79a3566b040c6",
+        "mismatched": 3277,
+        "outsideMasks": 3277,
         "masks": [],
         "diff": "diffs/en-check-tw-article.png"
       },
       "dom": {
         "tc4Sha256": "7020e2c0b8d4c92c0cc95e1bfe98edd9f32dc9171661cc9a649f7568b08e0136",
-        "rustSha256": "0a5d6672b2a162f52680b0a88322bb24b75cd4ca4cb8a1fbe7525956dda9c5cb",
+        "rustSha256": "96c1339e4b0a54de23a94b510455d9a40361a6683a9a5f043ff2d2a826ccb3b8",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
-          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
-          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
+          "line 2030: tC4                 <p dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align: start\"> | rust                 <p data-testid=\"orig-pane-text\" dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align:…",
+          "line 2031: tC4                   \"Παῦλος, δοῦλος Θεοῦ, ἀπόστολος δὲ Ἰησοῦ Χριστοῦ, κατὰ πίστιν ἐκλεκτῶν Θεοῦ, καὶ ἐπίγνωσιν ἀληθείας, τῆς κατ’ εὐσέβειαν\" | rust                   \"Παῦλος, δοῦλος \"",
+          "line 2032: tC4               <div data-testid=\"ult-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; bord… | rust                   <mark data-testid=\"orig-hl\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-rad…"
         ]
       },
       "meaning": {
@@ -1456,15 +1456,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b7e7e2425b94049bdd55457e29843a568807a23e40af58b6e86fa6fbef3f3370",
-        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
-        "mismatched": 484,
-        "outsideMasks": 484,
+        "rustSha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
+        "mismatched": 11813,
+        "outsideMasks": 11813,
         "masks": [],
         "diff": "diffs/en-check-tn-session.png"
       },
       "dom": {
         "tc4Sha256": "65cc728b1ccc47cba1d49b17ea6e4e112e2f6865223c1dcf1fb485afc5a2337b",
-        "rustSha256": "ec4641c53021bf3c9dccb7927ae9bb12da31a0717b748727a3b1bcf5926720f2",
+        "rustSha256": "f29d6d5d83da949dbd06178c1a049ed199fa5a9d165a119fcb8053cf4c9d626d",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1472,8 +1472,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"By figure\" | rust               \"By category\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -1492,15 +1492,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "96fec4249dd7799eefdbe324ef1b645d2963ef769626915ed80eee9f4b862b1b",
-        "rustSha256": "f5eabe1fd9ddd495b5c719ab836b198dba66c42a414c6baadfdd1d61fbc64247",
-        "mismatched": 484,
-        "outsideMasks": 484,
+        "rustSha256": "c3ea07f68bfa2628ebc72812e979edc48ea8fd3428f54dfe959ccc04e962f892",
+        "mismatched": 11813,
+        "outsideMasks": 11813,
         "masks": [],
         "diff": "diffs/en-check-ta-drawer.png"
       },
       "dom": {
         "tc4Sha256": "7a47230c4e6c55524000378059eb1b2a26759d8a137c7aa53e773ccd3c7e43e1",
-        "rustSha256": "cef432ca304b92573e59878eb6d8d923bc8b6c846a88ac49a3629a8fbd690985",
+        "rustSha256": "ce6ad5fc815f1ba617d45f6aed708c2ddb366eb2b32d06fba82110c8f5f1830b",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1508,8 +1508,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"By figure\" | rust               \"By category\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -1620,24 +1620,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "94f97cdd7e0be85444ebb398c5ab5f417f11ad99eb8000a389e2cdd0da158d31",
-        "rustSha256": "2f2ecf8613aae093aeac0f8868c5a1818fabfae98f32afadda5a54d3724797a4",
-        "mismatched": 454,
-        "outsideMasks": 454,
+        "rustSha256": "94f97cdd7e0be85444ebb398c5ab5f417f11ad99eb8000a389e2cdd0da158d31",
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/en-obs-check-tn-session.png"
+        "diff": null
       },
       "dom": {
         "tc4Sha256": "c046df7dd08134f039e80dea02624e92061d232c5116e924e79c256776bc5075",
-        "rustSha256": "31936e9398ca8d2629e53cac1d9c4d97a8f53564fcc6246bd157420b92afdd1e",
+        "rustSha256": "cd4dd77499841999bf0a14c5608826ebf87ba9e57214d5707fa214cdc3ab3f6d",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 91 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; …",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"By figure\" | rust               \"By category\"",
-          "line 80: tC4             <div data-group=\"\" data-testid=\"rail-group-rows\" style=\"column-gap: 6px; display: flex; flex-direction: column; row-gap: 6px\"> | rust             <div  style=\"column-gap: 6px; display: flex; flex-direction: column; row-gap: 6px\">",
-          "line 81: tC4               <button aria-current=\"true\" data-bookmarked=\"0\" data-check-id=\"i6lj\" data-commented=\"0\" data-decided=\"0\" data-i=\"choice\" data-invalid=\"0\" data-rail-index=\"0\" data-rail-stop=\"true\" data-ref=\"1:0\" data-save-error=\"0\" data-selected=\"true\" data-status=\"todo\" data-tone=\"accent\" tabindex=\"0\"… | rust               <button aria-current=\"true\" data-bookmarked=\"0\" data-check-id=\"i6lj\" data-commented=\"0\" data-decided=\"0\" data-i=\"choice\" data-invalid=\"0\" data-rail-index=\"0\" data-ref=\"1:0\" data-save-error=\"0\" data-selected=\"true\" data-status=\"todo\" data-tone=\"accent\" tabindex=\"0\" title=\"1:0 · \" type=\"…"
+          "line 644: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 645: tC4                 \"This title can also be translated as: “About how God made the world” or “How did God make the world?”\" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">",
+          "line 646: tC4           <button data-i=\"text\" data-testid=\"open-academy\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-… | rust                   \"This title can also be translated as: “About how God made the world” or “How did God make the world?”\"",
+          "line 647: tC4             \"Learn more: Translation Academy →\" | rust           <button data-i=\"text\" data-testid=\"open-academy\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-…"
         ]
       },
       "meaning": {
@@ -1656,24 +1656,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "a18f35b0ee9ee37ea2dc66c39a8f11a63c5443d31d5bc36002991e27449c7a56",
-        "rustSha256": "f3d317dbfa24176d6e4fd19756d3d8bbea503e364b4b458db65ac68b528805fe",
-        "mismatched": 16896,
-        "outsideMasks": 16896,
+        "rustSha256": "5dca2a169bac1cad748bf2df49db6fb4584dab5c1064d6c89d6eeca368be81ff",
+        "mismatched": 4905,
+        "outsideMasks": 4905,
         "masks": [],
         "diff": "diffs/ar-check-tw-session.png"
       },
       "dom": {
         "tc4Sha256": "131526ff2fb35e2d1b61bdba2aaa4c27f6e3aef8495c6d2045b036e4a8594e6e",
-        "rustSha256": "872a998b872656a6137ba03d89e946b0b9cf386d5a96be33bb32e619e5ad8903",
+        "rustSha256": "bae3a6a84abaf52fe0455155abd5a928bcbec666d0c7b6547f2b8e92f6839ba3",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
-          "line 75: tC4               \"طي الكل\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · اللغة المحورية الأساسية\"",
-          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
+          "line 2030: tC4                 <p dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align: start\"> | rust                 <p data-testid=\"orig-pane-text\" dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align:…",
+          "line 2031: tC4                   \"Παῦλος, δοῦλος Θεοῦ, ἀπόστολος δὲ Ἰησοῦ Χριστοῦ, κατὰ πίστιν ἐκλεκτῶν Θεοῦ, καὶ ἐπίγνωσιν ἀληθείας, τῆς κατ’ εὐσέβειαν\" | rust                   <mark data-testid=\"orig-hl\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-rad…",
+          "line 2032: tC4               <div data-testid=\"ult-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; bord… | rust                     \"Παῦλος\""
         ]
       },
       "meaning": {
@@ -1692,24 +1692,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "2c04d24cd3c76a3560f668554fd1626e6c09bb0ef4b91b255819897bcea9a70c",
-        "rustSha256": "e7c0f7d87417b14e5e496a49a5af0515887e8b9eb5496e12977d332516fcfabd",
-        "mismatched": 17038,
-        "outsideMasks": 17038,
+        "rustSha256": "7846fea64eb417b313ea53a1e1c8ef693df973d2b4d59b71e3b197c51bbf1853",
+        "mismatched": 31,
+        "outsideMasks": 31,
         "masks": [],
         "diff": "diffs/en-check-tw-session-620.png"
       },
       "dom": {
         "tc4Sha256": "b506f3852864b7601723cf47f6447e81e7ce0af6f75eb616f45550c15aa43438",
-        "rustSha256": "a83c55773bdfae3834f5a22cc00f8265e5b48afb7c7954c6ccc0aa3fd6157493",
+        "rustSha256": "4fac3a72bd8ee47e8b9f71c647aa892ad9eb3a7fd6f3ed080883d62d59e69218",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"2 of 182 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
-          "line 75: tC4               \"Fold all\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · primary gateway language\"",
-          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
+          "line 2030: tC4                 <p dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align: start\"> | rust                 <p data-testid=\"orig-pane-text\" dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align:…",
+          "line 2031: tC4                   \"Παῦλος, δοῦλος Θεοῦ, ἀπόστολος δὲ Ἰησοῦ Χριστοῦ, κατὰ πίστιν ἐκλεκτῶν Θεοῦ, καὶ ἐπίγνωσιν ἀληθείας, τῆς κατ’ εὐσέβειαν\" | rust                   <mark data-testid=\"orig-hl\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-rad…",
+          "line 2032: tC4               <div data-testid=\"ult-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; bord… | rust                     \"Παῦλος\""
         ]
       },
       "meaning": {
@@ -1728,24 +1728,24 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "63be0f3eeabf2c6afa3970f01a2d43ccd76f2cef53ac6a87865036286b141097",
-        "rustSha256": "6c2e22ab942e61ffd2c1c024afa2981649c49502b0d0b613a80d6f624f95a89d",
-        "mismatched": 16896,
-        "outsideMasks": 16896,
+        "rustSha256": "aaf47465072c9d54399ff79f03bf202c8d08890080f74ee8e5995a5db621fea1",
+        "mismatched": 31,
+        "outsideMasks": 31,
         "masks": [],
         "diff": "diffs/ar-check-tw-session-620.png"
       },
       "dom": {
         "tc4Sha256": "7404c5c739fc4c742b2b9ca9425c75123023b5c1da7c14aff29f66f22da0e51f",
-        "rustSha256": "e8cca7e9fd63b1a710573041a2daf1ce60e51a47fc055d28c3a97d80fbb579f6",
+        "rustSha256": "5cbd644b925c21dedcdedca77e676049acf9410b5fa78495f60435158a9bcb11",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 2 من أصل 182\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"1\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 53: tC4             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu… | rust             <div  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-radius: ; border-top-left-radiu…",
-          "line 74: tC4             <button data-testid=\"rail-fold-all\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\">",
-          "line 75: tC4               \"طي الكل\" | rust             \"git.door43.org/unfoldingWord/en_twl · v91 · اللغة المحورية الأساسية\"",
-          "line 76: tC4           <p  style=\"color: var(--text-tertiary); font-family: var(--font-mono); font-size: var(--fs-micro); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 10px; overflow-wrap: anywhere\"> | rust         <div data-testid=\"check-list\" style=\"column-gap: 16px; display: flex; flex-basis: 0%; flex-direction: column; flex-grow: 1; flex-shrink: 1; min-height: 0px; overflow-x: auto; overflow-y: auto; padding-bottom: 14px; padding-left: 14px; padding-right: 14px; padding-top: 14px; row-gap: 16px\">"
+          "line 2030: tC4                 <p dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align: start\"> | rust                 <p data-testid=\"orig-pane-text\" dir=\"ltr\" lang=\"el\" style=\"color: var(--text-scripture); font-family: var(--font-greek); font-size: var(--fs-verse); line-height: var(--lh-verse-md); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 8px; max-width: 80ch; text-align:…",
+          "line 2031: tC4                   \"Παῦλος, δοῦλος Θεοῦ, ἀπόστολος δὲ Ἰησοῦ Χριστοῦ, κατὰ πίστιν ἐκλεκτῶν Θεοῦ, καὶ ἐπίγνωσιν ἀληθείας, τῆς κατ’ εὐσέβειαν\" | rust                   <mark data-testid=\"orig-hl\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-left-radius: ; border-bottom-right-rad…",
+          "line 2032: tC4               <div data-testid=\"ult-pane\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-bottom-left-radius: ; bord… | rust                     \"Παῦλος\""
         ]
       },
       "meaning": {
@@ -1764,15 +1764,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b7e7e2425b94049bdd55457e29843a568807a23e40af58b6e86fa6fbef3f3370",
-        "rustSha256": "eb95e50736c2af5a70956b37daff71e00c8acf13da9e1eb184c5719d4567083b",
-        "mismatched": 484,
-        "outsideMasks": 484,
+        "rustSha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
+        "mismatched": 11813,
+        "outsideMasks": 11813,
         "masks": [],
         "diff": "diffs/en-check-tn-session-row.png"
       },
       "dom": {
         "tc4Sha256": "905b3b687e22b1e992860de970ef9f33eb21b48fbf12867f278f68a6f915d212",
-        "rustSha256": "30929a6a2ad77fae3b3284f11b9116ceb4ecb9ef34d8c5481b2184ff28a9adf1",
+        "rustSha256": "9e7932877802788858064d03ef6019cd99662f820d4e57d5369ca9536de6e7ae",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1780,8 +1780,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"By figure\" | rust               \"By category\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -1800,15 +1800,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "4837b92362b950f26e42547cdd3a596fa43892bec7d5f222ea9b711339bc1529",
-        "rustSha256": "618e227d4fb645f821483a6f0bec96a3999a9474092b93bdc0cbb8aa602686fa",
-        "mismatched": 639,
-        "outsideMasks": 639,
+        "rustSha256": "dfaee7ef506a09d8da11cc59e21af487f663fcc472c1e4b9320390fb92919904",
+        "mismatched": 11813,
+        "outsideMasks": 11813,
         "masks": [],
         "diff": "diffs/ar-check-tn-session-row.png"
       },
       "dom": {
         "tc4Sha256": "9d701a3e32167bb0ab9813a84040c1482c638f52fa8d5f1f6e539afee78aeb95",
-        "rustSha256": "01d4a177fb90eaa4ca2f0e2d46476e82235a4fdf913193f2d82005a06300a59a",
+        "rustSha256": "3908dca8d1a14b5bcf09bc60e43e8bd3114fb33f4bd04f90b68e1a135b2005c5",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1816,8 +1816,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"حسب الصورة البلاغية\" | rust               \"حسب الفئة\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -1836,15 +1836,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "07c711f7b899afad2dfb541f43090e260937fe152825581d10de4bdd691c442c",
-        "rustSha256": "cbeb678f7c28c82dc13e6b0f61d5ddcc059bc2334697d48509848fe848243449",
-        "mismatched": 484,
-        "outsideMasks": 484,
+        "rustSha256": "9d3a07aee4919dd8a4a7472fa7c2d6ddf294db1b4ff5a9d946e69668ca76a27b",
+        "mismatched": 48,
+        "outsideMasks": 48,
         "masks": [],
         "diff": "diffs/en-check-tn-session-620.png"
       },
       "dom": {
         "tc4Sha256": "2a4944e3c39aa4613a0218de7f1f772338537914e8cfa26fd0ef9b0a931a4fc5",
-        "rustSha256": "73768959088eea2469d0a0943379bbd4a48efaaebf187317a2a22e4283d94eaf",
+        "rustSha256": "b717995b0617742d9e55d87eca1d1b2970d138bda30c902e7493c98ff6b8a462",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1852,8 +1852,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"0 of 157 resolved\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ;…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"Invalid · 0\" | rust               \"Invalid · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"By figure\" | rust               \"By category\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -1872,15 +1872,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "efa314e3a13bc117776503c8423c0d8150a22054afb2e90d28c67e20134734be",
-        "rustSha256": "254eb5cbaba546dc291d3e9086eea974a348e14544c649f55575c7f50574769a",
-        "mismatched": 639,
-        "outsideMasks": 639,
+        "rustSha256": "c842e9d1d15bb4c7318a6baa1ad457407ca2042eb08048e5f8e26a89ff6997bf",
+        "mismatched": 48,
+        "outsideMasks": 48,
         "masks": [],
         "diff": "diffs/ar-check-tn-session-620.png"
       },
       "dom": {
         "tc4Sha256": "cf176231e2bf98bc2e2e7f48bb3afed10cd1ac40e83a2eb9bca890f1d4b538c5",
-        "rustSha256": "ef5d21d7dd9d8e364f3ccc63f070e9c2e8e05649a1f7c65130af08a3fbcfe244",
+        "rustSha256": "577289a8e62dea0361d3228b204bd6e4e303ea002f7607f1615d53277bbf71d0",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1888,8 +1888,8 @@
           "line 52: tC4           <div aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; backgroun… | rust           <div aria-label=\"تم حسم 0 من أصل 157\" aria-valuemax=\"100\" aria-valuemin=\"0\" aria-valuenow=\"0\" data-tone=\"valid\" role=\"progressbar\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y:…",
           "line 61: tC4             <button data-count=\"0\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord… | rust             <button data-count=\"1\" data-testid=\"filter-invalid\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; bord…",
           "line 62: tC4               \"غير صالح · 0\" | rust               \"غير صالح · 1\"",
-          "line 72: tC4             <button data-testid=\"sort-byFigure\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color:… | rust             <button data-testid=\"sort-byCategory\" data-trim=\"cap\" type=\"button\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
-          "line 73: tC4               \"حسب الصورة البلاغية\" | rust               \"حسب الفئة\""
+          "line 1040: tC4               <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\"> | rust               <div dir=\"auto\">",
+          "line 1041: tC4                 \"The words \" | rust                 <span  style=\"color: inherit; display: block; font-weight: var(--fw-regular); margin-bottom: 6px; margin-left: 0px; margin-right: 0px; margin-top: 0px; padding-inline-start: 0px\">"
         ]
       },
       "meaning": {
@@ -2775,7 +2775,7 @@
       },
       "dom": {
         "tc4Sha256": "e3f6fa7ff49f417cfcae6889fb317a44bb7ea6d69939b0f72cc3290a22f56baf",
-        "rustSha256": "0592e7b4871270980ee6083ada82c4ae66ea31419247e7cf8bbcad1d0566129c",
+        "rustSha256": "bcc6a7c68deebf7c16de96b95b1b836ed3d567a41799c27d41d50c3badba3618",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2798,15 +2798,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "08f5729ea4bed78555d5f7d8d73ffb8a7d5e3fadb973092f683fb2ce972752b6",
-        "rustSha256": "509ae6535e438263d5e3838b78a7ff6b3f27469ae2e181eb40beeee582fc3fdd",
-        "mismatched": 189795,
-        "outsideMasks": 189795,
+        "rustSha256": "c7abc1ed897df647ec67014d56c5c052b6d7df4a3967184f21b5b757229ee9aa",
+        "mismatched": 189623,
+        "outsideMasks": 189623,
         "masks": [],
         "diff": "diffs/import-review-usfm.png"
       },
       "dom": {
         "tc4Sha256": "84f61aa22860ec1eb5e8408806d7eac7c78e1d1d7071fd61e42f55d4e6cd5ba1",
-        "rustSha256": "e697d90c9c2f4a1f015b8d5ea4828a7a8d77f51689ebd5267cde0a46220ee049",
+        "rustSha256": "5013cf92f521381a34f3694db392fbc952d3843b128f9330e27c79525e7684de",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2829,24 +2829,21 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
-        "rustSha256": "d7dc9bea5aafd644668cfac1a47577903d8d5d7b643b1650049c3043109ca844",
-        "mismatched": 30620,
-        "outsideMasks": 30620,
+        "rustSha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+        "mismatched": 0,
+        "outsideMasks": 0,
         "masks": [],
-        "diff": "diffs/import-review-tc3.png"
+        "diff": null
       },
       "dom": {
         "tc4Sha256": "32b3fd7ae3974a8af0e1df0953c3730d9afb06ebd1261b27786c20441e763807",
-        "rustSha256": "a30d580ffab5424692648378be818138cd19cf707f188f492ffa5f12b9a3bc93",
+        "rustSha256": "028b2b0eb4b5ec84d1477bf3414ab293cc00ee78af733b2465706a11e2c507bf",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
           "line 140: tC4               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re… | rust               <button aria-label=\"Close\" data-i=\"quiet\" data-tone=\"neutral\" title=\"Close\" type=\"button\" style=\"align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-re…",
-          "line 189: tC4                             \"0 verses\" | rust                             \"46 verses\"",
-          "line 210: tC4                           \"Look up on Door43 the resource versions this project used (translationNotes, the original-language text), or use the versions on this computer.\" | rust                           \"Look up on Door43 the resource versions this project used, or use the versions on this computer.\"",
-          "line 232: tC4                     <div data-status=\"valid\" data-testid=\"import-check-missing\" style=\"align-items: baseline; column-gap: 10px; display: flex; row-gap: 10px\"> | rust                     <div  style=\"background-attachment: initial; background-clip: initial; background-color: rgb(255, 255, 255); background-image: initial; background-origin: initial; background-position-x: initial; background-position-y: initial; background-repeat: initial; background-size: initial…",
-          "line 233: tC4                       <span data-tone=\"valid\" style=\"display: inline-flex\"> | rust                       <div  style=\"column-gap: 12px; display: flex; flex-direction: column; row-gap: 12px\">"
+          "line 257: tC4               <button data-i=\"text\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background-position-x: initial; background-… | rust               <button data-i=\"text\" data-testid=\"import-review-back\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=\"align-items: center; background-attachment: initial; background-clip: initial; background-color: transparent; background-image: initial; background-origin: initial; background…"
         ]
       }
     },
@@ -2868,7 +2865,7 @@
       },
       "dom": {
         "tc4Sha256": "95c1321765a37894f8a54148a9b3bac88aa6540e4da5aab0296e0617bf37e7bb",
-        "rustSha256": "fe9db9d6604b29b19d2a30c84fdcd35b84bed10fc1c1487a3d6b62af3c7523fd",
+        "rustSha256": "1377352f785783c1949eb562540a33a8be056d3b9e189fb88ce97d098fab8a46",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2899,7 +2896,7 @@
       },
       "dom": {
         "tc4Sha256": "fda61bb02985b0e8725df582a2462d9fa02eb054cbc1b0c81c83cd448a8895a3",
-        "rustSha256": "b49208ffe0bc80d31675ae28770b1937cbdc45c13a3109e3e4ed2e8196504c9b",
+        "rustSha256": "ba055ee4dba038236c63798a2efdd0207e8a8903009303a45b19cfb4e6eeae51",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3002,7 +2999,7 @@
       },
       "dom": {
         "tc4Sha256": "4a40b4a31d200db33b76c746073e30ea917e981e2dde3375d24428efd5ff4666",
-        "rustSha256": "daee150d60a6492beb5455750f22e4a55fa01ec80e11961b02fcd4f9d61b1746",
+        "rustSha256": "6b9e2258ae452b289358fc868062b4e754ef5947e0f221dff40fd7de9f2fa7e3",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3304,15 +3301,15 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "8bc18061eb1c18d2116b13308e20f71ec7e926cb4d4da0d9f6e6f2710d4ec090",
-        "rustSha256": "823adda095f059620b972189232f70051bc4e5be8454f8d909b4a27aad95be04",
-        "mismatched": 3808,
-        "outsideMasks": 3808,
+        "rustSha256": "3ed06c4558c3ccd12fec330372767a92605da67b89c2216e0adb430e3d92190b",
+        "mismatched": 8471,
+        "outsideMasks": 8471,
         "masks": [],
         "diff": "diffs/check-rail-empty.png"
       },
       "dom": {
         "tc4Sha256": "3ea79ed5bdf24e82ac0f8b340aa544c1ada57bf1137924a38b827964aad371f9",
-        "rustSha256": "6223712be16ad8c929ffc817c50ef4d8a11cf000771f3642c97b86b2feedbddb",
+        "rustSha256": "27bda03e737dde80f0beb34f6fc293acdf3c821162cd1fd1b4662aac3c3e7110",
         "scope": null,
         "same": false,
         "declared": [],
@@ -3739,7 +3736,7 @@
       },
       "dom": {
         "tc4Sha256": "297e697f6a503b6404aa639e67468b1cfd859942bf826ed0bb43b76188a5814d",
-        "rustSha256": "f7783330bbc3e8e96e1d9daffa8cb40cea9946d06167de294b7e3b467de13b27",
+        "rustSha256": "424b0aa7d3fbd6334ede6a0b677caf03ef3b8f8338e3a852505e38240f1492f0",
         "scope": null,
         "same": false,
         "declared": [],

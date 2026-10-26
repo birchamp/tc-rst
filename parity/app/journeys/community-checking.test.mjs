@@ -1,5 +1,5 @@
 // Community Checking (B8): the preview of Titus on A4 sheets and of the OBS sample's drafted
-// story, the page setup, the export menu (its items listed and off until D2's exports), the way
+// story, the page setup, the export menu (its items listed; one runs only when chosen, as j07-export shows), the way
 // back to the checking tools, and the book changing while the preview is open. Reading the
 // preview writes nothing.
 //
@@ -118,7 +118,7 @@ browserTest('cc_the_page_setup_resets_the_sheets_and_keeps_every_word', async ()
   });
 });
 
-browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_d2', async () => {
+browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_one_is_chosen', async () => {
   await withApp(async ({ page }) => {
     await openTitusPreview(page);
     const requests = recordRequests(page);
@@ -127,8 +127,9 @@ browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_d2', async
     const items = page.getByRole('menuitem');
     await items.first().waitFor();
     assert.deepEqual(await items.allTextContents(), ['USFM, aligned', 'USFM, plain', 'Scripture Burrito (.zip)'], 'a browser has no PDF item');
-    for (const item of await items.all()) assert.equal(await item.isDisabled(), true);
-    await items.first().click({ force: true });
+    const off = [];
+    for (const item of await items.all()) if (await item.isDisabled()) off.push(await item.textContent());
+    assert.deepEqual(off, ['Scripture Burrito (.zip)'], 'D2 runs the USFM exports; the Burrito zip waits for E2');
     await page.keyboard.press('Escape');
     assert.deepEqual(requests.api(mark), [], 'no export runs');
   });

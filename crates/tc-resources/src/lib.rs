@@ -74,8 +74,8 @@ pub use choice::{
     AquiferHelps, CheckBlocker, CheckSources, HELPS_SOURCE_SETTING, HelpsChoice, check_sources,
 };
 pub use dcs::{
-    LexiconInstall, install_all, install_dcs, install_dcs_as, install_dcs_watched, install_dcs_zip,
-    install_lexicon_zip, pin_release,
+    LexiconInstall, install_all, install_archive_zip, install_dcs, install_dcs_as,
+    install_dcs_watched, install_dcs_zip, install_lexicon_zip, pin_release,
 };
 pub use error::{
     AquiferError, InstallError, LexiconError, LexiconUnavailable, ParseError, Refusal, StoreError,

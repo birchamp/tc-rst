@@ -92,7 +92,7 @@ fn rail_groups_visit_each_row_once() {
             marker: None,
         })
         .collect();
-    for mode in [SortMode::ByWord, SortMode::ByVerse, SortMode::ByCategory] {
+    for mode in [SortMode::ByWord, SortMode::ByVerse, SortMode::ByFigure] {
         let visits = Cell::new(0usize);
         let counted = all.iter().inspect(|_| visits.set(visits.get() + 1));
         let out = groups(counted, terms as usize, Filter::All, mode);
@@ -104,4 +104,112 @@ fn rail_groups_visit_each_row_once() {
             assert_eq!(out[3].label, GroupLabel::Term(3));
         }
     }
+}
+
+/// INV-GROUP-COUNTS-IGNORE-THE-FILTER: each term's heading counts every row of its term,
+/// decided or not, whatever the filter shows (tC4 `groupStatsOf`).
+#[test]
+fn term_counts_cover_every_row_whatever_the_filter() {
+    let row = |index: u32, term: u32, decided: bool, bookmarked: bool| RailRow {
+        index,
+        check_id: "abcd".into(),
+        place: "TIT 1:1".parse().unwrap(),
+        title: String::new(),
+        flags: RowFlags {
+            dot: tc_api::check::Dot::Todo,
+            decided,
+            invalidated: false,
+            invalid: false,
+            bookmarked,
+            commented: false,
+        },
+        term: Some(term),
+        category: None,
+        marker: None,
+    };
+    let rows = [
+        row(0, 1, true, false),
+        row(1, 0, false, true),
+        row(2, 1, false, false),
+        row(3, 1, true, false),
+    ];
+    let shown = groups(&rows, 2, Filter::Bookmarked, SortMode::ByFigure);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].label, GroupLabel::Figure(0));
+    assert_eq!(
+        tc_api::model::rail::term_progress(&rows, 2),
+        [(0, 1), (2, 3)]
+    );
+    let all = groups(&rows, 2, Filter::All, SortMode::ByFigure);
+    let labels: Vec<GroupLabel> = all.iter().map(|g| g.label).collect();
+    assert_eq!(
+        labels,
+        [GroupLabel::Figure(1), GroupLabel::Figure(0)],
+        "first appearance"
+    );
+}
+
+fn figure_rows() -> Vec<RailRow> {
+    (0..6)
+        .map(|i| RailRow {
+            index: i,
+            check_id: "abcd".into(),
+            place: "TIT 1:1".parse().unwrap(),
+            title: String::new(),
+            flags: RowFlags {
+                dot: tc_api::check::Dot::Todo,
+                decided: false,
+                invalidated: false,
+                invalid: false,
+                bookmarked: false,
+                commented: false,
+            },
+            term: Some(i % 3),
+            category: None,
+            marker: None,
+        })
+        .collect()
+}
+
+/// INV-THE-ACTIVE-GROUP-IS-OPEN: a folded group shows its rows only while it holds the active
+/// check, and By verse never folds.
+#[test]
+fn the_active_group_is_open_whatever_was_folded() {
+    use tc_api::model::rail::open_groups;
+    let rows = figure_rows();
+    let terms: Vec<String> = ["a", "b", "c"].map(str::to_owned).to_vec();
+    let groups = groups(&rows, 3, Filter::All, SortMode::ByFigure);
+    let folded: std::collections::BTreeSet<String> = ["a", "b"].map(str::to_owned).into();
+    assert_eq!(
+        open_groups(&groups, &terms, &folded, Some("b"), SortMode::ByFigure),
+        [false, true, true],
+        "b holds the active check"
+    );
+    let by_verse = groups_by_verse(&rows);
+    assert_eq!(
+        open_groups(&by_verse, &terms, &folded, None, SortMode::ByVerse),
+        [true]
+    );
+}
+
+fn groups_by_verse(rows: &[RailRow]) -> Vec<tc_api::model::rail::RailGroup> {
+    groups(rows, 3, Filter::All, SortMode::ByVerse)
+}
+
+/// tC4 #769: Fold all folds every shown group but the active one; once those are folded, the
+/// same button unfolds every shown group.
+#[test]
+fn fold_all_keeps_the_active_group_open() {
+    use tc_api::model::rail::fold_all;
+    let rows = figure_rows();
+    let terms: Vec<String> = ["a", "b", "c"].map(str::to_owned).to_vec();
+    let groups = groups(&rows, 3, Filter::All, SortMode::ByFigure);
+    let mut folded = std::collections::BTreeSet::new();
+    let (ids, fold) = fold_all(&groups, &terms, &folded, Some("b"));
+    assert!(fold);
+    assert_eq!(ids, ["a", "c"]);
+    folded.extend(ids);
+    let (ids, fold) = fold_all(&groups, &terms, &folded, Some("b"));
+    assert!(!fold, "every other group is folded: Unfold all");
+    assert_eq!(ids, ["a", "b", "c"]);
 }

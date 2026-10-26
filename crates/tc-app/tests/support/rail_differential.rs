@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use tc_api::check::{Category, NoteCategory, RailRow, Tool, WordCategory};
+use tc_api::check::{RailRow, Tool};
 use tc_api::model::rail::{self, Filter, GroupLabel, SortMode};
 use tc_check::derive::{BookSpec, notes_for_book, word_links_for_book};
 use tc_check::rail::{self as check_rail, GroupLabel as CheckLabel};
@@ -76,24 +76,6 @@ pub fn tc_check_side(
     (session.items, session.states)
 }
 
-fn api_name(category: Category) -> &'static str {
-    match category {
-        Category::Note(n) => match n {
-            NoteCategory::Discourse => "discourse",
-            NoteCategory::Numbers => "numbers",
-            NoteCategory::Figures => "figures",
-            NoteCategory::Culture => "culture",
-            NoteCategory::Grammar => "grammar",
-            NoteCategory::Other => "other",
-        },
-        Category::Word(w) => match w {
-            WordCategory::Kt => "kt",
-            WordCategory::Names => "names",
-            WordCategory::Other => "other",
-        },
-    }
-}
-
 fn check_filter(filter: Filter) -> check_rail::Filter {
     match filter {
         Filter::All => check_rail::Filter::All,
@@ -108,7 +90,7 @@ fn check_mode(mode: SortMode) -> check_rail::SortMode {
     match mode {
         SortMode::ByVerse => check_rail::SortMode::ByVerse,
         SortMode::ByWord => check_rail::SortMode::ByWord,
-        SortMode::ByCategory => check_rail::SortMode::ByCategory,
+        SortMode::ByFigure => check_rail::SortMode::ByFigure,
     }
 }
 
@@ -134,7 +116,7 @@ pub fn assert_groups_agree(
                     let label = match g.label {
                         GroupLabel::Unit => "unit".to_owned(),
                         GroupLabel::Term(t) => terms[t as usize].clone(),
-                        GroupLabel::Category(c) => api_name(c).to_owned(),
+                        GroupLabel::Figure(t) => terms[t as usize].clone(),
                     };
                     (label, g.rows.iter().map(|&at| rows[at].index).collect())
                 })
@@ -146,7 +128,7 @@ pub fn assert_groups_agree(
                         let label = match g.label {
                             CheckLabel::Unit => "unit".to_owned(),
                             CheckLabel::Term(term) => term,
-                            CheckLabel::Category(c) => c.name().to_owned(),
+                            CheckLabel::Figure(figure) => figure,
                         };
                         (label, g.rows.iter().map(|&i| i as u32).collect())
                     })

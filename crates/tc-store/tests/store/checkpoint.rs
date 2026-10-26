@@ -1379,3 +1379,85 @@ fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A checkpoint that fails on a full disk after it renamed a book file into place (while it
+/// writes `metadata.json` or flushes the folder) is retried: the retry's commit holds the file
+/// as saved, not the blob of the last commit (a stale `blob` in the manifest; D1's loss lens,
+/// 2026-10-25). Door43 and teammates would otherwise read an old book file until it changed again.
+#[test]
+fn a_retried_checkpoint_commits_the_book_file_as_saved() {
+    for n in 30..46u64 {
+        let (rig, folder) = titus();
+        let handle = open(&rig, &folder);
+        save_verse(&handle, 1, 1, "MUST BE COMMITTED").unwrap();
+        handle.wait_idle();
+        rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
+        let first = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+        handle.wait_idle();
+        if first.is_ok() {
+            handle.close().unwrap();
+            continue;
+        }
+        let second = handle
+            .checkpoint(CheckpointReason::Other("retry".into()))
+            .wait()
+            .unwrap();
+        handle.wait_idle();
+        let repo = repo_of(&rig.fs, &folder);
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
+        let files = commit_files(&repo, head);
+        let committed = String::from_utf8_lossy(&files["ingredients/TIT.usfm"]);
+        assert!(
+            second.commit.is_some() && committed.contains("MUST BE COMMITTED"),
+            "fail point {n}: retry {:?}, HEAD's TIT.usfm holds the save: {}",
+            (second.commit.is_some(), second.skipped),
+            committed.contains("MUST BE COMMITTED")
+        );
+        handle.close().unwrap();
+    }
+}
+
+/// INV-VALID-BURRITO at a full disk during the seal: a pack renamed into place whose folder
+/// flush then fails stays listed by `metadata.json` once the group ends, and this session's
+/// own pack is never taken for a second writer's (the checks lane's repro, 2026-10-25).
+#[test]
+fn a_seal_that_fails_after_its_pack_rename_leaves_the_pack_listed() {
+    let mut reached = Vec::new();
+    for n in 0..24u64 {
+        let (rig, folder) = titus();
+        let handle = open(&rig, &folder);
+        save_verse(&handle, 1, 2, "a change to commit").unwrap();
+        handle.wait_idle();
+        rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
+        let first = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
+        handle.wait_idle();
+        if first.is_ok() {
+            handle.close().unwrap();
+            continue;
+        }
+        let retried = handle
+            .checkpoint(CheckpointReason::Other("retry".into()))
+            .wait();
+        handle.wait_idle();
+        let problems = rig.store.hooks().burrito_problems();
+        assert!(
+            problems.is_empty(),
+            "fail point {n}: INV-VALID-BURRITO: {problems:?}; retry {retried:?}, mode {:?}",
+            handle.facts().mode
+        );
+        assert!(
+            !matches!(handle.facts().mode, tc_store::Mode::ReadOnly(_)),
+            "fail point {n}: this session's own pack was taken for a second writer's"
+        );
+        assert!(
+            retried.as_ref().is_ok_and(|r| r.commit.is_some()),
+            "fail point {n}: the retry commits the save: {retried:?}"
+        );
+        reached.push(n);
+        handle.close().unwrap();
+    }
+    assert!(
+        !reached.is_empty(),
+        "no fail point failed the first checkpoint"
+    );
+}

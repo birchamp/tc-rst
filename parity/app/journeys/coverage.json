@@ -126,9 +126,20 @@
         "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
       ]
     },
-    "J7": {
-      "pending": "D2"
-    },
+    "J7": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
+          "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
+          "J7: the PDF prints the print page of its job and leaves the project unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "J8": [
       {
         "file": "parity/app/journeys/check-keyboard.test.mjs",
@@ -152,9 +163,9 @@
         "refuse: a damaged file is refused on the review page and nothing is written",
         "all or nothing: a write failure leaves no project and says import.write-failed",
         "tC3 offline: the review page shows what carries over; Use installed versions; one new project",
-        "tC3 multi-zip: three books of one language are one project",
-        "tC3 online: the lookup waits for its click and the question, then names what Door43 has",
-        "tC3 online, mixed: Use installed versions keeps the found pins named",
+        "tC3 multi-zip: three books of one language are one project; the license is chosen on the review page",
+        "tC3 online: each version Door43 has is a full pin; the project opens and the guided fix lists the en_tn v87 this computer lacks",
+        "tC3 online, mixed: the found pins stay named when translationWords moves to the installed versions, and they are stored",
         "tC3 name clash: a Bible name of a project on this computer is flagged and Import stays off; a stale review still writes nothing (#436)"
       ]
     },
@@ -259,9 +270,18 @@
         ]
       }
     ],
-    "J23": {
-      "pending": "D2"
-    },
+    "J23": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "J24": {
       "pending": "E1b"
     },
@@ -431,9 +451,21 @@
         "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
       ]
     },
-    "j07-publish.spec.ts": {
-      "pending": "D2"
-    },
+    "j07-publish.spec.ts": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
+          "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
+          "J7: the PDF prints the print page of its job and leaves the project unchanged",
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "j08-resume.spec.ts": [
       {
         "file": "parity/app/journeys/check-keyboard.test.mjs",
@@ -458,9 +490,9 @@
           "refuse: a damaged file is refused on the review page and nothing is written",
           "all or nothing: a write failure leaves no project and says import.write-failed",
           "tC3 offline: the review page shows what carries over; Use installed versions; one new project",
-          "tC3 multi-zip: three books of one language are one project",
-          "tC3 online: the lookup waits for its click and the question, then names what Door43 has",
-          "tC3 online, mixed: Use installed versions keeps the found pins named",
+          "tC3 multi-zip: three books of one language are one project; the license is chosen on the review page",
+          "tC3 online: each version Door43 has is a full pin; the project opens and the guided fix lists the en_tn v87 this computer lacks",
+          "tC3 online, mixed: the found pins stay named when translationWords moves to the installed versions, and they are stored",
           "tC3 name clash: a Bible name of a project on this computer is flagged and Import stays off; a stale review still writes nothing (#436)"
         ]
       },

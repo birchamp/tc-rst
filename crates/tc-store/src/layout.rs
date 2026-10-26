@@ -15,6 +15,8 @@ pub const INDEX: &str = ".tc/index.bin";
 pub const DRAFTS: &str = ".tc/drafts.json";
 pub const QUARANTINE_LIST: &str = ".tc/quarantine.json";
 pub const INTAKE: &str = ".tc/intake.json";
+/// Where the project syncs and what Door43 last confirmed (§3.6, §9.5).
+pub const SYNC: &str = ".tc/sync.json";
 
 pub const INGREDIENTS: &str = "ingredients";
 pub const PROJECT_JSON: &str = "ingredients/tc/project.json";

@@ -154,10 +154,11 @@ How a card gets ready (owner ruling, 2026-10-24, `rulings/2026-10-24-test-proces
 2. Before the long checks: run the review lenses the card needs (a no-loss card's loss lens
    first) and fix what they find. A gate run before the review is wasted when the review changes
    the code.
-3. Before you hand the card over, run the fast checks that fail CI in seconds:
-   `python3 -I -B .audit/tools/board.py --check`, `node --test .audit/tools/claims.test.mjs` and
-   `node --test parity/app/journeys/coverage.test.mjs`, plus `cargo check` and the wasm clippy
-   with main merged in.
+3. Before you hand the card over, with main merged in, run `scripts/gates.sh --touched` (card
+   CHK-7b): the fast checks (board, claims, journey coverage), the tests of every crate the branch
+   changed and of every crate that depends on one, tc-api's endpoint and golden lists, and every
+   journey file that names a changed endpoint or test id; plus `cargo check` and the wasm clippy.
+   Track-branch CI runs none of these tests.
 4. Push the track branch once, when the card is ready for a batch. Track-branch CI runs only the
    compile and lint jobs; the full test and journey jobs run on `gate/*` and main.
 

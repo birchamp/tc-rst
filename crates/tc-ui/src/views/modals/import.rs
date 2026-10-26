@@ -46,11 +46,11 @@ fn size(bytes: u64) -> String {
 
 /// A part of the form, read reactively.
 fn read<T: Clone + PartialEq + Send + Sync + 'static>(
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     get: impl Fn(&ImportForm) -> T + Send + Sync + 'static,
     none: T,
 ) -> Memo<T> {
-    let im = im.clone();
+    let im = *im;
     Memo::new(move |_| im.with(|im| im.as_ref().map_or_else(|| none.clone(), &get)))
 }
 
@@ -80,7 +80,7 @@ pub fn Import() -> impl IntoView {
     let (Some(AppCtx { s, actions }), Some(runtime)) = (use_app(), use_runtime()) else {
         return ().into_any();
     };
-    let im = s.im.clone();
+    let im = s.import_form();
     let list = runtime.cache().read(List {});
     // Every entry of the projects folder, for the name check (tC4 `nameClash`).
     let listing = Memo::new(move |_| {
@@ -113,7 +113,7 @@ pub fn Import() -> impl IntoView {
 
 fn modal(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     listing: Memo<Vec<String>>,
     step: Memo<ImportStep>,
     wide: bool,
@@ -146,18 +146,17 @@ fn modal(
         }
     };
     let footer: ChildrenFn = {
-        let (actions, im) = (actions.clone(), im.clone());
+        let (actions, im) = (actions.clone(), *im);
         Arc::new(move || {
-            let (actions, im) = (actions.clone(), im.clone());
+            let (actions, im) = (actions.clone(), im);
             (move || footer(&actions, &im, listing, step.get())).into_any()
         })
     };
     let children: ChildrenFn = {
-        let (actions, im) = (actions.clone(), im.clone());
+        let (actions, im) = (actions.clone(), *im);
         Arc::new(move || {
-            let (actions, im) = (actions.clone(), im.clone());
+            let (actions, im) = (actions.clone(), im);
             let body = {
-                let im = im.clone();
                 move || match step.get() {
                     ImportStep::Kind => kind_step(&actions).into_any(),
                     ImportStep::Files => files_step(&actions, &im).into_any(),
@@ -207,7 +206,7 @@ fn modal(
 
 fn footer(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     listing: Memo<Vec<String>>,
     step: ImportStep,
 ) -> AnyView {
@@ -256,7 +255,7 @@ fn footer(
         }
         ImportStep::Review => {
             let off = {
-                let im = im.clone();
+                let im = *im;
                 Signal::derive(move || {
                     listing.with(|names| {
                         im.with(|im| {
@@ -351,7 +350,7 @@ fn kind_step(actions: &Actions) -> impl IntoView + use<> {
 }
 
 /// The files step (tC4 `FilesStep`): the drop zone, then the chosen files.
-fn files_step(actions: &Actions, im: &ArcRwSignal<Option<ImportForm>>) -> impl IntoView + use<> {
+fn files_step(actions: &Actions, im: &Signal<Option<ImportForm>>) -> impl IntoView + use<> {
     let kind = im
         .with_untracked(|im| im.as_ref().and_then(|im| im.kind))
         .unwrap_or(ImportKind::Tc3);
@@ -484,7 +483,7 @@ fn refusal_panel(
 
 fn review_step(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     listing: Memo<Vec<String>>,
 ) -> AnyView {
     let reviewed = im.with_untracked(|im| im.as_ref().and_then(|im| im.reviewed.clone()));
@@ -571,7 +570,7 @@ fn found_list(found: &[FoundVersion]) -> String {
 /// The Resource versions row (tC4 `ResourcesCheck`, D82).
 fn resources_check(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     slots: Vec<VersionSlot>,
 ) -> impl IntoView + use<> {
     use keys::importer::review as k;
@@ -713,7 +712,7 @@ fn license_check(review: &ImportReview) -> impl IntoView + use<> {
 /// license, so "No license" (`l:`) differs from "Choose a license" (``).
 fn license_pick(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     licenses: &[String],
 ) -> Option<impl IntoView + use<>> {
     use keys::importer::review as k;
@@ -762,7 +761,7 @@ fn license_pick(
 
 fn found(
     actions: &Actions,
-    im: &ArcRwSignal<Option<ImportForm>>,
+    im: &Signal<Option<ImportForm>>,
     listing: Memo<Vec<String>>,
     review: ImportReview,
 ) -> impl IntoView + use<> {
@@ -844,7 +843,7 @@ fn found(
     let name = read(im, |im| im.name.clone(), String::new());
     let code = read(im, |im| im.code.clone(), String::new());
     let name_error: Signal<Option<String>> = {
-        let im = im.clone();
+        let im = *im;
         Signal::from(Memo::new(move |_| {
             listing.with(|names| {
                 im.with(|im| {
@@ -856,7 +855,7 @@ fn found(
         }))
     };
     let lang_error: Signal<Option<String>> = {
-        let im = im.clone();
+        let im = *im;
         Signal::from(Memo::new(move |_| {
             im.with(|im| {
                 let im = im.as_ref()?;
@@ -969,7 +968,7 @@ fn found(
     }
 }
 
-fn working_step(im: &ArcRwSignal<Option<ImportForm>>) -> impl IntoView + use<> {
+fn working_step(im: &Signal<Option<ImportForm>>) -> impl IntoView + use<> {
     let name = im.with_untracked(|im| {
         im.as_ref()
             .map(|im| im.name.trim().to_owned())
@@ -1004,7 +1003,7 @@ fn working_step(im: &ArcRwSignal<Option<ImportForm>>) -> impl IntoView + use<> {
     }
 }
 
-fn failed_step(im: &ArcRwSignal<Option<ImportForm>>) -> AnyView {
+fn failed_step(im: &Signal<Option<ImportForm>>) -> AnyView {
     let failure = im.with_untracked(|im| match im.as_ref().map(|im| &im.state) {
         Some(ImportState::Failed(failure)) => Some(failure.clone()),
         _ => None,

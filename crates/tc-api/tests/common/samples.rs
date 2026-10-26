@@ -106,11 +106,20 @@ pub fn import() -> Vec<ImportRefusal> {
 
 pub fn export() -> Vec<ExportRefusal> {
     vec![
-        ExportRefusal::CheckpointFailed,
-        ExportRefusal::ReadFailed,
+        ExportRefusal::CheckpointFailed {
+            error: s("the change log could not be written"),
+        },
+        ExportRefusal::ReadFailed {
+            error: s("picture images/obs-en-01-01.jpg could not be read"),
+        },
+        ExportRefusal::WriteFailed {
+            error: s("No space left on device (os error 28)"),
+        },
         ExportRefusal::PrintFailed,
         ExportRefusal::PrintFailedPictures,
-        ExportRefusal::NothingDrafted,
+        ExportRefusal::NothingDrafted {
+            error: s("Titus has no drafted verse yet, so the PDF has nothing to print."),
+        },
     ]
 }
 

@@ -223,6 +223,10 @@ pub(crate) struct Inner {
     /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
     /// binary that runs the server.
     pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
+    /// The server's downloads, where an export's file goes (D2). Given once, as `uploads`.
+    pub(crate) downloads: std::sync::OnceLock<crate::export::Downloads>,
+    /// The print documents of print exports, served by `GET /print/{job}` (D2).
+    pub(crate) prints: crate::export::Prints,
     /// Calls in flight, for `test/quiet`.
     pub(crate) calls: AtomicUsize,
     quit: watch::Sender<bool>,
@@ -497,6 +501,8 @@ impl App {
             downloaded: Mutex::new(std::collections::BTreeSet::new()),
             plans: crate::upgrades::KeptPlans::default(),
             uploads: std::sync::OnceLock::new(),
+            downloads: std::sync::OnceLock::new(),
+            prints: crate::export::Prints::default(),
             #[cfg(feature = "test-hooks")]
             scripted_resources: crate::upgrades::ScriptedResources::default(),
             calls: AtomicUsize::new(0),
@@ -604,6 +610,12 @@ impl App {
     /// chose. Once; the first call wins.
     pub fn provide_uploads(&self, uploads: crate::fixes::Uploads) {
         let _ = self.inner.uploads.set(uploads);
+    }
+
+    /// Gives the app the server's downloads: an export registers its file there. Once; the
+    /// first call wins.
+    pub fn provide_downloads(&self, downloads: crate::export::Downloads) {
+        let _ = self.inner.downloads.set(downloads);
     }
 
     /// The request guard of a project-scoped query (§4.3): the screen's session at `at`, or

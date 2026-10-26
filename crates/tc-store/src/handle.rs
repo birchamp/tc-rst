@@ -222,6 +222,9 @@ pub struct ProjectFacts {
     pub device: DeviceId,
     pub folder: PathBuf,
     pub mode: Mode,
+    /// The project's git repository, for the sync's network calls (§9); `None` when the
+    /// project has none this session.
+    pub git_dir: Option<PathBuf>,
 }
 
 /// What happened in a project (R4, R16).
@@ -567,6 +570,16 @@ pub enum CheckpointReason {
     AfterImport,
     Periodic,
     Other(String),
+    /// §9.1 S7: a sync's merge commit, whose second parent is the commit fetched from
+    /// Door43. It is made even when the tree is HEAD's, so the push fast-forwards Door43.
+    SyncMerge {
+        remote: tc_journal::GitOid,
+    },
+    /// §10.2 R7: work received from an exchange file, taken in before the seal; the commit
+    /// has one parent. `from` names the file's person and date.
+    Received {
+        from: String,
+    },
 }
 
 impl CheckpointReason {
@@ -580,6 +593,8 @@ impl CheckpointReason {
             Self::AfterImport => "after import".into(),
             Self::Periodic => "every 30 minutes".into(),
             Self::Other(words) => words.clone(),
+            Self::SyncMerge { .. } => "sync with Door43".into(),
+            Self::Received { from } => format!("received work from {from}"),
         }
     }
 }
@@ -593,6 +608,64 @@ pub struct CheckpointReport {
     pub sealed: Vec<String>,
     /// Why no commit was made, when none was.
     pub skipped: Option<CheckpointSkip>,
+    /// What a sync's merge took in before it sealed (§9.3).
+    pub intake: IntakeReport,
+}
+
+/// `.tc/sync.json` (§3.6, §9.5): the address and branch a share, join or connect set, and
+/// the last commit Door43's branch was read back at. The address carries no credentials.
+/// A damaged `.git` is rebuilt with `origin` from it (§6.4 G4).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncFile {
+    pub remote_url: String,
+    pub branch: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<Confirmed>,
+    /// The device that wrote its Door43 username after a signed-in sync (Q7). A folder copied
+    /// to another computer carries this file, and the new device's copied username is not
+    /// its own, so the first signed-in sync there replaces it (#161); a device's own
+    /// confirmed name never changes (first wins).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username_device: Option<String>,
+}
+
+/// "Your work up to 14:32 is on Door43" (§9.5).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Confirmed {
+    pub commit: String,
+    /// RFC 3339, by the store's clock.
+    pub at: String,
+}
+
+/// A pack of a teammate's work, read from the tree fetched from Door43 (§9.2 N3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceivedPack {
+    /// Its path in the tree, under `ingredients/tc/changes/`.
+    pub path: String,
+    pub bytes: Vec<u8>,
+    /// Its blob, which the repository holds since the fetch.
+    pub blob: GitOid,
+}
+
+/// What [`ProjectHandle::sync_file`]'s job writes.
+#[derive(Debug, Clone)]
+pub(crate) enum SyncFileWrite {
+    File(SyncFile),
+    Confirmed(String),
+}
+
+/// What an intake took (§9.2, §9.3).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IntakeReport {
+    /// Packs written and folded.
+    pub packs: u32,
+    /// Damaged packs whose readable changes were salvaged into a pending batch.
+    pub salvaged: u32,
+    /// Packs the project had already.
+    pub held: u32,
+    /// Paths another program wrote other bytes to, left as they are (§5.10 M1).
+    pub left: Vec<String>,
 }
 
 /// Why a checkpoint made no commit. Each is a state, not a failure: the work is saved and the
@@ -628,8 +701,15 @@ pub(crate) enum Msg {
     Materialize {
         reply: Option<Resolver<Result<(), StoreError>>>,
     },
+    /// `.tc/sync.json`: read it, write it, or record a confirmed commit in it.
+    SyncFile {
+        write: Option<SyncFileWrite>,
+        reply: Resolver<Result<Option<SyncFile>, StoreError>>,
+    },
     Checkpoint {
         reason: CheckpointReason,
+        /// A sync's received packs, taken in before the seal (§9.3).
+        intake: Vec<ReceivedPack>,
         reply: Resolver<Result<CheckpointReport, StoreError>>,
     },
     /// The writer examined a changed file and plans to record it (§11.1 X4): the actor
@@ -867,6 +947,19 @@ impl ProjectHandle {
         pending
     }
 
+    /// The bytes of a carried file's version, the blob `oid` the fold names (§11.4): `None`
+    /// when this computer's object database lacks it. Reads only; the writer answers, since
+    /// it holds the repository.
+    pub fn read_carried(&self, oid: GitOid) -> Pending<Result<Option<Vec<u8>>, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send_writer(crate::writer::Job::ReadCarried {
+            oid,
+            reply: resolver,
+        });
+        pending
+    }
+
     /// Starts the open's background work (see [`Background`]).
     pub(crate) fn start_background(&self, job: Background) {
         let shared = self.shared.clone();
@@ -955,6 +1048,71 @@ impl ProjectHandle {
             pending(|| Err(StoreError::Other("the project is closed".into())));
         self.send(Msg::Checkpoint {
             reason,
+            intake: Vec::new(),
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// `.tc/sync.json`, when the project was shared, joined or connected.
+    pub fn sync_file(&self) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(None)
+    }
+
+    /// Writes `.tc/sync.json` atomically: share, join and connect.
+    pub fn set_sync_file(&self, file: SyncFile) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(Some(SyncFileWrite::File(file)))
+    }
+
+    /// Records that Door43's branch was read back at `commit`, now (§9.5 Confirm).
+    pub fn confirm_sync(&self, commit: String) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        self.sync_file_job(Some(SyncFileWrite::Confirmed(commit)))
+    }
+
+    fn sync_file_job(
+        &self,
+        write: Option<SyncFileWrite>,
+    ) -> Pending<Result<Option<SyncFile>, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::SyncFile {
+            write,
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// §10.2 R7: an exchange file's packs taken in, sealed and committed with one parent.
+    pub fn receive_packs(
+        &self,
+        from: String,
+        packs: Vec<ReceivedPack>,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::Checkpoint {
+            reason: CheckpointReason::Received { from },
+            intake: packs,
+            reply: resolver,
+        });
+        pending
+    }
+
+    /// A sync's merge (§9.3, §9.1 S7): takes the received packs in, each written whole
+    /// beside the project's own and folded, then seals, materializes and commits with
+    /// `remote`, the commit fetched from Door43, as the second parent. A pack already held is
+    /// skipped; a damaged one's readable changes are salvaged; a path another program wrote
+    /// is left as it is. Saves go on meanwhile.
+    pub fn sync_merge(
+        &self,
+        remote: GitOid,
+        packs: Vec<ReceivedPack>,
+    ) -> Pending<Result<CheckpointReport, StoreError>> {
+        let (pending, resolver) =
+            pending(|| Err(StoreError::Other("the project is closed".into())));
+        self.send(Msg::Checkpoint {
+            reason: CheckpointReason::SyncMerge { remote },
+            intake: packs,
             reply: resolver,
         });
         pending

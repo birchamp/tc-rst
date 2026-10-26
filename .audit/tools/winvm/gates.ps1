@@ -8,7 +8,8 @@ $env:CARGO_INCREMENTAL = '0'
 $gates = [ordered]@{
   fmt    = 'cargo fmt --all --check'
   clippy = 'cargo clippy --locked --workspace --all-targets --keep-going -- -D warnings'
-  test   = 'cargo test --locked --workspace --no-fail-fast'
+  test   = 'cargo test --locked --workspace --no-fail-fast --exclude tc-app'
+  'test-app' = 'cargo test --locked -p tc-app --no-fail-fast'
   'wasm-ui' = 'cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings'
 }
 
@@ -20,7 +21,7 @@ foreach ($g in $gates.Keys) {
   Write-Output ("{0,-7} exit {1}  {2:N0} s" -f $g, $code, $t.Elapsed.TotalSeconds)
   if ($code -ne 0) { $failed += $g }
 }
-$r = Select-String -Path "$logs\test.log" -Pattern '^test result:' | ForEach-Object { $_.Line }
+$r = Select-String -Path "$logs\test.log","$logs\test-app.log" -Pattern '^test result:' | ForEach-Object { $_.Line }
 $p = ($r | ForEach-Object { if ($_ -match '(\d+) passed') { [int]$Matches[1] } } | Measure-Object -Sum).Sum
 $f = ($r | ForEach-Object { if ($_ -match '(\d+) failed') { [int]$Matches[1] } } | Measure-Object -Sum).Sum
 Write-Output "tests: $p passed, $f failed"

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tc_core::BookId;
 
 use crate::error::ApiError;
-use crate::ids::{DownloadId, JobId, ProjectRef, RequestId};
+use crate::ids::{JobId, ProjectRef, RequestId};
 use crate::shown::PersonLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +107,7 @@ pub enum Phase {
     Train,
     Seed,
     Summary,
+    Export,
     /// Reading the files of an import, or writing what they hold.
     Import,
 }
@@ -158,10 +159,8 @@ pub enum JobOutcome {
     Created {
         project: ProjectRef,
     },
-    ExportReady {
-        download: DownloadId,
-        file_name: String,
-    },
+    /// An export's file, ready to download (D2).
+    ExportReady(crate::export::Exported),
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
     /// An upgrade, a gateway change or a re-pin planned (C8): the plan to read and confirm.
@@ -266,5 +265,8 @@ starts_job! {
     }
     crate::resources::FixFetch => () {
         JobOutcome::Finished => (), _done => JobOutcome::Finished
+    }
+    crate::export::RunExport => crate::export::Exported {
+        JobOutcome::ExportReady(done) => done, done => JobOutcome::ExportReady(done)
     }
 }

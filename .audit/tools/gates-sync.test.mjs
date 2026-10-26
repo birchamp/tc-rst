@@ -45,8 +45,8 @@ test('INV-LOCAL-PASS-MEANS-CI-PASS: the Windows VM runs the same commands', () =
     const step = steps.find(s => s.name === name);
     assert.ok(step, `gate drift: gates.ps1 step "${name}" is not a scripts/gates.sh step`);
     // These change how much a failure reports, not what passes.
-    const same = command.replace(' --keep-going', '').replace(' --no-fail-fast', '');
-    assert.equal(same, step.command, `gate drift: gates.ps1 step "${name}" runs "${command}" but scripts/gates.sh runs "${step.command}"`);
+    const report = (c) => c.replace(' --keep-going', '').replace(' --no-fail-fast', '');
+    assert.equal(report(command), report(step.command), `gate drift: gates.ps1 step "${name}" runs "${command}" but scripts/gates.sh runs "${step.command}"`);
   }
 });
 
@@ -100,7 +100,7 @@ test('INV-JOURNEYS-RUN: every browser journey runs in CI on every main and gate 
 
 test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on request, not on other pushes', () => {
   const ci = read('.github/workflows/ci.yml');
-  for (const job of ['test', 'alignment-budget', 'parity-baseline']) {
+  for (const job of ['test', 'test-app', 'alignment-budget', 'parity-baseline']) {
     const body = ci.split(new RegExp(`^  ${job}:$`, 'm'))[1]?.split(/^  [a-z-]+:$/m)[0] ?? '';
     assert.match(body, /if: .*refs\/heads\/claude\/focused-ride-5uzj7p.*startsWith\(github\.ref, 'refs\/heads\/gate\/'\).*workflow_dispatch/, `INV-FULL-TESTS-GATE-MERGES: ci.yml job ${job} runs on every push`);
   }

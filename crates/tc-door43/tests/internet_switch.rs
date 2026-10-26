@@ -5,8 +5,8 @@ mod common;
 use common::{credentials, left_in, repo, sha, tag, token_name};
 use std::time::{Duration, Instant};
 use tc_door43::{
-    CatalogQuery, Door43Client, Door43Error, DownloadTo, GitRemote, HttpError, InternetSwitch,
-    NewRepoOwner, Session, Token, TokenScope, Visibility, git,
+    CatalogQuery, Door43Client, Door43Error, DownloadTo, FastForwardRefspec, GitRemote, HttpError,
+    InternetSwitch, NewRepoOwner, Session, Token, TokenScope, Visibility, git,
 };
 use tc_door43_fake::{FakeDoor43, Fault, FaultRule};
 
@@ -124,7 +124,12 @@ async fn every_call_is_refused_before_anything_is_sent_while_the_switch_is_off()
             ),
             (
                 "push",
-                git::push(&http, &local, &remote, &["refs/heads/main:refs/heads/main"]),
+                git::push(
+                    &http,
+                    &local,
+                    &remote,
+                    &FastForwardRefspec::branch("main").unwrap(),
+                ),
             ),
             (
                 "ls_remote",

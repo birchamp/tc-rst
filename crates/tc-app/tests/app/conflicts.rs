@@ -36,7 +36,7 @@ const TWO: &str = "Pablo, versión del compañero 2.";
 
 /// The shared project after two teammates changed Titus 1:1 from one version, open at Titus,
 /// with this computer's clock at the store's.
-async fn two_versions() -> (super::sync::World, Scope) {
+pub(super) async fn two_versions() -> (super::sync::World, Scope) {
     synced_with(TWO_TEAMMATES()).await
 }
 

@@ -74,7 +74,7 @@ impl Actions {
             let bytes = file.size() as u64;
             let Some(id) = self
                 .s()
-                .im
+                .im_slot()
                 .try_update(|im| im.as_mut().map(|im| im.add_file(name.clone(), bytes)))
                 .flatten()
             else {
@@ -108,7 +108,7 @@ impl Actions {
     pub fn import_review(&self) {
         let Some(files) = self
             .s()
-            .im
+            .im_slot()
             .try_update(|im| im.as_mut().and_then(|im| im.press_review()))
             .flatten()
         else {
@@ -147,7 +147,7 @@ impl Actions {
 
     /// "Look up on Door43" (tC4 `importGoOnline`): the internet question first (D95).
     pub fn import_look_up(&self) {
-        let ready = self.s().im.with_untracked(|im| {
+        let ready = self.s().im_slot().with_untracked(|im| {
             im.as_ref().is_some_and(|im| {
                 im.versions == crate::app::forms::VersionLookup::NotLookedUp
                     && matches!(im.reviewed, Some(crate::app::forms::Reviewed::Found(_)))
@@ -163,7 +163,7 @@ impl Actions {
         let request = js::random_request_id();
         let Some(files) = self
             .s()
-            .im
+            .im_slot()
             .try_update(|im| {
                 let im = im.as_mut()?;
                 im.look_up(request).then(|| im.sent())
@@ -176,7 +176,7 @@ impl Actions {
         spawn_local(async move {
             let asked = Versions { request, files };
             let open = {
-                let im = this.s().im.clone();
+                let im = this.s().im_slot();
                 move || im.with_untracked(Option::is_some)
             };
             let ended = match this.run_net(Pending::ImportVersions, &asked).await {
@@ -219,7 +219,7 @@ impl Actions {
         let request = js::random_request_id();
         let Some(asked) = self
             .s()
-            .im
+            .im_slot()
             .try_update(|im| im.as_mut().and_then(|im| im.use_installed(request)))
             .flatten()
         else {
@@ -247,7 +247,7 @@ impl Actions {
     pub fn import_run(&self, listing: Vec<String>) {
         let Some(run) = self
             .s()
-            .im
+            .im_slot()
             .try_update(|im| im.as_mut()?.press_run(listing.iter().map(String::as_str)))
             .flatten()
         else {
@@ -257,7 +257,7 @@ impl Actions {
         spawn_local(async move {
             let name = run.details.name.clone();
             let open = {
-                let im = this.s().im.clone();
+                let im = this.s().im_slot();
                 move || im.with_untracked(Option::is_some)
             };
             let ended = match this.runtime().api().call(&run).await {
@@ -279,7 +279,7 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(project) => {
-                    let books = this.s().im.with_untracked(|im| {
+                    let books = this.s().im_slot().with_untracked(|im| {
                         match im.as_ref().and_then(|im| im.reviewed.as_ref()) {
                             Some(crate::app::forms::Reviewed::Found(review)) => review
                                 .found
@@ -315,7 +315,7 @@ impl Actions {
     pub fn import_cancel(&self) {
         let job = self
             .s()
-            .im
+            .im_slot()
             .with_untracked(|im| match im.as_ref().map(|im| &im.state) {
                 Some(ImportState::Running { job, .. }) => *job,
                 _ => None,
@@ -348,17 +348,13 @@ impl Actions {
             return;
         };
         let book = s.u.book.get_untracked().unwrap_or(BookId::Genesis);
-        s.ub.try_set(Some(UpdateBookForm::open(
-            at,
-            book,
-            js::random_request_id(),
-        )));
-        s.layers.dialog.try_set(Some(Dialog::UpdateBook));
+        let form = UpdateBookForm::open(at, book, js::random_request_id());
+        s.layers.dialog.try_set(Some(Dialog::UpdateBook(form)));
     }
 
     pub fn patch_ub(&self, patch: impl FnOnce(&mut UpdateBookForm)) {
-        self.s().ub.try_update(|ub| {
-            if let Some(ub) = ub {
+        self.s().layers.dialog.try_update(|dialog| {
+            if let Some(Dialog::UpdateBook(ub)) = dialog {
                 patch(ub);
             }
         });
@@ -376,7 +372,7 @@ impl Actions {
         let bytes = file.size() as u64;
         let Some(id) = self
             .s()
-            .ub
+            .ub_slot()
             .try_update(|ub| {
                 ub.as_mut()
                     .map(|ub| ub.choose_file(name.clone(), bytes, js::random_request_id()))
@@ -400,7 +396,7 @@ impl Actions {
     pub fn update_book_run(&self) {
         let Some(run) = self
             .s()
-            .ub
+            .ub_slot()
             .try_update(|ub| ub.as_mut().and_then(UpdateBookForm::press_run))
             .flatten()
         else {
@@ -409,7 +405,7 @@ impl Actions {
         let this = self.clone();
         spawn_local(async move {
             let open = {
-                let ub = this.s().ub.clone();
+                let ub = this.s().ub_slot();
                 move || ub.with_untracked(Option::is_some)
             };
             let ended = match this.runtime().api().call(&run).await {
@@ -448,7 +444,7 @@ impl Actions {
     pub fn update_book_cancel(&self) {
         let job = self
             .s()
-            .ub
+            .ub_slot()
             .with_untracked(|ub| match ub.as_ref().map(|ub| &ub.state) {
                 Some(UpdateState::Running { job, .. }) => *job,
                 _ => None,
@@ -458,13 +454,13 @@ impl Actions {
 
     /// The report's "Review the changes": the conflict review over Translate, at the book.
     pub fn update_book_review(&self) {
-        let Some(book) = self
-            .s()
-            .ub
-            .with_untracked(|ub| match ub.as_ref().map(|ub| &ub.state) {
-                Some(UpdateState::Done(report)) => Some(report.book),
-                _ => None,
-            })
+        let Some(book) =
+            self.s()
+                .ub_slot()
+                .with_untracked(|ub| match ub.as_ref().map(|ub| &ub.state) {
+                    Some(UpdateState::Done(report)) => Some(report.book),
+                    _ => None,
+                })
         else {
             return;
         };

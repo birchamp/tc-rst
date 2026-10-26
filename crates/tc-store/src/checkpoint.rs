@@ -111,6 +111,7 @@ impl Writer {
     ) {
         let CheckpointJob {
             reason,
+            intake,
             sealed,
             device,
             reply,
@@ -121,6 +122,7 @@ impl Writer {
             materialized?;
             let mut report = CheckpointReport {
                 sealed: sealed.packs,
+                intake,
                 ..CheckpointReport::default()
             };
             if !sealed.unsealed.is_empty() {
@@ -351,7 +353,31 @@ impl Writer {
         device: DeviceId,
     ) -> Result<Outcome, StoreError> {
         let head = git.head()?;
-        let built = self.build_tree(git, head.as_ref())?;
+        // A sync's merge: Door43's commit is the second parent, and its tree's entries the
+        // project does not make are kept (§9.4).
+        let remote = match subject {
+            Subject::Checkpoint(crate::handle::CheckpointReason::SyncMerge { remote }) => {
+                Some(*remote)
+            }
+            _ => None,
+        }
+        // Already in this history (an earlier merge took it): an ordinary checkpoint.
+        .filter(|remote| match &head {
+            None => true,
+            Some(h) => h.commit != *remote && !git.descends_from(h.commit, *remote),
+        });
+        let remote_tree = match remote {
+            Some(r) => {
+                let base = head
+                    .as_ref()
+                    .and_then(|h| git.merge_base(h.commit, r))
+                    .map(|b| git.tree_of(b))
+                    .transpose()?;
+                Some((git.tree_of(r)?, base))
+            }
+            None => None,
+        };
+        let built = self.build_tree(git, head.as_ref(), remote_tree)?;
         if self.manifest_changed {
             // The blobs just stored: the next checkpoint finds them in the manifest.
             self.write_manifest()?;
@@ -368,14 +394,21 @@ impl Writer {
             );
             return Ok(Outcome::Skip(CheckpointSkip::TreeInvalid));
         }
-        if built.same {
+        if built.same && remote.is_none() {
             return Ok(Outcome::Skip(CheckpointSkip::NoChanges));
         }
         let mut message = match subject {
+            Subject::Checkpoint(crate::handle::CheckpointReason::SyncMerge { .. }) => {
+                "Sync with Door43".to_owned()
+            }
+            Subject::Checkpoint(crate::handle::CheckpointReason::Received { from }) => {
+                format!("Received work from {from}")
+            }
             Subject::Checkpoint(reason) => format!("Checkpoint, {}", reason.words()),
             Subject::Recovered => "Recovered history".to_owned(),
         };
-        if !built.books.is_empty() && matches!(subject, Subject::Checkpoint(_)) {
+        if !built.books.is_empty() && matches!(subject, Subject::Checkpoint(_)) && remote.is_none()
+        {
             let codes: Vec<&str> = built.books.iter().map(|b| b.code()).collect();
             message.push_str(&format!(": {}", codes.join(", ")));
         }
@@ -387,7 +420,7 @@ impl Writer {
             name: self.author_name(device),
             time_ms: self.clock.now().0,
         };
-        let parents: Vec<GitOid> = head.iter().map(|h| h.commit).collect();
+        let parents: Vec<GitOid> = head.iter().map(|h| h.commit).chain(remote).collect();
         let commit = git.write_commit(built.tree, &parents, &author, &message)?;
         self.shared
             .hooks
@@ -470,7 +503,12 @@ impl Writer {
     }
 
     /// C3 and §9.4: the commit tree in memory.
-    fn build_tree(&mut self, git: &Git, head: Option<&Head>) -> Result<Built, StoreError> {
+    fn build_tree(
+        &mut self,
+        git: &Git,
+        head: Option<&Head>,
+        remote_tree: Option<(GitOid, Option<GitOid>)>,
+    ) -> Result<Built, StoreError> {
         let head_entries: BTreeMap<String, TreeEntry> = match head {
             Some(h) => git.tree_entries(h.tree)?,
             None => BTreeMap::new(),
@@ -698,6 +736,67 @@ impl Writer {
                     nfc: None,
                 },
             );
+        }
+        // A sync's merge keeps what Door43's tree holds that the project does not make: its
+        // foreign entries, with Door43's blob, and its packs this project has not taken (a
+        // damaged copy, a newer format), so no pack of R ever leaves the tip (§9.2 N3, §9.4
+        // "No entry of R is dropped silently"). Derived files come from the fold.
+        if let Some((remote_tree, base_tree)) = remote_tree {
+            let theirs = git.tree_entries(remote_tree)?;
+            // A foreign entry Door43 removed since the common ancestor is removed, unless this
+            // computer changed it since (§9.4): the app never edits them.
+            if let Some(base) = base_tree {
+                for (path, was) in git.tree_entries(base)? {
+                    let unchanged_here = head_entries.get(&path).is_some_and(|e| e.oid == was.oid);
+                    if !theirs.contains_key(&path) && unchanged_here && !self.app_owned(&path) {
+                        desired.remove(&path);
+                    }
+                }
+            }
+            for (path, entry) in theirs {
+                let pack = path.starts_with("ingredients/tc/changes/");
+                let foreign = !self.app_owned(&path);
+                let redundant = tc_journal::pack::PackPath::parse(&path)
+                    .is_some_and(|p| replaced.contains(&p.name));
+                // A foreign entry is Door43's version (§9.4: "kept with R's blob"); a pack
+                // this project holds is its own.
+                if (pack && desired.contains_key(&path)) || redundant || !(pack || foreign) {
+                    continue;
+                }
+                let ingredient = path.starts_with("ingredients/")
+                    && !path.split('/').any(|part| part.starts_with('.'));
+                if ingredient && IngredientPath::parse(&path).is_err() {
+                    desired.insert(
+                        format!(".tc-moved/{path}"),
+                        Desired {
+                            oid: entry.oid,
+                            mode: entry.mode,
+                            md5: Md5::of(b""),
+                            size: 0,
+                            nfc: None,
+                        },
+                    );
+                    continue;
+                }
+                let (md5, size) = if ingredient {
+                    match git.read_blob(entry.oid)? {
+                        Some(bytes) => (Md5::of(&bytes), bytes.len() as u64),
+                        None => continue,
+                    }
+                } else {
+                    (Md5::of(b""), 0)
+                };
+                desired.insert(
+                    path,
+                    Desired {
+                        oid: entry.oid,
+                        mode: entry.mode,
+                        md5,
+                        size,
+                        nfc: None,
+                    },
+                );
+            }
         }
         for (from, to) in &moved {
             if let Some(entry) = head_entries.get(from) {

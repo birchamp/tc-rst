@@ -12,7 +12,6 @@ use tc_core::BookId;
 
 use crate::app::forms::{ImportFailure, ImportUpload};
 use crate::app::update_book::{UpdateBookForm, UpdateState, UpdateStep, verse_list};
-use crate::app::web::app_ctx::Dialog;
 use crate::app::web::{Actions, AppCtx, use_app};
 use crate::ds::{
     Attrs, Button, ButtonVariant, Callout, CalloutTone, Corner, DropZone, Edge, Fill, Inset,
@@ -23,11 +22,11 @@ use crate::i18n::{Key, keys, t};
 use super::source_texts::book_options;
 
 fn read<T: Clone + PartialEq + Send + Sync + 'static>(
-    ub: &ArcRwSignal<Option<UpdateBookForm>>,
+    ub: &Signal<Option<UpdateBookForm>>,
     get: impl Fn(&UpdateBookForm) -> T + Send + Sync + 'static,
     none: T,
 ) -> Memo<T> {
-    let ub = ub.clone();
+    let ub = *ub;
     Memo::new(move |_| ub.with(|ub| ub.as_ref().map_or_else(|| none.clone(), &get)))
 }
 
@@ -37,11 +36,8 @@ pub fn UpdateBook() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let open = {
-        let (dialog, ub) = (s.layers.dialog.clone(), s.ub.clone());
-        Memo::new(move |_| dialog.get() == Some(Dialog::UpdateBook) && ub.with(Option::is_some))
-    };
-    let ub = s.ub.clone();
+    let ub = s.update_book_form();
+    let open = Memo::new(move |_| ub.with(Option::is_some));
     let step = read(&ub, UpdateBookForm::step, UpdateStep::File);
     // The Modal reads its title once: a step draws it again.
     (move || {
@@ -51,7 +47,7 @@ pub fn UpdateBook() -> impl IntoView {
     .into_any()
 }
 
-fn modal(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView {
+fn modal(actions: &Actions, ub: &Signal<Option<UpdateBookForm>>) -> AnyView {
     let step = read(ub, UpdateBookForm::step, UpdateStep::File);
     let title = move || {
         let overline = match step.get() {
@@ -82,18 +78,17 @@ fn modal(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView
         }
     };
     let footer: ChildrenFn = {
-        let (actions, ub) = (actions.clone(), ub.clone());
+        let (actions, ub) = (actions.clone(), *ub);
         Arc::new(move || {
-            let (actions, ub) = (actions.clone(), ub.clone());
+            let (actions, ub) = (actions.clone(), ub);
             (move || footer(&actions, &ub, step.get())).into_any()
         })
     };
     let children: ChildrenFn = {
-        let (actions, ub) = (actions.clone(), ub.clone());
+        let (actions, ub) = (actions.clone(), *ub);
         Arc::new(move || {
-            let (actions, ub) = (actions.clone(), ub.clone());
+            let (actions, ub) = (actions.clone(), ub);
             let body = {
-                let ub = ub.clone();
                 move || match step.get() {
                     UpdateStep::File => file_step(&actions, &ub).into_any(),
                     UpdateStep::Book => book_step(&actions, &ub).into_any(),
@@ -137,11 +132,7 @@ fn modal(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView
     .into_any()
 }
 
-fn footer(
-    actions: &Actions,
-    ub: &ArcRwSignal<Option<UpdateBookForm>>,
-    step: UpdateStep,
-) -> AnyView {
+fn footer(actions: &Actions, ub: &Signal<Option<UpdateBookForm>>, step: UpdateStep) -> AnyView {
     let spacer = || view! { <div style="flex: 1;"></div> };
     let button = |label: Key,
                   variant: ButtonVariant,
@@ -228,7 +219,7 @@ fn footer(
     }
 }
 
-fn file_step(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
+fn file_step(actions: &Actions, ub: &Signal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
     let input = NodeRef::<leptos::html::Input>::new();
     let choose = {
         let actions = actions.clone();
@@ -293,9 +284,9 @@ fn file_step(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> imp
     }
 }
 
-fn book_step(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
+fn book_step(actions: &Actions, ub: &Signal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
     let value = {
-        let ub = ub.clone();
+        let ub = *ub;
         Signal::derive(move || ub.with(|ub| ub.as_ref().map(|ub| ub.book.code().to_owned())))
     };
     let on_book = {
@@ -323,7 +314,7 @@ fn book_step(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> imp
     }
 }
 
-fn working_step(ub: &ArcRwSignal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
+fn working_step(ub: &Signal<Option<UpdateBookForm>>) -> impl IntoView + use<> {
     let book = ub.with_untracked(|ub| ub.as_ref().map_or(BookId::Genesis, |ub| ub.book));
     let label = t(
         keys::update_book::WORKING,
@@ -402,7 +393,7 @@ pub fn report_lines(report: &UpdateReport) -> Vec<(&'static str, String)> {
     lines
 }
 
-fn report_step(ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView {
+fn report_step(ub: &Signal<Option<UpdateBookForm>>) -> AnyView {
     let report = ub.with_untracked(|ub| match ub.as_ref().map(|ub| &ub.state) {
         Some(UpdateState::Done(report)) => Some(report.clone()),
         _ => None,
@@ -435,7 +426,7 @@ fn report_step(ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView {
     .into_any()
 }
 
-fn failed_step(ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView {
+fn failed_step(ub: &Signal<Option<UpdateBookForm>>) -> AnyView {
     let failure = ub.with_untracked(|ub| match ub.as_ref().map(|ub| &ub.state) {
         Some(UpdateState::Failed(failure)) => Some(failure.clone()),
         _ => None,

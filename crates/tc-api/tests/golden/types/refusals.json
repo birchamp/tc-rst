@@ -479,27 +479,54 @@
   {
     "wire": {
       "type": "export",
-      "value": "checkpointFailed"
+      "value": {
+        "type": "checkpointFailed",
+        "value": {
+          "error": "the change log could not be written"
+        }
+      }
     },
     "code": "export.checkpoint-failed",
     "key": "refusal.export.checkpoint-failed",
     "vars": {},
-    "detail": null
+    "detail": "the change log could not be written"
   },
   {
     "wire": {
       "type": "export",
-      "value": "readFailed"
+      "value": {
+        "type": "readFailed",
+        "value": {
+          "error": "picture images/obs-en-01-01.jpg could not be read"
+        }
+      }
     },
     "code": "export.read-failed",
     "key": "refusal.export.read-failed",
     "vars": {},
-    "detail": null
+    "detail": "picture images/obs-en-01-01.jpg could not be read"
   },
   {
     "wire": {
       "type": "export",
-      "value": "printFailed"
+      "value": {
+        "type": "writeFailed",
+        "value": {
+          "error": "No space left on device (os error 28)"
+        }
+      }
+    },
+    "code": "export.write-failed",
+    "key": "refusal.export.write-failed",
+    "vars": {},
+    "detail": "No space left on device (os error 28)"
+  },
+  {
+    "wire": {
+      "type": "export",
+      "value": {
+        "type": "printFailed"
+      }
     },
     "code": "export.print-failed",
     "key": "refusal.export.print-failed",
@@ -509,7 +536,9 @@
   {
     "wire": {
       "type": "export",
-      "value": "printFailedPictures"
+      "value": {
+        "type": "printFailedPictures"
+      }
     },
     "code": "export.print-failed-pictures",
     "key": "refusal.export.print-failed-pictures",
@@ -519,12 +548,17 @@
   {
     "wire": {
       "type": "export",
-      "value": "nothingDrafted"
+      "value": {
+        "type": "nothingDrafted",
+        "value": {
+          "error": "Titus has no drafted verse yet, so the PDF has nothing to print."
+        }
+      }
     },
     "code": "export.nothing-drafted",
     "key": "refusal.export.nothing-drafted",
     "vars": {},
-    "detail": null
+    "detail": "Titus has no drafted verse yet, so the PDF has nothing to print."
   },
   {
     "wire": {

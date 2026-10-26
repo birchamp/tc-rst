@@ -250,6 +250,71 @@ impl Project {
         Ok(())
     }
 
+    /// §9.3 T1: the packs a sync received, each written whole beside the project's own and
+    /// folded. A pack the project has is skipped (packs are immutable). A path that holds
+    /// bytes the project does not know is another program's: a valid pack there is folded as
+    /// it is, else it is left untouched and listed (§5.10 M1). A damaged received pack's
+    /// readable changes are salvaged into a pending batch; the merge tree keeps its blob
+    /// (§9.2 N3). Packs of another project are not taken.
+    pub(crate) fn take_in(
+        &mut self,
+        packs: Vec<crate::handle::ReceivedPack>,
+    ) -> Result<crate::handle::IntakeReport, StoreError> {
+        let mut report = crate::handle::IntakeReport::default();
+        for pack in packs {
+            let rel = pack.path;
+            if PackPath::parse(&rel).is_none() {
+                continue;
+            }
+            let received = read_pack(&rel, &pack.bytes, self.id);
+            if let Some(known) = self.journal.packs.get(&rel) {
+                // A damaged copy is repaired from a valid one, whichever side holds it
+                // (§9.2 N3); the damaged bytes are kept in the quarantine.
+                if !known.valid && received.is_valid() {
+                    self.write_back(&rel, &pack.bytes, PackLoss::Damaged)?;
+                    self.fold_pack(&rel, &pack.bytes, Some(pack.blob))?;
+                    report.packs += 1;
+                } else {
+                    report.held += 1;
+                }
+                continue;
+            }
+            match self.vfs.read(&self.folder.path(&rel)) {
+                Ok(there) if there == pack.bytes => {
+                    self.fold_pack(&rel, &there, Some(pack.blob))?;
+                    report.packs += 1;
+                    continue;
+                }
+                Ok(there) => {
+                    if read_pack(&rel, &there, self.id).is_valid() {
+                        self.fold_pack(&rel, &there, None)?;
+                        report.packs += 1;
+                    } else {
+                        report.left.push(rel);
+                    }
+                    continue;
+                }
+                Err(e) if is_not_found(&e) => {}
+                Err(source) => {
+                    return Err(StoreError::Io {
+                        op: "read a received pack's path",
+                        path: self.folder.path(&rel),
+                        source,
+                    });
+                }
+            }
+            if received.is_valid() {
+                self.write_back(&rel, &pack.bytes, PackLoss::Missing)?;
+                self.fold_pack(&rel, &pack.bytes, Some(pack.blob))?;
+                report.packs += 1;
+            } else {
+                self.salvage_all_copies(&rel, Some(&pack.bytes))?;
+                report.salvaged += 1;
+            }
+        }
+        Ok(report)
+    }
+
     fn mark_seen(&mut self, rel: &str, now: (u64, i64)) {
         if let Some(info) = self.journal.packs.get_mut(rel) {
             info.seen = Some(now);
@@ -326,5 +391,34 @@ impl Project {
             changes: Vec::new(),
         });
         Ok(())
+    }
+}
+
+/// A pack from another computer (a sync's fetch, an exchange file), read as the store reads
+/// its own: whether it passes P2 to P4, and the changes whose lines verify.
+#[derive(Debug, Clone)]
+pub struct PackRead {
+    pub valid: bool,
+    pub changes: Vec<tc_journal::Change>,
+}
+
+/// The device that sealed the pack at `path`, when `path` names a pack.
+pub fn pack_sealer(path: &str) -> Option<tc_journal::DeviceId> {
+    PackPath::parse(path).map(|p| p.sealer)
+}
+
+/// Reads `bytes` as the pack at `path` of `project`.
+pub fn read_received_pack(path: &str, bytes: &[u8], project: tc_journal::ProjectId) -> PackRead {
+    let read = read_pack(path, bytes, project);
+    PackRead {
+        valid: read.is_valid(),
+        changes: read
+            .entries
+            .into_iter()
+            .filter_map(|line| match line {
+                Verified::Change(change) => Some(change),
+                Verified::Quarantined(_) => None,
+            })
+            .collect(),
     }
 }

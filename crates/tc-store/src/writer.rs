@@ -82,6 +82,7 @@ pub(crate) struct MaterializeJob {
 /// What the writer does for a checkpoint after the seal and the files (§5.13 C3 to C5).
 pub(crate) struct CheckpointJob {
     pub reason: CheckpointReason,
+    pub intake: crate::handle::IntakeReport,
     /// The seal's result, which comes before the files' in the reply.
     pub sealed: Result<crate::seal::SealReport, StoreError>,
     pub device: tc_journal::DeviceId,
@@ -111,6 +112,11 @@ pub(crate) enum Job {
     TakeInHeld {
         rel: String,
         reply: Resolver<Result<crate::reply::TakenIn, StoreError>>,
+    },
+    /// The bytes of a carried file's version, its blob (§11.4), for an export.
+    ReadCarried {
+        oid: tc_journal::GitOid,
+        reply: Resolver<Result<Option<Vec<u8>>, StoreError>>,
     },
     /// The branch moved: the objects of the commit are reachable now, so a repack due may
     /// run (§9.8).
@@ -564,6 +570,14 @@ impl Writer {
                     self.retry();
                 }
             }
+            Job::ReadCarried { oid, reply } => {
+                // The writer owns the repository; a project with none has no carried bytes.
+                let result = match &self.git {
+                    Some(git) => git.read_blob(oid).map_err(StoreError::from),
+                    None => Ok(None),
+                };
+                reply.resolve(result);
+            }
             Job::Repack => self.maybe_repack(),
             Job::Sync { reply } => reply.resolve(()),
             Job::Close { reply } => {
@@ -730,6 +744,7 @@ mod tests {
             device: DeviceId::local([9; 15]),
             folder: "/p".into(),
             mode: Mode::Writable,
+            git_dir: None,
         };
         let shared = Arc::new(Shared::new(
             fold.clone(),
