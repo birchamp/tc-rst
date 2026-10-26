@@ -4,10 +4,10 @@ title: A large push goes to Door43 as a chain of commits, so a poor link can fin
 track: A
 lane: storage
 milestone: M2
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: PUSH-1 lane (Claude Code e939c6d5)
+branch: track-PUSH-1
+worktree: .worktrees/track-PUSH-1
 depends: [LOSS-1]
 needs_owner: []
 proves: [P1]
@@ -15,7 +15,7 @@ no_loss: true
 size: 2-3 d (basis: X's push and confirm, steps 4-5, about a day, plus the chain's tree builds)
 merged: none
 updated: 2026-10-26
-next: Claim this card, then do step 1.
+next: Step 1, the chain in the store.
 blocked_by: none
 ---
 
@@ -112,3 +112,4 @@ but it never reaches Door43 or the team, and nothing offers the exchange file in
 ## Log
 
 - 2026-10-26 12:50 EDT | LOSS-1 lane (Claude Code d63a7912) | created | none | at the orchestrator's word: LOSS-1 found §9.5's push chain is not in the code (one `git::push` of HEAD in S8), so L96 has no protection to test | crates/tc-sync/src/sync.rs
+- 2026-10-26 13:18 EDT | PUSH-1 lane (Claude Code e939c6d5) | claim | none | claimed at the orchestrator's word, on a branch from track-LOSS-1 | .worktrees/track-PUSH-1
