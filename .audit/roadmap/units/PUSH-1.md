@@ -8,7 +8,7 @@ state: verifying
 owner: PUSH-1 lane (Claude Code e939c6d5)
 branch: track-PUSH-1
 worktree: .worktrees/track-PUSH-1
-depends: [LOSS-1]
+depends: [LOSS-1, E1a]
 needs_owner: []
 proves: [P1]
 no_loss: true
@@ -32,11 +32,13 @@ report offers "Save an exchange file instead" (§10). §15 row L96 names its tes
 
 ## Why it matters to a translator
 
-Today one sync sends everything new in one push, and a push cannot resume. A translator can reach
-this now: the first share or sync of a project that already holds a lot of work (a whole Bible:
-packs about 70 MiB compressed, §14), a resource upgrade over a checked Bible (one batch of about
-150 MB, §9.5), or a USB-received project synced for the first time. On a slow or unstable link the
-push breaks part way every time; each sync starts it again from nothing and ends with "Not sent"
+No translator reaches it yet: the app still answers every sync with "unavailable"
+(`crates/tc-app/src/app.rs` wires `UnavailableSync`). Once E1a puts `tc-sync` behind Sync, one
+sync sends everything new in one push, and a push cannot resume. Then a translator meets it on the
+first share or sync of a project that already holds a lot of work (a whole Bible: packs about
+70 MiB compressed, §14), a resource upgrade over a checked Bible (one batch of about 150 MB,
+§9.5), or a USB-received project synced for the first time. On a slow or unstable link the push
+breaks part way every time; each sync starts it again from nothing and ends with "Not sent"
 (`syncResult.error.notSent`, or `cloneFailed` before intake). The work stays safe on the computer,
 but it never reaches Door43 or the team, and nothing offers the exchange file instead.
 
