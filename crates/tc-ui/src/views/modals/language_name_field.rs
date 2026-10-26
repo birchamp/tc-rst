@@ -34,7 +34,7 @@ pub fn LanguageNameField(id: &'static str) -> impl IntoView {
         });
     }
     let value = {
-        let np = s.np.clone();
+        let np = s.new_project_form();
         Signal::derive(move || {
             np.with(|np| {
                 np.as_ref()

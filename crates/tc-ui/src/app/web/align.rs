@@ -28,7 +28,7 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use super::ListenerId;
 use super::app_ctx::Actions;
 use super::js;
-use super::saves::GateHookId;
+use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
     EditFailure, EditQueue, Lens, RailFilter, SentEdit, refresh_for, same_verse,
 };
@@ -487,7 +487,7 @@ impl Actions {
 
     /// A click, a drop or a button (tC4 `applyAlignEdit`): queued, and sent when the reply to
     /// the one before has come.
-    pub fn align_edit(&self, edit: AlignEdit) {
+    pub fn align_edit(&self, _cap: WriteCap, edit: AlignEdit) {
         if !self
             .s()
             .a
@@ -612,7 +612,7 @@ impl Actions {
 
     /// "Keep the carried-over links" (tC4 `keepReflow`): the links the verse's new text could
     /// not keep stay in the bank, and the rest are the person's to save.
-    pub fn keep_align_reflow(&self) {
+    pub fn keep_align_reflow(&self, _cap: WriteCap) {
         let Some((at, _)) = self.align_scope() else {
             return;
         };

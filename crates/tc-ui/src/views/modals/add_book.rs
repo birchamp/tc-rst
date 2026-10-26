@@ -56,29 +56,25 @@ pub fn AddBook() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let ab = s.ab.clone();
+    let ab = s.add_book_form();
     let read = {
-        let ab = ab.clone();
         move |get: fn(&AddBookForm) -> bool| {
-            let ab = ab.clone();
             Signal::derive(move || ab.with(|ab| ab.as_ref().is_some_and(get)))
         }
     };
-    let step = {
-        let ab = ab.clone();
-        Memo::new(move |_| ab.with(|ab| ab.as_ref().map_or(AddBookStep::Method, |ab| ab.step)))
-    };
+    let step =
+        { Memo::new(move |_| ab.with(|ab| ab.as_ref().map_or(AddBookStep::Method, |ab| ab.step))) };
     let busy = read(|ab| ab.busy);
     let add_disabled = read(AddBookForm::add_disabled);
     let footer: ChildrenFn = {
-        let (actions, ab) = (actions.clone(), ab.clone());
+        let (actions, ab) = (actions.clone(), ab);
         Arc::new(move || {
-            let (actions, ab) = (actions.clone(), ab.clone());
+            let (actions, ab) = (actions.clone(), ab);
             (move || match step.get() {
                 // tC4's `footer={null}`: the first step has no footer row (`footer_shown`).
                 AddBookStep::Method => ().into_any(),
                 AddBookStep::Pick => {
-                    let (back, create, ab) = (actions.clone(), actions.clone(), ab.clone());
+                    let (back, create, ab) = (actions.clone(), actions.clone(), ab);
                     let label = move || {
                         ab.with(|ab| {
                             ab.as_ref().map(|ab| {
@@ -102,7 +98,7 @@ pub fn AddBook() -> impl IntoView {
                     .into_any()
                 }
                 AddBookStep::Usfm => {
-                    let (back, add, ab) = (actions.clone(), actions.clone(), ab.clone());
+                    let (back, add, ab) = (actions.clone(), actions.clone(), ab);
                     let label = move || {
                         let n = ab.with(|ab| ab.as_ref().map_or(0, AddBookForm::addable));
                         if n > 1 {
@@ -130,9 +126,9 @@ pub fn AddBook() -> impl IntoView {
         })
     };
     let children: ChildrenFn = {
-        let (actions, ab) = (actions.clone(), ab.clone());
+        let (actions, ab) = (actions.clone(), ab);
         Arc::new(move || {
-            let (actions, ab) = (actions.clone(), ab.clone());
+            let (actions, ab) = (actions.clone(), ab);
             (move || match step.get() {
                 AddBookStep::Method => method_step(&actions).into_any(),
                 AddBookStep::Usfm => usfm_step(&actions, &ab).into_any(),
@@ -142,7 +138,6 @@ pub fn AddBook() -> impl IntoView {
         })
     };
     let name = {
-        let ab = ab.clone();
         move || {
             ab.with(|ab| {
                 ab.as_ref()
@@ -152,7 +147,7 @@ pub fn AddBook() -> impl IntoView {
         }
     };
     let subtitle = move || {
-        let name = name.clone();
+        let name = name;
         view! {
             {move || t(keys::add_book::TO, &[])}" "
             <strong style="color: var(--uw-ocean);">{name}</strong>
@@ -197,8 +192,8 @@ fn method_step(actions: &Actions) -> impl IntoView + use<> {
 }
 
 /// The error under a step, kept until the next add (#564).
-fn error_callout(ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<> {
-    let ab = ab.clone();
+fn error_callout(ab: &Signal<Option<AddBookForm>>) -> impl IntoView + use<> {
+    let ab = *ab;
     move || {
         ab.with(|ab| ab.as_ref().and_then(|ab| ab.error.clone())).map(|error| {
             view! { <Callout tone=CalloutTone::Warn attrs=Attrs::from([("role", "alert")])>{error}</Callout> }
@@ -207,7 +202,7 @@ fn error_callout(ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<>
 }
 
 /// The from-USFM-files step (tC4 `UsfmStep`).
-fn usfm_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<> {
+fn usfm_step(actions: &Actions, ab: &Signal<Option<AddBookForm>>) -> impl IntoView + use<> {
     let input = NodeRef::<leptos::html::Input>::new();
     let add = {
         let actions = actions.clone();
@@ -237,7 +232,7 @@ fn usfm_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl I
         }
     });
     let rows = {
-        let (actions, ab) = (actions.clone(), ab.clone());
+        let (actions, ab) = (actions.clone(), *ab);
         move || {
             let rows = ab.with(|ab| ab.as_ref().map(AddBookForm::rows).unwrap_or_default());
             rows.into_iter()
@@ -316,13 +311,13 @@ fn usfm_row(actions: &Actions, row: UsfmRow) -> impl IntoView + use<> {
 }
 
 /// The pick step: one book from the list, or several from the grid (tC4's `pick`).
-fn pick_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<> {
+fn pick_step(actions: &Actions, ab: &Signal<Option<AddBookForm>>) -> impl IntoView + use<> {
     let multi = {
-        let ab = ab.clone();
+        let ab = *ab;
         Memo::new(move |_| ab.with(|ab| ab.as_ref().is_some_and(|ab| ab.multi)))
     };
     let body = {
-        let (actions, ab) = (actions.clone(), ab.clone());
+        let (actions, ab) = (actions.clone(), *ab);
         move || {
             if multi.get() {
                 grid(&actions, &ab).into_any()
@@ -336,7 +331,7 @@ fn pick_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl I
         Callback::new(move |_| actions.ab_toggle_multi())
     };
     let held = {
-        let ab = ab.clone();
+        let ab = *ab;
         move || {
             let held = ab.with(|ab| ab.as_ref().map(AddBookForm::held_picks).unwrap_or_default());
             let text = match held.as_slice() {
@@ -373,14 +368,14 @@ fn pick_step(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl I
     }
 }
 
-fn single(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<> {
+fn single(actions: &Actions, ab: &Signal<Option<AddBookForm>>) -> impl IntoView + use<> {
     let (book, existing) = ab.with_untracked(|ab| {
         ab.as_ref()
             .map(|ab| (ab.book, ab.existing.clone()))
             .unwrap_or((BookId::Genesis, Vec::new()))
     });
     let value = {
-        let ab = ab.clone();
+        let ab = *ab;
         Signal::derive(move || ab.with(|ab| ab.as_ref().map(|ab| ab.book.code().to_owned())))
     };
     let on_book = {
@@ -392,7 +387,7 @@ fn single(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl Into
         })
     };
     let info = {
-        let ab = ab.clone();
+        let ab = *ab;
         move || {
             let book = ab.with(|ab| ab.as_ref().map_or(book, |ab| ab.book));
             let testament = t(
@@ -431,7 +426,7 @@ fn single(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl Into
 }
 
 /// The several-at-once grid: the New Testament, then the Old, a chip for each book.
-fn grid(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoView + use<> {
+fn grid(actions: &Actions, ab: &Signal<Option<AddBookForm>>) -> impl IntoView + use<> {
     let section = |title: crate::i18n::Key, books: &'static [BookId]| {
         let chips = books
             .iter()
@@ -459,7 +454,7 @@ fn grid(actions: &Actions, ab: &ArcRwSignal<Option<AddBookForm>>) -> impl IntoVi
 
 fn chip(
     actions: &Actions,
-    ab: &ArcRwSignal<Option<AddBookForm>>,
+    ab: &Signal<Option<AddBookForm>>,
     book: BookId,
 ) -> impl IntoView + use<> {
     let held = ab.with_untracked(|ab| ab.as_ref().is_some_and(|ab| ab.existing.contains(&book)));
@@ -476,7 +471,7 @@ fn chip(
         .into_any();
     }
     let selected = {
-        let ab = ab.clone();
+        let ab = *ab;
         Signal::derive(move || ab.with(|ab| ab.as_ref().is_some_and(|ab| ab.books.contains(&book))))
     };
     let actions = actions.clone();

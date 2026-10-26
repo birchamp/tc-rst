@@ -8,7 +8,9 @@ use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
 use tc_door43::{GitOid, Limits, VerificationError};
-use tc_resources::{FetchedLock, Refusal};
+use tc_resources::{
+    FetchedLock, InstallError, Refusal, RepoPath, ResourcePin, ResourceStore, install_archive_zip,
+};
 use zip::write::SimpleFileOptions;
 
 const DEMO: &str = "demo-e8c6503832022a8fd38bb426781d6b6127dde664.zip";
@@ -229,4 +231,41 @@ fn only_archives_named_by_a_full_commit_need_an_entry() {
     ] {
         assert!(!is_commit_archive(name), "{name}");
     }
+}
+
+/// The OBS picture pack's path into the bundled store: an archive with no file in the lock,
+/// downloaded when the app is packaged, installed only when its lock entry confirms it.
+#[test]
+fn a_downloaded_archive_installs_only_when_its_lock_entry_confirms_it() {
+    let lock =
+        FetchedLock::parse(&fs::read(fixture_folder().join("fetched.lock")).unwrap()).unwrap();
+    let zip = fs::read(fixture_folder().join(DEMO)).unwrap();
+    let pin = ResourcePin::new(
+        "git.door43.org/fixture/demo".parse::<RepoPath>().unwrap(),
+        "e8c6503832022a8fd38bb426781d6b6127dde664".parse().unwrap(),
+    );
+    let max = Limits::default().max_unpacked_bytes;
+    let dir = tempfile::tempdir().unwrap();
+    let store = ResourceStore::open(dir.path()).unwrap();
+
+    let mut changed = zip.clone();
+    changed[zip.len() / 2] ^= 1;
+    let refused = install_archive_zip(&store, &pin, &lock, &changed, max).unwrap_err();
+    assert!(matches!(refused, InstallError::Refused { .. }), "{refused}");
+    let unlocked = FetchedLock { entries: vec![] };
+    assert!(
+        install_archive_zip(&store, &pin, &unlocked, &zip, max)
+            .unwrap()
+            .is_none(),
+        "no entry, nothing confirms it"
+    );
+    assert!(store.dcs(&pin).unwrap().is_none(), "nothing was installed");
+
+    let installed = install_archive_zip(&store, &pin, &lock, &zip, max)
+        .unwrap()
+        .unwrap();
+    installed.verify().unwrap();
+    let files: Vec<&str> = installed.files().collect();
+    assert!(files.contains(&"README.md"), "{files:?}");
+    assert!(files.contains(&"content/1.json"), "{files:?}");
 }

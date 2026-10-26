@@ -15,16 +15,15 @@ use common::{
     chapters_of, direction, fixture, markup, picture_sources, setup_of, story_of, vectors,
 };
 use serde_json::{Value, json};
-use tc_export::book::{
-    BookChapter, ChapterPart, Piece, PrintPart, PrintedItem, VersePiece, has_undrafted,
-    parts_of_items, print_book, print_parts, printed_items,
+use tc_api::export::{PrintChapter, PrintItem, Run};
+use tc_api::model::print::{
+    ChapterOpening, ChapterPart, Columns, ObsLayout, PRINT_LEADING, PageSetup, Paper, Pictures,
+    Piece, PrintPart, Spacing, VerseNumbers, atoms_of, parts_of, print_parts,
 };
-use tc_export::page::{
-    ChapterOpening, Columns, ObsLayout, PAGE_MARGIN_MM, PRINT_LEADING, PageSetup, Paper, Pictures,
-    PrintVariables, Spacing, VerseNumbers,
-};
+use tc_export::Direction;
+use tc_export::book::{PrintedItem, has_undrafted, print_book, print_items, printed_items};
+use tc_export::page::{PAGE_MARGIN_MM, PrintVariables, css_size, variables};
 use tc_export::stories::print_stories;
-use tc_export::{Direction, Run};
 use tc_helps::obs::ObsStory;
 use tc_obs::print::printed;
 
@@ -53,7 +52,7 @@ fn parts_json(parts: &[PrintPart<'_>]) -> Value {
             PrintPart::Chapter(part) => json!({
                 "c": part.chapter,
                 "head": part.head,
-                "verses": part.verses.iter().map(|v| v.verse.label.as_str()).collect::<Vec<_>>(),
+                "verses": part.verses.iter().map(|(v, _)| v.label.as_str()).collect::<Vec<_>>(),
             }),
         })
         .collect()
@@ -75,16 +74,23 @@ fn the_page_setup_is_tc4s() {
         json!({"columns": 1, "dropCapChapters": true, "verseNumbers": true, "spacing": "single",
                "paper": "a4", "pictures": true, "obsLayout": "above"})
     );
-    assert_eq!(
-        theirs["spacingFactor"],
-        json!({"single": Spacing::Single.factor(), "double": Spacing::Double.factor()})
-    );
     assert_eq!(theirs["leading"], json!(PRINT_LEADING));
     let mm = |v: &Value| v.as_f64().unwrap();
+    for (name, spacing) in [("single", Spacing::Single), ("double", Spacing::Double)] {
+        let leading = PageSetup {
+            spacing,
+            ..PageSetup::default()
+        }
+        .leading();
+        assert_eq!(
+            mm(&theirs["spacingFactor"][name]) * PRINT_LEADING,
+            leading,
+            "{name}"
+        );
+    }
     for (name, paper) in [("a4", Paper::A4), ("letter", Paper::Letter)] {
-        let size = paper.size_mm();
         let theirs = &theirs["paperMm"][name];
-        assert_eq!((mm(&theirs[0]), mm(&theirs[1])), (size.width, size.height));
+        assert_eq!((mm(&theirs[0]), mm(&theirs[1])), paper.size_mm());
     }
     let margins = &theirs["marginMm"];
     assert_eq!(
@@ -121,7 +127,7 @@ fn the_page_setup_is_tc4s() {
             },
             ..PageSetup::default()
         };
-        let vars = setup.variables();
+        let vars = variables(&setup);
         let theirs = &case["variables"];
         assert_eq!(theirs.as_object().unwrap().len(), 2);
         assert_eq!(
@@ -138,7 +144,7 @@ fn the_page_setup_is_tc4s() {
             case["page"],
             format!(
                 "@page {{ size: {}; margin: {}mm {}mm {}mm;",
-                setup.paper.css_size(),
+                css_size(setup.paper),
                 m.top,
                 m.side,
                 m.bottom
@@ -165,7 +171,12 @@ fn printed_items_and_parts_are_tc4s() {
         let chapters = chapters_of(case);
         let items = printed_items(&chapters);
         assert_eq!(items_json(&items), case["items"], "{name}");
-        assert_eq!(parts_json(&parts_of_items(&items)), case["parts"], "{name}");
+        let items = print_items(&items).unwrap();
+        assert_eq!(
+            parts_json(&parts_of(&atoms_of(&items))),
+            case["parts"],
+            "{name}"
+        );
         compared += 1;
     }
     assert!(compared >= 30, "{compared}");
@@ -194,7 +205,7 @@ fn the_book_print_is_tc4s() {
     for case in cases("books") {
         let name = case["name"].as_str().unwrap();
         let chapters = chapters_of(case);
-        let items = printed_items(&chapters);
+        let items = print_items(&printed_items(&chapters)).unwrap();
         let title = case["title"].as_str().unwrap();
         for variant in case["html"].as_array().unwrap() {
             let view = print_book(
@@ -216,7 +227,7 @@ fn the_book_print_is_tc4s() {
 
 /// A page of the preview as print parts: each verse found in the book by chapter and label,
 /// with the words the page shows of it.
-fn page_parts<'a>(page: &'a Value, chapters: &'a [BookChapter]) -> Vec<PrintPart<'a>> {
+fn page_parts<'a>(page: &'a Value, items: &'a [PrintItem]) -> Vec<PrintPart<'a>> {
     page["parts"]
         .as_array()
         .unwrap()
@@ -230,21 +241,31 @@ fn page_parts<'a>(page: &'a Value, chapters: &'a [BookChapter]) -> Vec<PrintPart
                 });
             }
             let number = u16::try_from(part["c"].as_u64().unwrap()).unwrap();
-            let chapter = chapters.iter().find(|c| c.number == number).unwrap();
+            let chapter: &PrintChapter = items
+                .iter()
+                .find_map(|item| match item {
+                    PrintItem::Chapter(c) if c.chapter == number => Some(c),
+                    _ => None,
+                })
+                .unwrap();
             let verses = part["verses"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .map(|v| {
                     let label = v["n"].as_str().unwrap();
-                    let verse = chapter.verses.iter().find(|x| x.label == label).unwrap();
+                    let verse = chapter
+                        .verses
+                        .iter()
+                        .find(|x| x.label.as_str() == label)
+                        .unwrap();
                     let text = v["text"].as_str().unwrap();
                     let piece = match v["rest"].as_str() {
                         Some(rest) => Piece::Continued(rest),
-                        None if text == verse.text => Piece::Whole,
+                        None if text == verse.text.as_deref().unwrap_or_default() => Piece::Whole,
                         None => Piece::Start(text),
                     };
-                    VersePiece { verse, piece }
+                    (verse, piece)
                 })
                 .collect();
             PrintPart::Chapter(ChapterPart {
@@ -260,11 +281,11 @@ fn page_parts<'a>(page: &'a Value, chapters: &'a [BookChapter]) -> Vec<PrintPart
 fn the_preview_pages_are_tc4s() {
     let (mut pages, mut split) = (0, 0);
     for case in cases("books") {
-        let chapters = chapters_of(case);
+        let items = print_items(&printed_items(&chapters_of(case))).unwrap();
         for preview in case["preview"].as_array().unwrap() {
             let setup = setup_of(preview);
             for page in preview["pages"].as_array().unwrap() {
-                let parts = page_parts(page, &chapters);
+                let parts = page_parts(page, &items);
                 split += parts
                     .iter()
                     .filter_map(|p| match p {
@@ -272,7 +293,7 @@ fn the_preview_pages_are_tc4s() {
                         PrintPart::Gap(_) => None,
                     })
                     .flat_map(|c| &c.verses)
-                    .filter(|v| v.piece != Piece::Whole)
+                    .filter(|(_, piece)| *piece != Piece::Whole)
                     .count();
                 let blocks = print_parts(&parts, &setup, page["continues"].as_bool().unwrap());
                 assert_eq!(
@@ -325,7 +346,7 @@ fn the_samples_print_as_in_tc4() {
         .find(|c| c["name"] == "titus-sample")
         .unwrap();
     let chapters = chapters_of(titus);
-    let items = printed_items(&chapters);
+    let items = print_items(&printed_items(&chapters)).unwrap();
     // Titus 1 has verses 1-5 drafted; chapters 2 and 3 have none, so they are left out.
     assert_eq!(items.len(), 1);
     let view = print_book("Titus", &items, &PageSetup::default(), Direction::Ltr);
