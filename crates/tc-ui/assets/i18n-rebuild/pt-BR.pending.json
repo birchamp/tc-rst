@@ -32,6 +32,7 @@
   "home.unusable.projectFileDamaged",
   "home.unusable.projectFileUnreadable",
   "importer.files.tooBig",
+  "importer.review.decisionsCounting",
   "importer.tc3.textChanged",
   "importer.tc3.unreadable",
   "newBible.codeAdjusted",

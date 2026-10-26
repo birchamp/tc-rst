@@ -189,9 +189,12 @@ impl UpdateBookForm {
         self.state = UpdateState::Problem(problem);
     }
 
-    /// Ended with nothing to say (a cancel, a new server run).
+    /// Ended with nothing to say (a cancel, a new server run). The job deleted the upload when
+    /// it ended, so the person chooses the file again.
     pub fn run_stopped(&mut self, next: RequestId) {
         self.submit.next(next);
+        self.file = None;
+        self.page = UpdatePage::File;
         self.state = UpdateState::Idle;
     }
 }

@@ -462,8 +462,8 @@ mod import {
 
     /// "Use installed versions" and the server's count.
     fn installed(form: &mut ImportForm) {
-        form.use_installed().expect("the count is asked");
-        form.carry_counted(Some(COUNTED));
+        form.use_installed(rid(70)).expect("the count is asked");
+        form.carry_counted(rid(70), Some(COUNTED));
     }
 
     fn versions(unresolved: Vec<VersionSlot>) -> VersionsView {
@@ -506,6 +506,11 @@ mod import {
             form.step(),
             ImportStep::Kind,
             "USFM and Burrito wait for their importers"
+        );
+        assert_eq!(
+            ImportKind::ALL.map(ImportKind::has_importer),
+            [true, false, false],
+            "the kind step draws USFM and Burrito disabled"
         );
         form.pick_kind(ImportKind::Tc3);
         assert_eq!(form.step(), ImportStep::Files);
@@ -571,7 +576,7 @@ mod import {
         form.review_refused(failure.clone());
         assert_eq!(form.step(), ImportStep::Review);
         assert_eq!(form.reviewed, Some(Reviewed::Damaged(failure)));
-        assert_eq!(form.use_installed(), None);
+        assert_eq!(form.use_installed(rid(70)), None);
         assert!(!form.can_import(NONE));
         assert_eq!(form.press_run(NONE), None);
     }
@@ -635,18 +640,18 @@ mod import {
     fn import_waits_for_the_versions_until_found_or_installed() {
         let mut form = reviewed(None);
         assert!(!form.can_import(NONE), "not looked up");
-        assert!(form.look_up());
+        assert!(form.look_up(rid(71)));
         assert_eq!(form.versions.data_state(), "looking");
-        assert!(!form.look_up(), "one lookup at a time");
-        form.versions_found(versions(vec![VersionSlot::TranslationWords]));
+        assert!(!form.look_up(rid(71)), "one lookup at a time");
+        form.versions_found(rid(71), versions(vec![VersionSlot::TranslationWords]));
         assert_eq!(form.versions.data_state(), "missing");
         assert!(form.versions.open());
         assert!(!form.can_import(NONE));
-        let asked = form.use_installed().expect("the count is asked");
+        let asked = form.use_installed(rid(70)).expect("the count is asked");
         assert_eq!(asked.use_installed, Some(versions(vec![]).found));
         assert_eq!(form.versions.data_state(), "installed");
         assert!(!form.can_import(NONE), "Import waits for the count");
-        form.carry_counted(Some(COUNTED));
+        form.carry_counted(rid(70), Some(COUNTED));
         assert!(form.can_import(NONE));
         assert_eq!(
             form.versions.found(),
@@ -655,29 +660,66 @@ mod import {
         );
 
         let mut form = reviewed(None);
-        form.look_up();
-        form.versions_found(versions(vec![]));
+        form.look_up(rid(71));
+        form.versions_found(rid(71), versions(vec![]));
         assert_eq!(form.versions.data_state(), "found");
         assert!(form.can_import(NONE));
 
         let mut form = reviewed(None);
-        form.look_up();
-        form.versions_failed("Door43 did not answer".into());
+        form.look_up(rid(71));
+        form.versions_failed(rid(71), "Door43 did not answer".into());
         assert_eq!(form.versions, VersionLookup::NotLookedUp);
         assert_eq!(
             form.state,
             ImportState::Problem("Door43 did not answer".into())
         );
-        form.look_up();
+        form.look_up(rid(71));
         form.versions_not_looked_up();
         assert_eq!(form.versions.data_state(), "offline", "Not now");
+    }
+
+    /// A late answer to a lookup or a count of other files is dropped: the review of the files
+    /// now chosen waits for its own.
+    #[test]
+    fn an_answer_to_an_earlier_lookup_or_count_is_dropped() {
+        let mut form = reviewed(None);
+        assert!(form.look_up(rid(10)));
+        form.back_to_files();
+        form.press_review().unwrap();
+        form.reviewed(review(None), rid(2));
+        assert!(form.look_up(rid(11)));
+        form.versions_found(rid(10), versions(vec![]));
+        form.versions_failed(rid(10), "late".into());
+        assert_eq!(
+            form.versions,
+            VersionLookup::Looking,
+            "the first lookup's answer"
+        );
+        assert_eq!(form.state, ImportState::Idle);
+        form.versions_found(rid(11), versions(vec![VersionSlot::TranslationWords]));
+        assert_eq!(form.versions.data_state(), "missing");
+
+        form.use_installed(rid(12)).expect("the count is asked");
+        form.back_to_files();
+        form.press_review().unwrap();
+        form.reviewed(review(None), rid(3));
+        form.use_installed(rid(13)).expect("the count is asked");
+        form.carry_counted(rid(12), Some(COUNTED));
+        form.carry_failed(rid(12), "late".into());
+        assert!(
+            matches!(form.versions, VersionLookup::Installed(_, None)),
+            "the first count's answer: {:?}",
+            form.versions
+        );
+        form.carry_counted(rid(13), Some(COUNTED));
+        assert!(form.can_import(NONE));
     }
 
     #[test]
     fn the_run_sends_one_request_per_attempt_with_the_found_versions() {
         let mut form = reviewed(None);
-        form.look_up();
-        form.versions_found(versions(vec![]));
+        form.look_up(rid(71));
+        form.versions_found(rid(71), versions(vec![]));
         let run = form.press_run(NONE).expect("Import runs");
         assert_eq!(run.request, rid(1));
         assert_eq!(run.details, details("cfm_fbt", "cfm"));
@@ -739,7 +781,7 @@ mod import {
     #[test]
     fn use_installed_before_a_lookup_moves_every_named_slot_and_asks_for_the_count() {
         let mut form = reviewed(None);
-        let asked = form.use_installed().expect("the count is asked");
+        let asked = form.use_installed(rid(70)).expect("the count is asked");
         assert_eq!(asked.use_installed, Some(Vec::new()));
         assert_eq!(asked.details, Some(details("cfm_fbt", "cfm")));
         assert_eq!(asked.files.len(), 1);
@@ -756,8 +798,8 @@ mod import {
                 None
             )
         );
-        assert_eq!(form.use_installed(), None, "one count at a time");
-        form.carry_failed("no answer".into());
+        assert_eq!(form.use_installed(rid(70)), None, "one count at a time");
+        form.carry_failed(rid(70), "no answer".into());
         assert_eq!(form.versions, VersionLookup::NotLookedUp, "offered again");
         assert_eq!(form.state, ImportState::Problem("no answer".into()));
         installed(&mut form);
@@ -931,7 +973,25 @@ mod update_book {
         assert_eq!(form.step(), UpdateStep::Book);
         assert_eq!(form.press_run().unwrap().request, rid(1));
         form.run_stopped(rid(4));
-        assert_eq!(form.press_run().unwrap().request, rid(4));
+        assert_eq!(form.press_run(), None);
+    }
+
+    /// A cancelled run's job deleted the upload: the person chooses the file again, and the
+    /// next run sends the new upload.
+    #[test]
+    fn after_a_cancel_the_file_is_chosen_again() {
+        let mut form = on_book_step();
+        form.press_run().unwrap();
+        form.run_stopped(rid(4));
+        assert_eq!(form.step(), UpdateStep::File);
+        assert!(!form.can_choose_book(), "the deleted upload is not offered");
+        assert_eq!(form.press_run(), None);
+        let id = form.choose_file("TIT.usfm".into(), 9_000, rid(5));
+        let upload = UploadId::parse(&"2".repeat(32)).unwrap();
+        form.file_sent(id, ImportUpload::Sent(upload.clone()));
+        form.to_book();
+        let run = form.press_run().unwrap();
+        assert_eq!((run.request, run.file.upload), (rid(5), upload));
     }
 
     #[test]

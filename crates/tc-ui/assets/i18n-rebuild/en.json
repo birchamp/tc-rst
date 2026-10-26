@@ -186,6 +186,7 @@
   "addBook.usfmExistsUpdate": "{name} is already in this project. To bring in changes to it, open the project and choose Update a book from USFM in the account menu.",
   "home.importRemoved": "An import did not finish, so the app removed the part copy. Import the files again.",
   "importer.files.tooBig": "{file} is larger than 512 MB, so it cannot be imported.",
+  "importer.review.decisionsCounting": "Counting the checking decisions that carry over…",
   "updateBook.added": "{book} was not in this project, so the file added it.",
   "updateBook.again": "Choose a file again",
   "updateBook.back": "← Choose another file",

@@ -480,13 +480,110 @@ async fn update_a_book_report_counts_match_the_batch() {
          in conflict"
     );
     assert_eq!(
-        report.to_review as usize,
-        conflicts.len(),
-        "INV-UPDATE-A-BOOK-REPORTS-WHAT-IT-DID: to review counts every record that waits"
+        report.to_review as usize, in_review,
+        "INV-UPDATE-A-BOOK-REPORTS-WHAT-IT-DID: to review counts the verses that wait"
     );
-    assert!(report.to_review as usize >= in_review);
     assert!(!report.book_added);
     assert_eq!(report.book, BookId::Titus);
+
+    // The job deleted the first upload; the person chooses the file again.
+    let file = upload(dir.path(), 8, "TIT.usfm", aligned_titus().as_bytes());
+    let again = updated(
+        &t,
+        post(&t.app, &update(2, &at, BookId::Titus, &file))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        (again.imported, again.to_review),
+        (0, 0),
+        "a rerun with nothing new imports nothing and puts nothing in review"
+    );
+}
+
+/// The review Update a book opens says which version came from the file: an import, not the
+/// person on this computer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn update_a_book_review_names_the_file_side_imported() {
+    use tc_api::conflicts::{List, MadeBy, ReviewEntries, ReviewTab, ReviewView};
+    let (dir, t, _world) = app().await;
+    let at = open_sample(&t).await;
+    let file = upload(dir.path(), 9, "TIT.usfm", aligned_titus().as_bytes());
+    let report = updated(
+        &t,
+        post(&t.app, &update(1, &at, BookId::Titus, &file))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert!(report.to_review > 0);
+    let view: ReviewView = post(
+        &t.app,
+        &List {
+            at: at.clone(),
+            tab: ReviewTab::Text,
+        },
+    )
+    .await
+    .unwrap();
+    let ReviewEntries::Conflicts(entries) = view.entries else {
+        panic!("{:?}", view.entries)
+    };
+    assert!(!entries.is_empty());
+    for entry in &entries {
+        let by: Vec<&MadeBy> = entry.versions.iter().map(|v| &v.by).collect();
+        assert!(
+            by.contains(&&MadeBy::Import),
+            "the file's version reads as imported: {by:?}"
+        );
+    }
+}
+
+/// Update a book stores NFC, as SaveVerse does: the same words in NFD and then in NFC are one
+/// text, not a conflict.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn update_a_book_stores_nfc() {
+    let (dir, t, _world) = app().await;
+    let at = open_sample(&t).await;
+    let usfm = |words: &str| format!("\\id TIT\n\\c 1\n\\p\n\\v 6 {words}\n");
+    // Titus 1:6 is an empty stub in the sample, so the first file fills it.
+    let nfd = upload(
+        dir.path(),
+        6,
+        "TIT.usfm",
+        usfm("Cafe\u{301} one.").as_bytes(),
+    );
+    let first = updated(
+        &t,
+        post(&t.app, &update(1, &at, BookId::Titus, &nfd))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(first.imported, 1);
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        tc_journal::ChapterNo::new(1).unwrap(),
+        tc_journal::VerseNo::new(6).unwrap(),
+    );
+    assert_eq!(words(&t, &at, &key).as_deref(), Some("Caf\u{e9} one."));
+
+    let waiting_before = waiting(&t, &at);
+    let nfc = upload(dir.path(), 7, "TIT.usfm", usfm("Caf\u{e9} one.").as_bytes());
+    let second = updated(
+        &t,
+        post(&t.app, &update(2, &at, BookId::Titus, &nfc))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!((second.imported, second.to_review), (0, 0));
+    assert_eq!(
+        waiting(&t, &at),
+        waiting_before,
+        "nothing new waits for review"
+    );
 }
 
 /// §13.6 U1: a file that does not read is refused with its line, a file of another book is
@@ -958,6 +1055,45 @@ async fn use_installed_versions_counts_what_carries_over_and_writes_nothing() {
     );
     assert_eq!(listed(&t.app).await, before, "no project was made");
     assert_eq!(at_name_or_staging(&world, "cfm_fbt"), staged);
+}
+
+/// A version found for other files is refused: a slot the files do not name, or a version
+/// of a named slot they were not checked against.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_import_refuses_versions_the_files_do_not_name() {
+    let (dir, t, _world) = app().await;
+    let before = listed(&t.app).await;
+    let version = |slot, repo: &str, tag: &str| FoundVersion {
+        slot,
+        repo_path: format!("git.door43.org/unfoldingWord/{repo}"),
+        tag: tag.into(),
+        sha: "a".repeat(40),
+    };
+    let wrong = [
+        version(VersionSlot::OriginalOldTestament, "hbo_uhb", "v2.1.30"),
+        version(VersionSlot::TranslationNotes, "en_tn", "v1"),
+    ];
+    for (n, found) in (1..).zip(wrong) {
+        let file = upload(dir.path(), n, TC3_TITUS, &tc3_titus());
+        let job = post(
+            &t.app,
+            &Run {
+                found: vec![found.clone()],
+                ..run(n, &file, details("cfm_fbt", "cfm"))
+            },
+        )
+        .await
+        .unwrap();
+        let ended = ended(&t.app, job).await;
+        assert!(
+            matches!(
+                &ended,
+                JobState::Failed(ApiError::BadRequest { field, .. }) if field == "found"
+            ),
+            "{found:?}: {ended:?}"
+        );
+    }
+    assert_eq!(listed(&t.app).await, before, "no project was made");
 }
 
 /// tC4 j09 :240 and :345: the project's metadata states the license the run names, the files'

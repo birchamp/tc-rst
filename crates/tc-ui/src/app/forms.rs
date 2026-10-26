@@ -520,6 +520,12 @@ impl ImportKind {
             Self::Burrito => "burrito",
         }
     }
+
+    /// Only the tC3 kind has an importer in this release (rulings/2026-10-24-H3-H4-H7); tC4
+    /// draws a kind without one disabled (`KindStep`).
+    pub fn has_importer(self) -> bool {
+        self == Self::Tc3
+    }
 }
 
 /// The steps of Import.
@@ -652,6 +658,9 @@ pub struct ImportForm {
     pub name: String,
     pub code: String,
     pub versions: VersionLookup,
+    /// The version lookup or the count of "Use installed versions" in flight: an answer to
+    /// an earlier one, of other files, is dropped.
+    asked: Option<RequestId>,
     /// The license the project states: the files' one, or the one picked where they differ
     /// (tC4 `im.license`); `None` until picked, `Some("")` for none.
     pub license: Option<String>,
@@ -672,6 +681,7 @@ impl ImportForm {
             name: String::new(),
             code: String::new(),
             versions: VersionLookup::NotLookedUp,
+            asked: None,
             license: None,
             submit: crate::app::submit::Submit::new(request),
             state: ImportState::Idle,
@@ -688,10 +698,10 @@ impl ImportForm {
         }
     }
 
-    /// A card of the kind step (tC4 `importPickKind`). Only the tC3 kind has an importer in
-    /// this release; the others stay on the kind step (rulings/2026-10-24-H3-H4-H7).
+    /// A card of the kind step (tC4 `importPickKind`). A kind with no importer stays on the
+    /// kind step.
     pub fn pick_kind(&mut self, kind: ImportKind) {
-        if kind != ImportKind::Tc3 {
+        if !kind.has_importer() {
             return;
         }
         self.kind = Some(kind);
@@ -890,27 +900,35 @@ impl ImportForm {
         })
     }
 
-    /// "Look up on Door43": `true` when the lookup is to run.
-    pub fn look_up(&mut self) -> bool {
+    /// "Look up on Door43" as `request`: `true` when the lookup is to run.
+    pub fn look_up(&mut self, request: RequestId) -> bool {
         if !matches!(self.reviewed, Some(Reviewed::Found(_)))
             || self.versions != VersionLookup::NotLookedUp
         {
             return false;
         }
         self.versions = VersionLookup::Looking;
+        self.asked = Some(request);
         true
     }
 
-    pub fn versions_found(&mut self, view: tc_api::import::VersionsView) {
-        if self.versions == VersionLookup::Looking {
+    /// Whether `request` is the lookup or count the form waits for.
+    fn waits_for(&self, request: RequestId) -> bool {
+        self.asked == Some(request)
+    }
+
+    pub fn versions_found(&mut self, request: RequestId, view: tc_api::import::VersionsView) {
+        if self.versions == VersionLookup::Looking && self.waits_for(request) {
             self.versions = VersionLookup::Found(view);
         }
     }
 
     /// The lookup gave no answer: it can be asked again, and the callout says why.
-    pub fn versions_failed(&mut self, problem: String) {
-        self.versions = VersionLookup::NotLookedUp;
-        self.state = ImportState::Problem(problem);
+    pub fn versions_failed(&mut self, request: RequestId, problem: String) {
+        if self.versions == VersionLookup::Looking && self.waits_for(request) {
+            self.versions = VersionLookup::NotLookedUp;
+            self.state = ImportState::Problem(problem);
+        }
     }
 
     /// The internet question's Not now, or the question took over.
@@ -923,7 +941,7 @@ impl ImportForm {
     /// "Use installed versions" (tC4 `importUseInstalled`): the review to ask for what the
     /// installed versions do to the decisions. Not looked up, every slot the files name takes
     /// them.
-    pub fn use_installed(&mut self) -> Option<tc_api::import::Review> {
+    pub fn use_installed(&mut self, request: RequestId) -> Option<tc_api::import::Review> {
         let view = match &self.versions {
             VersionLookup::Found(view) if !view.unresolved.is_empty() => view.clone(),
             VersionLookup::NotLookedUp => match &self.reviewed {
@@ -937,6 +955,7 @@ impl ImportForm {
         };
         let found = view.found.clone();
         self.versions = VersionLookup::Installed(view, None);
+        self.asked = Some(request);
         Some(tc_api::import::Review {
             files: self.sent(),
             details: Some(self.details()),
@@ -944,7 +963,10 @@ impl ImportForm {
         })
     }
 
-    pub fn carry_counted(&mut self, carry: Option<tc_api::import::CarryOver>) {
+    pub fn carry_counted(&mut self, request: RequestId, carry: Option<tc_api::import::CarryOver>) {
+        if !self.waits_for(request) {
+            return;
+        }
         if let (VersionLookup::Installed(_, held @ None), Some(carry)) = (&mut self.versions, carry)
         {
             *held = Some(carry);
@@ -952,8 +974,10 @@ impl ImportForm {
     }
 
     /// The count failed: the choice is offered again, and the callout says why.
-    pub fn carry_failed(&mut self, problem: String) {
-        if let VersionLookup::Installed(view, None) = &self.versions {
+    pub fn carry_failed(&mut self, request: RequestId, problem: String) {
+        if let VersionLookup::Installed(view, None) = &self.versions
+            && self.waits_for(request)
+        {
             self.versions = if view.found.is_empty() {
                 VersionLookup::NotLookedUp
             } else {

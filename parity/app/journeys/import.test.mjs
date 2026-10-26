@@ -37,6 +37,13 @@ async function pickOption(page, combobox, option) {
 async function review(page, files, { name } = {}) {
   await page.getByTestId('add-project').click();
   await page.getByTestId('add-project-import').click();
+  // tC4's KindStep: a kind with no importer is drawn disabled, at half opacity.
+  for (const kind of ['usfm', 'burrito']) {
+    const card = page.getByTestId(`import-kind-${kind}`);
+    assert.ok(await card.isDisabled(), `${kind} waits for its importer`);
+    assert.match(await card.innerText(), /Arrives with its importer\./);
+    assert.equal(await card.evaluate((e) => getComputedStyle(e).opacity), '0.5');
+  }
   await page.getByTestId('import-kind-tc3').click();
   await page.getByTestId('import-file-input').setInputFiles(files);
   const run = page.getByTestId('import-to-review');
@@ -138,6 +145,8 @@ browserTest('tC3 multi-zip: three books of one language are one project; the lic
     assert.equal(await page.getByTestId('import-damaged').count(), 0);
     // The files disagree on the license: the check says so.
     assert.equal(await page.getByTestId('import-check-license').getAttribute('data-status'), 'warn');
+    // tC4 tc3.ts: the licenses are joined with " · ".
+    assert.match(await page.getByTestId('import-check-license').textContent(), /\S · \S/);
     await page.getByTestId('import-use-installed').click();
     assert.equal(await state(page), 'installed');
     // the files disagree (CC BY-SA 4.0, CC0 1.0): Import waits for the choice
@@ -194,6 +203,7 @@ browserTest('tC3 online, mixed: the found pins stay named when translationWords 
     const after = await resources(page).textContent();
     assert.ok(after.includes('unfoldingWord/en_tn v87'), after);
     assert.ok(after.includes('The versions on this computer will be used for translationWords.'), after);
+    await until('the carry-over is counted', async () => /decisions? (?:must be checked again|carr(?:y|ies) over)/.test(await resources(page).textContent()));
     await pickOption(page, page.getByTestId('import-license'), 'CC BY-SA 4.0');
     await imported(page, name);
     const notes = pinsOf(env, name).languageSets.primary.translationNotes;

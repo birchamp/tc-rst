@@ -195,9 +195,13 @@ fn value_of(record: &Record) -> VersionValue {
 /// typed here came from (STORAGE §8.5).
 fn made_by(
     device: &DeviceId,
+    cause: &Cause,
     labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
 ) -> MadeBy {
     match device.kind() {
+        // Update a book writes the file's text from this computer; the file, not the person,
+        // made it.
+        DeviceKind::Local if matches!(cause, Cause::Import(_)) => MadeBy::Import,
         DeviceKind::Door43Edit => MadeBy::Door43,
         DeviceKind::ExchangeEdit => MadeBy::ExchangeFile,
         DeviceKind::Importer => MadeBy::Import,
@@ -410,7 +414,7 @@ fn versions(
                 Version {
                     change: ChangeRef::parse(&c.head.to_hex()).ok()?,
                     place: place_of(&c.value.key()),
-                    by: made_by(&c.device, labels),
+                    by: made_by(&c.device, &c.cause, labels),
                     at: WallMs(c.at.0),
                     clock_ahead: clock_ahead(c.at, now),
                     shown: c.head == conflict.provisional || c.also.contains(&conflict.provisional),
@@ -556,7 +560,7 @@ impl Handle<History> for App {
                 let version = Version {
                     change: ChangeRef::parse(&id.to_hex()).ok()?,
                     place: place_of(&key),
-                    by: made_by(&body.device, &labels),
+                    by: made_by(&body.device, &body.cause, &labels),
                     at: WallMs(body.at.0),
                     clock_ahead: clock_ahead(body.at, now),
                     shown: shown == Some(id),

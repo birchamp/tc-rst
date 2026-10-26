@@ -315,12 +315,25 @@ fn kind_step(actions: &Actions) -> impl IntoView + use<> {
         .into_iter()
         .map(|kind| {
             let actions = actions.clone();
+            let live = kind.has_importer();
             view! {
                 <OptionCard
                     icon=move || kind_text(kind, "icon")
                     title=move || kind_text(kind, "title")
-                    description=move || kind_text(kind, "desc")
+                    description=move || {
+                        if live {
+                            kind_text(kind, "desc")
+                        } else {
+                            t(keys::importer::kind::LATER, &[])
+                        }
+                    }
                     trailing="→"
+                    disabled=!live
+                    style=if live {
+                        crate::css! {}
+                    } else {
+                        crate::css! { "opacity": 0.5, "cursor": "default" }
+                    }
                     attrs=Attrs::new().with("data-testid", format!("import-kind-{}", kind.id()))
                     on_click=Callback::new(move |_| actions.import_pick_kind(kind))
                 />
@@ -590,23 +603,27 @@ fn resources_check(
                     k::RESOURCES_INSTALLED,
                     &[("list", &slot_list(&view.unresolved))],
                 )),
-                carry.map(|c| {
-                    let carried = if c.carried == 1 {
-                        k::DECISIONS_CARRIED_ONE
-                    } else {
-                        k::DECISIONS_CARRIED
-                    };
-                    let invalidated = if c.invalidated == 1 {
-                        k::DECISIONS_INVALIDATED_ONE
-                    } else {
-                        k::DECISIONS_INVALIDATED
-                    };
-                    format!(
-                        "{} {}",
-                        t(carried, &[("n", &c.carried)]),
-                        t(invalidated, &[("n", &c.invalidated)])
-                    )
-                }),
+                // Import waits for the count, so the row says what it waits for.
+                Some(carry.map_or_else(
+                    || t(k::DECISIONS_COUNTING, &[]),
+                    |c| {
+                        let carried = if c.carried == 1 {
+                            k::DECISIONS_CARRIED_ONE
+                        } else {
+                            k::DECISIONS_CARRIED
+                        };
+                        let invalidated = if c.invalidated == 1 {
+                            k::DECISIONS_INVALIDATED_ONE
+                        } else {
+                            k::DECISIONS_INVALIDATED
+                        };
+                        format!(
+                            "{} {}",
+                            t(carried, &[("n", &c.carried)]),
+                            t(invalidated, &[("n", &c.invalidated)])
+                        )
+                    },
+                )),
             ],
         };
         parts.into_iter().flatten().collect::<Vec<_>>().join(" ")
@@ -666,7 +683,7 @@ fn license_check(review: &ImportReview) -> impl IntoView + use<> {
     let licenses = &review.found.licenses;
     let (status, text) = match licenses.as_slice() {
         [] | [_] if licenses.iter().all(String::is_empty) => {
-            (Status::Valid, t(keys::importer::review::LICENSE_NONE, &[]))
+            (Status::Warn, t(keys::importer::review::LICENSE_NONE, &[]))
         }
         [one] => (Status::Valid, one.clone()),
         many => {
@@ -684,7 +701,7 @@ fn license_check(review: &ImportReview) -> impl IntoView + use<> {
                 Status::Warn,
                 t(
                     keys::importer::tc3::LICENSES,
-                    &[("licenses", &named.join(", "))],
+                    &[("licenses", &named.join(" · "))],
                 ),
             )
         }

@@ -32,6 +32,7 @@ use tc_journal::{Record, keys::PinGroup};
 use tc_resources::{BookCoverage, GatewayLanguage, ProjectPins, ResourcePin, SetSlot};
 use tc_usfm::codec::{BookParts, VersePart};
 use tc_versification::StandardScheme;
+use unicode_normalization::UnicodeNormalization;
 
 use crate::app::App;
 use crate::backend::{BoxFuture, CommandError, CreateFailure, NewProjectSpec, StoreCommand};
@@ -337,10 +338,15 @@ impl Handle<UpdateBook> for App {
     async fn handle(&self, req: UpdateBook) -> Result<JobId, ApiError> {
         let session = self.read(&req.at)?;
         let mut files = self.uploaded(std::slice::from_ref(&req.file)).await?;
-        let file = files.pop().ok_or_else(|| ApiError::BadRequest {
+        let mut file = files.pop().ok_or_else(|| ApiError::BadRequest {
             field: "upload".to_owned(),
             reason: "no such upload".to_owned(),
         })?;
+        // Stored text is NFC, as SaveVerse and the tC3 import store it: the same words in
+        // another normal form would otherwise read as a conflict.
+        if let Ok(text) = std::str::from_utf8(&file.bytes) {
+            file.bytes = text.nfc().collect::<String>().into_bytes();
+        }
         let parts = tc_usfm::codec::decompose_bytes(&file.bytes).map_err(|e| {
             refused(ImportRefusal::UpdateUnreadable {
                 file: file.name.clone(),
@@ -544,6 +550,29 @@ async fn twl_for(client: &tc_door43::Door43Client, tw: &FoundVersion) -> Option<
         }
     }
     None
+}
+
+/// A found version the files do not name, as a slot and a version tC3 checked against: a
+/// lookup of other files, so its pins would not hold these decisions. The links come with the
+/// words they belong to ([`found_pins`]).
+fn not_named(import: &Tc3Import, found: &[(VersionSlot, ResourcePin)]) -> Option<String> {
+    let named = candidates(&import.versions);
+    found.iter().find_map(|(slot, pin)| {
+        if *slot == VersionSlot::TranslationWordsLinks {
+            return None;
+        }
+        let tag = pin.version.as_ref().map(ToString::to_string);
+        let held = named
+            .iter()
+            .find(|(s, _)| slot_of(**s) == *slot)
+            .and_then(|(_, tried)| tried.as_ref())
+            .is_some_and(|tried| {
+                tried
+                    .iter()
+                    .any(|(repo, t)| *repo == pin.repo.to_string() && Some(t) == tag.as_ref())
+            });
+        (!held).then(|| format!("{slot:?} {}: not a version the files name", pin.repo))
+    })
 }
 
 /// The found version of `slot`.
@@ -853,6 +882,13 @@ impl ImportPort for TcImport {
                 }
                 .into());
             }
+            if let Some(reason) = not_named(&import, &found) {
+                return Err(ApiError::BadRequest {
+                    field: "found".to_owned(),
+                    reason,
+                }
+                .into());
+            }
             ctx.progress.add(1);
             ctx.cancel.check()?;
             let mut project_pins = tc_resources::suite::project_pins();
@@ -962,15 +998,15 @@ impl ImportPort for TcImport {
             let key_of = |id| read.body(id).map(|body| body.record.key());
             let fill_keys: Vec<RecordKey> = fill.changes.iter().filter_map(key_of).collect();
             let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+            let verses = |keys: &mut dyn Iterator<Item = RecordKey>| {
+                count(keys.filter(|k| matches!(k, RecordKey::Verse(..))).count())
+            };
             Ok(UpdateReport {
                 book,
-                imported: count(
-                    fill_keys
-                        .iter()
-                        .filter(|k| matches!(k, RecordKey::Verse(..)))
-                        .count(),
-                ),
-                to_review: count(review.changes.len()),
+                imported: verses(&mut fill_keys.iter().cloned()),
+                // The verses this run put in review: a rerun's verse is already a head and
+                // is not written again.
+                to_review: verses(&mut review.changes.iter().filter_map(key_of)),
                 left_as_it_was: fill.kept.iter().filter_map(verse_at).collect(),
                 markup_kept,
                 book_added: fill_keys

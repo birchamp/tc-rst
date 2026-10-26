@@ -160,12 +160,13 @@ impl Actions {
 
     /// The lookup, once the internet is on: `import/versions`, then its job's end.
     pub(super) fn import_versions_now(&self) {
+        let request = js::random_request_id();
         let Some(files) = self
             .s()
             .im
             .try_update(|im| {
                 let im = im.as_mut()?;
-                im.look_up().then(|| im.sent())
+                im.look_up(request).then(|| im.sent())
             })
             .flatten()
         else {
@@ -173,10 +174,7 @@ impl Actions {
         };
         let this = self.clone();
         spawn_local(async move {
-            let asked = Versions {
-                request: js::random_request_id(),
-                files,
-            };
+            let asked = Versions { request, files };
             let open = {
                 let im = this.s().im.clone();
                 move || im.with_untracked(Option::is_some)
@@ -191,12 +189,12 @@ impl Actions {
                 NetEnd::Failed(error) => JobEnd::Failed(error),
                 NetEnd::Transport(error) => {
                     let problem = error.to_string();
-                    this.patch_im(|im| im.versions_failed(problem));
+                    this.patch_im(|im| im.versions_failed(request, problem));
                     return;
                 }
             };
             match ended {
-                JobEnd::Done(view) => this.patch_im(|im| im.versions_found(view)),
+                JobEnd::Done(view) => this.patch_im(|im| im.versions_found(request, view)),
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     this.patch_im(|im| im.versions_not_looked_up());
                 }
@@ -204,11 +202,11 @@ impl Actions {
                     None => this.patch_im(|im| im.versions_not_looked_up()),
                     Some(ApiError::Refused(refusal)) => {
                         let problem = crate::i18n::refusal_text(&refusal);
-                        this.patch_im(|im| im.versions_failed(problem));
+                        this.patch_im(|im| im.versions_failed(request, problem));
                     }
                     Some(other) => {
                         let problem = other.to_string();
-                        this.patch_im(|im| im.versions_failed(problem));
+                        this.patch_im(|im| im.versions_failed(request, problem));
                     }
                 },
             }
@@ -218,10 +216,11 @@ impl Actions {
     /// "Use installed versions" (tC4 `importUseInstalled`): the server counts what carries
     /// over, and writes nothing.
     pub fn import_use_installed(&self) {
+        let request = js::random_request_id();
         let Some(asked) = self
             .s()
             .im
-            .try_update(|im| im.as_mut().and_then(|im| im.use_installed()))
+            .try_update(|im| im.as_mut().and_then(|im| im.use_installed(request)))
             .flatten()
         else {
             return;
@@ -229,10 +228,10 @@ impl Actions {
         let this = self.clone();
         spawn_local(async move {
             match this.runtime().api().call(&asked).await {
-                Ok(review) => this.patch_im(|im| im.carry_counted(review.carry_over)),
+                Ok(review) => this.patch_im(|im| im.carry_counted(request, review.carry_over)),
                 Err(error) => {
                     let problem = said(error);
-                    this.patch_im(|im| im.carry_failed(problem));
+                    this.patch_im(|im| im.carry_failed(request, problem));
                 }
             }
         });

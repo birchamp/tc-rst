@@ -74,9 +74,8 @@ fn modal(actions: &Actions, ub: &ArcRwSignal<Option<UpdateBookForm>>) -> AnyView
                 match step.get() {
                     UpdateStep::File => keys::update_book::subtitle::FILE,
                     UpdateStep::Book => keys::update_book::subtitle::BOOK,
-                    UpdateStep::Working | UpdateStep::Report | UpdateStep::Failed => {
-                        keys::update_book::subtitle::RUN
-                    }
+                    UpdateStep::Working | UpdateStep::Report => keys::update_book::subtitle::RUN,
+                    UpdateStep::Failed => keys::importer::subtitle::FAILED,
                 },
                 &[],
             )
@@ -184,10 +183,11 @@ fn footer(
         }
         UpdateStep::Book => {
             let busy = read(ub, |ub| ub.submit.busy(), false);
+            let cancel = actions.clone();
             view! {
                 {button(keys::update_book::BACK, ButtonVariant::Ghost, "update-book-back", Callback::new(move |_| b.patch_ub(UpdateBookForm::back_to_file)))}
                 {spacer()}
-                {close()}
+                {button(keys::new_bible::CANCEL, ButtonVariant::Secondary, "update-book-close", Callback::new(move |_| cancel.close_modal()))}
                 <Button
                     disabled=Signal::from(busy)
                     attrs=Attrs::from([("data-testid", "update-book-run")])
