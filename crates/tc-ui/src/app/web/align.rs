@@ -805,7 +805,9 @@ impl Actions {
             .saves()
             .add_gate_hook(std::rc::Rc::new(move || {
                 let this = this.clone();
-                Box::pin(async move { this.flush_aligner().await || this.refused_for_good() })
+                Box::pin(async move {
+                    this.flush_aligner().await || (!edits_pending() && this.refused_for_good())
+                })
             }));
         HOOK.with(|h| h.set(Some(id)));
     }

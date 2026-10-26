@@ -106,9 +106,9 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
     `crates/tc-door43-fake/src/lib.rs:714`).
   - `stale_scope_save_keeps_text_and_home_leaves_in_one_click` in
     `crates/tc-ui/tests/app/save.rs`; kind: unit.
-  - `a_refused_align_save_behind_a_span_save_lets_home_leave` (pending: E1d) and
-    `failed_open_keeps_the_sync_toast_links` (pending: E1d): not written when E1a landed; card
-    E1d writes both (the J18 journey already covers Review on a refused open).
+  - `a_refused_align_save_behind_a_span_save_lets_home_leave` (journey, align) and
+    `failed_open_keeps_the_sync_toast_links` (journey, sync-button): not written when E1a landed;
+    card E1d wrote both (the J18 journey already covers Review on a refused open).
   - Journeys (to create): `parity/app/journeys/sync-refusal.test.mjs` (tC4 J2, J6, J1b) and
     `parity/app/journeys/team-sync.test.mjs` (J26, tests titled `[G1] …` and `[G6] …`, #24).
   - Proof it can fail: each step names a mutation. Run it, see the failure message start with
