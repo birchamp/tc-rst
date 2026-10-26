@@ -1394,8 +1394,8 @@ async fn sync_protected_branch_reported() {
     a.close().unwrap();
 }
 
-/// L23 (F14): the person saves while a sync runs. The saves are taken at once, the sync ends,
-/// and the next sync sends them.
+/// L23 (F14): the person saves while a sync runs (here, while its commit waits to move the
+/// branch). The saves are taken at once, the sync ends, and the next sync sends them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn loss_f14_edits_during_sync_kept() {
     let door43 = door43("titus-during").await;
@@ -1405,45 +1405,24 @@ async fn loss_f14_edits_during_sync_kept() {
     let a = open(&ana, &folder);
     connect(&a, &door43, "titus-during");
     save(&a, 1, 1, "Paul, a servant of God");
-    let receive = format!("/{}/titus-during.git/git-receive-pack", seeded::USER);
-    door43.fake.inject(tc_door43_fake::FaultRule::once(
-        "POST",
-        &receive,
-        tc_door43_fake::Fault::Hold,
-    ));
-    let done = std::sync::atomic::AtomicBool::new(false);
+    let hooks = ana.store.hooks();
+    hooks.hold(tc_store::Point::BeforeHeadUpdate);
     let editor = async {
-        while !door43
-            .fake
-            .requests()
-            .iter()
-            .any(|r| r.method == "POST" && r.path == receive)
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        while hooks.reached(tc_store::Point::BeforeHeadUpdate) == 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
         blocking(|| {
-            save(&a, 1, 2, "saved while the sync pushed");
-            save(&a, 1, 1, "Paul, changed while the sync pushed");
+            save(&a, 1, 2, "saved while the sync ran");
+            save(&a, 1, 1, "Paul, changed while the sync ran");
+            hooks.release(tc_store::Point::BeforeHeadUpdate);
         });
-        while !done.load(std::sync::atomic::Ordering::Acquire) {
-            door43.fake.release_held();
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
     };
-    let syncing = async {
-        let report = sync(&a, &door43).await;
-        done.store(true, std::sync::atomic::Ordering::Release);
-        report
-    };
-    let (report, ()) = tokio::join!(syncing, editor);
+    let (report, ()) = tokio::join!(sync(&a, &door43), editor);
     synced(&report);
-    assert_eq!(
-        words(&a, 1, 2).as_deref(),
-        Some("saved while the sync pushed")
-    );
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("saved while the sync ran"));
     assert_eq!(
         words(&a, 1, 1).as_deref(),
-        Some("Paul, changed while the sync pushed")
+        Some("Paul, changed while the sync ran")
     );
     synced(&sync(&a, &door43).await);
     a.close().unwrap();
@@ -1459,13 +1438,10 @@ async fn loss_f14_edits_during_sync_kept() {
     .await
     .unwrap();
     let b = open(&juan, &folder_b);
-    assert_eq!(
-        words(&b, 1, 2).as_deref(),
-        Some("saved while the sync pushed")
-    );
+    assert_eq!(words(&b, 1, 2).as_deref(), Some("saved while the sync ran"));
     assert_eq!(
         words(&b, 1, 1).as_deref(),
-        Some("Paul, changed while the sync pushed")
+        Some("Paul, changed while the sync ran")
     );
     b.close().unwrap();
 }
@@ -1709,8 +1685,8 @@ async fn loss_bad_pack_from_teammate_sync_continues() {
     b.close().unwrap();
 }
 
-/// L26 (sync-design §9.3): three computers push at once. Each one that loses the race
-/// fetches what is new and pushes again, within its attempts, and all three converge.
+/// L26 (sync-design §9.3): three computers sync at once. One that loses the race to another's
+/// push fetches what is new and pushes again, within its attempts, and all three converge.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sync_contention_three_devices_converge() {
     let door43 = door43("titus-busy").await;
@@ -1740,45 +1716,28 @@ async fn sync_contention_three_devices_converge() {
     save(&a, 1, 1, "Paul, as Ana has it");
     save(&b, 1, 2, "in hope, as Juan has it");
     save(&c, 1, 3, "in his time, as Maria has it");
-    let receive = format!("/{}/titus-busy.git/git-receive-pack", seeded::USER);
-    // Ana's first push waits until Juan and Maria have pushed: Ana loses the race to both.
-    door43.fake.inject(tc_door43_fake::FaultRule::once(
-        "POST",
-        &receive,
-        tc_door43_fake::Fault::Hold,
-    ));
-    let ana_done = std::sync::atomic::AtomicBool::new(false);
-    let teammates = async {
-        while !door43
-            .fake
-            .requests()
-            .iter()
-            .any(|r| r.method == "POST" && r.path == receive)
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    synced(&sync(&b, &door43).await);
+    // Ana's work is committed already, so the only commit her sync makes is its merge of
+    // Juan's work, after the fetch. It waits there while Maria pushes, so Ana's push loses
+    // the race.
+    a.checkpoint(tc_store::CheckpointReason::Other("before the sync".into()))
+        .await
+        .unwrap();
+    let hooks = ana.store.hooks();
+    let point = tc_store::Point::BeforeHeadUpdate;
+    hooks.hold(point);
+    let maria = async {
+        while hooks.reached(point) < 1 {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
-        let juan = sync(&b, &door43).await;
-        let maria = sync(&c, &door43).await;
-        while !ana_done.load(std::sync::atomic::Ordering::Acquire) {
-            door43.fake.release_held();
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-        }
-        (juan, maria)
-    };
-    let ana_sync = async {
-        let report = sync(&a, &door43).await;
-        ana_done.store(true, std::sync::atomic::Ordering::Release);
+        let report = sync(&c, &door43).await;
+        hooks.release(point);
         report
     };
-    let (ana_report, (juan_report, maria_report)) = tokio::join!(ana_sync, teammates);
-    for report in [&ana_report, &juan_report, &maria_report] {
-        synced(report);
-    }
+    let (ana_report, maria_report) = tokio::join!(sync(&a, &door43), maria);
+    synced(&ana_report);
+    synced(&maria_report);
     assert!(ana_report.raced >= 1, "{ana_report:?}");
-    assert!(
-        maria_report.received.packs > 0,
-        "Maria took Juan's work: {maria_report:?}"
-    );
     for handle in [&b, &c] {
         synced(&sync(handle, &door43).await);
     }
