@@ -4,7 +4,7 @@ title: Write the loss tests STORAGE §15 promises that no card wrote
 track: A
 lane: storage
 milestone: M1
-state: verifying
+state: done
 owner: LOSS-1 lane (Claude Code d63a7912)
 branch: track-LOSS-1
 worktree: /home/bot/tc-rst/.worktrees/track-LOSS-1
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: true
 size: 2 d (basis: X's step 5, which wrote a dozen loss tests in about a day)
-merged: none
+merged: 2dae9e7b
 updated: 2026-10-26
-next: Hand to the integration lane for a batch.
+next: none
 blocked_by: none
 ---
 
@@ -131,3 +131,4 @@ checks: it can break and no gate fails.
 - 2026-10-26 14:20 EDT | parity lens (subagent of Claude Code d63a7912) | verify | 9131c36d | no blocker, no major, two minors. Browser drive not applicable: `git diff --name-only e36f49d2..HEAD | grep -E '^(crates/[^/]+/src|crates/tc-ui|shell/|parity/)'` prints nothing, and the app wires `UnavailableSync` (crates/tc-app/src/app.rs:110). The six tests that differ from tC4 (master branch, private repository, OBS sync, refused ref, no bulk keep-newest, carried audio) are each declared in STORAGE §15's tC4 column or APP-DESIGN (syncOperation.ts:40-42, 170-181, 253-256, 277, 340-345 at d310bf3). Minors: PUSH-1 overstated reach today (fixed: reachable once E1a wires sync; depends gains E1a); tc-obs belonged in dev-dependencies (fixed) | subagent report
 - 2026-10-26 14:25 EDT | LOSS-1 lane (Claude Code d63a7912) | fix | (this commit) | the races major: `a_push_that_loses_a_race_fetches_again_and_keeps_both` holds Ana's store at its merge commit (BeforeHeadUpdate, after the fetch; a README edit on Door43 makes the merge) instead of the fake's Hold of the push: 0 of 15 runs alone and 0 of 5 full-suite runs failed, and MAX_ATTEMPTS 1 fails it (Busy { attempts: 1 }); the X row of .audit/minors.tsv goes. Hook waits give up after 60 s (`held_at`), and F14's saves run beside a timeout, so a regression fails instead of hanging; tc-obs is a dev-dependency | cargo test -p tc-sync
 - 2026-10-26 15:30 EDT | LOSS-1 lane (Claude Code d63a7912) | fix | none | the integration lane held the card from batch 14: with it done, claims.test.mjs failed on seven Checks names that exist nowhere. Four point at the tests step 1 found or step 2 wrote; L60 and L77's ingest are marked retired by their rulings, L96 not in code (PUSH-1). claims passes with the card set done | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 15:59 EDT | integration lane (Claude Code 3d07d5f8) | merge | 2dae9e7b | merged into main in batch 14; tc-sync's push-race test keeps LOSS-1's store-hold version over D1's; gated by scripts/gates.sh --wait-ci batch-14 | scripts/gates.sh --wait-ci batch-14
