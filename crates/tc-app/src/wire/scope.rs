@@ -91,6 +91,10 @@ pub fn change_cause(
 
 /// A change part by part, or `Everything` when one part cannot be told exactly.
 #[derive(Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per part of a change; any mix of parts can change at once"
+)]
 struct Parts {
     chapters: BTreeSet<ChapterRef>,
     books: BTreeSet<BookId>,

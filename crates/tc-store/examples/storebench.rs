@@ -18,7 +18,12 @@
 //! `memory DIR` (private bytes a minute after the last action, then a whole-project
 //! materialize and the close). Each prints the machine's SHA and AVX-512 flags and the load.
 
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 #![allow(
     clippy::disallowed_methods,
     reason = "a benchmark that builds and removes its own scratch projects"

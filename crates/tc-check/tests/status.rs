@@ -1,6 +1,11 @@
 //! The computed state of a decision (STORAGE.md §7.7), on the sample project's own
 //! decisions and text, and tC4's revalidation suites (`revalidate`, `obsCheckSession`).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

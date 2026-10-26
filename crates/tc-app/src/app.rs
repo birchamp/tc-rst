@@ -204,8 +204,8 @@ pub(crate) struct Inner {
     pub(crate) import_removed: Arc<std::sync::atomic::AtomicBool>,
     /// Sync, share and open from Door43 (UI-2).
     pub(crate) sync: Arc<dyn crate::ports::SyncPort>,
-    /// USB exchange (E2 adds its use).
-    #[allow(dead_code)]
+    /// USB exchange.
+    #[expect(dead_code, reason = "E2 adds its use")]
     pub(crate) exchange: Arc<dyn crate::ports::ExchangePort>,
     /// Import (F1).
     pub(crate) import: Arc<dyn crate::ports::ImportPort>,

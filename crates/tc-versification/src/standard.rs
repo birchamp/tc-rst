@@ -78,7 +78,10 @@ static LOADED: [LazyLock<Scheme>; 6] = [
     LazyLock::new(|| load(StandardScheme::Vul)),
 ];
 
-#[allow(clippy::expect_used)]
+#[expect(
+    clippy::expect_used,
+    reason = "the bundled files are fixed at build time and a test loads each"
+)]
 fn load(which: StandardScheme) -> Scheme {
     // The bundled files are fixed at build time, and the test
     // `every_standard_scheme_loads` parses and compiles each one, so this cannot fail.

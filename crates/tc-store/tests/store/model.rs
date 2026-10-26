@@ -321,6 +321,10 @@ impl DeniedAccess {
 }
 
 /// One run of steps against the store.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a test model's independent facts about one run"
+)]
 pub struct Run {
     rig: Option<Rig>,
     folder: PathBuf,

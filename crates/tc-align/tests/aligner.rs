@@ -2,7 +2,12 @@
 //! (`e2e/j05-align-verse`): place and unplace words, Mark valid, and suggestions that are
 //! proposals until accepted (D72).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

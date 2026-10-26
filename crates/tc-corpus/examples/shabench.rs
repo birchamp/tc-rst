@@ -7,7 +7,12 @@
 //! one right after the other, so a change in the machine's load hits both. It prints MB/s for
 //! each round, then the medians, and checks that both give the same digests.
 
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use sha2::Digest;
 use std::path::{Path, PathBuf};

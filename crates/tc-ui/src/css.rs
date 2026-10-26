@@ -251,7 +251,7 @@ pub fn css_property(react_key: &str) -> String {
 #[macro_export]
 macro_rules! css {
     ($($k:literal : $v:expr),* $(,)?) => {{
-        #[allow(unused_mut)]
+        #[allow(unused_mut, reason = "a css! with no pairs never sets a key")]
         let mut c = $crate::css::Css::new();
         $( $crate::css::CssSet::set_into($v, &mut c, $k); )*
         c

@@ -358,7 +358,10 @@ impl Actor {
         Ok(Some(next))
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is one part of a checkpoint's outcome; a struct would be built only to be taken apart"
+    )]
     fn send_checkpoint(
         &mut self,
         reason: CheckpointReason,

@@ -37,6 +37,10 @@ pub enum Direction {
 
 /// One gateway language package: a language and the Door43 owner that publishes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per resource a gateway package publishes; any mix is published"
+)]
 pub struct Gateway {
     /// BCP 47, as Door43 reports it.
     pub language: &'static str,
@@ -337,8 +341,10 @@ impl Gateway {
 pub(crate) fn account(name: &str) -> AccountName {
     match name.parse() {
         Ok(owner) => owner,
-        // Every owner in GATEWAYS is a valid Door43 account name; the unit test
-        // `every_registry_name_parses` proves it.
+        #[expect(
+            clippy::unreachable,
+            reason = "every owner in GATEWAYS is a valid Door43 account name; the unit test every_registry_name_parses proves it"
+        )]
         Err(_) => unreachable!("registry owner {name} must parse"),
     }
 }

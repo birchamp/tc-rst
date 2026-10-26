@@ -1,6 +1,11 @@
 //! Resolution, the tool preflight and the guided fix, from tC4's suites (`resolve`,
 //! `gatewayTwl`, `coverage16`, `guidedFix`).
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

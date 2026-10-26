@@ -1,6 +1,11 @@
 //! Identifiers and tokens are checked where they enter (APP-DESIGN §3.2, §3.4, AD3).
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use serde::de::DeserializeOwned;
@@ -73,12 +78,12 @@ fn a_token_body_must_be_base64url_of_a_plausible_length() {
 macro_rules! implements {
     ($ty:ty: $($bound:tt)+) => {{
         struct Probe<T: ?Sized>(std::marker::PhantomData<T>);
-        #[allow(dead_code)]
+        #[allow(dead_code, reason = "the probe trait exists only to be resolved, never named")]
         trait No {
             const YES: bool = false;
         }
         impl<T: ?Sized> No for Probe<T> {}
-        #[allow(dead_code)]
+        #[allow(dead_code, reason = "the probe trait exists only to be resolved, never named")]
         impl<T: ?Sized + $($bound)+> Probe<T> {
             const YES: bool = true;
         }

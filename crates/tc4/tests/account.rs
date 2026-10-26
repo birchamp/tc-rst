@@ -1,6 +1,11 @@
 //! The Door43 account of the real binary (unit A8): which server a build signs in to, and which
 //! keychain it has.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

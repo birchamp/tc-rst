@@ -1,6 +1,11 @@
 //! How a run ends (APP-DESIGN §5.1), driven in process; `crates/tc4/tests/lifecycle.rs`
 //! drives the same sequence against the real binary.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

@@ -1,7 +1,10 @@
 //! A page around the save machine for the tests: it carries the machine's commands out on a
 //! storage in memory as the browser glue does, plays `boot.js`'s capture listener on each
 //! keystroke into a focused editor, and keeps the saves that are waiting for a reply.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};

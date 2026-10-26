@@ -525,7 +525,11 @@ impl Handle<tc_api::test::Script> for App {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     use tc_api::jobs::ReplacedValue;
     use tc_api::shown::Direction;

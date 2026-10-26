@@ -5,7 +5,12 @@
 //! `vendored-from-tc4.txt` names each file by its git blob id in tC4, so
 //! `git -C <tC4> ls-tree -r <commit>` confirms the list.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

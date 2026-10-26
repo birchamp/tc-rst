@@ -102,6 +102,10 @@ pub(crate) struct IndexCache {
 /// What to write again (§5.0 B5): the actor marks books and files, and the writer expands
 /// them from its snapshot, off the actor.
 #[derive(Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per kind of file to write again; any mix can be dirty at once"
+)]
 pub(crate) struct Dirty {
     /// Every file of these books is reconciled with the projection: rendered, written when it
     /// differs, removed when the book no longer projects it.

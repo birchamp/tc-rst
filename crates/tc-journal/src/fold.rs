@@ -329,6 +329,10 @@ impl ConflictId {
 /// What one call of [`FoldState::add`] changed: what `tc-store` marks dirty (§5.0 B5) and
 /// what the reply to a command says (B6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per kind of derived file a change touches; any mix can change at once"
+)]
 pub struct Delta {
     /// Records whose state or projected value may have changed, sorted.
     pub keys: Vec<RecordKey>,

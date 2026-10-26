@@ -30,6 +30,10 @@ pub use tc_journal::record::{DecisionRecord, Judgement, Selection, UserStatus};
 
 /// The state of one check on the list: its decision, if any, as computed.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one check, as tC4 computes them; together they are not one state"
+)]
 pub struct CheckState {
     pub assessment: Option<Assessment>,
     /// Whether the decision has selections (tC4 `selections !== false`).

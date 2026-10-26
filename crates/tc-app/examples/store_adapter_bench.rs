@@ -29,9 +29,17 @@
 //! are compared with the 25 ms budget; the Windows reference laptop requires its own run.
 
 // A benchmark stops at its first failure, with the reason: nothing to keep going for.
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 // The direct runs time tc-store's own handle, minting as its bench does.
-#![allow(clippy::disallowed_methods)]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "a benchmark stops at its first failure, with the reason"
+)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

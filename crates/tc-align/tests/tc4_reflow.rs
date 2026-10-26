@@ -2,7 +2,12 @@
 //! ported, and `fixtures/align/reflow-vectors.json` (tC4's `reflowAlignment` on en_ult
 //! Titus records after seeded edits).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

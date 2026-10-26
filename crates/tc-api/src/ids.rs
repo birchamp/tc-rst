@@ -489,6 +489,10 @@ mod arbitrary {
     use super::*;
 
     /// Every caller passes a literal pattern that compiles.
+    #[expect(
+        clippy::unreachable,
+        reason = "every caller passes a literal pattern that compiles"
+    )]
     fn regex(pattern: &str) -> BoxedStrategy<String> {
         proptest::string::string_regex(pattern)
             .unwrap_or_else(|_| unreachable!("a valid regex"))

@@ -1,7 +1,12 @@
 //! The behaviour of the app runtime's pure parts through the public API of tc-ui. One test
 //! binary, so the crate and its dependencies link once.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod app {
     mod account;

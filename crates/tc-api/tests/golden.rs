@@ -3,7 +3,12 @@
 //! change to a wire shape changes a file, so it shows in review. Run with `UPDATE_GOLDEN=1`
 //! to write the files again after a deliberate change.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

@@ -7,7 +7,12 @@
 //! The aligner takes one verse and nothing of the project, so its cost cannot grow with
 //! the project; the budgets bound the cost of the largest verse.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 use tc_align::Alignment;

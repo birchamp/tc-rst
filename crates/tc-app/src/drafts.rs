@@ -126,6 +126,10 @@ fn place_of(key: &RecordKey) -> String {
     }
 }
 
+#[expect(
+    clippy::unreachable,
+    reason = "a record always has a place; a key that formats to nothing is still offered"
+)]
 fn field_place(text: &str) -> FieldPlace {
     let cut: String = text
         .chars()
@@ -136,7 +140,6 @@ fn field_place(text: &str) -> FieldPlace {
         })
         .collect();
     FieldPlace::parse(&cut).unwrap_or_else(|_| {
-        // A record always has a place; a key that formats to nothing is still offered.
         FieldPlace::parse("?").unwrap_or_else(|_| unreachable!("'?' is a valid place"))
     })
 }

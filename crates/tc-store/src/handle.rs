@@ -82,7 +82,7 @@ pub(crate) fn ready<T: Send + 'static>(value: T) -> Pending<T> {
 fn unreachable_value<T>() -> T {
     // `ready` resolves at once, so its drop value is never asked for. Proof: `resolve`
     // takes `on_drop` before the resolver is dropped.
-    #[allow(clippy::panic)]
+    #[expect(clippy::panic, reason = "never reached: resolve takes on_drop first")]
     {
         panic!("a ready value has no drop value")
     }

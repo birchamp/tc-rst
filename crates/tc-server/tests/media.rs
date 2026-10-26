@@ -1,6 +1,11 @@
 //! `GET /media/obs/{pack}/{path}` (APP-DESIGN §5.3): a picture the backend serves, with the
 //! token every route needs, and a 404 for what it does not.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

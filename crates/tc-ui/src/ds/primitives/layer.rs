@@ -184,6 +184,10 @@ fn listen(kind: &'static str, capture: bool, f: impl FnMut(web_sys::Event) + 'st
 }
 
 #[component]
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "tC4's Layer props, each an independent option of one layer"
+)]
 pub fn Layer(
     /// Shown while true; tC4's default is open.
     #[prop(optional, into)]

@@ -1,5 +1,8 @@
 //! What the test modules share.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;

@@ -4,6 +4,10 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-dbg-in-tests = true
+# INV-NO-BAGS-OF-BOOLEANS
+max-struct-bools = 3
+# INV-NO-BAGS-OF-BOOLEANS
+max-fn-params-bools = 3
 
 # No read in tc-app may cost the whole project (APP-DESIGN §4.3, §8.1, PERFORMANCE rule 1). These
 # are the public reads of `FoldState` that walk every key, change, book, batch or conflict of a

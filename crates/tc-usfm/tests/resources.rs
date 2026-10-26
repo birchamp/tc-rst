@@ -21,7 +21,12 @@
 //! concerns, and any verse that comes out otherwise fails the test with its reason.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

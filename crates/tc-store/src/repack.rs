@@ -653,7 +653,12 @@ pub(crate) fn due(objects: u64, bytes: u64, after: (u64, u64)) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::*;
 

@@ -1,5 +1,11 @@
 // Each test file uses a different subset of these helpers, and test helpers may panic.
-#![allow(dead_code, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    dead_code,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 pub mod markup;
 

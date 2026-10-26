@@ -105,7 +105,10 @@ pub fn Divider(
     #[prop(optional)] orientation: Orientation,
     #[prop(optional, into)] label: Option<String>,
     #[prop(optional)]
-    #[allow(unused_variables)]
+    #[allow(
+        unused_variables,
+        reason = "Divider.jsx's prop, accepted and ignored: Rule reads --line from the surface"
+    )]
     inverse: bool,
     #[prop(optional)] style: Css,
     #[prop(optional)] attrs: Attrs,

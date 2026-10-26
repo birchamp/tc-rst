@@ -1,7 +1,12 @@
 //! The app-data lock of the restart case (APP-DESIGN §5.1, AD39). The operating system's lock
 //! conflicts between two handles of one process (`flock`, `LockFileEx`), so these tests run
 //! in process and are real. `crates/tc4/tests/lifecycle.rs` runs the wait between processes.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::time::{Duration, Instant};
 

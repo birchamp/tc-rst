@@ -109,7 +109,10 @@ impl Spec {
     /// The factor the scale tests run with (owner ruling, rulings/2026-10-26-test-scale.md):
     /// `TC_SCALE_FACTOR`, 2 by default; the nightly job sets 10. Below 2 the larger corpus would
     /// be Psalms itself and the tests would compare nothing, so 2 is the least.
-    #[allow(clippy::panic)] // Tests' support: a mistyped factor must stop the run, not run at 2.
+    #[expect(
+        clippy::panic,
+        reason = "tests' support: a mistyped factor must stop the run, not run at 2"
+    )]
     pub fn test_factor() -> usize {
         match std::env::var("TC_SCALE_FACTOR") {
             Err(_) => 2,

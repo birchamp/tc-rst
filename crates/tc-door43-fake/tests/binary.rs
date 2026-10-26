@@ -1,7 +1,12 @@
 //! The fake as a process (`tc-door43-fake`): the parity account, the control port, and its
 //! end when its stdin closes.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;

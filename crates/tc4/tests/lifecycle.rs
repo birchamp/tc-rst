@@ -1,7 +1,12 @@
 //! How `tc4 serve` starts, quits and shares its app data, run against the real binary
 //! (APP-DESIGN §5.1, §5.2). tc-server's own `tests/lifecycle.rs` drives the quit sequence in
 //! process.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

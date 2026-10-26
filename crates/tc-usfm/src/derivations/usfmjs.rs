@@ -41,6 +41,10 @@ pub(super) enum EndTag {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a port of usfm-js's marker table, one flag per column"
+)]
 pub(super) struct Props {
     pub ty: Option<&'static str>,
     pub end_tag: EndTag,
@@ -746,6 +750,10 @@ enum Thing {
     Obj(Ref),
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a port of usfm-js's parser state, one flag per variable it keeps"
+)]
 struct State {
     heap: Heap,
     current_chapter: Pos,

@@ -304,6 +304,10 @@ async fn world_with(decided: usize, orphans: usize, vrs: Option<&[u8]>) -> World
 
 /// What a world is made with beyond the sample's Titus and notes.
 #[derive(Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "test options: each adds one independent thing to a world"
+)]
 struct Opts {
     /// The project pins an original-language text and a gateway Bible pane, and holds aligned
     /// verses.

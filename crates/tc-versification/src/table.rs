@@ -155,8 +155,10 @@ impl Rule {
         let start = |t: &MappedRange| (t.chapter, t.first);
         let (first_target, more_targets) = match mapping.targets() {
             [first, more @ ..] => (first, more),
-            // `Mapping`'s fields are private, its constructors (`new`, `single`) each give
-            // it a target, and `push_target` only adds one.
+            #[expect(
+                clippy::unreachable,
+                reason = "Mapping's fields are private, its constructors (new, single) each give it a target, and push_target only adds one"
+            )]
             [] => unreachable!("a mapping with no target"),
         };
         let crosses_book = first_target.book != source.book;

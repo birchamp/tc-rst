@@ -1,6 +1,11 @@
 //! The test crash points against the real binary (AD35, APP-DESIGN §6.6): `tc4 serve
 //! --test-hooks` ends itself at a named point with exit code 86.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

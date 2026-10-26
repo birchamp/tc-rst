@@ -1057,7 +1057,7 @@ fn a_restart_keeps_only_the_fields_on_screen_sends_nothing_and_ignores_late_repl
         "the text on screen is not saved"
     );
     assert!(
-        page.gate(|_, _| unreachable!("nothing is sent"), |_| {}),
+        page.gate(|_, _| panic!("nothing is sent"), |_| {}),
         "a held field does not block the gate"
     );
     // Late replies of the old run change nothing.

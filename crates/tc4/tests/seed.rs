@@ -3,7 +3,12 @@
 //! and a repeat launch touches no resource file. The bundled store is the four Open Bible
 //! Stories resources of `bundle/en` (about 60 files), built once per test binary with the
 //! code the installer's `bundle_store` example runs.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
@@ -18,7 +23,10 @@ use serde_json::{Value, json};
 use tc_resources::ResourceStore;
 use tempfile::TempDir;
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the bundle builder's example code; this test uses part of it"
+)]
 #[path = "../../tc-app/examples/bundle_store/build.rs"]
 mod bundle_build;
 

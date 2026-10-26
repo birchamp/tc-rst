@@ -23,7 +23,12 @@
 //! file's facts as it is read instead of holding them for O7's rules, to measure what holding
 //! costs.
 
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::fs::File;
 use std::path::{Path, PathBuf};

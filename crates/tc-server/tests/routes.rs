@@ -1,5 +1,10 @@
 //! The routes: the UI's files, the API from tc-api's tables, and the stand-in backend.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
@@ -308,7 +313,7 @@ struct Panics;
 impl Backend for Panics {
     type Events = tc_server::stub::StubEvents;
 
-    #[allow(clippy::panic)]
+    #[allow(clippy::panic, reason = "test code: a failed unwrap is a failed test")]
     async fn call(&self, path: &'static str, _body: tc_server::Bytes) -> Answer {
         if path == "app/clientError" {
             panic!("a bug in the app");

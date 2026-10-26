@@ -2,7 +2,12 @@
 //! read whole after the same decisions, and a grouping reads each row once. tc-app holds the
 //! groups to tc-check's on Titus and Psalms.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::cell::Cell;
 

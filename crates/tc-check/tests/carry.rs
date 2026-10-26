@@ -1,7 +1,12 @@
 //! Carry-over plans and the counts the upgrade and gateway-change dialogs show, from
 //! tC4's suites (`carryOver`, `derive-full-strength`, `twArticleGate`, `gatewayChange`)
 //! and properties that no decision is ever dropped.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

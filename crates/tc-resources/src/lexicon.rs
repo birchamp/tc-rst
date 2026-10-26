@@ -31,9 +31,10 @@
 //! archive without entries. A reader refuses a format it does not know and a version it
 //! does not read, in words: the app shows the lexicon as unavailable rather than guess.
 
-// A `LexiconUnavailable` is made at most once per lexicon and session and carries the pin
-// it names, so its size costs nothing; boxing it would only make every match harder to read.
-#![allow(clippy::result_large_err)]
+#![expect(
+    clippy::result_large_err,
+    reason = "a LexiconUnavailable is made at most once per lexicon and session and carries the pin it names, so its size costs nothing; boxing it would only make every match harder to read"
+)]
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};

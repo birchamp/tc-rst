@@ -1,7 +1,12 @@
 //! The event stream (APP-DESIGN §5.4): frames as server-sent events, in order, with a
 //! heartbeat. The ring, replay and `Resync` are the backend's; a scripted source stands in
 //! for it here, so these tests prove what the server does with what the bus yields.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

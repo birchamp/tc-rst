@@ -1,7 +1,12 @@
 //! Property tests: lossless parsing, safe replacement and the alignment round trip.
 
 // Helpers outside `#[test]` functions build inputs and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
@@ -589,7 +594,10 @@ enum Item {
 /// An aligned verse in any shape the markup allows: milestones nested and closed in any
 /// order, words inside and outside them, text anywhere. Returns the aligned text, the
 /// plain text it stands for, and what it means.
-#[allow(clippy::type_complexity)]
+#[allow(
+    clippy::type_complexity,
+    reason = "a proptest strategy's tuple, read where it is destructured"
+)]
 fn aligned_verse() -> impl Strategy<
     Value = (
         String,

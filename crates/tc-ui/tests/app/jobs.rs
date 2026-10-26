@@ -65,7 +65,7 @@ fn a_job_ends_once_with_the_state_the_server_gave() {
         state.step(Some(&running(3)), 50),
         Step::Progress(match running(3) {
             JobState::Running(p) => p,
-            _ => unreachable!(),
+            _ => panic!("unexpected"),
         })
     );
     // A row's outcome is typed; another row's outcome ends lost.

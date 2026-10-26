@@ -1,6 +1,11 @@
 //! INV-PURE-CRATES-DO-NO-IO, INV-ATOMIC-WRITES, INV-ONE-PARSER-OWNER and
 //! INV-LOCAL-SERVER-IS-CLOSED, by scanning the product source of every crate.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

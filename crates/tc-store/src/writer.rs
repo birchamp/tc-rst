@@ -160,6 +160,10 @@ pub(crate) enum Recorded {
 }
 
 /// See the module documentation.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts the writer keeps about the folder and its open; together they are not one state"
+)]
 pub(crate) struct Writer {
     pub vfs: Arc<dyn Vfs>,
     pub counters: Arc<Counters>,
@@ -645,7 +649,12 @@ pub(crate) fn spawn(writer: Writer, rx: Receiver<Job>) -> Option<JoinHandle<()>>
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::*;
     use crate::counters::Counters;

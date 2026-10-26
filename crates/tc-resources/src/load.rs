@@ -20,9 +20,10 @@
 //! and the simplified text resolved over the ladder; the USFM comes back as its bytes.
 //! Open Bible Stories helps come from Door43 only: Aquifer mirrors none of them.
 
-// A `Missing` is built at most once per part and carries the pin it names, so its size
-// costs nothing; boxing it would only make every match harder to read.
-#![allow(clippy::result_large_err)]
+#![expect(
+    clippy::result_large_err,
+    reason = "a Missing is built at most once per part and carries the pin it names, so its size costs nothing; boxing it would only make every match harder to read"
+)]
 
 use std::collections::BTreeMap;
 

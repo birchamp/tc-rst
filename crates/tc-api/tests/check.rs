@@ -5,7 +5,12 @@
 //! cannot carry the row of such a check leaves its decision looking unsaved, and a rail that
 //! cannot read the row drops the check from view.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

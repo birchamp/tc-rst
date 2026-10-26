@@ -1,7 +1,12 @@
 //! A story project's own pictures (tC4 #549): found by their path in `metadata.json`, which
 //! lists a carried file with no role.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

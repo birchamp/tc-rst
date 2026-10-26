@@ -1617,7 +1617,10 @@ impl Writer {
     /// (§5.10). Just before the rename the file is looked at again (I8): when it is not as M1
     /// found it and does not hold the new bytes, nothing is renamed over it ([`Wrote::Refused`],
     /// the bytes in `outside`), and the ledger decides them as any bytes read.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the compare-and-swap reads each; a struct would be built only to be taken apart"
+    )]
     fn write_once(
         &self,
         dir: &std::path::Path,

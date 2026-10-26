@@ -5,7 +5,12 @@
 //! The language state is per thread and each test runs on its own thread, so a test starts in
 //! English with only English installed.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::cell::RefCell;
 use std::path::PathBuf;

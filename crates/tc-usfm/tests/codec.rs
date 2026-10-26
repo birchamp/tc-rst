@@ -1,7 +1,12 @@
 //! The journal codec: verse split, decompose and recompose (`docs/STORAGE.md` §2.4, §7.5,
 //! §13.5).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod census;
 

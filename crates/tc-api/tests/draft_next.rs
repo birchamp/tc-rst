@@ -5,7 +5,12 @@
 //! it, or it lived only in the page's memory and every keystroke had put it in the buffer.
 
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use tc_api::buffer::{BufferKey, FieldKey, FieldKind, FieldPlace};
 use tc_api::ids::{ProjectId, ProjectRef, ServerInstance, WallMs};

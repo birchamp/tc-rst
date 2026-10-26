@@ -178,9 +178,11 @@ impl ProjectName {
     }
 
     /// The project folder the name makes.
+    #[expect(
+        clippy::unreachable,
+        reason = "letters, digits, - and _ are one path segment on every system, and the name is never empty or only dots"
+    )]
     pub fn folder(&self) -> ProjectRef {
-        // Letters, digits, `-` and `_` are one path segment on every system, and the name is
-        // never empty or only dots.
         ProjectRef::parse(&self.0).unwrap_or_else(|_| unreachable!("a checked project name"))
     }
 
@@ -232,8 +234,8 @@ mod arbitrary {
 
     use super::{ProjectName, RepoSource};
 
+    #[expect(clippy::unreachable, reason = "the patterns are literals that compile")]
     fn pattern(re: &str) -> impl Strategy<Value = String> {
-        // The patterns are literals that compile.
         proptest::string::string_regex(re).unwrap_or_else(|_| unreachable!("a valid regex"))
     }
 

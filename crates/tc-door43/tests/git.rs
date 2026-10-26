@@ -1,7 +1,10 @@
 //! Sync's git calls (`tc_door43::git`) against the fake's smart HTTP.
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
