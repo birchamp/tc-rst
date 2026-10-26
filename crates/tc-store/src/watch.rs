@@ -6,7 +6,7 @@
 //! pack file it does not know has appeared (a second writer). The app's own writes are told
 //! too on a real filesystem; the writer recognizes them by the entry it keeps for the path.
 
-use crate::handle::Msg;
+use crate::handle::{Msg, Shared};
 use crate::layout::{self, Folder};
 use crate::vfs::{Vfs, WatchGuard};
 use crate::writer::Job;
@@ -32,12 +32,15 @@ impl Watching {
         vfs: &Arc<dyn Vfs>,
         folder: &Folder,
         debounce: Duration,
+        shared: Arc<Shared>,
         writer: Sender<Job>,
         actor: Sender<Msg>,
     ) -> Option<Self> {
         let (tx, rx) = mpsc::channel::<Vec<PathBuf>>();
         let sink_tx = Mutex::new(tx.clone());
+        let heard_by = shared.clone();
         let sink: crate::vfs::WatchSink = Arc::new(move |paths| {
+            heard_by.heard();
             if let Ok(tx) = sink_tx.lock() {
                 let _ = tx.send(paths);
             }
@@ -69,7 +72,7 @@ impl Watching {
             .collect();
         let thread = std::thread::Builder::new()
             .name("tc-store watcher".into())
-            .spawn(move || gather(&roots, debounce, &rx, &writer, &actor))
+            .spawn(move || gather(&roots, debounce, &rx, &shared, &writer, &actor))
             .ok()?;
         Some(Self {
             guards,
@@ -99,10 +102,14 @@ fn gather(
     roots: &[PathBuf],
     debounce: Duration,
     rx: &Receiver<Vec<PathBuf>>,
+    shared: &Shared,
     writer: &Sender<Job>,
     actor: &Sender<Msg>,
 ) {
     let mut batch: BTreeSet<PathBuf> = BTreeSet::new();
+    // The sink counts one heard change per message, so the messages received are exactly
+    // the changes this batch and the earlier ones hold.
+    let mut received_so_far: u64 = 0;
     loop {
         let received = if batch.is_empty() {
             rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
@@ -110,14 +117,31 @@ fn gather(
             rx.recv_timeout(debounce)
         };
         match received {
-            Ok(paths) => batch.extend(paths),
+            Ok(paths) => {
+                received_so_far += 1;
+                batch.extend(paths);
+            }
             Err(RecvTimeoutError::Timeout) => {
-                if !tell(roots, std::mem::take(&mut batch), writer, actor) {
+                if !tell(
+                    roots,
+                    std::mem::take(&mut batch),
+                    received_so_far,
+                    shared,
+                    writer,
+                    actor,
+                ) {
                     return;
                 }
             }
             Err(RecvTimeoutError::Disconnected) => {
-                tell(roots, std::mem::take(&mut batch), writer, actor);
+                tell(
+                    roots,
+                    std::mem::take(&mut batch),
+                    received_so_far,
+                    shared,
+                    writer,
+                    actor,
+                );
                 return;
             }
         }
@@ -129,6 +153,8 @@ fn gather(
 fn tell(
     roots: &[PathBuf],
     paths: BTreeSet<PathBuf>,
+    upto: u64,
+    shared: &Shared,
     writer: &Sender<Job>,
     actor: &Sender<Msg>,
 ) -> bool {
@@ -157,8 +183,10 @@ fn tell(
     if journal {
         open &= actor.send(Msg::JournalChanged).is_ok();
     }
-    if !files.is_empty() {
-        open &= writer.send(Job::Paths(files)).is_ok();
+    if files.is_empty() {
+        shared.examined(upto);
+    } else {
+        open &= writer.send(Job::Paths(files, upto)).is_ok();
     }
     open
 }

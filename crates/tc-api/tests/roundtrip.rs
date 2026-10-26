@@ -155,6 +155,10 @@ fn every_shared_type_round_trips() {
             UploadRefusal,
             UploadFlow,
             UploadView,
+            // import
+            tc_api::import::ImportReview,
+            tc_api::import::VersionsView,
+            tc_api::import::UpdateReport,
             // events and jobs
             EventFrame,
             Event,
@@ -244,6 +248,9 @@ fn every_shared_type_round_trips() {
             HelloView,
             BuildInfo,
             OpenSession,
+            FailedCheckpoint,
+            tc_api::session::OutsideEdits,
+            tc_api::session::KeptImported,
             SessionRole,
             AppPrefsView,
             DraftUnit,

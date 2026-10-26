@@ -65,7 +65,43 @@ pub fn settings() -> Vec<SettingsRefusal> {
 }
 
 pub fn import() -> Vec<ImportRefusal> {
-    vec![ImportRefusal::WriteFailed, ImportRefusal::NameExists]
+    let file = || s("cfm_fbt_tit_book.zip");
+    vec![
+        ImportRefusal::WriteFailed,
+        ImportRefusal::NameExists,
+        ImportRefusal::NotZip { file: file() },
+        ImportRefusal::CorruptEntry {
+            file: file(),
+            entry: s("tit/1.json"),
+        },
+        ImportRefusal::NoManifest { file: file() },
+        ImportRefusal::NoText { file: file() },
+        ImportRefusal::Languages {
+            languages: vec![s("cfm"), s("es-419")],
+        },
+        ImportRefusal::Twice { code: s("TIT") },
+        ImportRefusal::Unreadable {
+            file: file(),
+            problem: s("tit/1.json: expected value at line 1 column 1"),
+        },
+        ImportRefusal::TextChanged { book: s("TIT") },
+        ImportRefusal::UpdateUnreadable {
+            file: s("TIT.usfm"),
+            line: 5,
+            problem: s("verse 1:1 appears twice"),
+        },
+        ImportRefusal::UpdateOtherBook {
+            file: s("TIT.usfm"),
+            named: s("PHM"),
+            chosen: s("TIT"),
+        },
+        ImportRefusal::UpdateNotWritten {
+            reason: s("No space left on device (os error 28)"),
+        },
+        ImportRefusal::UpdateReviewNotWritten {
+            reason: s("No space left on device (os error 28)"),
+        },
+    ]
 }
 
 pub fn export() -> Vec<ExportRefusal> {

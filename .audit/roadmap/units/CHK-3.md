@@ -4,7 +4,7 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: verifying
+state: done
 owner: shell lane (Claude Code 6f39d119)
 branch: track-CHK-3b
 worktree: .worktrees/track-CHK-3b
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1, P3]
 no_loss: false
 size: 1 d
-merged: none
+merged: e36f49d2
 updated: 2026-10-26
-next: ready for a batch: branch track-CHK-3b, pushed; the integration lane gates it
+next: none
 blocked_by: none
 ---
 
@@ -280,3 +280,4 @@ and each planted failure is in the log.
 - 2026-10-26 11:05 EDT | shell lane (Claude Code 6f39d119) | fix | none | the blocker: new card LOSS-1 owns the 26 §15 tests no card writes (L16, L17, L19, L20, L22 twice, L23, L25, L26, L28 to L32, L34, L45, L47, L59, L60, L66, L77 twice, L79, L83, L89, L95, L96), and those rows pend on it; S3 keeps its step-9 rows and E2 `usb_export_verify_reads_device`, each with a note; the notes in E1a, E1b, V, C7b and F1 are gone. L145 and L148 drop their markers, since their tests exist. Pending now: LOSS-1 27, S3 12, E2 1. The log lines carry times | node --test .audit/tools/claims.test.mjs
 - 2026-10-26 11:20 EDT | C7a session (Claude Code 2a5f27bc), for CHK-3 | verify | c94dcb29 | the review of 3890a1cf..c94dcb29 is closed with no findings: LOSS-1 27 markers on 25 rows match its card, none of its 26 names exists as a fn, S3 12 and E2 1 are right | message to the shell lane
 - 2026-10-26 11:22 EDT | shell lane (Claude Code 6f39d119) | gate | none | the fast checks on the branch (main 1a0c8469 is its base, unchanged): `node --test .audit/tools/*.test.mjs parity/app/journeys/coverage.test.mjs` 43 pass 0 fail; board_test, union_test and `board.py --check` 0 errors. The change is docs and node only, so no cargo step runs differently | node --test .audit/tools/*.test.mjs
+- 2026-10-26 11:30 EDT | integration lane (Claude Code 3d07d5f8) | merge | e36f49d2 | merged into main in batch 9 (C7b 39a6158c, HIST-1 144e595d, CHK-3 e36f49d2, and REL-1 waits for LOSS-1), gated by scripts/gates.sh --wait-ci batch-9 | scripts/gates.sh --wait-ci batch-9

@@ -15,9 +15,11 @@ pub mod check;
 mod create;
 pub(crate) mod export;
 mod fix;
+mod import;
 mod jobs;
 pub(crate) mod js;
 mod leave;
+mod outside;
 mod panic;
 #[cfg(feature = "test-hooks")]
 mod probe;
@@ -286,6 +288,7 @@ impl Runtime {
                 self.0.busy.set_jobs(active);
             }
             Effect::Checkpoint { at, outcome } => {
+                state.checkpoint_ended(&at, &outcome);
                 state.checkpoints.update(|map| {
                     map.insert(at, outcome);
                 });
@@ -294,6 +297,7 @@ impl Runtime {
             Effect::MaterializeBlocked { at, paths } => state.blocked.update(|map| {
                 map.insert(at, paths);
             }),
+            Effect::OutsideEdits { at, outside } => state.session_outside(&at, outside),
             Effect::AlignSave {
                 aligner,
                 state: save,
@@ -619,6 +623,10 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
 /// The page: the port of tC4's `App.jsx`, or, in a test build that asks for it, the no-loss
 /// probe outside the App, so a restart's way Home never unmounts its fields (D15).
 fn page(after: Option<CrashMarker>, probe: bool) -> AnyView {
+    #[cfg(feature = "test-hooks")]
+    if let Some(name) = probe::q9_requested() {
+        return view! { <probe::Q9 name=name /> }.into_any();
+    }
     #[cfg(feature = "test-hooks")]
     if probe {
         return view! { <ProbeRoot after=after /> }.into_any();

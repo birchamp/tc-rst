@@ -149,7 +149,8 @@ pub enum Resolved {
     Settled {
         head: ChangeId,
     },
-    /// Several heads; the projection uses `head`, no conflict is listed (§7.3 stub rules).
+    /// Several heads; the projection uses `head`, no conflict is listed (§7.3 stub rules,
+    /// ruling H5). Every head stays in History.
     SettledByRule {
         head: ChangeId,
         rule: AutoRule,
@@ -166,6 +167,8 @@ pub enum Resolved {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoRule {
     SeedStubs,
+    /// The head with the largest (rank, at, id) of a kind that never conflicts (ruling H5).
+    Newest,
 }
 
 /// A merge unit (§7.3): a group of fields taken together, named by its JSON path in the
@@ -729,6 +732,12 @@ pub enum Notice {
     },
     ImportUnfinished {
         source: Box<str>,
+    },
+    /// A book file or story changed outside the app while the project is open read-only:
+    /// nothing is kept and nothing is asked ("Titus was changed outside translationCore. Open
+    /// the project normally to import it.", delta §2.11, H22 part 4).
+    ChangedWhileReadOnly {
+        path: RepoPath,
     },
 }
 

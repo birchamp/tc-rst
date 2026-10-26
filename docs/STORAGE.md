@@ -78,8 +78,8 @@ Each invariant is proven by the tests named in §16.
 | Id | Invariant |
 |---|---|
 | I1 | **Convergence.** The fold output, the derived bytes and the conflict list are a pure function of the set of valid changes (and the derivation versions, §12). Any order, grouping or duplication of unions gives byte-identical results. |
-| I2 | **Conservation.** Every valid change is in exactly one of these states: (a) a head of a settled or merged record, projected and reachable from a screen (an alignment, decision or comment whose verse or check no longer exists is listed under *Detached*, §7.7); (b) a head shown as a candidate in a listed conflict; (c) an ancestor of a head, reachable in History, because a later change named it as a parent; (d) a head of a record of a removed book, held by the removal's author (§7.6), restored with the book; (e) part of a listed anomaly (an incomplete batch, a quarantined change, or a record of a book that no `BookPresence` change makes present); (f) a seed stub absorbed by the stub rules (§7.3), starting text no person wrote, listed in History. There is no seventh state. |
-| I3 | **No survival by time or identity.** Heads, merges and conflicts never read `at`, the device or the author. Only provisional choices read `at`: which head derived files show while a conflict is open, which side of a passage conflict they show (§7.3), the scope of a contested book, the fallback text of an incoherent verse, and the book kept by the last-book rule (§7). Display order reads it too. A wrong clock can change what is shown provisionally, never what is kept. |
+| I2 | **Conservation.** Every valid change is in exactly one of these states: (a) a head of a settled or merged record, projected and reachable from a screen (an alignment, decision or comment whose verse or check no longer exists is listed under *Detached*, §7.7); (b) a head shown as a candidate in a listed conflict; (c) an ancestor of a head, reachable in History, because a later change named it as a parent; (d) a head of a record of a removed book, held by the removal's author (§7.6), restored with the book; (e) part of a listed anomaly (an incomplete batch, a quarantined change, or a record of a book that no `BookPresence` change makes present); (f) a seed stub absorbed by the stub rules (§7.3), starting text no person wrote, listed in History; (g) a head that lost to the newest version of a record that is not verse or frame text (owner ruling H5, §8.1), listed in History, where *Restore this version* brings it back, or, for a carried file, kept as a file of its own beside it (§11.4). There is no eighth state. |
+| I3 | **No survival by time or identity, except the newest-wins rule.** Heads, merges and text conflicts never read `at`, the device or the author. Owner ruling H5: between concurrent heads of a record that is not verse or frame text and of a book's presence, the head with the largest (rank, at, id) wins (`ChangeMeta::order`, the order of the provisional head); a change that has another as an ancestor always replaces it, whatever the clocks say. The loser stays a head (I2 state g). Only provisional choices read `at`: which head derived files show while a conflict is open, which side of a passage conflict they show (§7.3), the scope of a contested book, the fallback text of an incoherent verse, and the book kept by the last-book rule (§7). Display order reads it too. A wrong clock can change what is shown provisionally and which version of a newest-wins record wins, never what is kept. |
 | I4 | **Observed parents.** The parents of a change are the heads the person's screen displayed (a `ShownToken`, §2.7), or the exact base an automated writer computed. They are never "the current heads at write time". |
 | I5 | **Total fold.** The fold never fails or panics. Defects become anomalies with a message for the person. |
 | I6 | **Atomic files.** Every file the app writes in a project goes through `atomic_write` (§5.0). No project file is written in place. |
@@ -3165,6 +3165,8 @@ outside it (tC4 D8, D18), and `recompose(decompose(x)) == x` for every book the 
 
 ### 7.6 Books
 
+*Owner ruling H5 (2026-10-24, `.audit/roadmap/rulings/2026-10-24-H5.md`), over the rest of this section:* a removal that is the newest of the book's presence heads and of the edits its remover had not seen removes the book, and those edits stay in History; a newer edit keeps the book with its edits; neither is a conflict. A removal that would leave a Bible project with no book loses to the others, with no conflict. Only *Restore the text* against *Start empty* stays a conflict, because one of them empties verse text.
+
 **Presence.** If any head of `BookPresence(b)` is `Present`, the book projects as present, with
 the scope of the `Present` head that has the largest `(at, id)`. A `Present` against a `Removed`
 is also a `BookPresence` conflict, and so are two `Present` heads with different values: a
@@ -3393,15 +3395,14 @@ the screen and the file read one text.
 and `decisionIsStale`, `src/data/revalidate.ts`, at d310bf3). A decision on a verse reads the
 content of a projected run only when its chapter is a number and its verse is a number (the run
 that holds that verse, a span included) or a span label `a-b` that a projected run carries
-exactly; and only when the run is drafted as tC4 reads a draft (`tc_usfm::codec::is_drafted`):
-the body tC4's indexer reads for it (`indexBook`, `src/data/usfm/indexer.ts`), trimmed as
-JavaScript trims, is neither empty nor the stub `___`. That body runs from after the marker (from
-the next line when the rest of the marker's line is blank) to the first line that starts with a
-paragraph-level marker (`PARA_MARKERS`), `\v` or `\c`, without the line breaks before it. So a
-seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and so are a verse whose text
-starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) and the stub followed by
-a line of text, though they hold words: tC4's Check screen shows them as not drafted, and the
-rebuild reads them the same way. Every other target (`front`, `intro`, a list such as
+exactly; and only when the run is drafted by the one drafted rule of Home, Check, the store and
+the fold (`tc_usfm::codec::words_drafted`, owner ruling H12): its words, on any line, trimmed as
+JavaScript trims, are neither empty nor the stub `___`; a line of layout markers alone holds no
+words. So a seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and a verse whose
+text starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) is drafted. This
+differs from tC4 on purpose: tC4's Check screen, Home and aligner read only the body its indexer
+finds (up to the first line that starts with a paragraph-level marker, `\v` or `\c`;
+`tc_usfm::codec::tc4_indexer_drafted`), so they show such a poem verse as not drafted. Every other target (`front`, `intro`, a list such as
 `1,3,8,12`, a span no run carries, an undrafted verse) has no text: the text gives no evidence
 either way, so it neither changes the verse nor loses the selections, as in tC4, where such a
 decision is never stale. One difference is deliberate: tC4's indexer reads a `\v` only at the
@@ -3516,6 +3517,8 @@ sync, an upgrade plan or an export is O(1).
 
 ### 8.1 Kinds and grouping
 
+*Owner ruling H5 (2026-10-24):* only verse text and story frame text conflict, with the kinds that hold them (verse text and structure, passage, structure issue, frame, book header, chapter front, story base and reference), the book restore race (§7.6) and `Unknown`. Every other kind of this section settles on its newest head (I3) with no conflict listed (`AutoRule::Newest`); the older heads stay in History. A carried file keeps both versions (§11.4); in a path-case clash one keeps its name by byte order and the other is placed beside it, so a newer version never swaps the names on a disk that ignores case.
+
 | Kind | Raised when |
 |---|---|
 | `VerseText` | verse heads are all `Text` with the same `last`, and a unit is disputed |
@@ -3556,6 +3559,8 @@ screen with the editor beside every version; its save is a resolution. A merged 
 one value that stands for all heads, so an edit of it replaces all of them.
 
 ### 8.3 Choices
+
+*Owner ruling H5 (2026-10-24):* the choices below for kinds that now settle by the newest (§8.1) are no longer offered: *Restore this version* in History brings an older version back.
 
 Every choice is one `Resolve` batch whose changes name every current head as parents (§5.9).
 
@@ -3664,6 +3669,8 @@ everything else.
 - A resolution needs no ancestry condition, so every conflict can always be resolved (tC4 F12).
 
 ### 8.5 What the person sees (requirements on the UI)
+
+*Owner ruling H5 (2026-10-24):* the Received sheet says what a newer version replaced, for example "Juan's alignment of Titus 1:1 replaced yours. Your version is in History."
 
 - Nothing is modal and nothing blocks work (tC4 D53e). After a sync or a file import, a sheet
   says "Received 212 changes from Juan and Ana. 3 verses, 1 alignment and 2 checks were changed
@@ -4307,6 +4314,8 @@ or CRC fails is never compared (§10.2 R4). The device kind `ExchangeEdit` and
 
 ### 11.4 Carried files
 
+*Owner ruling H5 (2026-10-24):* two versions of a carried file are both kept, with no question. The newest keeps the file's name; each other version is placed beside it as `<stem>-<author>.<ext>` (the author's Door43 user name or display name, or the version's short id without one), with `-2`, `-3` while that name collides with a file the project holds; the fold gives out the names, so every computer gives the same ones. The shown token of a carried file names only its shown version, so an edit or a removal of it leaves the other.
+
 A carried file is any file the app does not derive and does not own, whose path obeys the
 grammar of §3.3: anything under `ingredients/` outside the derived table, `tc/` and the format's
 `derivedPaths`, and any file at the repository root other than `.gitignore`, `.gitattributes`
@@ -4404,6 +4413,8 @@ paths break the grammar or have a dot segment are foreign entries (§9.4), kept 
 ---
 
 ## 12. Format versioning
+
+*Owner ruling H5 (2026-10-24)* changed which concurrent heads conflict. Format 1.0 is not frozen (H9), so builds from before and after it are not compatible, and no team used the earlier ones.
 
 ### 12.1 What carries a version
 
@@ -4902,7 +4913,7 @@ and the on-disk end state, not only what the fold returns.
 | L5 | An edit to a verse a teammate merged away (E3, F2) | retained `orphaned-text`, shown nowhere | verse 5 has `Covered` and `Text` heads: a conflict; the coherence pass keeps verse 5's words in the provisional USFM; *Keep 4 and 5 separate* restores both verses in one action | `loss_e3_edit_vs_merge_away`, `loss_span_resolution_restores_both_verses` |
 | L6 | A renumber against an edit of the moved verse; the "branches do not meet" dead end (F12) | `resolveVerse` could refuse; the losing text became unreachable | a renumber is a passage batch: an edit of any verse it rewrote is one `Passage` conflict shown from one side (§7.3); a resolution names the current heads and needs no ancestry condition | `loss_renumber_vs_edit`, `loss_renumber_shift_vs_edit_by_number`, property `resolution_always_possible` |
 | L7 | The same verse edited two ways | a fork, newest provisional, the review showed it | the same, for every record kind; the base text is shown with a word diff | `loss_same_verse_two_ways` (J18) |
-| L8 | Silent newest-wins for alignments and check results (E4, F3, G7) | only text forks reached a person; the rest kept the newest head with a count | every record kind has the same conflict state and a review screen (§8); decisions merge by unit first, so a bookmark against a status is no conflict | `loss_e4_alignment_conflict_visible`, `loss_check_two_ways_visible`, `merge_bookmark_and_status` |
+| L8 | Silent newest-wins for alignments and check results (E4, F3, G7) | only text forks reached a person; the rest kept the newest head with a count | every record kind has the same conflict state and a review screen (§8); decisions merge by unit first, so a bookmark against a status is no conflict | `loss_e4_alignment_newest_wins_the_other_in_history`, `loss_check_two_ways_newest_wins`, `merge_bookmark_and_status` |
 | L9 | Pins and settings mixed by concurrent slot events (sync-design §7 table) | two gateway changes could mix slots | pins are grouped; a disputed slot makes the whole group a conflict and the projection never mixes two heads | `loss_two_gateway_changes_never_mix` |
 | L10 | Two `book.add` of one book with different payloads | structural fork, newest wins silently | per-record merge; seed stubs settle by the stub rule; real differences are conflicts per verse | `loss_two_book_adds` |
 | L11 | Two people resolve one conflict differently | a new fork | a new conflict, labelled "resolved differently"; equal resolutions merge | `resolve_differently_reconflicts` |
@@ -4994,7 +5005,7 @@ and the on-disk end state, not only what the fold returns.
 | L88 | Files on Door43 the app does not own (dot files, names with spaces) are dropped from the tip by the next sync | foreign entries are kept verbatim; a badly named ingredient moves to `.tc-moved/` with a notice on every device (§9.4) | `a_checkpoint_keeps_foreign_entries_of_head`, `a_file_the_app_does_not_own_follows_door43`, `loss_invalid_name_file_moved_not_deleted` |
 | L89 | `project.json` deleted on Door43 refuses every device's sync forever | a missing or unreadable file on R is not a mismatch; the merge commit restores it (§9.2 N1, N2) | `sync_project_json_deleted_on_door43_restored` |
 | L91 | A one-verse edit in another program that strips CR becomes a whole-book conflict | line-ending and trailing-whitespace differences are not changes at an import (§13.6 U3); the file's line endings are kept (§11.1 Q2) | `a_whitespace_only_change_asks_nothing_and_keeps_a_copy` (pending: S3) |
-| L92 | `localizedNames`, other id authorities and OBS template edits are dropped at import and after outside edits | Every non-derived metadata field is a record at import (P9). An outside edit of `metadata.json` is copied, not recorded. An OBS template edit enters through Update a story (§3.4, §11.1, §13) | `loss_metadata_unmodelled_fields_kept`, `loss_obs_template_edit_recorded` |
+| L92 | `localizedNames`, other id authorities and OBS template edits are dropped at import and after outside edits | Every non-derived metadata field is a record at import (P9). An outside edit of `metadata.json` is copied, not recorded. An OBS template edit enters through Update a story (§3.4, §11.1, §13) | `loss_metadata_unmodelled_fields_kept`, `loss_obs_template_edit_imported` |
 | L93 | An edit of a carried file's `.conflict-` copy cannot be recorded and is overwritten | it continues that version of the original record (§11.4) | `loss_conflict_copy_edit_kept` |
 | L94 | The working folder is an invalid burrito during seals and intakes for longer than I7 said | every write group ends with a `metadata.json` rewrite; I7 states the windows; the crash tests assert validity after each (§1 I7, §16.2) | `every_written_state_is_a_valid_burrito` |
 | L95 | A display name such as `Ana/Pedro` makes every USB export fail | the file name is cleaned and falls back to ids (§10.1 E4) | `a_display_name_never_makes_the_file_name_fail` |
@@ -5006,7 +5017,7 @@ and the on-disk end state, not only what the fold returns.
 |---|---|---|---|
 | L97 | Keeping one candidate of a passage conflict writes another person's version of the same record, the one a later clock prefers, and supersedes the chosen one; *Keep separate* picks between two concurrent texts of a verse by clock | a choice writes exactly the version picked; where a side, or a verse's own history, holds two different versions the person did not pick between, the choice asks (§8.3) | `loss_passage_keeps_the_picked_version`, `loss_passage_side_with_two_versions_asks`, `loss_keep_separate_never_picks_by_clock`, `loss_keep_joined_keeps_the_picked_span`; property `resolution_always_possible` |
 | L98 | A version the fold's source cannot read (a locked file, a cloud placeholder) is taken as absent: two unread versions settle as equal, or an unread base lets the one readable head merge over a version nobody saw, and the next edit's token supersedes it | an unreadable value is unknown, never absent or equal: the record is listed as a conflict marked unreadable, no token names an unread version, no choice is made while one is unread, and `retry_unreadable` judges it again (§2.6) | `unreadable_versions_are_listed_never_settled`, `unreadable_equal_versions_wait_to_be_read`, `unreadable_base_never_merges_away_a_version`, `unreadable_settled_version_is_not_in_a_token` |
-| L99 | Applying offline changes to a moved check applies only the newest editor's changes (by clock) and supersedes the others, and leaves out the units other than judgement, comment and bookmark | every decided version's changed units are applied, every unit of §7.3; two different changes of one unit refuse the choice (§8.3) | `loss_carryover_two_offline_editors`, `loss_carryover_two_verdicts_refused` |
+| L99 | Applying offline changes to a moved check applies only the newest editor's changes (by clock) and supersedes the others, and leaves out the units other than judgement, comment and bookmark | every decided version's changed units are applied, every unit of §7.3; two different changes of one unit refuse the choice (§8.3) | `loss_carryover_two_offline_editors`,  |
 | L100 | *Choose per line* starts from one head's value and skips the units that merged cleanly, so the other person's agreed change (a comment) is lost; with no folded head it panics | the record starts from the merged agreed units and takes only the disputed units from the picks; it is offered only for a record's own conflict with disputed units (§8.3) | `loss_choose_per_line_keeps_agreed_units`, `per_unit_not_offered_without_units` |
 | L101 | Two changes under one comment id that target different books file the comment under the book of whichever arrived first, so devices disagree on removal visibility, `RecordsWithoutBook` and the comments files | the comment is a record of every book a change under its id targets (§7.6); a comments file lists it with the book its shown version targets | `duplicated_comment_id_across_books_converges`; property `fold_converges_under_any_union` |
 | L102 | A *Start empty* rewound after *Restore the text* rewinds only its own `StartOver` changes: a verse typed after starting empty shows beside restored verses, a mix of the two sides, and is on no screen once rewound | every verse change that is or descends from a rewound `StartOver` change is rewound, and listed as a candidate of the book's presence conflict; *Restore the text* restores each such verse (§7.6) | `loss_start_empty_descendants_rewound_and_listed` |
@@ -5035,7 +5046,7 @@ and the on-disk end state, not only what the fold returns.
 | L124 | A pending file the open read cut in place, so a value of the book can no longer be read, and the book file deleted: the book file waits for the value (R15), and a later checkpoint's job (or the close's) found no book to list, failed the build of `metadata.json` as a bug, and the checkpoint and the close failed | a book file the folder lacks and the group does not write excuses an invalid listing like a blocked path (§6.2) | `a_deleted_book_file_waiting_for_an_unreadable_value_fails_no_checkpoint` (`crates/tc-store/tests/store/model.rs`) |
 | L125 | `metadata.json` renamed by a group killed right after the rename, then held unreadable at the next open while a checkpoint's job ran: the job began a second write of it, so the ledger no longer named the first write's bytes, and the next read recorded the app's own bytes as an outside edit with a copy | No second write begins before a read settles the first, so the app's own first bytes are never taken for a change made outside (a false copy and notice) (§6.2) | `a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit` (`crates/tc-store/tests/store/model.rs`) |
 | L126 | An unreadable projection cached without its readability fact is later written as complete | only complete projections enter the cache | `an_unreadable_prerender_never_replaces_the_last_copy_of_a_save`, `a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy` |
-| L127 | A surviving unapplied outside-batch member suppresses its recovery record and spins the writer | An incomplete *Import* batch never marks its kept copy imported: `reconciles` counts only for folded, readable, applied changes (§6.4 X3a) | `an_incomplete_outside_batch_is_recorded_again_without_a_retry_loop` |
+| L127 | A surviving unapplied outside-batch member suppresses its recovery record and spins the writer | An incomplete *Import* batch never marks its kept copy imported: `reconciles` counts only for folded, readable, applied changes (§6.4 X3a) | `crash_at_every_write_point_of_an_import_imports_once` |
 | L128 | Salvaging an earlier pending path replaces a later path's source slot, then stale cleanup removes its readable source | cleanup relocates the current pending entry, including salvage aliases | both path-order regressions of `crates/tc-store/tests/store/salvage_sources.rs` |
 | L129 | Unreadable or unpreservable metadata permits carried replacement and breaks the old listing | metadata denial defers the group; typed carried preparation precedes metadata preservation and execution | `carried_restore_waits_with_its_old_listing_while_metadata_is_unreadable`, `a_carried_restore_waits_until_outside_metadata_can_be_preserved` |
 | L130 | Failed metadata preservation is deduplicated as kept, or an occupied final copy name is replaced | remember only durable copies; every new copy uses atomic no-replace creation | `metadata_copy_failure_is_retried_after_writes_resume`, `external_copy_namespace_exhaustion_never_replaces_an_existing_copy` |
@@ -5044,7 +5055,7 @@ and the on-disk end state, not only what the fold returns.
 | L133 | A temporary stat denial on a carried ingredient fails the whole materialization instead of waiting for access | both stat and content denial take R19 and keep the path dirty until retry | `a_carried_file_that_cannot_be_read_waits_for_its_replacement` |
 | L137 | A placed carried version whose blob is there but cannot be read (a damaged object): the job failed, the project turned read-only at every open, and a checkpoint could not build its tree | the path waits (R19, `FileUnreadable`) and the rest is written; a tree takes in only a blob whose header reads, else keeps the version it had (§9.4, §11.4) | `a_restored_version_whose_blob_is_damaged_waits_and_the_project_opens_writable`, `a_checkpoint_keeps_the_committed_version_while_the_placed_one_is_damaged` |
 | L139 | A save of this session whose pending file the seal cannot read (a scanner holds it) is left unsealed; if the file is cut meanwhile, the next open quarantines it and the save is gone | K1 seals from the fold's own bytes the changes it holds of a file it cannot read, and keeps the file | `a_save_whose_pending_file_the_seal_cannot_read_is_sealed_from_memory`, model history `a_pending_file_cut_twice_around_a_revert_and_a_held_open` |
-| L140 | A placement's record named a head a journal loss took and a head the fold kept: the file edited back to the kept head's value compares equal to it, records nothing, and is written over with the project's newer text | An import of a file edited back to a kept head's value, after a lost head, compares that record with the fold's heads. The edit is a revert, so a conflict, never silently dropped (§13.6 U3) | `an_edit_back_to_a_kept_head_after_a_lost_one_is_recorded` |
+| L140 | A placement's record named a head a journal loss took and a head the fold kept: the file edited back to the kept head's value compares equal to it, records nothing, and is written over with the project's newer text | An import of a file edited back to a kept head's value, after a lost head, compares that record with the fold's heads. The edit is a revert, so a conflict, never silently dropped (§13.6 U3) | `an_edit_back_to_a_kept_head_after_a_lost_one_is_kept_and_asked` |
 | L144 | A changed book file is lost or written over while the question is open | The copy is durable before the state names it, and a file whose copy cannot be made is left as it is (§5.10). The file is left as it is until *Import* or *Not now*. Another save keeps another copy with its own entry. The state and the copy survive a restart, and the question is asked again (§6.2, §11.1) | `a_changed_book_file_is_kept_and_left_until_the_answer` (pending: S3), `a_question_left_unanswered_is_asked_again_at_the_next_open` (pending: S3), `a_second_outside_save_while_asked_keeps_both_copies` (pending: S3), crash rows X1, X2 |
 | L145 | *Import* overwrites a verse changed on both sides since the file left the project | Parents are the base heads; a moved head makes a sibling, so a conflict (§13.6 U3) | `update_a_book_conflicts_a_verse_changed_on_both_sides` |
 | L146 | The app's own interrupted write is taken for a change made outside (a false question or copy after a crash) | `Placed`, `Writing` old and new, and the projection are the app's own (§6.2) | `no_crash_of_the_apps_own_write_asks_a_question` (pending: S3) (kill at every write point of M3 to M7, with and without a power cut) |
@@ -5088,14 +5099,14 @@ and are covered by the projection tests.
 | `stale_tokens_never_supersede_unseen` | screens that hold tokens across exchanges | no head disappears unless the writing screen displayed it | the actor uses current heads instead of the token |
 | `incremental_equals_full` | every step of the generators above, including batches completed late and parents arriving after children | the incremental state equals a fold from scratch | an incremental update forgets a key, a chapter or a book |
 | `fold_never_panics` | arbitrary bytes as packs and pending files; well-formed but odd sets (unknown parents, parents on other keys, duplicate devices, incoherent spans, unknown kinds, giant batches) | no panic; every defect is an anomaly | any step can fail |
-| `no_survival_by_time_or_identity` | the same history with permuted `at` values and device ids | identical heads, merges and conflict sets; only the provisional choice may differ | a rule reads `at` or the device |
+| `heads_and_text_conflicts_read_no_clock` | the same history with permuted `at` values and device ids | identical heads, merges and text conflicts; only the provisional choice and the newest-wins settlement (H5) may differ | a rule reads `at` or the device |
 | `resolution_always_possible` | any fold state | resolving every conflict, with any choice, yields a state with no conflict on those keys | a resolution needs an ancestry condition |
 | `merge_units_sound` | records with criss-cross histories and random unit changes | an agreed unit's value equals the value written by every head that changed that unit relative to every base | the base choice lets one head override another |
 | `provisional_usfm_never_drops_words` | concurrent spans, splits, joins, renumbers that shift ranges across a chapter boundary, marker drags, *Start empty*, verse edits and paragraph breaks, in books with and without a `BookLayout` | per chapter, the multiset of words in the projected USFM equals the multiset of the chapter state built from the provisional side of every `Passage` conflict; every record whose projected value is `Text` has its words in the USFM exactly once; an incoherent covered verse shows its newest own text; every incoherence is listed | the coherence pass drops a verse, a passage is judged verse by verse, or the layout skips a record |
 | `every_head_reachable_from_a_screen` | the generators above, with carry-overs, renumbers, joins and removals concurrent with comments, alignments and decisions | every head of every record kind is placed on a screen (a verse, a run's aligner, a check, a settings page, History of a removed book), is a conflict candidate, or is listed under Detached or as an anomaly | an attached record is left on an identity no screen shows |
 | `mixed_minor_versions_converge` | the same change set folded by the current app and by a build of the previous minor, with changes that carry inert newer fields and causes. Until a previous minor is released, `tc-journal` emulates it: the team history written again with inert newer-minor fields on a third of its changes (an older device's edit of such a record drops them, as it would) | identical heads, conflict lists and derived bytes; emulated: every change on its own key, the same heads, every conflict of the plain history still listed (a passage group may grow, by its passage's records, when one of them differs in a newer field: such versions are not equal values, F6), an added conflict only where versions differ in a newer field, and no newer field in any derived file | an unknown field moves a change to another key |
 | `arbitrary_meta_never_blocks_commit` | arbitrary JSON as `ProjectMeta`, pin and scope values, from commands and from imported files | `build_metadata` succeeds, the document passes `tc_burrito::check`, a checkpoint commits, and every invalid value is listed as `InvalidForBurrito` | any value can make M2 or C3 fail |
-| `book_removal_hides_nothing_unseen` | removals concurrent with edits of every record kind of the book | every change the remover did not hold is projected or in a listed conflict | removal visibility ignores a record kind |
+| `a_newer_removal_removes_and_a_newer_edit_keeps` | removals concurrent with edits of every record kind of the book | the newest of the removal and the unseen edits decides; every change the remover did not hold stays in History; a Bible project always projects a book | removal visibility ignores a record kind |
 | `update_a_book_conserves` (to write: S3 step 9) (replaces `outside_edit_reconcile_conserves` and `every_kind_of_outside_edit_in_one_project_conserves`) | random files imported through §13.6, with and without a base: small edits, reverts to older values, verse deletions, more than 50 keys, line-ending and trailing-space rewrites, book files for absent books, aligned verses, empty verses on either side | no head lost; reverts and removals are conflicts; whitespace-only differences import nothing; a file for an absent book adds it; with no base every disagreement between two non-empty verses is a conflict and the empty-verse rule holds (§13.6 U3); no no-base change is provisional | a known-base import replaces a value it did not see, or a no-base import replaces a teammate's text |
 | `a_door43_edit_by_another_tool_is_reported_once` (to write: S3 step 9) (replaces `door43_ingest_deterministic`) | commits by other tools fetched by several devices in different orders | each such commit is reported once on each device, by commit id; the merge tree takes the fold's projection (§11.2) | the intake merges a file from such a commit, or reports it at every sync |
 | `exchange_idempotent_and_relayed` | exports and imports in random order, repeated, relayed A→B→C | importing twice equals importing once; a relay equals direct exchange | intake writes something that depends on the importer |
@@ -5213,7 +5224,7 @@ copy after any crash of the app's own write:
 `crash_materialize_ledger_tells_its_bytes_from_an_outside_edit`,
 `crash_materialize_with_a_carried_file_and_a_held_file`; a same-stat change kept and asked (a
 book) or copied and written again: `loss_bit_rot_not_recorded_as_edit`; the
-`<stem>-<Door43 user>.<ext>` name: `keep_both_gives_the_other_version_its_own_file`.
+`<stem>-<Door43 user>.<ext>` name: `loss_carried_file_two_versions_both_kept` and `a_kept_copy_never_takes_a_held_name` (tc-journal).
 
 ### 16.4 Journeys (P1, P2)
 
@@ -5246,7 +5257,7 @@ Playwright drives the real UI against the real server for:
 4. **Derivations.** `plain_text_v1`, `tokenize_v1` and `selections_v1` against golden outputs
    produced once by usfm-js 3.4.3, string-punctuation-tokenizer 2.0.0 and word-aligner-lib over
    tC4's fixtures and a generated corpus, including tC4's sample hash
-   `f8aee622daff1496bccc7c2e3b358b43`; the draft test (`codec::is_drafted`) and `shown_text_v1`
+   `f8aee622daff1496bccc7c2e3b358b43`; tC4's draft test (`codec::tc4_indexer_drafted`) and `shown_text_v1`
    against tC4's own `verseTextIndex` run over every verse of its plain drafts and of drafts
    written for poetry, lists, notes and markers inside a line
    (`fixtures/usfm/check-text-vectors.json`).
@@ -5430,7 +5441,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | the read-back of a repack's index before it removes a loose object, and the 14 days | `repack_keeps_every_reachable_object`, `repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches`, `crash_r1_pack_written_loose_not_removed` |
 | G4's copy of the carried blobs (start a new repository empty) | `crash_g4_rebuild_keeps_carried_blobs` |
 | the choices of a conflict marked as incomplete history (offer only *Apply what was recovered*) | `an_incomplete_restore_race_offers_every_choice`, `release_batch_is_accepted_beside_the_other_choices` |
-| a target path of *Keep both* or a rename (any path) | `keep_both_to_a_path_the_app_writes_or_another_file_holds_is_refused`, `keep_both_gives_the_other_version_its_own_file` |
+| the path of a kept copy (H5: no choice, the fold gives it) | `a_kept_copy_never_takes_a_held_name`, `carried_keeps_both` |
 | a head's carried bytes written at their new place before the old place goes (remove first) | `an_old_carried_version_in_a_conflict_is_never_removed` (to write: S3 step 9), `a_conflict_side_whose_blob_was_lost_moves_to_its_conflict_copy_before_the_path_is_replaced` (to write: S3 step 9) |
 | the copy of a changed book file durable before the manifest names it (name it first) | `a_changed_book_file_is_kept_and_left_until_the_answer` (to write: S3 step 9), crash rows X1, X2 |
 | the look at the folder as a burrito after a job (§16.6) | `every_written_state_is_a_valid_burrito`, `the_states_after_outside_changes_are_valid_burritos` |
@@ -5441,7 +5452,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | Crate | Owns in this design |
 |---|---|
 | `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
-| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
+| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the drafted rule `words_drafted` and tC4's `tc4_indexer_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking (edit and review kinds), the command types, the scope digests and heads lists of derived files (§6.2), the per-chapter range reads the screens and the store use (`chapters_of`, `chapter_keys`, `decisions_of`, `alignments_of`, `comments_of`, `book_keys`, APP-DESIGN R1), each costing what it returns. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `StdFs`, `FaultFs`, `atomic_write`, the project lock, the device identity and the ledger, `Store` (open, create in a staging folder renamed without replacing, the start cleanup, a copy of a read-only project), the project actor and its commands, the `ProjectHandle` surface (§5.0), the draft writer, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, the detection of changed files, their kept copies and the import of a kept copy (§11.1, §13.6), drafts, identity, local git (tree build, commit, index, repack, object database access; no TLS: it comes with `tc-door43`'s fetch and push) |

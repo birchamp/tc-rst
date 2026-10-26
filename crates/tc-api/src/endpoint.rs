@@ -174,6 +174,12 @@ scoped!(
     crate::prefs::SetRailFolded,
     crate::prefs::RecordPlace,
     crate::session::Close,
+    crate::session::RetryCheckpoint,
+    crate::session::LeaveMode,
+    crate::session::Focus,
+    crate::session::ImportKept,
+    crate::session::NotNow,
+    crate::session::DismissNotice,
     crate::session::Drafts,
     crate::session::KeepDraft,
     crate::session::DiscardDraft,
@@ -194,8 +200,10 @@ scoped!(
     crate::align::Flush,
     crate::align::Close,
     crate::conflicts::Resolve,
+    crate::conflicts::Restore,
     crate::conflicts::ResolveBulk,
     crate::export::RunExport,
+    crate::import::UpdateBook,
 );
 unscoped!(
     crate::app::Quit,
@@ -215,6 +223,8 @@ unscoped!(
     crate::create::Obs,
     crate::create::AddBlankBooks,
     crate::create::AddUsfmBooks,
+    crate::import::Versions,
+    crate::import::Run,
 );
 #[cfg(feature = "test-hooks")]
 unscoped!(

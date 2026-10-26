@@ -65,6 +65,7 @@ impl Handle<Hello> for App {
                 app_locale: inner.prefs.app_locale(),
             },
             startup,
+            checkpoints: inner.sessions.failed_checkpoints(),
         })
     }
 }

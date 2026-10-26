@@ -270,15 +270,21 @@ fn loss_rename_retry_never_overwrites_outside_save() {
     };
     assert_eq!(
         rig.fs.peek(&folder.join(&copy)),
-        Some(outside),
+        Some(outside.clone()),
         "the outside save is kept whole"
     );
+    handle.wait_idle();
+    // The book waits for the person's answer, and is not written over meanwhile.
+    assert_eq!(handle.waiting_books().len(), 1);
+    assert_eq!(rig.fs.peek(&usfm), Some(outside.clone()));
+    handle.not_now("ingredients/TIT.usfm").wait().unwrap();
     handle.wait_idle();
     let written = String::from_utf8(rig.fs.peek(&usfm).unwrap()).unwrap();
     assert!(
         written.contains("a new first verse"),
         "the project's save is written after the copy: {written}"
     );
+    assert_eq!(handle.kept_copies().len(), 1, "the copy stays listed");
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
@@ -348,12 +354,15 @@ fn loss_bit_rot_not_recorded_as_edit() {
         h.wait_idle();
         let n = h.snapshot().fold().len();
         let notices = notices_of(&h);
+        // Kept and asked about like any change (delta §2.5: R10's own hold goes); nothing
+        // enters the project without *Import*.
         assert!(
             notices
                 .iter()
-                .any(|n| matches!(n, Notice::StorageDamage { .. })),
+                .any(|n| matches!(n, Notice::OutsideEditHeld { .. })),
             "{notices:?}"
         );
+        assert_eq!(h.waiting_books().len(), 1);
         h.close().unwrap();
         n
     };

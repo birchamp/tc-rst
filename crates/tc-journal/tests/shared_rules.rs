@@ -163,14 +163,13 @@ fn the_no_text_rule_reads_only_the_texts_tc4_reads() {
     );
 }
 
-/// §7.7: a verse is drafted when the body tC4's indexer reads for it, from after its marker
-/// to the first line that starts with a paragraph marker, holds more than the stub. A poetry
-/// verse whose first line is a `\q1` line of its own, the stub followed by poetry, and a
-/// verse that opens with a blank line have no text, as in tC4, though they hold words; a
-/// verse whose marker stands inside a line after `\q1 ` is read from its marker (tC4 does
-/// not index it at all).
+/// §7.7 and owner ruling H12: a verse is drafted when its words on any line hold more than
+/// the stub. A poetry verse whose first line is a `\q1` line of its own, the stub followed by
+/// poetry, and a verse that opens with a blank line have their text, though tC4's indexer,
+/// which reads only up to the first paragraph line, gives them none; a verse whose marker
+/// stands inside a line after `\q1 ` is read from its marker (tC4 does not index it at all).
 #[test]
-fn the_no_text_rule_reads_the_body_tc4s_indexer_reads() {
+fn the_no_text_rule_reads_the_words_on_every_line() {
     use tc_usfm::codec::{MarkerTerm, MarkerWs};
     let mut dev = Dev::new(1);
     let mut changes = seed_book(&mut dev, &[5]);
@@ -258,10 +257,7 @@ fn the_no_text_rule_reads_the_body_tc4s_indexer_reads() {
         "{usfm}"
     );
     let file = decision_file(&state);
-    for id in ["lfq1", "stbq", "blnk"] {
-        assert_eq!(flags(&file, id), (false, false), "{id}");
-    }
-    for id in ["text", "midl"] {
+    for id in ["lfq1", "stbq", "blnk", "text", "midl"] {
         assert_eq!(flags(&file, id), (true, true), "{id}");
     }
 }

@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use tc_api::ApiError;
-use tc_api::door43::SyncProject;
+use tc_api::door43::{LastSyncView, SyncProject};
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobKind, Phase, SyncPhase, SyncResultView};
 use tc_api::shown::PersonLabel;
@@ -86,16 +86,229 @@ pub fn synced_view(
             from.push(label);
         }
     }
+    let (replaced, records) = replaced(snapshot, received, &labels);
     SyncResultView {
         received: u32::try_from(received.len()).unwrap_or(u32::MAX),
         from,
-        kept_newest: tally.others,
+        // tC4's "{n} conflicts kept the newest version", one per record that held two
+        // versions (tC4 sync.mjs): under H5, each such record a newer version settled.
+        kept_newest: records,
         verse_conflicts: tally.verse,
         alignments: tally.alignments,
         restored,
         missing_pins: missing_pins(snapshot, installed),
         recreated: false,
+        replaced,
     }
+}
+
+/// Owner ruling H5: each received change that won as the newest over another version, by who
+/// replaced whose and of what kind ("yours" when the other version is this person's). Costs
+/// the changes received.
+fn replaced(
+    snapshot: &CountingSnapshot,
+    received: &[ChangeId],
+    labels: &BTreeMap<DeviceId, tc_journal::fold::PersonLabel>,
+) -> (Vec<tc_api::jobs::ReplacedView>, u32) {
+    use tc_api::jobs::ReplacedKind;
+    use tc_journal::RecordKey;
+    use tc_journal::fold::{AutoRule, Resolved};
+    let mut rows: Vec<((DeviceId, DeviceId), tc_api::jobs::ReplacedView)> = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut records = 0u32;
+    for id in received {
+        let Some(body) = snapshot.body(id) else {
+            continue;
+        };
+        let key = body.record.key();
+        let kind = match &key {
+            RecordKey::Alignment(..) => ReplacedKind::Alignment,
+            RecordKey::Check(_) => ReplacedKind::Check,
+            RecordKey::Comment(_) => ReplacedKind::Comment,
+            RecordKey::Setting(_)
+            | RecordKey::ProjectMeta(_)
+            | RecordKey::Versification
+            | RecordKey::BookLayout(_) => ReplacedKind::Setting,
+            RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => ReplacedKind::Resources,
+            RecordKey::BookPresence(_) => ReplacedKind::Book,
+            RecordKey::CarriedFile(_) => ReplacedKind::File,
+            _ => continue,
+        };
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        // A teammate's removal that removed a book: its verses and the rest stay in History, and
+        // the sheet says so even though no second version of the book's presence lost.
+        if let RecordKey::BookPresence(book) = &key
+            && matches!(
+                body.record,
+                tc_journal::Record::BookPresence {
+                    value: tc_journal::record::BookPresence::Removed { .. },
+                    ..
+                }
+            )
+            && snapshot.book(*book) == tc_journal::fold::BookView::Removed
+            && let Some(by) = labels.get(&body.device)
+            && labels.get(&body.device) != Some(&tc_journal::fold::PersonLabel::Mine)
+        {
+            rows.push((
+                (body.device, body.device),
+                tc_api::jobs::ReplacedView {
+                    by: crate::wire::scope::person_label(by),
+                    whose: crate::wire::scope::person_label(&tc_journal::fold::PersonLabel::Mine),
+                    kind,
+                    place: place_of(&body.record, &key),
+                    count: 1,
+                    was: None,
+                },
+            ));
+            continue;
+        }
+        // Every record a received change touched that settled on its newest head: the received
+        // change won, or lost (a teammate's decision at a check that moved), never silently.
+        let Some(state) = snapshot.key_state(&key) else {
+            continue;
+        };
+        let Resolved::SettledByRule {
+            head: winner,
+            rule: AutoRule::Newest,
+        } = state.state
+        else {
+            continue;
+        };
+        let Some(winner_device) = snapshot.body(&winner).map(|b| b.device) else {
+            continue;
+        };
+        let Some(by) = labels.get(&winner_device) else {
+            continue;
+        };
+        if state.heads.len() > 1 {
+            records += 1;
+        }
+        let won = snapshot.body(&winner).map(|b| b.record);
+        for h in state.heads.iter().filter(|h| **h != winner) {
+            let Some(lost) = snapshot.body(h) else {
+                continue;
+            };
+            let loser = lost.device;
+            let was = won.as_ref().and_then(|won| was_of(&lost.record, won));
+            let Some(whose) = labels.get(&loser) else {
+                continue;
+            };
+            // One row per record, as tC4 lists each replaced alignment (#791), so the person can
+            // find each one; a direction's two records say it once.
+            match rows.iter_mut().find(|(device, row)| {
+                *device == (winner_device, loser)
+                    && row.kind == kind
+                    && row.was.is_some()
+                    && row.was == was
+            }) {
+                Some(_) => {}
+                None => rows.push((
+                    (winner_device, loser),
+                    tc_api::jobs::ReplacedView {
+                        by: crate::wire::scope::person_label(by),
+                        whose: crate::wire::scope::person_label(whose),
+                        kind,
+                        place: place_of(&body.record, &key),
+                        count: 1,
+                        was,
+                    },
+                )),
+            }
+        }
+    }
+    (rows.into_iter().map(|(_, row)| row).collect(), records)
+}
+
+/// Where a received change's row points: a comment at the verse, check or frame it is on.
+fn place_of(
+    record: &tc_journal::Record,
+    key: &tc_journal::RecordKey,
+) -> tc_api::conflicts::ReviewPlace {
+    use tc_journal::RecordKey;
+    use tc_journal::record::CommentTarget;
+    match record {
+        tc_journal::Record::Comment { value, .. } => {
+            crate::conflicts::place_of(&match &value.target {
+                CommentTarget::Verse {
+                    book,
+                    chapter,
+                    verse,
+                } => RecordKey::Verse(*book, *chapter, *verse),
+                CommentTarget::Check(check) => RecordKey::Check(check.clone()),
+                CommentTarget::Frame { story, frame } => RecordKey::Frame(*story, *frame),
+            })
+        }
+        _ => crate::conflicts::place_of(key),
+    }
+}
+
+/// The older value of a setting or of the pins that `won` replaced, as the Received sheet
+/// names it: the font, the direction, or the pinned resources that differ.
+fn was_of(
+    lost: &tc_journal::Record,
+    won: &tc_journal::Record,
+) -> Option<tc_api::jobs::ReplacedValue> {
+    use tc_api::jobs::ReplacedValue;
+    use tc_journal::{Json, Record, keys::MetaField};
+    let direction = |text: &str| match text {
+        "rtl" => Some(ReplacedValue::Direction(tc_api::shown::Direction::Rtl)),
+        "ltr" => Some(ReplacedValue::Direction(tc_api::shown::Direction::Ltr)),
+        _ => None,
+    };
+    match lost {
+        Record::Setting {
+            key,
+            value: Some(Json::Str(text)),
+        } => match key.as_str() {
+            "textFont" => Some(ReplacedValue::Font(text.clone())),
+            "textDirection" => direction(text),
+            _ => None,
+        },
+        Record::ProjectMeta {
+            field: MetaField::Languages,
+            value: Some(Json::Arr(languages)),
+        } => match languages.first() {
+            Some(Json::Obj(first)) => match first.get("scriptDirection") {
+                Some(Json::Str(text)) => direction(text),
+                _ => None,
+            },
+            _ => None,
+        },
+        Record::Pins { value: lost, .. } => {
+            let Record::Pins { value: won, .. } = won else {
+                return None;
+            };
+            let named: Vec<String> = (lost.0.iter())
+                .filter(|(slot, value)| won.0.get(*slot) != Some(*value))
+                .filter_map(|(_, value)| pin_name(&value.0))
+                .collect();
+            (!named.is_empty()).then_some(ReplacedValue::Resources(named))
+        }
+        _ => None,
+    }
+}
+
+/// A pin as a person names it: a gateway language by its code, a resource by its repository's
+/// name and version (`en_tn v90`).
+fn pin_name(pin: &tc_journal::Json) -> Option<String> {
+    use tc_journal::Json;
+    let Json::Obj(pin) = pin else {
+        return None;
+    };
+    let text = |key: &str| match pin.get(key) {
+        Some(Json::Str(text)) => Some(text.as_str()),
+        _ => None,
+    };
+    if let Some(language) = text("languageId") {
+        return Some(language.to_owned());
+    }
+    let repo = text("repoPath")?.rsplit('/').next()?;
+    Some(match text("version") {
+        Some(version) => format!("{repo} {version}"),
+        None => repo.to_owned(),
+    })
 }
 
 /// tC4's `missingPinsAfterSync`: 0 when the pins cannot be read.
@@ -128,7 +341,12 @@ impl App {
     /// One sync of `folder`, after the checkpoint of the project just left (tC4 `syncRun`).
     async fn sync_job(&self, folder: ProjectRef) -> Result<SyncResultView, JobEnd> {
         self.inner.sessions.settled(&folder).await;
-        self.inner.sync.sync(self.clone(), folder).await
+        let view = self.inner.sync.sync(self.clone(), folder.clone()).await?;
+        crate::app::lock(&self.inner.last_sync).insert(folder.clone(), view.clone());
+        self.inner
+            .bus
+            .publish(tc_api::event::Event::HomeCard { project: folder });
+        Ok(view)
     }
 
     /// One real sync of `folder` with its Door43 repository (E1a): unit X's `tc_sync::sync` on
@@ -245,7 +463,7 @@ impl App {
     ) -> Result<SyncResultView, JobEnd> {
         use serde_json::json;
         use tc_api::test::ScriptedSync as Scripted;
-        let (teammates, joined, restored) = match outcome {
+        let (teammates, joined, kinds, restored) = match outcome {
             Scripted::Failed(failure) => {
                 return Err(JobEnd::Failed(ApiError::Refused(tc_api::Refusal::Sync(
                     failure,
@@ -254,8 +472,9 @@ impl App {
             Scripted::Synced {
                 teammates,
                 joined,
+                kinds,
                 restored,
-            } => (teammates, joined, restored),
+            } => (teammates, joined, kinds, restored),
         };
         let failed = |what: &str, reason: String| {
             JobEnd::Failed(self.internal(what, crate::reports::facts(json!({ "reason": reason }))))
@@ -308,6 +527,18 @@ impl App {
                     .map_err(|e| failed("the teammates' join was not written", e.to_string()))?,
             );
         }
+        for kind in kinds {
+            let at = folder.clone();
+            let written = self
+                .with_store(move |store| store.teammates_change_kind(&at, kind))
+                .await
+                .map_err(JobEnd::Failed)?;
+            received.extend(
+                written.map_err(|e| {
+                    failed("the teammates' changes were not written", e.to_string())
+                })?,
+            );
+        }
         // Read the project again as a sync's intake does: the fold takes the received changes
         // in and its files are written, so Home counts the conflicts they make.
         let progress =
@@ -336,6 +567,15 @@ impl App {
             .bus
             .publish(tc_api::event::Event::HomeCard { project: folder });
         Ok(view)
+    }
+}
+
+impl Handle<tc_api::door43::LastSync> for App {
+    async fn handle(&self, req: tc_api::door43::LastSync) -> Result<LastSyncView, ApiError> {
+        let view = crate::app::lock(&self.inner.last_sync)
+            .get(&req.project)
+            .cloned();
+        Ok(LastSyncView { view })
     }
 }
 
@@ -394,10 +634,72 @@ impl Handle<tc_api::test::Script> for App {
                 self.script_open_door43(Err(ApiError::Refused(tc_api::Refusal::Sync(failure))))
             }
             Scripted::Sync { project, outcome } => self.script_sync(project, outcome),
+            Scripted::CheckpointFails { project } => {
+                self.inner.sessions.script_checkpoint_failure(project);
+            }
             next @ (Scripted::Updates(_) | Scripted::Plan(_)) => {
                 self.inner.scripted_resources.script(next);
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use tc_api::jobs::ReplacedValue;
+    use tc_api::shown::Direction;
+    use tc_journal::keys::{PinGroup, SettingKey};
+    use tc_journal::record::PinGroupValue;
+    use tc_journal::{Json, Record};
+
+    use super::was_of;
+
+    fn setting(key: &str, text: &str) -> Record {
+        Record::Setting {
+            key: SettingKey::parse(key).unwrap(),
+            value: Some(Json::Str(text.to_owned())),
+        }
+    }
+
+    fn pins(tn: &str) -> Record {
+        let value = serde_json::json!({
+            "gatewayLanguage": { "languageId": "en", "owner": "unfoldingWord" },
+            "translationNotes": { "repoPath": "git.door43.org/unfoldingWord/en_tn", "version": tn },
+        });
+        Record::Pins {
+            group: PinGroup::Primary,
+            value: PinGroupValue::from_json(&value).unwrap(),
+        }
+    }
+
+    /// Owner ruling H5 for settings and pins: the Received row names the older value, so the
+    /// person can set it again where it is set.
+    #[test]
+    fn a_settings_row_names_the_older_value() {
+        assert_eq!(
+            was_of(
+                &setting("textFont", "Noto Sans"),
+                &setting("textFont", "Gentium")
+            ),
+            Some(ReplacedValue::Font("Noto Sans".into()))
+        );
+        assert_eq!(
+            was_of(
+                &setting("textDirection", "rtl"),
+                &setting("textDirection", "ltr")
+            ),
+            Some(ReplacedValue::Direction(Direction::Rtl))
+        );
+        assert_eq!(
+            was_of(&pins("v90"), &pins("v91")),
+            Some(ReplacedValue::Resources(vec!["en_tn v90".into()])),
+            "only the pins that differ"
+        );
+        assert_eq!(
+            was_of(&setting("teammateNote", "a"), &setting("teammateNote", "b")),
+            None
+        );
     }
 }

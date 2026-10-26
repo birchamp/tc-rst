@@ -588,3 +588,89 @@ fn a_large_merge_is_a_chain_grown_from_door43s_commit() {
     assert_commits_valid(&rig_a.fs, &folder);
     assert_valid_burrito(&rig_a.fs, &folder);
 }
+
+/// The storage lane's attack on *Bring it back*: Ana's save S reaches the book file while only
+/// a pending file holds it, and Juan's change T of the same verse, made over the same text,
+/// arrives by an exchange file. The receive is killed at each write point; at a point after
+/// T's pack is written and before S is sealed, another program then deletes S's pending file
+/// while the app is closed. The reopened project has T, and the book file shows S, which is
+/// kept to bring back. T is newer than what S was made over: *Bring it back* never puts S
+/// over T, T stays a version shown or in conflict.
+#[test]
+fn bring_it_back_never_replaces_a_teammates_verse_received_after_the_save() {
+    use crate::crash::{Outcome, kill_everywhere_between};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "the text before").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 1, "Juan's verse").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (_, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    let base = rig_a.fs.crash(false);
+    drop(rig_a);
+    let before = pending_files(&base, &folder);
+    let setup = |_: &tc_store::fault::FaultFs, handle: &ProjectHandle| {
+        save_verse(handle, 1, 1, "Ana's save").unwrap();
+        handle.leave(tc_store::Leave::Mode).wait().unwrap();
+        handle.wait_idle();
+    };
+    let action = |handle: &ProjectHandle| {
+        let _ = handle.receive_packs("Juan".into(), packs.clone()).wait();
+        Outcome::NotSaved
+    };
+    let between = |fs: &tc_store::fault::FaultFs| {
+        for pending in pending_files(fs, &folder) {
+            if !before.contains(&pending) {
+                fs.delete(&folder.join(pending)).unwrap();
+            }
+        }
+    };
+    let attacked = std::cell::Cell::new(0);
+    let points = kill_everywhere_between(
+        &base,
+        &folder,
+        &setup,
+        &action,
+        &between,
+        &|handle, _, _| {
+            let juan_folded = {
+                let snapshot = handle.snapshot();
+                let fold = snapshot.fold();
+                let key = verse(1, 1);
+                fold.history(&key).iter().any(|id| {
+                    fold.body(id)
+                        .is_some_and(|b| format!("{:?}", b.record).contains("Juan's verse"))
+                })
+            };
+            let lost: Vec<_> = handle
+                .kept_copies()
+                .into_iter()
+                .filter(|k| k.why == tc_store::KeptWhy::Lost)
+                .collect();
+            if !juan_folded || lost.is_empty() {
+                return;
+            }
+            attacked.set(attacked.get() + 1);
+            handle.import_kept(&lost[0].copy).wait().unwrap();
+            handle.wait_idle();
+            let shown = words(handle, 1, 1);
+            let snapshot = handle.snapshot();
+            let in_conflict = snapshot.fold().conflicts().any(|c| {
+                c.candidates
+                    .iter()
+                    .any(|v| format!("{:?}", v.value).contains("Juan's verse"))
+            });
+            assert!(
+                shown.as_deref() == Some("Juan's verse") || in_conflict,
+                "Ana's lost save replaced Juan's verse: {shown:?}"
+            );
+        },
+    );
+    assert!(points > 5, "{points}");
+    assert!(attacked.get() > 0, "no kill point gave the attack");
+}

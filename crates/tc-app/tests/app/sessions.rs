@@ -497,7 +497,8 @@ async fn a_failed_leave_checkpoint_still_closes_and_says_so() {
         [
             SessionEvent::Opened,
             SessionEvent::Checkpoint(CheckpointOutcome::Failed {
-                reason: "the disk is full".to_owned()
+                reason: "the disk is full".to_owned(),
+                code: None,
             }),
             SessionEvent::Closed
         ]
@@ -848,4 +849,41 @@ async fn a_cancelled_screen_open_with_no_other_caller_closes_the_project() {
     f.settled("kr_ulb").await;
     assert!(f.sessions().open_sessions().is_empty());
     assert!(!f.sessions().busy());
+}
+
+/// D1, H22 part 1: lost work the store keeps at a look while the project is open (found at
+/// focus or by the watcher) raises no notice of its own, only the file's write. The pages
+/// hear of the new kept copy then, without a reload; a write that changes no list tells
+/// nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn lost_work_kept_at_a_look_reaches_the_pages_without_a_reload() {
+    use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits};
+    let f = one_project().await;
+    let at = f.open("kr_ulb").await;
+    let mut sub = f.events();
+    let lost = OutsideEdits {
+        waiting: Vec::new(),
+        kept: vec![KeptCopy {
+            file: "ingredients/TIT.usfm".into(),
+            copy: ".tc/external/20261025T120000Z-ingredients%2FTIT.usfm".into(),
+            why: KeptWhy::Lost,
+        }],
+        read_only_changed: Vec::new(),
+    };
+    let written = tc_app::backend::StoreEvent::Materialized {
+        paths: vec!["ingredients/TIT.usfm".into()],
+    };
+    f.store.set_outside(lost.clone());
+    f.store.emit(&written);
+    let events = events_of(&mut sub, &at, |e| {
+        matches!(e, SessionEvent::OutsideEdits(_))
+    })
+    .await;
+    assert_eq!(events.last(), Some(&SessionEvent::OutsideEdits(lost)));
+    // The same lists again: no event, so the next one the pages hear is the mode's.
+    f.store.emit(&written);
+    f.store
+        .emit(&tc_app::backend::StoreEvent::Mode(SessionMode::Writable));
+    let events = events_of(&mut sub, &at, |e| matches!(e, SessionEvent::Mode(_))).await;
+    assert_eq!(events, [SessionEvent::Mode(SessionMode::Writable)]);
 }

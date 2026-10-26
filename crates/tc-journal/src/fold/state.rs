@@ -173,8 +173,15 @@ pub(crate) enum Local {
     /// No folded change.
     Empty,
     Settled(ChangeIdx),
-    /// Seed stubs absorbed (§7.3 stub rules).
-    ByRule(ChangeIdx),
+    /// Several heads, one shown and no conflict listed: seed stubs absorbed (§7.3 stub
+    /// rules), or the newest head of a kind that never conflicts (ruling H5).
+    ByRule {
+        head: ChangeIdx,
+        rule: super::AutoRule,
+        /// A value could not be read (§2.6): judged again when it can, since equal or
+        /// mergeable values would stand for every head instead.
+        unreadable: bool,
+    },
     /// Boxed, like `Conflict`: few records merge or conflict, and every key holds a `Local`.
     Merged(Box<(Arc<Record>, MergeHow)>),
     /// A conflict of this record alone.
@@ -409,6 +416,9 @@ pub struct FoldState {
     /// The shapes of the changes whose [`Form`] keeps no payload: moves, comments, carried
     /// files and releases.
     pub(crate) shapes: CowMap<ChangeIdx, Shape>,
+    /// The moves into each check, by the check they move to: History of a check lists the
+    /// versions a move left behind (ruling H5).
+    pub(crate) moves_into: CowMap<CheckKey, SmallVec<[ChangeIdx; 1]>>,
     /// The ids of parents the fold did not hold when a change named them (`ParentRef`).
     pub(crate) absent: ChunkVec<ChangeId>,
     /// The devices changes name, by [`DeviceIdx`].
@@ -504,6 +514,7 @@ impl FoldState {
             seqs_apart: CowMap::default(),
             kept: CowMap::default(),
             shapes: CowMap::default(),
+            moves_into: CowMap::default(),
             absent: ChunkVec::default(),
             devices: Arc::new(Vec::new()),
             device_index: CowMap::default(),
@@ -766,6 +777,11 @@ impl FoldState {
                     Shape::Carried { .. } => Form::Carried,
                     _ => Form::Release,
                 };
+                if let Shape::MovedTo { to } = &shape {
+                    self.moves_into
+                        .entry_or((**to).clone(), SmallVec::new)
+                        .push(c);
+                }
                 self.shapes.insert(c, shape);
                 form
             }
@@ -1991,7 +2007,15 @@ impl FoldState {
     /// F6 for a key whose heads may have changed.
     fn after_heads(&mut self, k: KeyIdx, dirty: &mut Dirty) {
         let (local, div) = super::merge::resolve_local(self, k);
-        if matches!(&local, Local::Conflict(c) if c.unreadable) {
+        if matches!(&local, Local::Conflict(c) if c.unreadable)
+            || matches!(
+                &local,
+                Local::ByRule {
+                    unreadable: true,
+                    ..
+                }
+            )
+        {
             self.unreadable.insert(k, ());
         } else {
             self.unreadable.remove(&k);
@@ -2167,7 +2191,8 @@ impl FoldState {
     }
 
     /// The records whose versions could not all be read on this computer (§2.6): each is
-    /// listed as a conflict marked unreadable, or holds a conflict candidate that is.
+    /// listed as a conflict marked unreadable, holds a conflict candidate that is, or shows
+    /// its newest head until its versions can be compared.
     /// `tc-store` reports them, and derived files are not written while there are any.
     pub fn unreadable_records(&self) -> Vec<RecordKey> {
         let mut keys: BTreeSet<RecordKey> = self

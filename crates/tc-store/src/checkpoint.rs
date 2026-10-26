@@ -626,13 +626,51 @@ impl Writer {
         {
             return true;
         }
-        // A carried file the project has a record of, or the other version of one.
+        // A carried file the app placed there (a kept copy no longer placed included, H5), a
+        // carried file the project has a record of, or the other version of one.
+        if self
+            .manifest
+            .paths
+            .get(path)
+            .is_some_and(|e| e.oid.is_some())
+        {
+            return true;
+        }
         let original = conflict_original(path);
         [Some(path.to_owned()), original]
             .into_iter()
             .flatten()
             .filter_map(|p| RepoPath::parse(&p).ok())
             .any(|p| self.fold.key_state(&RecordKey::CarriedFile(p)).is_some())
+    }
+
+    /// Whether `path` is a name H5 gives a kept copy of a carried file the project records:
+    /// `<stem>-<who>.<ext>` or `<stem>-<who>-<n>.<ext>` beside `<stem>.<ext>`.
+    fn kept_copy_name(&self, path: &str) -> bool {
+        let (dir, name) = path.rsplit_once('/').map_or(("", path), |(d, n)| (d, n));
+        let (stem, ext) = name
+            .rsplit_once('.')
+            .map_or((name, None), |(s, e)| (s, Some(e)));
+        let mut originals = Vec::new();
+        if let Some((base, _)) = stem.rsplit_once('-') {
+            originals.push(base);
+            if let Some((base, _)) = base.rsplit_once('-') {
+                originals.push(base);
+            }
+        }
+        originals.into_iter().any(|base| {
+            let original = match ext {
+                Some(ext) => format!("{base}.{ext}"),
+                None => base.to_owned(),
+            };
+            let original = if dir.is_empty() {
+                original
+            } else {
+                format!("{dir}/{original}")
+            };
+            RepoPath::parse(&original)
+                .is_ok_and(|p| !self.fold.heads(&RecordKey::CarriedFile(p)).is_empty())
+        })
     }
 
     /// C3 and §9.4: the commit tree in memory.
@@ -838,10 +876,16 @@ impl Writer {
             }
         }
 
-        // Foreign entries stay as they are (§9.4).
+        // Foreign entries stay as they are (§9.4). A kept copy the app placed under a name it
+        // no longer gives (H5: `<stem>-<who>[-n].<ext>` beside a carried file, holding bytes of a
+        // version the project records) is the app's; the version stays in History.
+        let versions: BTreeSet<GitOid> = self.fold.carried_versions().into_iter().collect();
         let mut moved: Vec<(String, String)> = Vec::new();
         for (path, entry) in &head_entries {
-            if desired.contains_key(path) || self.app_owned(path) {
+            if desired.contains_key(path)
+                || self.app_owned(path)
+                || (versions.contains(&entry.oid) && self.kept_copy_name(path))
+            {
                 continue;
             }
             let ingredient_like = path.starts_with("ingredients/")

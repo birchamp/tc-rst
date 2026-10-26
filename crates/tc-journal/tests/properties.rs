@@ -15,9 +15,10 @@ use sim::{Forge, Kept, Mint, Op, Script, Sim, arb_script, choose, mint};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use support::{derived_bytes, same_fold};
 use tc_journal::change::{Verified, parse_change};
+use tc_journal::command::PlannedChange;
 use tc_journal::fold::{
-    Anomaly, BookView, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow, Placement,
-    ProjectKind, Resolved, decode_alignments, decode_decisions,
+    Anomaly, AutoRule, BookView, ConflictKind, DerivedFile, FoldInput, FoldState, MergeHow,
+    Placement, ProjectKind, Resolved, decode_alignments, decode_decisions,
 };
 use tc_journal::json::Json;
 use tc_journal::record::{BookPresence, CheckValue, CommentTarget, PresentHow, VerseValue};
@@ -122,22 +123,21 @@ const SYNCED_STATES: &[&str] = &[
     "StructureIssue",
     "BookHeader",
     "ChapterFront",
-    "BookPresence",
-    "BookRemovedWhileEdited",
-    "LastBookRemoved",
-    "Alignment",
-    "Check",
-    "CheckMoved",
-    "Comment",
-    "Pins",
-    "Setting",
-    "ProjectMeta",
-    "Versification",
-    "CarriedFile",
-    "PathCase",
+    // The presence race of *Restore the text* against *Start empty*, the one book conflict
+    // H5 keeps, is built by hand in loss.rs: the generator does not reach it.
+    "newest BookPresence",
+    "newest Alignment",
+    "newest Check",
+    "newest CheckMoved",
+    "newest Comment",
+    "newest Pins",
+    "newest Setting",
+    "newest ProjectMeta",
+    "newest Versification",
+    "newest CarriedFile",
     "Unknown",
-    "BookLayout",
-    "DeviceProfile",
+    "newest BookLayout",
+    "newest DeviceProfile",
     "criss-cross bases",
     "incomplete batch",
     "duplicate device",
@@ -218,6 +218,10 @@ fn census_of(view: &View, census: &Census) {
     for key in state.record_keys() {
         if let Some(k) = state.key_state(&key) {
             match k.state {
+                Resolved::SettledByRule {
+                    rule: AutoRule::Newest,
+                    ..
+                } => census.saw(newest_name(state, &key)),
                 Resolved::SettledByRule { .. } => {
                     census.saw("settled by rule");
                     if k.heads.iter().all(|h| is_seed_stub(state, h)) {
@@ -261,6 +265,104 @@ fn census_of(view: &View, census: &Census) {
             _ => {}
         }
     }
+}
+
+/// The record kinds where the newest version wins and no conflict is listed (ruling H5).
+fn newest_kind(key: &RecordKey) -> bool {
+    matches!(
+        key,
+        RecordKey::Alignment(..)
+            | RecordKey::Check(_)
+            | RecordKey::Comment(_)
+            | RecordKey::Pins(_)
+            | RecordKey::ResourcesExtra(_)
+            | RecordKey::Setting(_)
+            | RecordKey::ProjectMeta(_)
+            | RecordKey::Versification
+            | RecordKey::DeviceProfile(_)
+            | RecordKey::BookLayout(_)
+            // A presence race of *Restore the text* against *Start empty* still conflicts.
+            | RecordKey::BookPresence(_)
+            | RecordKey::CarriedFile(_)
+    )
+}
+
+/// A book's presence heads race *Restore the text* against *Start empty*: H5 keeps that a
+/// conflict, since one of them empties verse text.
+fn restore_race(state: &FoldState, key: &RecordKey) -> bool {
+    let how = |wanted: PresentHow| {
+        state.heads(key).iter().any(|h| {
+            matches!(
+                body_of(state, h).map(|b| b.record),
+                Some(Record::BookPresence { value: BookPresence::Present { how, .. }, .. }) if how == wanted
+            )
+        })
+    };
+    how(PresentHow::RestoredText) && how(PresentHow::StartedEmpty)
+}
+
+/// A head recorded from outside without a known base meets another head: the outside edit's
+/// review decides, so the record stays a conflict.
+fn outside_without_base(state: &FoldState, key: &RecordKey) -> bool {
+    let unknown = |h: &ChangeId| {
+        matches!(
+            body_of(state, h).map(|b| b.cause),
+            Some(Cause::External {
+                unknown_base: true,
+                ..
+            })
+        )
+    };
+    let heads = state.heads(key);
+    heads.iter().any(unknown) && !heads.iter().all(unknown)
+}
+
+/// The census name of a record settled by the newest-wins rule: the kind it would have
+/// been listed as before ruling H5.
+fn newest_name(state: &FoldState, key: &RecordKey) -> &'static str {
+    match key {
+        RecordKey::Alignment(..) => "newest Alignment",
+        RecordKey::Check(_) => {
+            let moved = state.heads(key).iter().any(|h| {
+                matches!(
+                    body_of(state, h).map(|b| b.record),
+                    Some(Record::Check {
+                        value: CheckValue::MovedTo { .. },
+                        ..
+                    })
+                )
+            });
+            if moved {
+                "newest CheckMoved"
+            } else {
+                "newest Check"
+            }
+        }
+        RecordKey::Comment(_) => "newest Comment",
+        RecordKey::Pins(_) | RecordKey::ResourcesExtra(_) => "newest Pins",
+        RecordKey::Setting(_) => "newest Setting",
+        RecordKey::ProjectMeta(_) => "newest ProjectMeta",
+        RecordKey::Versification => "newest Versification",
+        RecordKey::DeviceProfile(_) => "newest DeviceProfile",
+        RecordKey::BookLayout(_) => "newest BookLayout",
+        RecordKey::BookPresence(_) => "newest BookPresence",
+        RecordKey::CarriedFile(_) => "newest CarriedFile",
+        _ => "newest of another kind",
+    }
+}
+
+/// F7's order, read from the change itself: an outside change with no known base below
+/// every other, then the time, then the id.
+fn newest_order(state: &FoldState, id: &ChangeId) -> (u8, i64, ChangeId) {
+    let body = body_of(state, id).expect("a head can be read");
+    let rank = u8::from(!matches!(
+        body.cause,
+        Cause::External {
+            unknown_base: true,
+            ..
+        }
+    ));
+    (rank, body.at.0, *id)
 }
 
 /// The device whose view before the last exchange holds the most defects (held batches,
@@ -383,6 +485,215 @@ fn fold_converges_under_any_union() {
 }
 
 // ---------------------------------------------------------------------------------------
+// Ruling H5: only text conflicts
+// ---------------------------------------------------------------------------------------
+
+/// Fails if a record outside verse text is settled by anything but the newest version, or
+/// two computers settle it differently: after any union order every device, and a fold of
+/// the union shuffled and grouped, show the head with the largest (rank, at, id).
+#[test]
+fn newest_wins_converges() {
+    team_synced(CASES, &[], |sim, _| {
+        let lines: Vec<Verified> = sim.items.iter().flatten().cloned().collect();
+        let mut rng = Rng(lines.len() as u64 * 13 + 5);
+        let mut shuffled = lines.clone();
+        rng.shuffle(&mut shuffled);
+        let mut grouped = FoldState::new(ProjectKind::Bible);
+        let mut at = 0;
+        while at < shuffled.len() {
+            let end = (at + 1 + rng.below(12)).min(shuffled.len());
+            grouped.add(InMemory.carry(&shuffled[at..end]));
+            at = end;
+        }
+        let folds: Vec<&FoldState> = sim
+            .devices
+            .iter()
+            .map(|d| &d.state)
+            .chain(std::iter::once(&grouped))
+            .collect();
+        let first = folds[0];
+        for key in first.record_keys().into_iter().filter(newest_kind) {
+            let heads = first.heads(&key);
+            // A move wins at a check's old place over any decision (H5, so it is shown once).
+            let moves: Vec<ChangeId> = heads
+                .iter()
+                .copied()
+                .filter(|h| {
+                    matches!(
+                        body_of(first, h).map(|b| b.record),
+                        Some(Record::Check {
+                            value: CheckValue::MovedTo { .. },
+                            ..
+                        })
+                    )
+                })
+                .collect();
+            let candidates = if moves.is_empty() {
+                heads.clone()
+            } else {
+                moves
+            };
+            let newest = candidates
+                .iter()
+                .copied()
+                .max_by_key(|h| newest_order(first, h))
+                .expect("a record has a head");
+            for (n, state) in folds.iter().enumerate() {
+                match state.key_state(&key).map(|k| k.state) {
+                    Some(Resolved::SettledByRule {
+                        head,
+                        rule: AutoRule::Newest,
+                    }) => prop_assert_eq!(
+                        head,
+                        newest,
+                        "INV-NEWEST-WINS-CONVERGES: fold {} settles {:?} on another head",
+                        n,
+                        key
+                    ),
+                    Some(Resolved::Conflict(_)) if !restore_race(state, &key) => {
+                        prop_assert!(
+                            false,
+                            "INV-NEWEST-WINS-CONVERGES: fold {n} lists {key:?} as a conflict"
+                        )
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    });
+}
+
+/// Fails if the newest-wins rule loses the older version: every head of a record settled
+/// by the newest is in its History, and a Restore of an older one is accepted and shown.
+// INV-A-CARRIED-FILE-KEEPS-BOTH: every present version of a carried file has one placement,
+// and no two placements share a path, letters' case ignored (H5: newest wins, both kept).
+#[test]
+fn carried_keeps_both() {
+    team_synced(CASES, &[], |sim, _| {
+        for device in &sim.devices {
+            let state = &device.state;
+            let placements = state.carried_files();
+            let mut paths = BTreeSet::new();
+            for p in &placements {
+                prop_assert!(
+                    paths.insert(tc_burrito::collision_form(&p.path)),
+                    "{} is placed twice",
+                    p.path
+                );
+            }
+            for key in state.record_keys() {
+                if !matches!(key, RecordKey::CarriedFile(_)) {
+                    continue;
+                }
+                for h in state.heads(&key) {
+                    let present = matches!(
+                        body_of(state, &h).map(|b| b.record),
+                        Some(Record::CarriedFile {
+                            value: tc_journal::record::CarriedValue::Present { .. },
+                            ..
+                        })
+                    );
+                    if present {
+                        prop_assert_eq!(
+                            placements.iter().filter(|p| p.head == h).count(),
+                            1,
+                            "{:?}: {:?} is not placed once",
+                            key,
+                            h
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    });
+}
+
+#[test]
+fn the_loser_stays_in_history() {
+    team_synced(CASES, &[], |mut sim, _| {
+        let state = sim.devices[0].state.clone();
+        for key in state.record_keys() {
+            let Some(Resolved::SettledByRule {
+                head,
+                rule: AutoRule::Newest,
+            }) = state.key_state(&key).map(|k| k.state)
+            else {
+                continue;
+            };
+            let history = state.history(&key);
+            let heads = state.heads(&key);
+            for h in &heads {
+                prop_assert!(
+                    history.contains(h),
+                    "INV-THE-LOSER-STAYS-IN-HISTORY: {key:?}: head {h:?} not in History"
+                );
+            }
+            // A carried file's other versions are files beside it, not versions to restore.
+            if matches!(key, RecordKey::CarriedFile(_)) {
+                continue;
+            }
+            let Some(loser) = heads.iter().copied().find(|h| *h != head) else {
+                continue;
+            };
+            let record = body_of(&state, &loser).expect("readable").record;
+            let writer = sim.writer_of(&key, 0);
+            let parents = sim.devices[writer].state.shown_heads(&key, None);
+            sim.write_planned(
+                writer,
+                vec![PlannedChange {
+                    record: record.clone(),
+                    parents,
+                    cause: Cause::Restore { from: loser },
+                }],
+            );
+            let after = &sim.devices[writer].state;
+            let now = after.heads(&key);
+            prop_assert_eq!(now.len(), 1, "{:?}: the Restore was refused", key);
+            prop_assert_eq!(
+                body_of(after, &now[0]).map(|b| b.record),
+                Some(record),
+                "{:?}: the restored version is not shown",
+                key
+            );
+        }
+        Ok(())
+    });
+}
+
+/// Fails if a conflict is listed for a kind where the newest wins: the kinds listed are
+/// text, the book kinds, carried files, path case and unknown records.
+#[test]
+fn only_text_conflicts() {
+    team(&[], |view, _| {
+        for conflict in view.state.conflicts() {
+            prop_assert!(
+                matches!(
+                    conflict.kind,
+                    ConflictKind::VerseText
+                        | ConflictKind::VerseStructure
+                        | ConflictKind::Passage
+                        | ConflictKind::StructureIssue
+                        | ConflictKind::Frame
+                        | ConflictKind::BookHeader
+                        | ConflictKind::ChapterFront
+                        | ConflictKind::StoryBase
+                        | ConflictKind::StoryRef
+                        | ConflictKind::Unknown
+                ) || (conflict.kind == ConflictKind::BookPresence
+                    && restore_race(view.state, &conflict.key))
+                    || outside_without_base(view.state, &conflict.key),
+                "INV-ONLY-TEXT-CONFLICTS: {:?} listed at {:?}",
+                conflict.kind,
+                conflict.key
+            );
+        }
+        Ok(())
+    });
+}
+
+// ---------------------------------------------------------------------------------------
 // I2
 // ---------------------------------------------------------------------------------------
 
@@ -463,6 +774,15 @@ fn conservation() {
                     prop_assert!(
                         candidates.contains(&id),
                         "head {label} of a conflicted record is no candidate"
+                    );
+                }
+                Some(Resolved::SettledByRule {
+                    head,
+                    rule: AutoRule::Newest,
+                }) if head != id => {
+                    prop_assert!(
+                        state.history(&key).contains(&id),
+                        "older {label} is not in History"
                     );
                 }
                 Some(Resolved::SettledByRule { head, .. }) if head != id => {
@@ -648,6 +968,16 @@ fn differences_are_visible(view: &View, census: &Census) -> Result<(), TestCaseE
                 how: MergeHow::Units(_) | MergeHow::Union,
                 ..
             }) => {}
+            Some(Resolved::SettledByRule {
+                head,
+                rule: AutoRule::Newest,
+            }) => {
+                prop_assert!(newest_kind(&key), "{key:?}: a text settled by the newest");
+                let history = state.history(&key);
+                for h in heads.iter().filter(|h| **h != head) {
+                    prop_assert!(history.contains(h), "{key:?}: an older version is gone");
+                }
+            }
             Some(Resolved::SettledByRule { head, .. }) => {
                 for h in heads.iter().filter(|h| **h != head) {
                     prop_assert!(
@@ -1125,6 +1455,12 @@ fn shape(state: &FoldState, labels: &HashMap<ChangeId, usize>) -> Shape {
             Some(Resolved::Settled { head }) => format!("settled {}", label(&head)),
             // Every head a seed stub: the smallest id stays, an id the clock and the
             // device are part of; otherwise the one head that is not a stub.
+            // The newest version wins by the clock (ruling H5); `newest_wins_converges`
+            // checks which.
+            Some(Resolved::SettledByRule {
+                rule: AutoRule::Newest,
+                ..
+            }) => "newest wins".into(),
             Some(Resolved::SettledByRule { head, .. }) => {
                 let heads = state.heads(&key);
                 if heads.iter().all(|h| is_seed_stub(state, h)) {
@@ -1190,10 +1526,11 @@ fn fold_lines(lines: &[Option<Verified>]) -> FoldState {
     )
 }
 
-/// Fails if a rule reads `at` or the device: the same history with permuted clocks and
-/// device ids has the same heads, merges and conflicts.
+/// Fails if a rule other than the newest-wins rule reads `at` or the device: the same
+/// history with permuted clocks and device ids has the same heads, merges and text
+/// conflicts, and the same records settled by the newest.
 #[test]
-fn no_survival_by_time_or_identity() {
+fn heads_and_text_conflicts_read_no_clock() {
     team_synced(CASES, &[], |sim, _| {
         let original = shape(&sim.devices[0].state, &sim.labels);
         let n = sim.recipes.len();
@@ -1611,6 +1948,16 @@ fn every_head_reachable_from_a_screen() {
                 if candidates.contains(&head) || detached.contains(&key) {
                     continue;
                 }
+                // An older version the newest replaced is reached from History (ruling H5).
+                if let Some(Resolved::SettledByRule {
+                    head: newest,
+                    rule: AutoRule::Newest,
+                }) = state.key_state(&key).map(|k| k.state)
+                    && newest != head
+                {
+                    prop_assert!(state.history(&key).contains(&head), "{key:?}");
+                    continue;
+                }
                 let Some(body) = body_of(state, &head) else {
                     continue;
                 };
@@ -1677,9 +2024,13 @@ fn every_head_reachable_from_a_screen() {
 /// Fails if removal visibility ignores a record kind: every change of a removed book that
 /// the removers did not hold keeps the book projected and is counted.
 #[test]
-fn book_removal_hides_nothing_unseen() {
+fn a_newer_removal_removes_and_a_newer_edit_keeps() {
     team(
-        &["removed with unseen work", "removed, all seen"],
+        &[
+            "removed, all seen",
+            "kept by a newer edit",
+            "removed over older unseen work",
+        ],
         removal_hides_nothing_unseen,
     );
 }
@@ -1709,6 +2060,7 @@ fn removal_hides_nothing_unseen(view: &View, census: &Census) -> Result<(), Test
             continue;
         }
         let mut unseen = 0u32;
+        let mut newest_unseen: Option<ChangeId> = None;
         for (label, line) in view.lines() {
             let Verified::Change(change) = line else {
                 continue;
@@ -1728,23 +2080,55 @@ fn removal_hides_nothing_unseen(view: &View, census: &Census) -> Result<(), Test
             };
             if !removals.iter().any(closure_has) {
                 unseen += 1;
+                // Unseen work is never lost: it stays in its record's History (H5).
+                prop_assert!(
+                    state
+                        .history(&change.body().record.key())
+                        .contains(&change.id())
+                );
+                if newest_unseen
+                    .is_none_or(|n| newest_order(state, &change.id()) > newest_order(state, &n))
+                {
+                    newest_unseen = Some(change.id());
+                }
             }
         }
-        if unseen == 0 {
-            census.saw("removed, all seen");
-            if !matches!(state.book(book), BookView::KeptAsLast { .. }) {
-                prop_assert_eq!(state.book(book), BookView::Removed);
+        let newest_removal = heads
+            .iter()
+            .max_by_key(|h| newest_order(state, h))
+            .expect("removal heads");
+        let kept_as_last = matches!(state.book(book), BookView::KeptAsLast { .. });
+        match newest_unseen {
+            None => {
+                census.saw("removed, all seen");
+                if !kept_as_last {
+                    prop_assert_eq!(state.book(book), BookView::Removed);
+                }
             }
-        } else {
-            census.saw("removed with unseen work");
-            prop_assert!(
-                matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
-                "{:?}: {} unseen, {:?}",
-                book,
-                unseen,
-                state.book(book)
-            );
+            Some(edit) if newest_order(state, &edit) > newest_order(state, newest_removal) => {
+                census.saw("kept by a newer edit");
+                prop_assert!(
+                    matches!(state.book(book), BookView::RemovedWhileEdited { unseen: n, .. } if n == unseen),
+                    "{:?}: {} unseen, {:?}",
+                    book,
+                    unseen,
+                    state.book(book)
+                );
+            }
+            Some(_) => {
+                census.saw("removed over older unseen work");
+                if !kept_as_last {
+                    prop_assert_eq!(state.book(book), BookView::Removed);
+                }
+            }
         }
+        prop_assert_eq!(
+            state
+                .conflicts_of(ConflictKind::BookPresence)
+                .filter(|c| c.key == presence)
+                .count(),
+            0
+        );
     }
     Ok(())
 }
@@ -1854,7 +2238,11 @@ fn a_comment_change_seen_under_another_book_counts_as_seen() {
         ],
         last_books_removed: false,
     };
-    let census = Census::new(&["removed with unseen work", "removed, all seen"]);
+    let census = Census::new(&[
+        "removed, all seen",
+        "kept by a newer edit",
+        "removed over older unseen work",
+    ]);
     let mut sim = Sim::run(&script, false);
     removal_hides_nothing_unseen(&View::of(&sim, most_defects(&sim)), &census).unwrap();
     sim.sync_all();

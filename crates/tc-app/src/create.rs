@@ -157,6 +157,22 @@ fn command_failed(error: CommandError) -> ApiError {
 }
 
 impl App {
+    /// Whether anything in the projects folder has `folder`'s name, without letter case.
+    pub(crate) async fn name_taken(&self, folder: &ProjectRef) -> Result<bool, ApiError> {
+        let folder = folder.clone();
+        self.with_store(move |store| {
+            let listing = store.list()?;
+            let same = |name: &str| name.eq_ignore_ascii_case(folder.as_str());
+            Ok::<_, crate::backend::StoreError>(
+                listing.projects.iter().any(|p| same(p.folder.as_str()))
+                    || listing.unusable.iter().any(|u| same(&u.name))
+                    || listing.others.iter().any(|name| same(name)),
+            )
+        })
+        .await?
+        .map_err(|e| create_failed(e.to_string()))
+    }
+
     /// Creates the project `details` describe (tC4 `createBible` and `createObs`, after the
     /// form's checks): the folder its name makes must be free, then one `Store::create`.
     async fn create_project(
@@ -173,21 +189,7 @@ impl App {
                 abbr: folder.to_string(),
             }))
         };
-        let taken = {
-            let folder = folder.clone();
-            self.with_store(move |store| {
-                let listing = store.list()?;
-                let same = |name: &str| name.eq_ignore_ascii_case(folder.as_str());
-                Ok::<_, crate::backend::StoreError>(
-                    listing.projects.iter().any(|p| same(p.folder.as_str()))
-                        || listing.unusable.iter().any(|u| same(&u.name))
-                        || listing.others.iter().any(|name| same(name)),
-                )
-            })
-            .await?
-            .map_err(|e| create_failed(e.to_string()))?
-        };
-        if taken {
+        if self.name_taken(&folder).await? {
             return Err(name_in_use());
         }
         let code = details.code.trim();
@@ -293,7 +295,7 @@ impl App {
         });
     }
 
-    fn upload_path(&self, id: &UploadId) -> PathBuf {
+    pub(crate) fn upload_path(&self, id: &UploadId) -> PathBuf {
         self.inner.config.app_data.join(UPLOADS).join(id.as_str())
     }
 
@@ -313,9 +315,9 @@ impl App {
         })
     }
 
-    fn drop_upload(&self, file: &UsfmFile) {
+    pub(crate) fn drop_upload(&self, upload: &UploadId) {
         // A file that is already gone, or cannot be removed now, is emptied at the next start.
-        let _ = std::fs::remove_file(self.upload_path(&file.upload));
+        let _ = std::fs::remove_file(self.upload_path(upload));
     }
 }
 
@@ -448,7 +450,7 @@ impl Handle<AddUsfmBooks> for App {
                     }
                 }
             };
-            self.drop_upload(file);
+            self.drop_upload(&file.upload);
             rows.push(UsfmRow {
                 name: file.name.clone(),
                 outcome,

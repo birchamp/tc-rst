@@ -554,6 +554,16 @@ impl Git {
             }
         };
         let commit = at("read HEAD's commit", reference.peel_to_commit())?;
+        Self::head_of(&commit).map(Some)
+    }
+
+    /// `commit` as HEAD was when it was HEAD.
+    pub fn commit_head(&self, commit: GitOid) -> Result<Head, GitError> {
+        let commit = at("read a commit", self.repo.find_commit(to_oid(commit)?))?;
+        Self::head_of(&commit)
+    }
+
+    fn head_of(commit: &git2::Commit<'_>) -> Result<Head, GitError> {
         let message = commit.message().unwrap_or_default();
         let has = |trailer: &str| {
             message.lines().any(|line| {
@@ -561,11 +571,11 @@ impl Git {
                     .is_some_and(|r| r.starts_with(':'))
             })
         };
-        Ok(Some(Head {
+        Ok(Head {
             commit: from_oid(commit.id())?,
             tree: from_oid(commit.tree_id())?,
             app_commit: has(TRAILER_FRONTIER) && has(TRAILER_FORMAT),
-        }))
+        })
     }
 
     /// The commit's message and the commit's parents (first parent first).

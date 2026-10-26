@@ -36,6 +36,7 @@ pub mod git;
 pub mod handle;
 mod history;
 pub mod hooks;
+pub mod kept;
 pub mod layout;
 pub mod ledger;
 pub mod load;
@@ -74,6 +75,7 @@ pub use handle::{
     StoreEvent, SyncFile, Work,
 };
 pub use hooks::{Failure, Hooks, Point};
+pub use kept::{ImportReport, Kept, KeptBase, KeptWhy, WaitingBook};
 pub use notices::StoreNotice;
 pub use open::{LockHolder, OpenError, OpenOptions};
 pub use packs::{PackRead, pack_sealer, read_received_pack};

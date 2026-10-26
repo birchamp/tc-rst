@@ -542,6 +542,7 @@ fn refusals_are_never_resent_under_their_id() {
         id: ProjectId::parse(PROJECT_ID).unwrap(),
         mode: SessionMode::Writable,
         role: SessionRole::Screen,
+        outside: Default::default(),
     };
     let mut page = Page::new();
     let k = key_of(FieldKind::Verse, "TIT 1:1");
@@ -603,6 +604,7 @@ fn writable(epoch: u64) -> OpenSession {
         id: ProjectId::parse(PROJECT_ID).unwrap(),
         mode: SessionMode::Writable,
         role: SessionRole::Screen,
+        outside: Default::default(),
     }
 }
 

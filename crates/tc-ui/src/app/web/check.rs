@@ -21,9 +21,10 @@ use tc_api::check::{
     CheckArticleRead, CheckItemView, CheckListRef, CheckSessionView, CheckUnit, Decide, DecideEdit,
     Item, Open, RailRow, RailRows, RailSince, Rows, RowsView, Tool,
 };
+use tc_api::conflicts::Restore;
 use tc_api::editor::{Draft, DraftField};
 use tc_api::helps::ArticleView;
-use tc_api::ids::Scope;
+use tc_api::ids::{ChangeRef, Scope};
 use tc_api::model::rail::{self, Filter, SortMode};
 use tc_api::prefs::{PlaceChange, PlaceMode, PlaceUpdate, RecordPlace, SetRailFolded};
 use tc_api::query::QueryKey;
@@ -111,6 +112,12 @@ pub struct CheckState {
     pub marking: ArcRwSignal<Marking>,
     /// The comment editor of the active check is open.
     pub comment_open: ArcRwSignal<bool>,
+    /// The active check's History is open (owner ruling H5).
+    pub history_open: ArcRwSignal<bool>,
+    /// A *Restore this version* of the active check is being written.
+    pub restoring: ArcRwSignal<bool>,
+    /// The last *Restore this version* of the active check was not saved.
+    pub restore_failed: ArcRwSignal<bool>,
 }
 
 impl CheckState {
@@ -129,6 +136,9 @@ impl CheckState {
             academy: ArcRwSignal::new(None),
             marking: ArcRwSignal::new(Marking::Idle),
             comment_open: ArcRwSignal::new(false),
+            history_open: ArcRwSignal::new(false),
+            restoring: ArcRwSignal::new(false),
+            restore_failed: ArcRwSignal::new(false),
         }
     }
 }
@@ -667,6 +677,7 @@ impl Actions {
         ITEMS.with(Latest::begin);
         ARTICLES.with(Latest::begin);
         c.comment_open.try_set(false);
+        c.history_open.try_set(false);
         c.detail.try_set(None);
         c.selection.try_set(BTreeSet::new());
         c.academy.try_set(None);
@@ -678,6 +689,8 @@ impl Actions {
     fn leave_item(&self) {
         let c = &self.s().c;
         c.comment_open.try_set(false);
+        c.history_open.try_set(false);
+        c.restore_failed.try_set(false);
         c.academy.try_set(None);
         c.marking.try_set(Marking::Idle);
     }
@@ -833,6 +846,69 @@ impl Actions {
                     }
                 }
             }
+        });
+    }
+
+    /// *Restore this version* from the active check's History (owner ruling H5): written like a
+    /// mark, after the write before it and over the newest token the page knows of the check.
+    pub fn restore_check(&self, from: ChangeRef) {
+        let c = self.s().c.clone();
+        let (Some((at, list)), Some(Detail::Ready(view))) =
+            (self.detail_target(), c.detail.get_untracked())
+        else {
+            return;
+        };
+        let comment = self
+            .s()
+            .project
+            .get_untracked()
+            .and_then(|project| comment_key(list.tool, &project, &view));
+        let (place, check_id) = (view.place.clone(), view.check_id.clone());
+        c.restoring.try_set(true);
+        c.restore_failed.try_set(false);
+        let this = self.clone();
+        spawn_local(async move {
+            // The comment being typed saves first, so its save never lands over the restore
+            // (loss lens M2); a save that cannot be made leaves the restore undone.
+            if !this.runtime().saves().gate().await {
+                let c = &this.s().c;
+                c.restoring.try_set(false);
+                c.restore_failed.try_set(true);
+                return;
+            }
+            let writes = WRITES.with(DecisionWrites::clone);
+            let result = {
+                let _turn = writes.turn().await;
+                let request = Restore {
+                    at,
+                    request: js::random_request_id(),
+                    shown: writes.token(&place, &check_id, &view.decision.token),
+                    from,
+                };
+                let result = this.runtime().api().call(&request).await;
+                if let Ok(ack) = &result
+                    && let [update] = ack.tokens.as_slice()
+                {
+                    writes.learn(&place, &check_id, &update.token);
+                }
+                result
+            };
+            let c = &this.s().c;
+            c.restoring.try_set(false);
+            if let Ok(ack) = &result {
+                this.patch_rail(ack);
+                if let Some(key) = &comment {
+                    this.runtime().saves().redraft(key);
+                }
+            }
+            let shown = c.detail.with_untracked(|d| {
+                matches!(d, Some(Detail::Ready(v)) if v.place == place && v.check_id == check_id)
+            });
+            if !shown {
+                return;
+            }
+            c.restore_failed.try_set(result.is_err());
+            this.refresh_item();
         });
     }
 
