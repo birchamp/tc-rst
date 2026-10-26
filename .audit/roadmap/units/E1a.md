@@ -4,7 +4,7 @@ title: Sync with Door43 in the app
 track: A
 lane: app
 milestone: M3
-state: building
+state: verifying
 owner: C7a session (Claude Code 3058c665)
 branch: track-E1a
 worktree: .worktrees/track-E1a
@@ -16,7 +16,7 @@ no_loss: true
 size: 5-6 sessions (basis: B10 and C0)
 merged: none
 updated: 2026-10-24
-next: The three review lenses (loss first), then the hand-off tests and one push; the merge waits for D1.
+next: Reviewed and ready; the merge waits for D1. The integration lane gates it then.
 blocked_by: none
 ---
 
@@ -314,3 +314,4 @@ and the same with `--features gallery`, `--features app` and `--features test-ho
 - 2026-10-26 | races and protocol lens (Claude Code subagent of 3058c665) | verify | cdc87260 | no blocker, no major. Lock order read lock then actor; close off the workers; a second sync refused by the FlowGate; door43_refused clears only its own token; keychain calls go through spawn_blocking except the launch read on the main thread; the fake's routes hold no lock across an await. Minors: while close waits for a running sync, a late read of that project waits behind it (quit only); the comment said a launch never touches the store, but the launch read does; remove_repo is blocking (test only) | code reading
 - 2026-10-26 | browser and parity lens (Claude Code subagent of 3058c665) | verify | cdc87260 | Blocker: the records treated two alignments as a conflict to review, against ruling H5 (newest wins, the Received sheet says what was replaced). Major: the Download journey's last wait passed vacuously (the toast is drawn only on Home); the residuals' count of 4 claimed tC4's behaviour without evidence. Minors: some sync-button waits loose; J26 [G6] reads no texts back; Download keeps the toast until Source texts opens where tC4 closes it first (#724's own follow-up); with real sync, pushToDoor43 connects an empty repository where the capture steps say main exists | code reading
 - 2026-10-26 | C7a session (Claude Code 3058c665) | fix | none | H5: PLAN's #791 paragraph says ruling H5 replaces the two-alignment note (C7b), the two #791 rows are back to before step 8 with the owner named (H5, C7b), `two_different_alignments_of_one_verse_are_listed_once` is dropped (it would hold the pre-H5 behaviour), and the residuals say the note goes when C7b lands. The count residual no longer claims tC4's count. The Download journey goes back Home and checks the toast is gone; with the clearing removed it fails (`# pass 0 # fail 1`). The keychain comment is right now. The close fallback for callers outside a runtime keeps tc-app's lib tests passing (88). Minors left as logged | node --test sync-button.test.mjs
+- 2026-10-26 | C7a session (Claude Code 3058c665) | gate | none | hand-off checks with main (1a0c8469) in: fmt, clippy (workspace, release bins and app, Windows gnu), the five wasm clippy runs, `cargo test` of tc-app, tc-api (proptest), tc-ui (tc-api/test-hooks), tc4 and tc-door43-fake, journeys sync-button, share-open, team-sync, j11-sign-in, conflict-review and env-rust `# tests 38 # pass 38 # fail 0 # skipped 0`, screen_record 48, audit tools 39, board 0 errors. Pushed once | .enjoy-logs/handoff{,2,3}.log
