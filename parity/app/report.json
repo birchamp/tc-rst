@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "6239bdc24c392969",
+      "ui": "e7f5216f8861da3a",
       "commit": "dev",
       "api": 1
     }
@@ -600,7 +600,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "6ba06b02b5c5f13a0cc1a645aa328d749d8f6178aa8c27be86b45162d2bc4e45",
@@ -612,7 +612,7 @@
       },
       "dom": {
         "tc4Sha256": "80a6868148bd3e8c8647c47dcf157a0dd465fde6708f698f1271bda589a55985",
-        "rustSha256": "27c89f926269106ca38c7a537a4a1204e90b2ddf9114ac4a8a238be357e97476",
+        "rustSha256": "06a5f9fb1e469175ad1195a92a3b687ec3ed27c2f9160c52eaf550cfd5f6245d",
         "scope": null,
         "same": true,
         "declared": [],
@@ -630,7 +630,7 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "47134d59f40f981739da209fcfb95bd56f6499cd8cbda1dbf49c7d061630ae32",
@@ -642,7 +642,7 @@
       },
       "dom": {
         "tc4Sha256": "04d557e1d9c81afec3c21a68eec9eb4302eea5081dd5a348486a7a7d5c6b6a4e",
-        "rustSha256": "a6130dc0bbdea91d685de14c6646ad2b4b5bb272a8cdc44b46bbe108b0041264",
+        "rustSha256": "9a4d13d08153294d0d66488996f8e45fdcf93b433ce64d76d40daefa4c9144a5",
         "scope": null,
         "same": false,
         "declared": [],
@@ -1130,13 +1130,13 @@
       "scenario": "sample",
       "locale": "en",
       "status": "differs",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b0b464938b644360ba68430e8b13eb2e3936b49e0b834597769798ff818738f2",
-        "rustSha256": "bbb80a328c02a5597d0cc6328817a1acf5b587fe597a35fa1785ec17b2f221c5",
-        "mismatched": 175240,
-        "outsideMasks": 164851,
+        "rustSha256": "0bc6c604ea4b4a2ecee43eed575efe623218828790ce1e102ce59212308a4064",
+        "mismatched": 176171,
+        "outsideMasks": 165784,
         "masks": [
           "q3-where",
           "q3-refused"
@@ -1145,14 +1145,17 @@
       },
       "dom": {
         "tc4Sha256": "a50f3ad3c432027882810e2693c29df35fa8020b6d9ea742789704d86f77325f",
-        "rustSha256": "a583daa240526ed0ae44725d0d6279b3820b1d611bdabafd4bc6cf875be19af0",
+        "rustSha256": "9c75c9f5ef18a982ae0c0db9098e63df2872c391192cd429f0b64e14acb6e4d6",
         "scope": null,
         "same": false,
-        "declared": [
-          "q3-where",
-          "q3-refused"
-        ],
-        "firstDiffs": []
+        "declared": [],
+        "firstDiffs": [
+          "line 17: tC4             <button aria-expanded=\"false\" aria-haspopup=\"menu\" aria-label=\"Door43 account: not signed in. The internet is on. Click to turn it off.\" data-internet=\"on\" data-state=\"out\" data-testid=\"account-menu\" title=\"The internet is on. Click to turn it off.\" type=\"button\" style=\"align-items: cent… | rust             <button aria-expanded=\"false\" aria-haspopup=\"menu\" aria-label=\"Door43 account: @facilitator-zq. The internet is on. Click to turn it off.\" data-internet=\"on\" data-state=\"in\" data-testid=\"account-menu\" title=\"The internet is on. Click to turn it off.\" type=\"button\" style=\"align-items: cen…",
+          "line 18: tC4               <svg aria-hidden=\"true\" fill=\"none\" height=\"18\" stroke-width=\"2\" stroke=\"currentColor\" viewBox=\"0 0 24 24\" width=\"18\"> | rust               \"FA\"",
+          "line 19: tC4                 <circle cx=\"12\" cy=\"8\" r=\"4\"> | rust             <span aria-hidden=\"true\" data-testid=\"internet-indicator\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: rgb(255…",
+          "line 20: tC4                 <path d=\"M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7\"> | rust     <main  style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; flex-basis: 0%; flex-grow: 1; flex-shrink: 1; overflow-x: auto; overflow-y: auto; paddi…",
+          "line 21: tC4             <span aria-hidden=\"true\" data-testid=\"internet-indicator\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: rgb(255… | rust       <div  style=\"margin-bottom: 0px; margin-left: auto; margin-right: auto; margin-top: 0px; max-width: var(--measure-page)\">"
+        ]
       },
       "meaning": {
         "same": true,

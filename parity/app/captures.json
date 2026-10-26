@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "6239bdc24c392969",
+    "ui": "e7f5216f8861da3a",
     "commit": "dev",
     "api": 1
   },
@@ -452,7 +452,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "layers": [
         "pixels",
@@ -471,14 +471,14 @@
       "png": "screens/share-dialog.png",
       "sha256": "14f519d2439311d08e2abd0b78e9609081b72e8e3106cdbc6d27c0947d537764",
       "dom": "dom/share-dialog.json",
-      "domSha256": "27c89f926269106ca38c7a537a4a1204e90b2ddf9114ac4a8a238be357e97476"
+      "domSha256": "06a5f9fb1e469175ad1195a92a3b687ec3ed27c2f9160c52eaf550cfd5f6245d"
     },
     {
       "name": "share-dialog-check",
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "layers": [
         "pixels",
@@ -497,7 +497,7 @@
       "png": "screens/share-dialog-check.png",
       "sha256": "46d5ed3a511040a4766dfb6ea04f134fa59e60203a191e23c5257e668daf4b0c",
       "dom": "dom/share-dialog-check.json",
-      "domSha256": "a6130dc0bbdea91d685de14c6646ad2b4b5bb272a8cdc44b46bbe108b0041264"
+      "domSha256": "9a4d13d08153294d0d66488996f8e45fdcf93b433ce64d76d40daefa4c9144a5"
     },
     {
       "name": "account-menu",
@@ -874,7 +874,7 @@
       "kind": "screen",
       "scenario": "sample",
       "locale": "en",
-      "by": "B7",
+      "by": "E1b",
       "backend": "store",
       "layers": [
         "pixels",
@@ -904,9 +904,9 @@
         }
       },
       "png": "screens/open-door43-refused.png",
-      "sha256": "bbb80a328c02a5597d0cc6328817a1acf5b587fe597a35fa1785ec17b2f221c5",
+      "sha256": "0bc6c604ea4b4a2ecee43eed575efe623218828790ce1e102ce59212308a4064",
       "dom": "dom/open-door43-refused.json",
-      "domSha256": "a583daa240526ed0ae44725d0d6279b3820b1d611bdabafd4bc6cf875be19af0"
+      "domSha256": "9c75c9f5ef18a982ae0c0db9098e63df2872c391192cd429f0b64e14acb6e4d6"
     },
     {
       "name": "en-understand-tit1",
