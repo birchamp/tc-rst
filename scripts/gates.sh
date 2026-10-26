@@ -12,17 +12,20 @@ STEPS=(
   "clippy-release-bins|cargo clippy --locked -p tc-server -p tc4 --lib --bins -- -D warnings"
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
-  "test|cargo test --locked --workspace --no-fail-fast --exclude tc-app"
+  # nextest names a test that runs past 60 s and stops it at its limit (.config/nextest.toml,
+  # CHK-8); it runs no doctests, so cargo test --doc does.
+  "test|cargo nextest run --locked --workspace --no-fail-fast --exclude tc-app && cargo test --locked --workspace --doc --no-fail-fast --exclude tc-app"
   # tc-app alone took 39 min locally: in one CI job with the rest it ran past the job's 75 min.
-  "test-app|cargo test --locked -p tc-app --no-fail-fast"
-  "alignment-budget|cargo test --locked -p tc-align --release --test suggestion_budget -- --ignored --nocapture"
+  "test-app|cargo nextest run --locked -p tc-app --no-fail-fast && cargo test --locked -p tc-app --doc --no-fail-fast"
+  "alignment-budget|cargo nextest run --locked -p tc-align --release --test suggestion_budget --run-ignored only --no-capture"
   "ignored|scripts/check-ignored.sh"
   "wasm-ui|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets -- -D warnings"
   "wasm-ui-gallery|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features gallery -- -D warnings"
   "wasm-ui-app|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features app -- -D warnings"
   "wasm-ui-hooks|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features test-hooks -- -D warnings"
   "wasm-api|cargo clippy --locked -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings"
-  "node|node --test parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs .audit/tools/*.test.mjs"
+  # --test-timeout bounds each file, which node runs as one test (CHK-8).
+  "node|node --test --test-timeout=120000 parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs .audit/tools/*.test.mjs"
   "board|python3 -I -B .audit/tools/board_test.py && python3 -I -B .audit/tools/union_test.py && python3 -I -B .audit/tools/board.py --check"
 )
 NIGHTLY=(
@@ -178,7 +181,8 @@ touched() {
   echo "gates: --touched: ${#crates[@]} crates, ${#files[@]} journey files"
   cargo test --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
   if (( ${#crates[@]} )); then
-    cargo test --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
+    cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
+    cargo test --locked --no-fail-fast --doc "${crates[@]/#/--package=}" || code=1
   fi
   if (( ${#files[@]} )); then
     journeys "${files[@]}" || code=1

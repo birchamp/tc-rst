@@ -1,0 +1,6 @@
+# The gate's Rust tests run through cargo-nextest (scripts/gates.sh, CHK-8): a test still running
+# after 60 s is named SLOW in the log, and after 5 periods it is stopped and named TIMEOUT, so a
+# hung test costs 5 minutes, not the job's whole limit.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 5 }
+fail-fast = false

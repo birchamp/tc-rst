@@ -176,19 +176,19 @@ pub fn store_corpora() -> &'static StoreCorpora {
 mod bundle_build;
 
 /// A resource store with the bundle's English notes, words links and words articles and the
-/// Hebrew Bible, the releases the corpus pins, built once per test binary.
+/// Hebrew Bible, the releases the corpus pins, built once per test run.
 pub fn psalms_resources() -> &'static Path {
     static STORE: OnceLock<PathBuf> = OnceLock::new();
     STORE.get_or_init(|| {
-        let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("b5a-psalms-resources");
-        let _ = std::fs::remove_dir_all(&out);
         let from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bundle/en");
         let wanted = ["en_tn", "en_twl", "en_tw", "hbo_uhb"];
-        let built = bundle_build::build_bundle(&from, &out, &|pin| {
-            wanted.contains(&pin.repo.name().as_str())
-        })
-        .unwrap_or_else(|e| panic!("the corpus's resources could not be installed: {e}"));
-        assert_eq!(built.installed.len(), 4, "{built:?}");
-        out
+        bundle_build::build_once_per_run(
+            &PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+            "b5a-psalms-resources",
+            &from,
+            &|pin| wanted.contains(&pin.repo.name().as_str()),
+            4,
+        )
+        .unwrap_or_else(|e| panic!("the corpus's resources could not be installed: {e}"))
     })
 }

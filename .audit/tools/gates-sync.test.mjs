@@ -105,3 +105,23 @@ test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on requ
     assert.match(body, /if: .*refs\/heads\/claude\/focused-ride-5uzj7p.*startsWith\(github\.ref, 'refs\/heads\/gate\/'\).*workflow_dispatch/, `INV-FULL-TESTS-GATE-MERGES: ci.yml job ${job} runs on every push`);
   }
 });
+
+test('INV-A-HUNG-TEST-IS-NAMED-AND-STOPPED: every gate test has a time limit (CHK-8)', () => {
+  const problems = [];
+  for (const step of steps) {
+    const libtest = step.command.split('&&').filter((c) => /cargo test /.test(c) && !/ --doc\b| --list\b/.test(c));
+    if (libtest.length) problems.push(`step ${step.name} runs Rust tests through cargo test, which stops no hung test; use cargo nextest run`);
+  }
+  const config = read('.config/nextest.toml').split(/^\[profile\.default\]$/m)[1]?.split(/^\[/m)[0] ?? '';
+  if (!/^slow-timeout = \{ period = "\d+s", terminate-after = \d+ \}$/m.test(config)) problems.push('.config/nextest.toml [profile.default] sets no slow-timeout with terminate-after');
+  const nextestSteps = new Set(steps.filter((s) => s.command.includes('cargo nextest')).map((s) => s.name));
+  for (const job of jobsOf(ci)) {
+    const runs = [...job.text.matchAll(/scripts\/gates\.sh --step (\S+)/g)].some((m) => nextestSteps.has(m[1]));
+    if (runs && !job.text.includes('tool: cargo-nextest@')) problems.push(`ci.yml job ${job.id} runs a nextest step without installing a pinned cargo-nextest`);
+  }
+  if (!/^\s*"node\|node --test --test-timeout=\d+ /m.test(gates)) problems.push('the node step sets no --test-timeout');
+  const kit = read('parity/app/journeys/kit.mjs');
+  const limit = Number(kit.match(/export function browserTest\([^)]*timeout = ([\d_]+)/)?.[1].replaceAll('_', ''));
+  if (!(limit > 0 && limit <= 120_000)) problems.push('browserTest in parity/app/journeys/kit.mjs has no default timeout of 2 minutes or less');
+  assert.deepEqual(problems, []);
+});
