@@ -114,6 +114,11 @@ pub(crate) enum Job {
         rel: String,
         reply: Resolver<Result<crate::reply::TakenIn, StoreError>>,
     },
+    /// The bytes of a carried file's version, its blob (§11.4), for an export.
+    ReadCarried {
+        oid: tc_journal::GitOid,
+        reply: Resolver<Result<Option<Vec<u8>>, StoreError>>,
+    },
     /// The branch moved: the objects of the commit are reachable now, so a repack due may
     /// run (§9.8).
     Repack,
@@ -596,6 +601,14 @@ impl Writer {
                 if self.recorded(rel, seen, copy, outcome, &bytes) == Answered::Accepted {
                     self.retry();
                 }
+            }
+            Job::ReadCarried { oid, reply } => {
+                // The writer owns the repository; a project with none has no carried bytes.
+                let result = match &self.git {
+                    Some(git) => git.read_blob(oid).map_err(StoreError::from),
+                    None => Ok(None),
+                };
+                reply.resolve(result);
             }
             Job::Repack => self.maybe_repack(),
             Job::ImportKept { copy, reply } => self.import_kept(&copy, reply),

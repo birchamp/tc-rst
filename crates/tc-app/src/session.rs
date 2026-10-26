@@ -266,7 +266,9 @@ pub fn checkpoint_due(
     reason: &CheckpointReason,
 ) -> bool {
     match reason {
-        CheckpointReason::LeavingProject | CheckpointReason::Other(_) => true,
+        CheckpointReason::LeavingProject
+        | CheckpointReason::BeforeExport
+        | CheckpointReason::Other(_) => true,
         CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => match policy {
             CheckpointPolicy::EveryModeSwitch => true,
             CheckpointPolicy::AtMostEvery(span) => last.is_none_or(|last| {
@@ -423,6 +425,7 @@ impl SessionRegistry {
         let folder = session.scope.project.clone();
         let label = match &reason {
             CheckpointReason::LeavingProject => "leavingProject",
+            CheckpointReason::BeforeExport => "beforeExport",
             CheckpointReason::LeavingTranslate | CheckpointReason::LeavingMode(_) => "leavingMode",
             CheckpointReason::Other(_) => "other",
         };

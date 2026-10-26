@@ -19,3 +19,4 @@ crates/tc-store/src/git.rs	removes git's stale lock and temporary pack files: gi
 crates/tc-store/src/history.rs	moves a broken .git aside into .tc (G4 rebuild): git's own files, kept, not a project file
 crates/tc-store/src/repack.rs	removes loose git objects a pack now holds, and their empty folders: git's own files, not a project file
 crates/tc-sync/src/exchange.rs	the exchange file an export writes to the folder the person chose (a USB stick), under a temporary name, then renamed; no project file
+crates/tc-app/src/export.rs	an export's file in the server's downloads folder in app data, renamed into the registry; never a project file

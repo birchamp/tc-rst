@@ -6,7 +6,7 @@ use leptos::ev;
 use leptos::prelude::*;
 use tc_api::ids::ServerInstance;
 
-use super::app_ctx::{Actions, AppState, Dialog, use_app};
+use super::app_ctx::{Actions, AppState, Dialog, DialogKind, use_app};
 use super::{ViewError, js, panic};
 use crate::app::account::SignInFlow;
 use crate::app::save::indicator::{Indicator, IndicatorStatus, Retry};
@@ -71,32 +71,35 @@ pub fn App() -> impl IntoView {
     // changes `sign_in`, never draws the dialog again.
     let feedback_open = {
         let (dialog, fb) = (ctx.s.layers.dialog.clone(), ctx.s.fb.clone());
-        Memo::new(move |_| dialog.get() == Some(Dialog::Feedback) && fb.with(Option::is_some))
+        Memo::new(move |_| {
+            dialog.with(|d| matches!(d, Some(Dialog::Feedback))) && fb.with(Option::is_some)
+        })
     };
     // A step opened again is a new dialog, as tC4's is (a new `si`).
     let sign_in_open = {
         let (dialog, step) = (ctx.s.layers.dialog.clone(), ctx.s.sign_in.clone());
         Memo::new(move |_| {
-            (dialog.get() == Some(Dialog::SignIn))
+            dialog
+                .with(|d| matches!(d, Some(Dialog::SignIn { .. })))
                 .then(|| step.with(SignInFlow::flow))
                 .flatten()
         })
     };
     let share_open = {
-        let (dialog, sh) = (ctx.s.layers.dialog.clone(), ctx.s.sh.clone());
-        Memo::new(move |_| dialog.get() == Some(Dialog::Share) && sh.with(Option::is_some))
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::Share(_)))))
     };
     let fix_open = {
-        let (dialog, fix) = (ctx.s.layers.dialog.clone(), ctx.s.c.fix.clone());
-        Memo::new(move |_| dialog.get() == Some(Dialog::GuidedFix) && fix.with(Option::is_some))
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::GuidedFix(_)))))
     };
     let settings_open = {
-        let (dialog, st) = (ctx.s.layers.dialog.clone(), ctx.s.st.clone());
-        Memo::new(move |_| dialog.get() == Some(Dialog::Settings) && st.with(Option::is_some))
+        let dialog = ctx.s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::Settings(_)))))
     };
     let sources_open = {
         let dialog = ctx.s.layers.dialog.clone();
-        Memo::new(move |_| dialog.get() == Some(Dialog::Sources))
+        Memo::new(move |_| dialog.with(|d| matches!(d, Some(Dialog::Sources))))
     };
     view! {
         <div style=frame.to_style()>
@@ -123,34 +126,22 @@ pub fn App() -> impl IntoView {
 }
 
 /// Home's dialogs, in tC4's mount order (`tC4:src/App.jsx:138-143`): AddProject, NewBible,
-/// NewObs, AddBook, Import, OpenFromDoor43. Each is mounted while `s.modal` names it and its
-/// form is set.
+/// NewObs, AddBook, Import, OpenFromDoor43. Each is mounted while `s.modal` names it; its form
+/// is in the dialog.
 fn home_dialogs(s: &AppState) -> impl IntoView + use<> {
+    // The kind alone, so typing in a form does not draw its dialog again.
     let dialog = {
-        let (dialog, np, ab, im, od) = (
-            s.layers.dialog.clone(),
-            s.np.clone(),
-            s.ab.clone(),
-            s.im.clone(),
-            s.od.clone(),
-        );
-        Memo::new(move |_| match dialog.get() {
-            Some(Dialog::NewProject) if np.with(Option::is_none) => None,
-            Some(Dialog::NewObs) if np.with(Option::is_none) => None,
-            Some(Dialog::AddBook) if ab.with(Option::is_none) => None,
-            Some(Dialog::Import) if im.with(Option::is_none) => None,
-            Some(Dialog::OpenDoor43) if od.with(Option::is_none) => None,
-            other => other,
-        })
+        let dialog = s.layers.dialog.clone();
+        Memo::new(move |_| dialog.with(|d| d.as_ref().map(Dialog::kind)))
     };
-    let open = move |which: Dialog| Memo::new(move |_| dialog.get() == Some(which));
+    let open = move |which: DialogKind| Memo::new(move |_| dialog.get() == Some(which));
     let (add_project, new_bible, new_obs, add_book, import, open_door43) = (
-        open(Dialog::AddProject),
-        open(Dialog::NewProject),
-        open(Dialog::NewObs),
-        open(Dialog::AddBook),
-        open(Dialog::Import),
-        open(Dialog::OpenDoor43),
+        open(DialogKind::AddProject),
+        open(DialogKind::NewProject),
+        open(DialogKind::NewObs),
+        open(DialogKind::AddBook),
+        open(DialogKind::Import),
+        open(DialogKind::OpenDoor43),
     );
     view! {
         {move || add_project.get().then(|| view! { <AddProject /> })}
@@ -549,9 +540,11 @@ fn main_view(s: &AppState) -> AnyView {
             })
             .into_any()
         }
-        Screen::CommunityChecking => {
-            view! { <crate::views::community_checking::CommunityChecking /> }.into_any()
+        Screen::CommunityChecking => view! {
+            <crate::views::community_checking::CommunityChecking />
+            <crate::views::review::ReviewOverOther />
         }
+        .into_any(),
         Screen::Nothing => ().into_any(),
     }
 }

@@ -1562,6 +1562,7 @@ impl ProjectHandle for StoreHandle {
                 CheckpointReason::LeavingMode(mode) => {
                     tc_store::CheckpointReason::Other(format!("leaving {mode}"))
                 }
+                CheckpointReason::BeforeExport => tc_store::CheckpointReason::BeforeExport,
                 CheckpointReason::Other(why) => tc_store::CheckpointReason::Other(why),
             })
         }) else {
@@ -1573,6 +1574,16 @@ impl ProjectHandle for StoreHandle {
             });
         };
         Box::pin(async move { checkpoint_outcome(pending.await) })
+    }
+
+    fn carried_bytes(
+        &self,
+        oid: tc_journal::GitOid,
+    ) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        let Some(pending) = self.inner().as_ref().map(|handle| handle.read_carried(oid)) else {
+            return Box::pin(async { Err(StoreError::Other("the project is closed".to_owned())) });
+        };
+        Box::pin(async move { pending.await.map_err(store_error) })
     }
 
     fn counters(&self) -> StoreCounters {

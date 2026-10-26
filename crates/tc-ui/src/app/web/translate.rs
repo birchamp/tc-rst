@@ -15,6 +15,23 @@ use crate::app::shell::Editing;
 use crate::app::translate::{section_key, verse_key};
 
 impl Actions {
+    /// The open project's write proof, tracked (6.4): `None` while it is read-only.
+    pub fn write_cap(&self) -> Option<super::WriteCap> {
+        let project = self.s().project.get()?;
+        self.runtime().saves().watch_write_cap(&project.at)
+    }
+
+    /// Why the open project is read-only, in the banner's words (6.4), tracked: the screens
+    /// whose edit controls are off say it.
+    pub fn read_only_words(&self) -> Option<String> {
+        let project = self.s().project.get()?;
+        let reason = self.runtime().saves().watch_read_only(&project.at)?;
+        Some(crate::i18n::t(
+            crate::app::offer::banner(reason).sentence,
+            &[],
+        ))
+    }
+
     pub fn start_story_unit(&self, key: tc_api::buffer::BufferKey) {
         let Some(project) = self.s().project.get_untracked() else {
             return;

@@ -188,6 +188,42 @@ pub fn install_lexicon_zip(
     store.install(staged).map(LexiconInstall::Installed)
 }
 
+/// Installs a commit's archive at hand: the OBS picture pack the release pipeline downloads
+/// (`scripts/release/fetch-pinned.mjs`). The archive must match the entry `lock` holds for the
+/// pin's commit, as [`install_lexicon_zip`]'s must; without an entry nothing confirms it, and
+/// it is `None`, with nothing installed. A lexicon goes through [`install_lexicon_zip`], which
+/// also checks the file it is repackaged into.
+pub fn install_archive_zip(
+    store: &ResourceStore,
+    pin: &ResourcePin,
+    lock: &FetchedLock,
+    zip: &[u8],
+    max_unpacked: u64,
+) -> Result<Option<Installed>, InstallError> {
+    if let Some(installed) = store.dcs(pin)? {
+        return Ok(Some(installed));
+    }
+    let archive = match lock
+        .check(pin.repo.repo(), &pin.sha, zip, max_unpacked)
+        .map_err(|refusal| InstallError::Refused {
+            what: pin.to_string(),
+            refusal,
+        })? {
+        TreeCheck::Unconfirmed => return Ok(None),
+        TreeCheck::Confirmed(archive) => archive,
+    };
+    if is_lexicon_pin(pin) || is_lexicon_archive(&archive.files) {
+        return Ok(
+            match install_lexicon_zip(store, pin, lock, zip, max_unpacked)? {
+                LexiconInstall::Installed(installed) => Some(installed),
+                LexiconInstall::Unconfirmed => None,
+            },
+        );
+    }
+    let pin = with_flavor(pin, &archive.files);
+    store.install(staged_archive(pin, archive)).map(Some)
+}
+
 /// Installs a burrito export already at hand: a zip a person picked from a USB drive, or
 /// one an installer building the bundled store downloaded earlier (tC4 `verifySideload`).
 /// It is checked as a download is: its metadata must declare the pin's commit as its DCS
@@ -313,11 +349,22 @@ fn from_archive(
             Sha256::of_file(zip.path()).map_err(|e| StoreError::io("read", zip.path(), e))?;
         return staged_lexicon(pin, &archive, zip_sha256).map(|(staged, _)| staged);
     }
+    Ok(staged_archive(pin, archive))
+}
+
+/// The install of an archive that is not a lexicon: its files, without its symbolic links.
+fn staged_archive(pin: ResourcePin, archive: VerifiedArchive) -> Staged {
     // A symbolic link's target can point anywhere; it is never written (tc-door43
     // `FileMode::Symlink`).
+    // Finder's litter is not the resource's, and a macOS package drops it, so an install record
+    // that listed it would name a file the shipped bundle lacks (as `aquifer` skips it).
     let (links, files): (Vec<UnpackedFile>, Vec<UnpackedFile>) = archive
         .files
         .into_iter()
+        .filter(|f| {
+            let name = f.path.rsplit('/').next().unwrap_or(&f.path);
+            !(f.path.starts_with("__MACOSX/") || name == ".DS_Store" || name.starts_with("._"))
+        })
         .partition(|f| f.mode == FileMode::Symlink);
     let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
     let books = layout::coverage_of(
@@ -325,7 +372,7 @@ fn from_archive(
         pin.flavor.as_deref(),
         pin.repo.repo(),
     );
-    Ok(Staged {
+    Staged {
         origin: Origin::Dcs {
             pin,
             packaging: Packaging::Archive,
@@ -334,7 +381,7 @@ fn from_archive(
         },
         books,
         files: files.into_iter().map(|f| (f.path, f.bytes)).collect(),
-    })
+    }
 }
 
 /// The pin, with the flavor the archive's metadata declares when the pin names none.
@@ -376,4 +423,40 @@ fn staged_lexicon(
         files: vec![(LEXICON_FILE.to_owned(), bytes)],
     };
     Ok((staged, sha256))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finder_litter_is_not_staged() {
+        let oid = "e8c6503832022a8fd38bb426781d6b6127dde664";
+        let file = |path: &str| UnpackedFile {
+            path: path.to_owned(),
+            mode: FileMode::Regular,
+            bytes: b"x".to_vec(),
+        };
+        let archive = VerifiedArchive {
+            commit: oid.parse().unwrap(),
+            tree: oid.parse().unwrap(),
+            files: vec![
+                file("README.md"),
+                file("360px/.DS_Store"),
+                file("360px/._obs-en-01-01.jpg"),
+                file("__MACOSX/360px/obs-en-01-01.jpg"),
+                file("360px/obs-en-01-01.jpg"),
+            ],
+        };
+        let pin = ResourcePin::new(
+            "git.door43.org/uW/obs_images_360".parse().unwrap(),
+            oid.parse().unwrap(),
+        );
+        let staged: Vec<String> = staged_archive(pin, archive)
+            .files
+            .into_iter()
+            .map(|(path, _)| path)
+            .collect();
+        assert_eq!(staged, ["README.md", "360px/obs-en-01-01.jpg"]);
+    }
 }

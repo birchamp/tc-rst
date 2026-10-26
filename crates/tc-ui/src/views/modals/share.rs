@@ -45,18 +45,14 @@ pub fn ShareDialog() -> impl IntoView {
     let Some(AppCtx { s, actions }) = use_app() else {
         return ().into_any();
     };
-    let sh = s.sh.clone();
+    let sh = s.share_form();
     let read = {
-        let sh = sh.clone();
         move |get: fn(&ShareForm) -> Option<String>| {
-            let sh = sh.clone();
             Memo::new(move |_| sh.with(|sh| sh.as_ref().and_then(get)))
         }
     };
-    let step = {
-        let sh = sh.clone();
-        Memo::new(move |_| sh.with(|sh| sh.as_ref().map_or(ShareStep::Target, |sh| sh.step)))
-    };
+    let step =
+        { Memo::new(move |_| sh.with(|sh| sh.as_ref().map_or(ShareStep::Target, |sh| sh.step))) };
     let project_name = read(|sh| Some(sh.project.name.clone()));
     let account = s.server.account.clone();
     let user = Memo::new({
@@ -65,15 +61,13 @@ pub fn ShareDialog() -> impl IntoView {
     });
 
     let footer: ChildrenFn = {
-        let (actions, sh) = (actions.clone(), sh.clone());
+        let (actions, sh) = (actions.clone(), sh);
         Arc::new(move || {
-            let (actions, sh) = (actions.clone(), sh.clone());
+            let (actions, sh) = (actions.clone(), sh);
             let can_next = {
-                let sh = sh.clone();
                 Signal::derive(move || sh.with(|sh| sh.as_ref().is_some_and(ShareForm::can_next)))
             };
             let can_submit = {
-                let sh = sh.clone();
                 Signal::derive(move || sh.with(|sh| sh.as_ref().is_some_and(ShareForm::can_submit)))
             };
             (move || {
@@ -131,7 +125,7 @@ pub fn ShareDialog() -> impl IntoView {
             let (actions, s) = (actions.clone(), s.clone());
             let sharing_as = sharing_as(&actions, &s, user);
             let body = {
-                let (actions, sh) = (actions.clone(), s.sh.clone());
+                let (actions, sh) = (actions.clone(), s.share_form());
                 move || match step.get() {
                     ShareStep::Target => target_step(&actions, &sh, user).into_any(),
                     ShareStep::Check => check_step(&actions, &sh, user).into_any(),
@@ -236,15 +230,15 @@ fn account_title(user: Option<String>) -> String {
 /// chosen, and says why (D84 point 3).
 fn target_step(
     actions: &crate::app::web::Actions,
-    sh: &ArcRwSignal<Option<ShareForm>>,
+    sh: &Signal<Option<ShareForm>>,
     user: Memo<Option<String>>,
 ) -> impl IntoView + use<> {
     let selected = {
-        let sh = sh.clone();
+        let sh = *sh;
         Memo::new(move |_| sh.with(|sh| sh.as_ref().map_or(Target::User, |sh| sh.target.clone())))
     };
     let choices = {
-        let sh = sh.clone();
+        let sh = *sh;
         Memo::new(move |_| {
             sh.with(|sh| {
                 sh.as_ref()
@@ -360,11 +354,11 @@ fn target_step(
 /// point 4).
 fn check_step(
     actions: &crate::app::web::Actions,
-    sh: &ArcRwSignal<Option<ShareForm>>,
+    sh: &Signal<Option<ShareForm>>,
     user: Memo<Option<String>>,
 ) -> impl IntoView + use<> {
     let where_to = {
-        let sh = sh.clone();
+        let sh = *sh;
         move || {
             let org = sh.with(|sh| {
                 sh.as_ref()
@@ -375,13 +369,13 @@ fn check_step(
         }
     };
     let name: Signal<String> = {
-        let sh = sh.clone();
+        let sh = *sh;
         Signal::from(Memo::new(move |_| {
             sh.with(|sh| sh.as_ref().map(|sh| sh.name.clone()).unwrap_or_default())
         }))
     };
     let invalid = {
-        let sh = sh.clone();
+        let sh = *sh;
         Signal::derive(move || sh.with(|sh| sh.as_ref().is_some_and(ShareForm::name_invalid)))
     };
     let on_name = {

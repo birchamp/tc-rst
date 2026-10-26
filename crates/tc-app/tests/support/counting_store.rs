@@ -242,6 +242,13 @@ impl ProjectHandle for CountingHandle {
             .unwrap_or_else(|| self.inner.outside_edits())
     }
 
+    fn carried_bytes(
+        &self,
+        oid: tc_journal::GitOid,
+    ) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        self.inner.carried_bytes(oid)
+    }
+
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
         let (hold, fail) = {
             let mut counts = self.shared.counts.lock().unwrap();

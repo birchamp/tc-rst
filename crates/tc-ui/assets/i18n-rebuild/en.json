@@ -18,6 +18,12 @@
   "exchange.error.notWritten": "The file was not saved: {reason}",
   "exchange.error.unreadable": "The file could not be read: {reason}",
   "exchange.error.verifyFailed": "The file on the drive could not be read back correctly, so it was deleted. Save it again, or use another drive.",
+  "export.anyway": "Export anyway",
+  "export.conflictsMany": "{n} verses have two versions. The export uses the version shown. Review first?",
+  "export.conflictsOne": "1 verse has two versions. The export uses the version shown. Review first?",
+  "export.markupKept": "These verses are in the file as stored, with their alignment markup, because the app could not take it out: {refs}",
+  "export.review": "Review",
+  "export.skipped": "Your alignment of these verses is not in the file. Check them in Align: {refs}",
   "feedback.attachmentFailed": "translationCore could not gather these details ({reason}), so Send stays off. Close this window and open it again to try again.",
   "home.unusable.badge": "Cannot be opened",
   "home.unusable.folderUnreadable": "This folder could not be read: {reason}. Nothing in the folder was changed.",
@@ -59,6 +65,7 @@
   "readOnly.otherComputerClosed": "That computer is closed",
   "readOnly.secondWriter": "Another computer is saving into this project folder, so this one stopped saving to keep both computers' work. Copy the project to go on working here?",
   "readOnly.unsafeDrive": "This drive cannot keep the project safe if the power fails. Copy the project to this computer?",
+  "refusal.export.write-failed": "The app could not save the export file, so it exported nothing. The project did not change. Check that the computer has free space, then try the export again.",
   "refusal.open.lock-held": "Another program is using this project (process {pid} on {host}). Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.lock-held-unnamed": "Another program is using this project. Close it, or restart the computer, then open the project again. Nothing was changed.",
   "refusal.open.newer-format": "This project was saved by a newer translationCore (project format {format}). Update translationCore, then open the project again. Nothing was changed.",
@@ -185,6 +192,5 @@
   "upgrade.checkFailedServer": "Could not check for updates: Door43 did not answer properly. Try again later.",
   "upgrade.checkFailedUnreachable": "Could not check for updates: Door43 cannot be reached. Check the connection and try again.",
   "upload.notWritten": "The file could not be copied into translationCore: {reason}. Nothing was changed.",
-  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code.",
-  "check.sort.byCategory": "By category"
+  "wizard.codeNotHeld": "A project cannot keep the language code {code}, so nothing was created. Choose another code."
 }

@@ -171,6 +171,7 @@ scoped!(
     crate::editor::DiscardDraft,
     crate::prefs::SetDraftUnit,
     crate::prefs::SetAlignSuggestions,
+    crate::prefs::SetRailFolded,
     crate::prefs::RecordPlace,
     crate::session::Close,
     crate::session::RetryCheckpoint,
@@ -200,6 +201,7 @@ scoped!(
     crate::align::Close,
     crate::conflicts::Resolve,
     crate::conflicts::ResolveBulk,
+    crate::export::RunExport,
 );
 unscoped!(
     crate::app::Quit,
