@@ -26,13 +26,15 @@ const BIBLE = 'sample_burrito';
 const OBS = 'sample_burrito_obs';
 const DATE = String.raw`\d{4}-\d{2}-\d{2}`;
 
-/** sha256 of every file of `dir` but `.git/`, by relative path. */
+/** sha256 of every file of `dir` but `.git/` and the store's materialized record, by relative path. */
 function hashes(dir) {
   const out = {};
   const walk = (d, base) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       const rel = base ? `${base}/${e.name}` : e.name;
       if (rel === '.git') continue;
+      // The store's own record of what it has materialized; a read may bring it up to date.
+      if (rel === '.tc/materialized.json') continue;
       if (e.isDirectory()) walk(path.join(d, e.name), rel);
       else out[rel] = crypto.createHash('sha256').update(fs.readFileSync(path.join(d, e.name))).digest('hex');
     }
@@ -51,7 +53,9 @@ async function settled(dir) {
 }
 
 /** Runs `exports` and fails if any project file but `.git/` changed. */
-async function unchanged(dir, exports) {
+async function unchanged(env, dir, exports) {
+  // The store's own work (a materialization after the open) can outlast two quiet reads.
+  await env.call('test/validate', {});
   const before = await settled(dir);
   const result = await exports();
   assert.deepEqual(hashes(dir), before, 'every project file is byte-identical after the export');
@@ -192,7 +196,7 @@ browserTest('j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged'
     const project = path.join(env.projectsDir, BIBLE);
     assert.deepEqual(await menuItems(page), [en['cc.exportUsfmAligned'], en['cc.exportUsfmPlain'], en['cc.exportBurritoZip']],
       'a browser has no PDF item; the Burrito zip is listed');
-    const [aligned, plain] = await unchanged(project, async () => [
+    const [aligned, plain] = await unchanged(env, project, async () => [
       await download(page, en['cc.exportUsfmAligned']),
       await download(page, en['cc.exportUsfmPlain']),
     ]);
@@ -229,7 +233,7 @@ browserTest('J7: an aligned word in an add span keeps the span in the aligned US
     // tC4's J7 excepts the D9 checkpoint commit; the project is compared from after it.
     await download(page, en['cc.exportUsfmAligned']);
 
-    const [aligned, plain] = await unchanged(project, async () => [
+    const [aligned, plain] = await unchanged(env, project, async () => [
       await download(page, en['cc.exportUsfmAligned']),
       await download(page, en['cc.exportUsfmPlain']),
     ]);
@@ -249,7 +253,7 @@ browserTest('J7: the PDF prints the print page of its job and leaves the project
     const project = path.join(env.projectsDir, BIBLE);
     assert.deepEqual(await menuItems(page), [en['cc.exportPdf'], en['cc.exportUsfmAligned'], en['cc.exportUsfmPlain'], en['cc.exportBurritoZip']],
       'with the shell, the PDF item comes first');
-    const pdf = await unchanged(project, () => printPdf(page, printed));
+    const pdf = await unchanged(env, project, () => printPdf(page, printed));
     assert.match(pdf.url, /^\/print\/\d+$/, 'the shell is given the app\'s own print page');
     // Chapter 1 has verses 1 to 5 drafted; chapters 2 and 3 have none and are left out.
     assert.equal((pdf.html.match(/<section class="print-chapter"/g) ?? []).length, 1);
@@ -265,7 +269,7 @@ browserTest('j23_story_markdown_and_the_pdf_leave_the_project_unchanged', async 
     await openStoryPreview(page, env);
     const project = path.join(env.projectsDir, OBS);
     assert.deepEqual(await menuItems(page), [en['cc.exportPdf'], en['cc.exportStoryMarkdown'], en['cc.exportBurritoZip']]);
-    const [markdown, pdf] = await unchanged(project, async () => [
+    const [markdown, pdf] = await unchanged(env, project, async () => [
       await download(page, en['cc.exportStoryMarkdown']),
       await printPdf(page, printed),
     ]);

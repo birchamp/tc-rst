@@ -626,9 +626,7 @@ fn restored_changes(
     };
     ours.iter()
         .filter(|(path, _)| !theirs.contains_key(*path))
-        .filter(|(path, _)| {
-            tc_journal::pack::PackPath::parse(path).is_some_and(|p| p.sealer != device)
-        })
+        .filter(|(path, _)| tc_store::pack_sealer(path).is_some_and(|sealer| sealer != device))
         .filter_map(|(path, oid)| {
             let blob = repo.find_blob(*oid).ok()?;
             let read = tc_store::read_received_pack(path, blob.content(), project);
