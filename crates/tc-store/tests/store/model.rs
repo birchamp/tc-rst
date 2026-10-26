@@ -1291,7 +1291,11 @@ impl Run {
         let fs = self.fs();
         let path = self.path(&rel);
         self.outside = true;
-        self.by_another_program(|| fs.put_unseen(&path, &bytes, None));
+        let before = self.copies();
+        fs.put_unseen(&path, &bytes, None);
+        // A byte changed in place takes the bytes from a session that read the file at its
+        // open, as a cut in place does: it holds only the saves it made itself.
+        self.lost_copies(before, false);
         self.log.push(format!("changed byte {i} of {rel}"));
         if self.handle.is_some() {
             self.check(false)
@@ -2981,8 +2985,72 @@ fn metadata_unreadable_but_replaceable() -> Vec<Step> {
     ]
 }
 
+/// Found by proptest on 2026-10-26 (the G5 lane's gate on main 29faa1ef): a save sealed into
+/// a pack that no commit holds yet (the process died between the seal and the commit), its
+/// pending file deleted and the book file reverted by other programs, then one byte of the
+/// pack changed in place while a later session that only read it runs. The only copy is
+/// damaged, so the save is gone (§4.4 salvages verified lines, and the line is not one); the
+/// oracle took the reading session for a holder of the bytes, as it does not for a cut in
+/// place.
+fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
+    let kill = |at| {
+        Some(Kill {
+            at,
+            power_cut: false,
+            torn: false,
+        })
+    };
+    vec![
+        act(Act::Save(1)),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 0,
+        },
+        act(Act::Checkpoint),
+        Step::Act {
+            act: Act::Close,
+            kill: kill(0),
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        act(Act::Leave),
+        Step::Act {
+            act: Act::Leave,
+            kill: kill(15),
+        },
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        act(Act::Save(1)),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 0,
+        },
+        act(Act::Checkpoint),
+        Step::Act {
+            act: Act::Leave,
+            kill: kill(5),
+        },
+        Step::Flip {
+            journal: Journal::Pack,
+            which: 53,
+            at: 0,
+        },
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_flipped_pack_after_a_cut_pending_and_a_reverted_book",
+            a_flipped_pack_after_a_cut_pending_and_a_reverted_book(),
+        ),
         (
             "oracle_independence_false_adoption",
             false_adoption_witness(),
