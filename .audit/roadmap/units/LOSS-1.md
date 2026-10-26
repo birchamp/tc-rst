@@ -4,10 +4,10 @@ title: Write the loss tests STORAGE §15 promises that no card wrote
 track: A
 lane: storage
 milestone: M1
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: LOSS-1 lane (Claude Code d63a7912)
+branch: track-LOSS-1
+worktree: /home/bot/tc-rst/.worktrees/track-LOSS-1
 depends: [CHK-3]
 needs_owner: []
 proves: [P1]
@@ -15,7 +15,7 @@ no_loss: true
 size: 2 d (basis: X's step 5, which wrote a dozen loss tests in about a day)
 merged: none
 updated: 2026-10-26
-next: Claim this card, then do step 1.
+next: Step 1: find the tests that exist under another name.
 blocked_by: none
 ---
 
@@ -122,3 +122,4 @@ checks: it can break and no gate fails.
 ## Log
 
 - 2026-10-26 11:01 EDT | shell lane (Claude Code 6f39d119), for CHK-3 | created | none | from CHK-3 step 5 and the app lane's review of it: 26 §15 tests that no card writes | .audit/roadmap/units/CHK-3.md
+- 2026-10-26 11:07 EDT | LOSS-1 lane (Claude Code d63a7912) | claim | none | claimed on track-LOSS-1 from track-CHK-3b e36f49d2 (CHK-3 lands in batch 9), at the orchestrator's word | python3 -I .audit/tools/board.py
