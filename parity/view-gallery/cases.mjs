@@ -724,6 +724,15 @@ export const CASES = [
     why: 'Home after an open refused a file written outside the app.' },
   { name: 'home-checkpoint-error', group: 'home-checkpoint', state: 'home',
     patch: (s, { kit }) => ({ commitError: `${kit.t('app.commitError')}: ${FETCH_FAILED}`, commitErrorHelp: null, commitErrorRepo: BIBLE }),
+    // The Rust app: the leave checkpoint of Titus scripted to fail with tC4's reason
+    // (test/script CheckpointFails), then Switch project to Home (D1).
+    rust: async (app, env) => {
+      await app.home();
+      await env.call('test/script', { request: newRequestId(), next: { type: 'checkpointFails', value: { project: env.projectId(BIBLE) } } });
+      await app.openTitus();
+      await app.page.getByTitle('Switch project').click();
+      await app.page.getByTestId('home-checkpoint-error').waitFor();
+    },
     why: 'Home after the checkpoint of the project just left failed (state.jsx startLeaveCheckpoint).' },
 
   // ---- resume, import-toast ------------------------------------------------------------------

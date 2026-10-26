@@ -25,6 +25,7 @@ use crate::views::check::Check;
 use crate::views::home::Home;
 use crate::views::modals::add_book::AddBook;
 use crate::views::modals::add_project::AddProject;
+use crate::views::modals::changed_books::ChangedBooks;
 use crate::views::modals::feedback::Feedback;
 use crate::views::modals::gateway_change::GatewayChange;
 use crate::views::modals::guided_fix::GuidedFix;
@@ -51,6 +52,12 @@ pub fn App() -> impl IntoView {
     };
     remember_place(&ctx.s);
     go_home_after_a_restart(&ctx.s, &ctx.actions);
+    // D1: another program may have changed a book file while the window was elsewhere.
+    let focused = {
+        let actions = ctx.actions.clone();
+        window_event_listener(leptos::ev::focus, move |_| actions.focus_window())
+    };
+    on_cleanup(move || focused.remove());
     let frame = crate::css! {
         "display": "flex",
         "flex-direction": "column",
@@ -112,6 +119,7 @@ pub fn App() -> impl IntoView {
             {move || share_open.get().then(|| view! { <ShareDialog /> })}
             {move || feedback_open.get().then(|| view! { <Feedback /> })}
             <InternetDialog />
+            <ChangedBooks />
             <OpenProgress />
             // The Inspector (late) mounts here.
         </div>
@@ -521,7 +529,19 @@ fn main_view(s: &AppState) -> AnyView {
             .into_any()
         }
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
-        Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
+        // The review shows in a story's Translate as in a book's, in place of its columns.
+        Screen::StoryDraft => {
+            let review = s.review.clone();
+            let open = Memo::new(move |_| review.with(Option::is_some));
+            (move || {
+                if open.get() {
+                    view! { <crate::views::review::ConflictReview /> }.into_any()
+                } else {
+                    view! { <StoryDraft /> }.into_any()
+                }
+            })
+            .into_any()
+        }
         Screen::CommunityChecking => view! {
             <crate::views::community_checking::CommunityChecking />
             <crate::views::review::ReviewOverOther />

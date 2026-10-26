@@ -19,6 +19,7 @@ mod import;
 mod jobs;
 pub(crate) mod js;
 mod leave;
+mod outside;
 mod panic;
 #[cfg(feature = "test-hooks")]
 mod probe;
@@ -287,6 +288,7 @@ impl Runtime {
                 self.0.busy.set_jobs(active);
             }
             Effect::Checkpoint { at, outcome } => {
+                state.checkpoint_ended(&at, &outcome);
                 state.checkpoints.update(|map| {
                     map.insert(at, outcome);
                 });
@@ -295,6 +297,7 @@ impl Runtime {
             Effect::MaterializeBlocked { at, paths } => state.blocked.update(|map| {
                 map.insert(at, paths);
             }),
+            Effect::OutsideEdits { at, outside } => state.session_outside(&at, outside),
             Effect::AlignSave {
                 aligner,
                 state: save,

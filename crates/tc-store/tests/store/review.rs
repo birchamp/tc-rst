@@ -308,10 +308,11 @@ fn a_fixed_file_edited_outside_is_restored_and_a_copy_is_kept() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// A held file that changes again is recorded as it is now (§6.2), with no base since the
-/// app's version is gone, and both versions of the file stay as copies.
+/// A held file that changes again is kept again under its own entry (delta §2.11): the hold
+/// stays, its notice names the newest bytes, and both versions of the file stay as copies,
+/// each listed until it is imported or dismissed.
 #[test]
-fn a_held_file_that_changes_again_is_recorded_and_both_copies_stay() {
+fn a_held_file_that_changes_again_is_kept_again_and_both_copies_stay() {
     let (rig, folder) = titus();
     saved_and_closed(&rig, &folder);
     settle_entries(&rig, &folder);
@@ -333,7 +334,9 @@ fn a_held_file_that_changes_again_is_recorded_and_both_copies_stay() {
     leave(&handle);
     assert_valid_burrito(&rig.fs, &folder);
     handle.wait_idle();
-    assert!(hold_notices(&handle).is_empty(), "the hold ended");
+    assert_eq!(hold_notices(&handle).len(), 1, "the hold stays");
+    assert_eq!(rig.fs.peek(&usfm), Some(second.clone()), "still held");
+    assert_eq!(handle.kept_copies().len(), 2, "each copy has its entry");
     let copies = copies_of(&handle, "ingredients/TIT.usfm");
     assert_eq!(copies.len(), 1, "{:?}", notices(&handle));
     assert_eq!(

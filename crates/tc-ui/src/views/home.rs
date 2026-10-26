@@ -191,17 +191,18 @@ fn banners(
 ) -> impl IntoView + use<> {
     let banner_style = crate::css! { "margin": "0 0 16px", "overflow-wrap": "anywhere" };
     let commit = {
-        let (error, actions, style) = (
-            s.commit_error.clone(),
+        let (failed, actions, style) = (
+            s.server.failed.clone(),
             actions.clone(),
             banner_style.clone(),
         );
         move || {
-            error.get().map(|banner| {
-                let help = ask_for_help(&actions, banner.help.clone());
+            failed.with(|failed| failed.first().cloned()).map(|failed| {
+                let (text, help) = crate::app::home::checkpoint_banner(&failed);
+                let help = ask_for_help(&actions, help);
                 view! {
                     <Callout tone=CalloutTone::Warn style=style.clone() attrs=Attrs::from([("role", "alert"), ("data-testid", "home-checkpoint-error")])>
-                        {banner.text.clone()}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
+                        {text}" "{move || t(keys::home::COMMIT_ERROR_HINT, &[])}
                         {help}
                     </Callout>
                 }

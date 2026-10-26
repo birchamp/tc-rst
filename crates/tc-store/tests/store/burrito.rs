@@ -78,6 +78,10 @@ fn the_states_after_outside_changes_are_valid_burritos() {
     rig.fs.put(&usfm, edited.as_bytes(), None);
     handle.focus().wait().unwrap();
     settled_and_valid(&rig, &handle, &folder, "an outside edit");
+    // The book waits for the person's answer; *Import* brings the edit in.
+    assert!(words(&handle, 1, 1).unwrap().contains("servant"));
+    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
+    settled_and_valid(&rig, &handle, &folder, "an outside edit imported");
     assert!(words(&handle, 1, 1).unwrap().contains("slave"));
 
     // A file the project carries.
@@ -151,6 +155,8 @@ fn every_commit_tree_is_a_valid_burrito() {
         .replace("Paul, a servant of God", "Paul, a slave of God");
     rig.fs.put(&usfm, edited.as_bytes(), None);
     handle.focus().wait().unwrap();
+    checkpoint(&handle);
+    import_waiting(&handle);
     checkpoint(&handle);
     handle
         .submit(Command::RemoveBook {

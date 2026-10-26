@@ -575,3 +575,70 @@ async fn a_save_never_erases_a_newer_draft_of_its_field() {
         "the text typed while the save was in flight"
     );
 }
+
+/// The commits of the project at `folder` on the store world's filesystem, newest first.
+fn commits(world: &crate::store_world::StoreWorld, folder: &tc_api::ids::ProjectRef) -> usize {
+    use tc_store::Vfs;
+    let path = std::path::Path::new(crate::store_world::PROJECTS).join(folder.as_str());
+    let Ok(repo) = git2::Repository::open(world.fs.outside_dir(&path).unwrap()) else {
+        return 0;
+    };
+    let Ok(head) = repo.head() else {
+        return 0;
+    };
+    let mut walk = repo.revwalk().unwrap();
+    walk.push(head.target().unwrap()).unwrap();
+    walk.count()
+}
+
+/// INV-A-LEAVE-WITH-CHANGES-MAKES-ONE-COMMIT (D1, tC4 J8): leaving with a change since the last
+/// commit makes exactly one commit; leaving again with nothing changed makes none.
+#[tokio::test]
+async fn a_leave_with_changes_makes_one_commit_and_without_none() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let before = commits(&world, &world.bible);
+    save(
+        handle.as_ref(),
+        &tit(1, 2),
+        "a change since the last commit",
+    )
+    .await
+    .unwrap();
+    handle.wait_idle();
+    let first = handle
+        .checkpoint(tc_app::backend::CheckpointReason::LeavingProject)
+        .await;
+    assert_eq!(first, tc_api::event::CheckpointOutcome::Committed);
+    assert_eq!(
+        commits(&world, &world.bible),
+        before + 1,
+        "one commit for the leave"
+    );
+    let second = handle
+        .checkpoint(tc_app::backend::CheckpointReason::LeavingProject)
+        .await;
+    assert_eq!(second, tc_api::event::CheckpointOutcome::Unchanged);
+    assert_eq!(
+        commits(&world, &world.bible),
+        before + 1,
+        "no commit without a change"
+    );
+}
+
+/// A save is no checkpoint (tC4 #536): it makes no commit.
+#[tokio::test]
+async fn a_save_makes_no_commit() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    let before = commits(&world, &world.bible);
+    save(
+        handle.as_ref(),
+        &tit(1, 3),
+        "a saved verse, not a checkpoint",
+    )
+    .await
+    .unwrap();
+    handle.wait_idle();
+    assert_eq!(commits(&world, &world.bible), before);
+}

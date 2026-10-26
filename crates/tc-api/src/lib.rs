@@ -135,6 +135,14 @@ macro_rules! endpoint_table {
 
             job "session/open": $crate::session::Open => $crate::ids::JobId;
             command "session/close": $crate::session::Close => ();
+            command "session/retryCheckpoint": $crate::session::RetryCheckpoint => $crate::event::CheckpointOutcome;
+            command "session/leave": $crate::session::LeaveMode => ();
+            command "session/focus": $crate::session::Focus => $crate::session::OutsideEdits;
+            command "session/importKept": $crate::session::ImportKept
+                => $crate::session::KeptImported;
+            command "session/notNow": $crate::session::NotNow => $crate::session::OutsideEdits;
+            command "session/dismissNotice": $crate::session::DismissNotice
+                => $crate::session::OutsideEdits;
 
             query "editor/book": $crate::editor::Book => $crate::editor::BookView;
             query "editor/sources": $crate::editor::Sources => $crate::editor::SourcesView;

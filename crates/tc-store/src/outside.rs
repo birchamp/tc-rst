@@ -72,7 +72,7 @@ impl Writer {
     /// The base of an outside edit the ledger chose (§6.2): the heads of a placement, each
     /// record's heads cut to the changes the fold holds applied; what HEAD's packs hold; or
     /// none. Unknown when the ledger keeps no heads of the placement.
-    fn read_base(
+    pub(crate) fn read_base(
         &mut self,
         rel: &str,
         base: &ledger::Base,
@@ -134,11 +134,23 @@ impl Writer {
     /// holds (a change another pack holds, or only a pending file, is newer than the file the
     /// person started from, so the edit conflicts with it and replaces nothing). A file HEAD
     /// does not have was made since: every record is new. No usable HEAD: unknown.
-    fn head_base(&self, rel: &str) -> PlanBase {
+    pub(crate) fn head_base(&self, rel: &str) -> PlanBase {
+        match self.git.as_ref().map(|git| git.head()) {
+            Some(Ok(Some(head))) => self.base_at(rel, head),
+            _ => PlanBase::Unknown,
+        }
+    }
+
+    /// [`Writer::head_base`] as of `commit`, the HEAD a held file was found against.
+    pub(crate) fn head_base_at(&self, rel: &str, commit: tc_journal::GitOid) -> PlanBase {
+        match self.git.as_ref().map(|git| git.commit_head(commit)) {
+            Some(Ok(head)) => self.base_at(rel, head),
+            _ => PlanBase::Unknown,
+        }
+    }
+
+    fn base_at(&self, rel: &str, head: crate::git::Head) -> PlanBase {
         let Some(git) = &self.git else {
-            return PlanBase::Unknown;
-        };
-        let Ok(Some(head)) = git.head() else {
             return PlanBase::Unknown;
         };
         if !head.app_commit {

@@ -223,14 +223,20 @@ pub struct AppState {
     pub gw: ArcRwSignal<crate::app::upgrades::GatewayState>,
     /// A refused open, on Home (tC4 `bookError`; B3 sets it).
     pub book_error: ArcRwSignal<Option<HomeBanner>>,
-    /// The checkpoint of the project just left failed (tC4 `commitError`; D1 sets it).
-    pub commit_error: ArcRwSignal<Option<HomeBanner>>,
     /// The project a sync runs for (tC4 `syncing`).
     pub syncing: ArcRwSignal<Option<ProjectRef>>,
     /// The result of the last sync, which Home shows (tC4 `syncResult`). Never stored.
     pub sync_result: ArcRwSignal<Option<SyncToast>>,
     /// The toast of a finished import (F1 sets it).
     pub import_toast: ArcRwSignal<Option<ImportToast>>,
+    /// The reports of the *Import*s just made of books another program changed (D1), shown
+    /// until the person closes them.
+    pub outside_reports: ArcRwSignal<Vec<tc_api::session::KeptImported>>,
+    /// An *Import* or *Not now* is on its way: a second click would send the same answer again.
+    pub outside_busy: ArcRwSignal<bool>,
+    /// What the last refused *Import*, *Not now* or *Dismiss* said, shown in the question and
+    /// in the review's notices until the next answer goes through.
+    pub outside_refused: ArcRwSignal<Option<String>>,
     /// The project an import of this page made: its card carries "Imported" (F1 sets it).
     pub imported_repo: ArcRwSignal<Option<ProjectRef>>,
     /// Home's `home.importRemoved`: the server said so in one listing of this launch, and it
@@ -444,10 +450,12 @@ impl AppState {
             up: ArcRwSignal::new(crate::app::upgrades::UpgradeState::default()),
             gw: ArcRwSignal::new(crate::app::upgrades::GatewayState::default()),
             book_error: ArcRwSignal::new(None),
-            commit_error: ArcRwSignal::new(None),
             syncing: ArcRwSignal::new(None),
             sync_result: ArcRwSignal::new(None),
             import_toast: ArcRwSignal::new(None),
+            outside_reports: ArcRwSignal::new(Vec::new()),
+            outside_busy: ArcRwSignal::new(false),
+            outside_refused: ArcRwSignal::new(None),
             imported_repo: ArcRwSignal::new(None),
             import_removed: ArcRwSignal::new(false),
             u: super::understand::UnderstandState::new(
@@ -993,15 +1001,37 @@ impl Actions {
     // ---- the save indicator (X2) ------------------------------------------------------------
 
     /// The indicator's Retry. Every failed field is retried, whichever kind it is; the
-    /// checkpoint's retry is D1's `session/retryCheckpoint`, which no phase-0 state can reach.
+    /// checkpoint's retry is `session/retryCheckpoint` (D1).
     pub fn retry(&self, which: Retry) {
         match which {
-            Retry::Checkpoint => {}
+            Retry::Checkpoint => self.retry_checkpoint(),
             Retry::Story | Retry::Note | Retry::Save => {
                 self.0.runtime.saves().retry();
                 self.retry_align_save();
             }
         }
+    }
+
+    /// The checkpoint that failed runs again (D1, tC4 `retryCheckpoint`): its outcome comes back
+    /// as the session's event, which clears or keeps the failure.
+    fn retry_checkpoint(&self) {
+        let Some(at) = self
+            .s()
+            .project
+            .with_untracked(|p| p.as_ref().map(|p| p.at.clone()))
+        else {
+            return;
+        };
+        let this = self.clone();
+        spawn_local(async move {
+            let request = tc_api::session::RetryCheckpoint {
+                request: js::random_request_id(),
+                at,
+            };
+            if let Err(error) = this.0.runtime.api().call(&request).await {
+                console_warn(&format!("tc4: the checkpoint was not retried: {error}"));
+            }
+        });
     }
 
     // ---- Home and its dialogs (B2) ----------------------------------------------------------

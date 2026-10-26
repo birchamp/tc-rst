@@ -116,6 +116,9 @@ pub enum SaveRefusal {
     /// the chosen version is not one of the conflict's, a version cannot be read here yet.
     /// The review shows the reason.
     Choice { reason: String },
+    /// *Import*, *Bring it back* or *Dismiss* of a kept copy that was imported or dismissed
+    /// already (another window, or a reload during an import): nothing is done twice (D1).
+    NotKept,
 }
 
 /// Why a project is open read-only (STORAGE §5.0, §6.1, O1, O4, O5). Unit variants only, so

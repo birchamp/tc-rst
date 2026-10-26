@@ -30,8 +30,8 @@
     "rows": 130,
     "same": 36,
     "declared": 0,
-    "differs": 82,
-    "unported": 12,
+    "differs": 83,
+    "unported": 11,
     "failed": 0
   },
   "rows": [
@@ -3698,10 +3698,30 @@
       "kind": "case",
       "scenario": "sample",
       "locale": "en",
-      "status": "unported",
-      "missing": {
-        "pixels": "D1",
-        "dom": "D1"
+      "status": "differs",
+      "by": "D1",
+      "backend": "store",
+      "pixels": {
+        "tc4Sha256": "0812db03ed8853389110f0c36b6ec38e3be3bd6be13c9fe73b2fc160fb268048",
+        "rustSha256": "18074ee24f7d5ce72fbb4e2050790a120dd701bf781fa62ce78628542a479520",
+        "mismatched": 155058,
+        "outsideMasks": 155058,
+        "masks": [],
+        "diff": "diffs/home-checkpoint-error.png"
+      },
+      "dom": {
+        "tc4Sha256": "debc1c47caae21bef2070a7822f13a37bcdfe860b80d79986411c5a98c89ca21",
+        "rustSha256": "e16ac370bdbdd43fb56d5aa41d510f7fedf54cc280ae0e589aa3db2de0a49417",
+        "scope": null,
+        "same": false,
+        "declared": [],
+        "firstDiffs": [
+          "line 35: tC4           <div data-testid=\"project-_local_/_local_/sample_burrito_obs\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; bor… | rust           <div data-testid=\"project-_local_/_local_/sample_burrito\" style=\"background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: ; border-…",
+          "line 42: tC4                     \"Equipo Ejemplo — Historias Bíblicas Abiertas\" | rust                     \"Equipo Ejemplo — Tito y Jonás\"",
+          "line 43: tC4                   <span data-on=\"dark\" data-testid=\"obs-marker\" data-tone=\"accent\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: … | rust                   <span data-tone=\"neutral\" style=\"--radius-inner: var(--radius-pill); background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-colo…",
+          "line 44: tC4                     <span  style=\"color: var(--tone-on-fill); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transf… | rust                     <span  style=\"color: var(--tone-text); font-family: var(--font-ui); font-size: var(--fs-micro); font-weight: var(--fw-heavy); letter-spacing: var(--tracking-label); line-height: var(--lh-ui); margin-bottom: 0px; margin-left: 0px; margin-right: 0px; margin-top: 0px; text-transform…",
+          "line 45: tC4                       \"OBS\" | rust                       \"LTR\""
+        ]
       }
     },
     {

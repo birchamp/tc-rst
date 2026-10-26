@@ -705,12 +705,12 @@ impl Handle<RunExport> for App {
             .start_typed::<RunExport, _, _>(spec, move |_ctx| async move {
                 // tC4 checkpoints before every export and delivers nothing when it fails
                 // (`runExport`), so the file and the project's last commit agree.
-                match session
-                    .handle()
-                    .checkpoint(CheckpointReason::BeforeExport)
+                match app
+                    .sessions()
+                    .checkpoint(&session, CheckpointReason::BeforeExport)
                     .await
                 {
-                    CheckpointOutcome::Failed { reason } => {
+                    CheckpointOutcome::Failed { reason, .. } => {
                         app.report_export_failure(reason.clone());
                         return Err(failed(ExportRefusal::CheckpointFailed { error: reason }));
                     }
