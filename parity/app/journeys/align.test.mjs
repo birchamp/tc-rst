@@ -407,6 +407,28 @@ browserTest('a_refused_verse_switch_keeps_the_open_verse_shown', async () => {
   });
 });
 
+/** tC4 #807: Home waited forever on an alignment save that was refused. The rebuild has no
+ * alignment-save queue for a span save to wait behind: the gate saves the fields, then asks the
+ * server to save the links. A refusal no retry in this open can fix (another installation now
+ * writes the folder) lets the person leave in one click, as a field's does (#801); closing the
+ * project keeps the links' draft for the next open. */
+browserTest('a_refused_align_save_behind_a_span_save_lets_home_leave', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    await chip(page, 'fe').click();
+    await card(page, 'πίστιν').click();
+    await until('seven words placed', async () => (await placed(page)) === '7 of 27 words placed');
+    await page.route('**/api/v1/align/flush', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"ok","value":{"type":"failed","value":{"type":"readOnly","value":"secondWriter"}}}' }));
+    await page.getByTestId('project-switch').click();
+    await page.getByTestId(`project-${BIBLE}`).waitFor({ timeout: 10_000 }).catch(() => {
+      throw new Error('INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR: Home is reached in one click after a refused alignment save');
+    });
+    await page.unroute('**/api/v1/align/flush');
+    await openAlign(page);
+    await until('the links came back', async () => (await placed(page)) === '7 of 27 words placed');
+  });
+});
+
 /** Suggestions (tC4 #1, D72): the switch trains the engine in the background, Suggest proposes
  * links as dashed chips that are not links, and Accept all places them. */
 browserTest('align_suggestions_through_the_page', async () => {
