@@ -19,3 +19,8 @@ pub fn few<T: Arbitrary>() -> impl Strategy<Value = Vec<T>> {
 pub fn few_lists<T: Arbitrary>() -> impl Strategy<Value = Vec<Vec<T>>> {
     proptest::collection::vec(few::<T>(), 0..3)
 }
+
+/// No list, or a few values.
+pub fn maybe_few<T: Arbitrary>() -> impl Strategy<Value = Option<Vec<T>>> {
+    proptest::option::of(few::<T>())
+}

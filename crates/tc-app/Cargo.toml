@@ -29,6 +29,8 @@ tc-door43 = { path = "../tc-door43" }
 tc-export = { path = "../tc-export" }
 # The helps the Understand screen shows: blocks and highlights (B3).
 tc-helps = { path = "../tc-helps" }
+# Import of translationCore 3 projects (F1).
+tc-import = { path = "../tc-import" }
 tc-journal = { path = "../tc-journal" }
 tc-obs = { path = "../tc-obs" }
 tc-resources = { path = "../tc-resources" }

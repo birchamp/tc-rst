@@ -83,6 +83,9 @@ pub enum SessionEvent {
     MaterializeBlocked {
         paths: Vec<String>,
     },
+    /// The project's outside edits changed: a file was held, or a hold or a kept copy ended
+    /// (D1). The lists replace the session's.
+    OutsideEdits(crate::session::OutsideEdits),
     /// The server's alignment save for an open aligner (AD18).
     AlignSave {
         aligner: AlignerId,
@@ -237,6 +240,10 @@ pub enum CheckpointOutcome {
     Unchanged,
     Failed {
         reason: String,
+        /// The failure's code when it is a problem in the app, not in the computer (a full
+        /// disk): the banner then offers Ask for help with it (tC4 `askHelpFor`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
     },
 }
 

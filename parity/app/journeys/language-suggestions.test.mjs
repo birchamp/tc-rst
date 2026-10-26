@@ -117,3 +117,20 @@ browserTest('a Door43 code a project cannot hold is offered in a form it can, an
     await until('the sentence goes', async () => (await page.getByTestId('code-offer').count()) === 0);
   });
 });
+
+browserTest('Import review: Language code is the plain field, with no suggestions', async () => {
+  await withApp(async ({ page }) => {
+    await page.getByTestId('add-project').click();
+    await page.getByTestId('add-project-import').click();
+    await page.getByTestId('import-kind-tc3').click();
+    await page.getByTestId('import-file-input').setInputFiles(path.join(REPO, 'fixtures', 'tc4', 'conformance-fixtures', 'import', 'tc3', 'cfm_fbt_tit_book.zip'));
+    const review = page.getByTestId('import-to-review');
+    await until('the file is sent', () => review.isEnabled());
+    await review.click();
+    const lang = page.getByTestId('import-lang');
+    await lang.fill('ha');
+    assert.equal(await lang.inputValue(), 'ha');
+    assert.notEqual(await lang.getAttribute('role'), 'combobox');
+    assert.equal(await page.getByRole('option').count(), 0);
+  });
+});

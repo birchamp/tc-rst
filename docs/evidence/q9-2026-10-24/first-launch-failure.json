@@ -1,0 +1,7 @@
+{
+  "screen": "first-launch-failure",
+  "choices": [],
+  "dom": {
+    "text": "translationCore4 could not start\n\nThe bundled resources could not be prepared. Please quit and try again.\n\nthe bundled resource en_tw could not be read: unexpected end of file"
+  }
+}

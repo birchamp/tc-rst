@@ -5,7 +5,7 @@
 
 use crate::common::*;
 use std::path::{Path, PathBuf};
-use tc_journal::command::{Choice, Command};
+use tc_journal::command::Command;
 use tc_journal::fold::{ConflictKind, Notice};
 use tc_journal::record::CarriedValue;
 use tc_journal::{ChangeId, DeviceId, GitOid, Md5, Record, RecordKey, RepoPath};
@@ -190,14 +190,9 @@ fn loss_carried_file_two_versions_both_kept() {
     teammate_version(&rig, &folder, 5, SONG, oid, &theirs, Vec::new());
     let handle = open(&rig, &folder);
     leave(&handle);
-    let conflict = handle
-        .snapshot()
-        .fold()
-        .conflicts_of(ConflictKind::CarriedFile)
-        .next()
-        .cloned()
-        .expect("two versions of a file");
-    assert_eq!(conflict.candidates.len(), 2);
+    // H5: both are kept with no question.
+    assert_eq!(handle.snapshot().fold().conflicts().count(), 0);
+    assert_eq!(handle.snapshot().fold().heads(&song_key()).len(), 2);
     let places = placements(&handle);
     assert_eq!(places.len(), 2);
     for place in &places {
@@ -210,7 +205,11 @@ fn loss_carried_file_two_versions_both_kept() {
         );
     }
     assert!(places.iter().any(|p| p.path == SONG));
-    assert!(places.iter().any(|p| p.path.contains(".conflict-")));
+    assert!(
+        places
+            .iter()
+            .any(|p| p.path != SONG && p.record.as_str() == SONG)
+    );
     let metadata = String::from_utf8(rig.fs.peek(&folder.join("metadata.json")).unwrap()).unwrap();
     for place in &places {
         assert!(metadata.contains(&place.path), "{} is listed", place.path);
@@ -234,8 +233,14 @@ fn loss_conflict_copy_edit_kept() {
     leave(&handle);
     let copy = placements(&handle)
         .into_iter()
-        .find(|p| p.path.contains(".conflict-"))
+        .find(|p| p.path != SONG)
         .expect("a copy of the other version");
+    // A checkpoint commits the copy under the name it has now.
+    handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
     let edited = b"the copy, trimmed by hand".to_vec();
     arrive(&rig, &handle, &folder, &copy.path, &edited);
     let fold = handle.snapshot().fold().clone();
@@ -269,12 +274,32 @@ fn loss_conflict_copy_edit_kept() {
         .expect("the edit is placed");
     assert_eq!(rig.fs.peek(&folder.join(&now.path)), Some(edited));
     assert_valid_burrito(&rig.fs, &folder);
+    // The commit holds the files where they are placed now, and no copy at a name the app
+    // gave out earlier and no longer places (H5).
+    handle
+        .checkpoint(CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    let repo = repo_of(&rig.fs, &folder);
+    let head = commits_of(&repo)[0];
+    let committed: Vec<String> = commit_files(&repo, head)
+        .into_keys()
+        .filter(|p| p.starts_with("ingredients/audio/"))
+        .collect();
+    let mut placed: Vec<String> = placements(&handle).into_iter().map(|p| p.path).collect();
+    placed.sort();
+    assert_eq!(
+        committed, placed,
+        "the copy's earlier name {} is not committed",
+        copy.path
+    );
     handle.close().unwrap();
 }
 
 /// §11.4: an edit of a placed file continues the version the app placed there, not the newest
 /// head of the record. A teammate's version the folder never showed is a sibling of the edit,
-/// so both are kept and listed as a conflict (I4), and neither replaces the other.
+/// so both are kept (H5: with no question), and neither replaces the other.
 #[test]
 fn an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version() {
     let (rig, folder) = titus();
@@ -305,9 +330,9 @@ fn an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version() {
         "the edit continues the version the app placed"
     );
     assert_eq!(
-        fold.conflicts_of(ConflictKind::CarriedFile).count(),
-        1,
-        "the two versions are listed"
+        fold.conflicts().count(),
+        0,
+        "both are kept with no question"
     );
     leave(&handle);
     let held: Vec<Vec<u8>> = placements(&handle)
@@ -319,125 +344,6 @@ fn an_edit_of_a_placed_file_does_not_replace_a_teammates_newer_version() {
         "both are on disk"
     );
     assert_valid_burrito(&rig.fs, &folder);
-    handle.close().unwrap();
-}
-
-/// *Keep both* (§8.3): the other version becomes a file of its own, and the conflict is gone.
-#[test]
-fn keep_both_gives_the_other_version_its_own_file() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    let mine = b"my recording of the song".to_vec();
-    arrive(&rig, &handle, &folder, SONG, &mine);
-    handle.close().unwrap();
-    let theirs = b"their recording of the song, longer".to_vec();
-    let oid = store_blob(&rig, &folder, &theirs);
-    teammate_version(&rig, &folder, 5, SONG, oid, &theirs, Vec::new());
-    let handle = open(&rig, &folder);
-    let conflict = handle
-        .snapshot()
-        .fold()
-        .conflicts_of(ConflictKind::CarriedFile)
-        .next()
-        .cloned()
-        .unwrap();
-    let (keep, other) = (
-        conflict.provisional,
-        conflict
-            .candidates
-            .iter()
-            .map(|c| c.head)
-            .find(|h| *h != conflict.provisional)
-            .unwrap(),
-    );
-    let to = "ingredients/audio/song-second.mp3";
-    handle
-        .submit(Command::Resolve {
-            conflict: conflict.id,
-            shown: vec![handle.mint_review(&song_key()).unwrap()],
-            choice: Choice::KeepBothCarried {
-                keep,
-                other,
-                to: RepoPath::parse(to).unwrap(),
-            },
-        })
-        .wait()
-        .unwrap();
-    handle.wait_idle();
-    leave(&handle);
-    assert_eq!(handle.snapshot().fold().conflicts().count(), 0);
-    let bytes_at = |rel: &str| rig.fs.peek(&folder.join(rel));
-    let kept = placements(&handle);
-    assert_eq!(kept.len(), 2);
-    assert!(bytes_at(SONG).is_some() && bytes_at(to).is_some());
-    let both: Vec<Vec<u8>> = [bytes_at(SONG).unwrap(), bytes_at(to).unwrap()].to_vec();
-    assert!(both.contains(&mine) && both.contains(&theirs));
-    assert_valid_burrito(&rig.fs, &folder);
-    handle.close().unwrap();
-}
-
-/// A path the other version is moved to must be one a carried file may have: the files the
-/// app writes, a folder it needs and a path another record holds are refused, and nothing is
-/// written (V8, §11.4).
-#[test]
-fn keep_both_to_a_path_the_app_writes_or_another_file_holds_is_refused() {
-    use tc_store::CommandError;
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    arrive(&rig, &handle, &folder, SONG, b"my recording of the song");
-    arrive(
-        &rig,
-        &handle,
-        &folder,
-        "ingredients/audio/other.mp3",
-        b"another song",
-    );
-    handle.close().unwrap();
-    let theirs = b"their recording of the song, longer".to_vec();
-    let oid = store_blob(&rig, &folder, &theirs);
-    teammate_version(&rig, &folder, 5, SONG, oid, &theirs, Vec::new());
-    let handle = open(&rig, &folder);
-    let conflict = handle
-        .snapshot()
-        .fold()
-        .conflicts_of(ConflictKind::CarriedFile)
-        .next()
-        .cloned()
-        .unwrap();
-    let other = conflict
-        .candidates
-        .iter()
-        .map(|c| c.head)
-        .find(|h| *h != conflict.provisional)
-        .unwrap();
-    let before = handle.snapshot().fold().len();
-    for to in [
-        "ingredients/TIT.usfm",
-        "ingredients/tc/conflicts.json",
-        "ingredients/audio/other.mp3",
-    ] {
-        let refused = handle
-            .submit(Command::Resolve {
-                conflict: conflict.id,
-                shown: vec![handle.mint_review(&song_key()).unwrap()],
-                choice: Choice::KeepBothCarried {
-                    keep: conflict.provisional,
-                    other,
-                    to: RepoPath::parse(to).unwrap(),
-                },
-            })
-            .wait();
-        assert!(
-            matches!(refused, Err(CommandError::Refused(_))),
-            "{to}: {refused:?}"
-        );
-    }
-    assert_eq!(
-        handle.snapshot().fold().len(),
-        before,
-        "nothing was written"
-    );
-    assert_eq!(handle.snapshot().fold().conflicts().count(), 1);
     handle.close().unwrap();
 }
 
@@ -592,62 +498,52 @@ fn loss_invalid_name_file_moved_not_deleted() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// §3.3, §8.3: two files whose names differ by case only cannot both be written on Windows
-/// and macOS; the project lists a path-case conflict and places one at a name of its own
-/// until a person renames it, which moves the bytes.
+/// §3.3 and H5: two files whose names differ by case only cannot both be written on Windows
+/// and macOS. With no question, one keeps the name, by byte order, and the other is placed
+/// beside it; a newer version of the one beside never swaps the names, since on a disk that
+/// ignores case a read of the moved name would return the other file's bytes.
 #[test]
-fn a_path_case_rename_moves_the_bytes() {
+fn a_path_case_clash_keeps_one_name_and_both_files() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     let (upper, lower) = ("ingredients/audio/Song.mp3", "ingredients/audio/song.mp3");
     arrive(&rig, &handle, &folder, upper, b"the capital letter song");
     arrive(&rig, &handle, &folder, lower, b"the small letter song");
     leave(&handle);
-    let conflict = handle
-        .snapshot()
-        .fold()
-        .conflicts_of(ConflictKind::PathCase)
-        .next()
-        .cloned()
-        .expect("a path-case conflict");
-    let places = placements(&handle);
-    assert_eq!(places.len(), 2);
-    assert_valid_burrito(&rig.fs, &folder);
-    // The file that was moved aside is renamed.
-    let aside = places
-        .iter()
-        .find(|p| p.path.contains(".case-"))
-        .expect("one is placed apart");
-    let to = "ingredients/audio/second-song.mp3";
-    let shown: Vec<_> = std::iter::once(&conflict.key)
-        .chain(&conflict.also_keys)
-        .map(|k| handle.mint_review(k).unwrap())
-        .collect();
-    handle
-        .submit(Command::Resolve {
-            conflict: conflict.id,
-            shown,
-            choice: Choice::RenameCarried {
-                from: aside.record.clone(),
-                to: RepoPath::parse(to).unwrap(),
-            },
-        })
-        .wait()
-        .unwrap();
-    handle.wait_idle();
-    leave(&handle);
     assert_eq!(handle.snapshot().fold().conflicts().count(), 0);
-    let moved = rig.fs.peek(&folder.join(to)).expect("the bytes moved");
-    let aside_bytes = if aside.record.as_str() == upper {
-        b"the capital letter song".to_vec()
-    } else {
-        b"the small letter song".to_vec()
+    let check = |want_lower: &[u8]| {
+        let places = placements(&handle);
+        assert_eq!(places.len(), 2);
+        let kept = places
+            .iter()
+            .find(|p| p.path == upper)
+            .expect("one keeps its name");
+        assert_eq!(
+            rig.fs.peek(&folder.join(&kept.path)).unwrap(),
+            b"the capital letter song"
+        );
+        let aside = places
+            .iter()
+            .find(|p| p.record.as_str() == lower)
+            .expect("the other is placed");
+        assert!(aside.path.contains(".case-"), "{}", aside.path);
+        assert_eq!(rig.fs.peek(&folder.join(&aside.path)).unwrap(), want_lower);
     };
-    assert_eq!(moved, aside_bytes);
-    assert!(
-        rig.fs.peek(&folder.join(&aside.path)).is_none(),
-        "the name it had apart is gone"
+    check(b"the small letter song");
+    // A newer version of the one beside keeps the names where they are.
+    let aside = placements(&handle)
+        .into_iter()
+        .find(|p| p.record.as_str() == lower)
+        .unwrap();
+    arrive(
+        &rig,
+        &handle,
+        &folder,
+        &aside.path,
+        b"the small letter song, again",
     );
+    leave(&handle);
+    check(b"the small letter song, again");
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
 }

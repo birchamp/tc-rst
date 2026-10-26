@@ -41,6 +41,21 @@ pub struct HelloView {
     pub sessions: Vec<OpenSession>,
     pub prefs: AppPrefsView,
     pub startup: StartupState,
+    /// INV-A-FAILED-CHECKPOINT-IS-SHOWN-UNTIL-RETRIED (D1): each project of this server run whose
+    /// last checkpoint failed, so a reload shows "Checkpoint not saved" again.
+    pub checkpoints: Vec<FailedCheckpoint>,
+}
+
+/// A project whose last checkpoint failed, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct FailedCheckpoint {
+    pub project: ProjectRef,
+    pub reason: String,
+    /// As `CheckpointOutcome::Failed`'s: set when the banner offers Ask for help.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 /// The build the server runs. A UI built from another commit reloads once (§3.10).
@@ -62,6 +77,9 @@ pub struct OpenSession {
     pub id: ProjectId,
     pub mode: SessionMode,
     pub role: SessionRole,
+    /// INV-A-CHANGED-BOOK-IS-ASKED-NOT-TAKEN, INV-A-KEPT-COPY-STAYS-ON-A-SCREEN (D1): the books
+    /// the question asks about and the kept copies, so a reload asks and lists them again.
+    pub outside: crate::session::OutsideEdits,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

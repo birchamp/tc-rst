@@ -1058,6 +1058,32 @@ pub(crate) fn follow_moves(state: &FoldState, check: &CheckKey) -> CheckKey {
     at
 }
 
+impl FoldState {
+    /// The checks a folded move names `check` as its new place, directly or through other
+    /// moves, in key order: the versions a move left behind are in their History (ruling
+    /// H5). Costs the moves into it, never the project.
+    pub fn moved_into(&self, check: &CheckKey) -> Vec<CheckKey> {
+        let mut seen: BTreeSet<CheckKey> = BTreeSet::new();
+        let mut queue = vec![check.clone()];
+        while let Some(at) = queue.pop() {
+            let Some(moves) = self.moves_into.get(&at) else {
+                continue;
+            };
+            for c in moves.iter().filter(|c| self.meta(**c).active()) {
+                if let RecordKey::Check(from) = &self.entry(self.meta(*c).key).key
+                    && from != check
+                    // Only while the move is still in force: else its versions are its own.
+                    && follow_moves(self, from) == *check
+                    && seen.insert(from.clone())
+                {
+                    queue.push(from.clone());
+                }
+            }
+        }
+        seen.into_iter().collect()
+    }
+}
+
 fn merged_shape(record: &Record) -> Shape {
     match record {
         Record::Alignment { value, .. } => Shape::Alignment {
@@ -1167,63 +1193,22 @@ pub(crate) fn stage_paths(state: &mut FoldState, dirty: &mut Dirty) {
             .push((path.clone(), *k, shown));
     }
     let mut moves: BTreeMap<RepoPath, String> = BTreeMap::new();
-    let mut conflicts = Vec::new();
     for (form, mut files) in carried {
         let derived_here = derived.contains_key(&form);
         if files.len() < 2 && !derived_here {
             continue;
         }
+        // H5 asks no question; which name stays is byte order, never the newest version, so a
+        // newer recording never swaps the names on a disk that ignores case (a read of the
+        // moved name would return the other file's bytes).
         files.sort_by(|a, b| a.0.as_str().as_bytes().cmp(b.0.as_str().as_bytes()));
         let keep = if derived_here { 0 } else { 1 };
-        let moved: Vec<&(RepoPath, KeyIdx, Option<crate::ids::GitOid>)> =
-            files.iter().skip(keep).collect();
-        for (path, _, oid) in &moved {
+        for (path, _, oid) in files.iter().skip(keep) {
             if let Some(oid) = oid {
                 moves.insert(path.clone(), moved_path(path.as_str(), oid, "case"));
             }
         }
-        let keys: Vec<KeyIdx> = files.iter().map(|f| f.1).collect();
-        let mut heads: Vec<ChangeIdx> = Vec::new();
-        for k in &keys {
-            heads.extend(state.entry(*k).heads.iter().copied());
-        }
-        let ids: Vec<ChangeId> = heads.iter().map(|h| state.meta(*h).id).collect();
-        let Some(first) = moved.first() else {
-            continue;
-        };
-        let key = RecordKey::CarriedFile(first.0.clone());
-        let mut also_keys: Vec<RecordKey> = files
-            .iter()
-            .map(|f| RecordKey::CarriedFile(f.0.clone()))
-            .filter(|k| *k != key)
-            .collect();
-        also_keys.sort();
-        let tag = format!("pathCase\0{form}");
-        let (candidates, unreadable) = candidates_of(state, &heads, |_| None);
-        conflicts.push(Conflict {
-            id: ConflictId::tagged(&tag, &ids),
-            key,
-            also_keys,
-            kind: ConflictKind::PathCase,
-            bases: Vec::new(),
-            candidates,
-            agreed: Vec::new(),
-            disputed: Vec::new(),
-            provisional: heads
-                .iter()
-                .copied()
-                .max_by_key(|h| state.meta(*h).order())
-                .map_or(ChangeId::from_bytes([0; 32]), |h| state.meta(h).id),
-            batches: heads
-                .iter()
-                .map(|h| state.batch(state.meta(*h).batch).id)
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect(),
-            incomplete_history: continues_missing(state, &heads),
-            unreadable,
-        });
     }
     state.case_moves = Arc::new(moves);
-    state.set_conflicts(Owner::Paths, conflicts, dirty);
+    state.set_conflicts(Owner::Paths, Vec::new(), dirty);
 }

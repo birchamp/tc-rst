@@ -139,7 +139,8 @@
         "save": {
           "type": "unsaved"
         },
-        "marker": null
+        "marker": null,
+        "history": "st1.eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"
       }
     }
   },

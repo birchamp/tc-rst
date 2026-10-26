@@ -57,6 +57,11 @@ pub enum Effect {
         at: Scope,
         paths: Vec<String>,
     },
+    /// The project's outside edits changed (D1): the session's lists are replaced.
+    OutsideEdits {
+        at: Scope,
+        outside: tc_api::session::OutsideEdits,
+    },
     AlignSave {
         aligner: AlignerId,
         state: AlignSave,
@@ -107,6 +112,10 @@ pub fn react(incoming: &Incoming) -> Vec<Effect> {
                 SessionEvent::MaterializeBlocked { paths } => vec![Effect::MaterializeBlocked {
                     at: at.clone(),
                     paths: paths.clone(),
+                }],
+                SessionEvent::OutsideEdits(outside) => vec![Effect::OutsideEdits {
+                    at: at.clone(),
+                    outside: outside.clone(),
                 }],
                 SessionEvent::AlignSave { aligner, state } => vec![Effect::AlignSave {
                     aligner: *aligner,

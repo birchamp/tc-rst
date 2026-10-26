@@ -484,6 +484,16 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     save(&a, 1, 1, "Paul, as Ana has it");
     save(&b, 1, 2, "in hope, as Juan has it");
     let receive = format!("/{}/titus-race.git/git-receive-pack", seeded::USER);
+    let pushes = || {
+        door43
+            .fake
+            .requests()
+            .iter()
+            .filter(|r| r.method == "POST" && r.path == receive)
+            .count()
+    };
+    // The first sync pushed already: Ana's held push is the next one.
+    let before = pushes();
     door43.fake.inject(tc_door43_fake::FaultRule::once(
         "POST",
         &receive,
@@ -492,15 +502,7 @@ async fn a_push_that_loses_a_race_fetches_again_and_keeps_both() {
     let ana_done = std::sync::atomic::AtomicBool::new(false);
     let teammate = async {
         // Ana's push is held: Juan's goes first.
-        loop {
-            if door43
-                .fake
-                .requests()
-                .iter()
-                .any(|r| r.method == "POST" && r.path == receive)
-            {
-                break;
-            }
+        while pushes() == before {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         let report = sync(&b, &door43).await;

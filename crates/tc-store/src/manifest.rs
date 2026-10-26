@@ -108,6 +108,10 @@ pub struct Manifest {
     pub derivations: BTreeMap<String, u64>,
     pub paths: BTreeMap<String, Entry>,
     pub packs: BTreeMap<String, PackEntry>,
+    /// One entry for each kept copy of a file changed outside the app that still has a
+    /// notice, until it is imported or dismissed (delta §2.3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kept: Vec<crate::kept::Kept>,
 }
 
 impl Default for Manifest {
@@ -117,6 +121,7 @@ impl Default for Manifest {
             derivations: current_derivations(),
             paths: BTreeMap::new(),
             packs: BTreeMap::new(),
+            kept: Vec::new(),
         }
     }
 }

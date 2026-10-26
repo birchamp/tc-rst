@@ -318,6 +318,19 @@ impl StoreCommand {
         }
     }
 
+    /// *Restore this version* (#78, owner ruling H5): the value of the version `from` of the
+    /// record `shown` names, kept over every head the token shows.
+    pub fn restore(shown: EditToken, from: ChangeId) -> Self {
+        let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
+        Self::new(
+            Command::Restore {
+                shown: shown.0,
+                from,
+            },
+            listed,
+        )
+    }
+
     /// `SaveVerse` (STORAGE §5.1): the words over the verse the token shows.
     pub fn save_verse(shown: EditToken, words: String) -> Self {
         let listed = vec![(shown.key().clone(), shown.heads().to_vec())];
@@ -392,6 +405,25 @@ impl StoreCommand {
                 scope: tc_journal::record::Scope::Whole,
                 usfm,
                 file_name,
+            },
+            Vec::new(),
+        )
+    }
+
+    /// One part of "Update a book from USFM" (STORAGE §13.6): the `Fill` first, then the
+    /// `Review`, each planned on the fold it lands on.
+    pub fn update_book(
+        book: BookId,
+        bytes: Vec<u8>,
+        file_name: String,
+        part: tc_journal::outside::UpdatePart,
+    ) -> Self {
+        Self::new(
+            Command::UpdateBook {
+                book,
+                bytes,
+                file_name,
+                part,
             },
             Vec::new(),
         )
@@ -643,6 +675,9 @@ pub struct StoreReply {
     pub changes: Vec<ChangeId>,
     /// Conflicts a bulk choice left for a choice of their own (tc-store).
     pub skipped: Vec<ConflictId>,
+    /// Records the command left as they were (tc-store): the verses an Update a book's `Fill`
+    /// did not change.
+    pub kept: Vec<RecordKey>,
 }
 
 /// Why a command wrote nothing (tc-store `CommandError`). The memory backend makes none of
@@ -1042,6 +1077,9 @@ pub enum StoreError {
     /// `project.json`, since it was listed.
     #[error("not a project")]
     NotAProject,
+    /// The kept copy was imported or dismissed already.
+    #[error("the copy is no kept copy any more")]
+    NotKept,
     #[error("{0}")]
     Other(String),
 }
@@ -1051,6 +1089,10 @@ pub enum StoreError {
 pub enum CheckpointReason {
     /// tC4's "leaving the project" checkpoint, when the person goes Home.
     LeavingProject,
+    /// tC4's "leaving Translate" checkpoint, at a mode switch (D1).
+    LeavingTranslate,
+    /// A mode switch from another mode: its words name it ("leaving Check").
+    LeavingMode(String),
     /// tC4's "before export" checkpoint: an export reads the project as committed (D2).
     BeforeExport,
     Other(String),
@@ -1108,6 +1150,17 @@ pub trait ProjectStore: Send + Sync + 'static {
         Err(CreateFailure::Unavailable)
     }
 
+    /// Creates a project from an import, as [`ProjectStore::create`] does, with `cause` on
+    /// every record so History says where the work came from (STORAGE §13).
+    fn create_imported(
+        &self,
+        new: NewProjectSpec,
+        cause: tc_journal::Cause,
+    ) -> Result<(), CreateFailure> {
+        let _ = (new, cause);
+        Err(CreateFailure::Unavailable)
+    }
+
     /// The person said that the computer `folder`'s lock names is closed (STORAGE §5.0): the
     /// next open of `folder` takes the lock and opens writable, where it would otherwise open
     /// read-only with `OpenOnAnotherComputer`.
@@ -1148,6 +1201,19 @@ pub trait ProjectStore: Send + Sync + 'static {
         last: tc_journal::VerseNo,
     ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
         let _ = (folder, book, chapter, first, last);
+        Err(StoreError::Other("this store has no teammates".to_owned()))
+    }
+
+    /// Teammates 1 and 2's versions of one record of `kind` in `folder`, both from one version,
+    /// written as a sync's intake would ([`memory::teammates::Teammates::change_kind`]): the
+    /// changes' ids. A store with no teammates refuses.
+    #[cfg(feature = "test-hooks")]
+    fn teammates_change_kind(
+        &self,
+        folder: &ProjectRef,
+        kind: tc_api::test::TeammatesKind,
+    ) -> Result<Vec<tc_journal::ChangeId>, StoreError> {
+        let _ = (folder, kind);
         Err(StoreError::Other("this store has no teammates".to_owned()))
     }
 
@@ -1201,6 +1267,34 @@ pub trait ProjectHandle: Send + Sync {
     /// the fold does not list. A backend with no files has none.
     fn notices(&self) -> Vec<StoreNotice> {
         Vec::new()
+    }
+
+    /// The books another program changed that wait for the question, and every kept copy
+    /// (D1, delta §2.3, §2.11), as the store's manifest lists them. A backend with no files has
+    /// none.
+    fn outside_edits(&self) -> tc_api::session::OutsideEdits {
+        tc_api::session::OutsideEdits::default()
+    }
+
+    /// The window got focus: the store looks for files another program changed and holds them
+    /// (STORAGE §11.1). A backend with no files finds none.
+    fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// *Import* of the kept copy `copy` (delta §2.11 Q4).
+    fn import_kept(&self, _copy: &str) -> BoxFuture<Result<tc_store::ImportReport, StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Not now* for the waiting file `file`: the project keeps its text (delta §2.11 Q5).
+    fn not_now(&self, _file: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
+    }
+
+    /// *Dismiss* of the kept copy `copy`; refused while its book still waits.
+    fn dismiss_kept(&self, _copy: &str) -> BoxFuture<Result<(), StoreError>> {
+        Box::pin(async { Err(StoreError::Other("this backend keeps no copies".to_owned())) })
     }
 
     /// Drafts from an earlier session that differ from what their records hold (O12).

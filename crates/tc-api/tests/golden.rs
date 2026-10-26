@@ -72,6 +72,11 @@ use tc_api::ids::{
     ProjectId, ProjectRef, RecordRef, RefPart, ReportId, RequestId, Scope, ServerInstance, StoryNo,
     UploadId, ViewSeq, WallMs,
 };
+use tc_api::import::{
+    CarryOver, FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
+    Review as ImportReviewRequest, Run as ImportRun, UpdateBook, UpdateReport, VerseAt,
+    VersionSlot, Versions, VersionsView,
+};
 use tc_api::jobs::{
     Cancel, Get, JobKind, JobOutcome, JobState, JobView, OpenPhase, Phase, Progress, SyncResultView,
 };
@@ -106,7 +111,7 @@ use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
-    TeammatesEdit, TeammatesJoin, TokenBase,
+    TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
 use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
@@ -273,6 +278,7 @@ impl Example for HelloView {
                 id: ProjectId::parse("6f1c0e9a-2b7d-4c3e-8a5f-0b1d2c3e4f50").unwrap(),
                 mode: SessionMode::ReadOnly(ReadOnlyReason::CloudSynced),
                 role: SessionRole::Screen,
+                outside: outside_edits(),
             }],
             prefs: AppPrefsView {
                 app_locale: LocaleId::parse("ar").unwrap(),
@@ -281,6 +287,11 @@ impl Example for HelloView {
                 done: 1200,
                 total: 3739,
             }),
+            checkpoints: vec![tc_api::app::FailedCheckpoint {
+                project: scope().project,
+                reason: "the disk is full".into(),
+                code: None,
+            }],
         }
     }
 }
@@ -542,6 +553,63 @@ impl Example for OpenDoor43 {
             request: request(20),
             repo: RepoSource::new("facilitator-zq", "es-419_tit_equipo").unwrap(),
             name: ProjectName::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
+impl Example for tc_api::door43::LastSync {
+    fn example() -> Self {
+        tc_api::door43::LastSync {
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for tc_api::door43::LastSyncView {
+    fn example() -> Self {
+        use tc_api::jobs::{ReplacedKind, ReplacedValue, ReplacedView};
+        let juan = PersonLabel {
+            who: Who::Username("juan".into()),
+            computer: None,
+        };
+        let mine = PersonLabel {
+            who: Who::Mine,
+            computer: None,
+        };
+        let setting = |kind, was| ReplacedView {
+            by: juan.clone(),
+            whose: mine.clone(),
+            kind,
+            place: tc_api::conflicts::ReviewPlace::Book {
+                book: BookId::Titus,
+            },
+            count: 1,
+            was: Some(was),
+        };
+        tc_api::door43::LastSyncView {
+            view: Some(SyncResultView {
+                received: 3,
+                from: vec![juan.clone()],
+                kept_newest: 3,
+                verse_conflicts: 0,
+                alignments: 0,
+                restored: 0,
+                missing_pins: 0,
+                replaced: vec![
+                    setting(
+                        ReplacedKind::Setting,
+                        ReplacedValue::Font("Noto Sans".into()),
+                    ),
+                    setting(
+                        ReplacedKind::Setting,
+                        ReplacedValue::Direction(Direction::Ltr),
+                    ),
+                    setting(
+                        ReplacedKind::Resources,
+                        ReplacedValue::Resources(vec!["en_tn v90".into()]),
+                    ),
+                ],
+            }),
         }
     }
 }
@@ -1570,6 +1638,7 @@ impl Example for HomeView {
                 tool: None,
                 snippet: "Pablo, siervo de Dios".into(),
             }),
+            import_removed: true,
         }
     }
 }
@@ -1668,6 +1737,7 @@ fn opened() -> OpenedProject {
             id: ProjectId::parse("0a1b2c3d-0000-4000-8000-000000000001").unwrap(),
             mode: SessionMode::Writable,
             role: SessionRole::Screen,
+            outside: tc_api::session::OutsideEdits::default(),
         },
         name: "Equipo Ejemplo — Tito y Jonás".into(),
         tag: "es-419".into(),
@@ -1699,6 +1769,133 @@ impl Example for Close {
             request: request(31),
             at: scope(),
         }
+    }
+}
+
+impl Example for tc_api::session::LeaveMode {
+    fn example() -> Self {
+        tc_api::session::LeaveMode {
+            request: request(33),
+            at: scope(),
+            from: tc_api::session::ScreenMode::Translate,
+        }
+    }
+}
+
+/// Titus changed outside and waiting, Ruth added outside, and an earlier copy of Titus.
+fn outside_edits() -> tc_api::session::OutsideEdits {
+    use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits, WaitingBook};
+    OutsideEdits {
+        waiting: vec![
+            WaitingBook {
+                file: "ingredients/TIT.usfm".into(),
+                book: Some(BookId::Titus),
+                added: false,
+                copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+                unreadable: None,
+                why: KeptWhy::Changed,
+            },
+            WaitingBook {
+                file: "ingredients/RUT.usfm".into(),
+                book: Some(BookId::Ruth),
+                added: true,
+                copy: ".tc/external/RUT.usfm.20261024T101500Z".into(),
+                unreadable: Some("RUT 1:3 appears twice (line 212)".into()),
+                why: KeptWhy::Changed,
+            },
+        ],
+        kept: vec![
+            KeptCopy {
+                file: "ingredients/TIT.usfm".into(),
+                copy: ".tc/external/TIT.usfm.20261023T090000Z".into(),
+                why: KeptWhy::Changed,
+            },
+            KeptCopy {
+                file: "ingredients/TIT.usfm".into(),
+                copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+                why: KeptWhy::Changed,
+            },
+            KeptCopy {
+                file: "ingredients/JON.usfm".into(),
+                copy: ".tc/external/JON.usfm.20261024T101500Z".into(),
+                why: KeptWhy::Lost,
+            },
+        ],
+        // A read-only open asks nothing, so no example holds both.
+        read_only_changed: Vec::new(),
+    }
+}
+
+impl Example for tc_api::session::OutsideEdits {
+    fn example() -> Self {
+        outside_edits()
+    }
+}
+
+impl Example for tc_api::session::Focus {
+    fn example() -> Self {
+        tc_api::session::Focus {
+            request: request(34),
+            at: scope(),
+        }
+    }
+}
+
+impl Example for tc_api::session::ImportKept {
+    fn example() -> Self {
+        tc_api::session::ImportKept {
+            request: request(35),
+            at: scope(),
+            copy: ".tc/external/TIT.usfm.20261024T101500Z".into(),
+        }
+    }
+}
+
+impl Example for tc_api::session::KeptImported {
+    fn example() -> Self {
+        tc_api::session::KeptImported {
+            file: "ingredients/TIT.usfm".into(),
+            book: Some(BookId::Titus),
+            imported: 12,
+            to_review: 2,
+            book_added: false,
+            outside: tc_api::session::OutsideEdits::default(),
+        }
+    }
+}
+
+impl Example for tc_api::session::NotNow {
+    fn example() -> Self {
+        tc_api::session::NotNow {
+            request: request(36),
+            at: scope(),
+            file: "ingredients/TIT.usfm".into(),
+        }
+    }
+}
+
+impl Example for tc_api::session::DismissNotice {
+    fn example() -> Self {
+        tc_api::session::DismissNotice {
+            request: request(37),
+            at: scope(),
+            copy: ".tc/external/TIT.usfm.20261023T090000Z".into(),
+        }
+    }
+}
+
+impl Example for tc_api::session::RetryCheckpoint {
+    fn example() -> Self {
+        tc_api::session::RetryCheckpoint {
+            request: request(32),
+            at: scope(),
+        }
+    }
+}
+
+impl Example for tc_api::event::CheckpointOutcome {
+    fn example() -> Self {
+        tc_api::event::CheckpointOutcome::Committed
     }
 }
 
@@ -2166,6 +2363,7 @@ impl Example for AlignerView {
             },
             save: AlignSave::Unsaved,
             marker: None,
+            history: Some(token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA")),
         }
     }
 }
@@ -2734,6 +2932,15 @@ impl Example for History {
     }
 }
 
+impl Example for tc_api::conflicts::Versions {
+    fn example() -> Self {
+        tc_api::conflicts::Versions {
+            at: scope(),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+        }
+    }
+}
+
 impl Example for HistoryView {
     fn example() -> Self {
         HistoryView {
@@ -2775,6 +2982,17 @@ impl Example for Resolve {
                     ChangeRef::parse(&"b".repeat(64)).unwrap(),
                 ],
             },
+        }
+    }
+}
+
+impl Example for tc_api::conflicts::Restore {
+    fn example() -> Self {
+        tc_api::conflicts::Restore {
+            at: scope(),
+            request: request(27),
+            shown: token("eyJoZWFkcyI6W10sImtleSI6e319AAAAAAAAAAAAAAAAAAAAAA"),
+            from: ChangeRef::parse(&"a".repeat(64)).unwrap(),
         }
     }
 }
@@ -2847,6 +3065,7 @@ fn review_notices() -> Vec<NoticeView> {
         NoticeView::ImportUnfinished,
         NoticeView::IncompleteChanges { have: 3, of: 5 },
         NoticeView::KeptApart { changes: 2 },
+        NoticeView::ChangedWhileReadOnly { file: file() },
     ]
 }
 
@@ -2882,6 +3101,18 @@ fn review_values() -> Vec<VersionValue> {
         VersionValue::Text("Pablo, siervo de Dios".into()),
         VersionValue::Joined { by: 4 },
         VersionValue::Absent,
+        VersionValue::Check {
+            selected: vec!["siervo".into()],
+            nothing_to_select: false,
+            status: Some(tc_api::check::DecisionStatus::Valid),
+            bookmarked: true,
+            comment: Some("Revisar".into()),
+        },
+        VersionValue::Alignment {
+            pairs: vec!["Παῦλος = Pablo".into()],
+            done: true,
+            marked_invalid: false,
+        },
         VersionValue::NotShown,
     ]
 }
@@ -2933,6 +3164,7 @@ impl Example for Script {
                         first: 4,
                         last: 5,
                     }),
+                    kinds: vec![TeammatesKind::Check, TeammatesKind::CarriedFile],
                     restored: 0,
                 },
             },
@@ -3018,6 +3250,132 @@ impl Example for export::StoriesPrint {
                 }),
             ],
             undrafted: true,
+        }
+    }
+}
+
+fn import_files() -> Vec<ImportFile> {
+    vec![ImportFile {
+        upload: UploadId::parse(&format!("{:032x}", 7)).unwrap(),
+        name: "cfm_fbt_tit_book.zip".into(),
+    }]
+}
+
+fn import_details() -> ImportDetails {
+    ImportDetails {
+        name: "Tita tC3".into(),
+        code: "cfm".into(),
+    }
+}
+
+impl Example for ImportReviewRequest {
+    fn example() -> Self {
+        ImportReviewRequest {
+            files: import_files(),
+            details: Some(import_details()),
+            use_installed: Some(VersionsView::example().found),
+        }
+    }
+}
+
+impl Example for ImportReview {
+    fn example() -> Self {
+        ImportReview {
+            found: ImportFound {
+                details: ImportDetails {
+                    name: "cfm_fbt".into(),
+                    code: "cfm".into(),
+                },
+                licenses: vec!["CC BY-SA 4.0".into()],
+                contributors: vec!["Translator".into()],
+                books: vec![FoundBook {
+                    book: BookId::Titus,
+                    chapters: 3,
+                    verses: 46,
+                    drafted: 46,
+                    aligned: 0,
+                    decisions: 5,
+                    not_kept: Vec::new(),
+                }],
+                slots: vec![
+                    VersionSlot::TranslationNotes,
+                    VersionSlot::OriginalNewTestament,
+                ],
+            },
+            details: import_details(),
+            folder: Some(ProjectRef::parse("tita_tc3").unwrap()),
+            refusal: Some(tc_api::Refusal::Import(
+                tc_api::refusal::ImportRefusal::NameExists,
+            )),
+            carry_over: Some(CarryOver {
+                carried: 4,
+                invalidated: 1,
+            }),
+        }
+    }
+}
+
+impl Example for Versions {
+    fn example() -> Self {
+        Versions {
+            request: request(60),
+            files: import_files(),
+        }
+    }
+}
+
+impl Example for VersionsView {
+    fn example() -> Self {
+        VersionsView {
+            found: vec![FoundVersion {
+                slot: VersionSlot::TranslationNotes,
+                repo_path: "git.door43.org/unfoldingWord/en_tn".into(),
+                tag: "v87".into(),
+                sha: "e586762e330f482a60c52aedd1c7b3a2f155df8a".into(),
+            }],
+            unresolved: vec![VersionSlot::OriginalNewTestament],
+        }
+    }
+}
+
+impl Example for ImportRun {
+    fn example() -> Self {
+        ImportRun {
+            request: request(61),
+            files: import_files(),
+            details: import_details(),
+            found: VersionsView::example().found,
+            license: "CC BY-SA 4.0".into(),
+        }
+    }
+}
+
+impl Example for UpdateBook {
+    fn example() -> Self {
+        UpdateBook {
+            request: request(62),
+            at: scope(),
+            book: BookId::Titus,
+            file: ImportFile {
+                upload: UploadId::parse(&format!("{:032x}", 8)).unwrap(),
+                name: "TIT.usfm".into(),
+            },
+        }
+    }
+}
+
+impl Example for UpdateReport {
+    fn example() -> Self {
+        UpdateReport {
+            book: BookId::Titus,
+            imported: 12,
+            to_review: 2,
+            left_as_it_was: vec![VerseAt {
+                chapter: 1,
+                verse: 3,
+            }],
+            markup_kept: Vec::new(),
+            book_added: false,
         }
     }
 }
@@ -3217,6 +3575,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "check/decide",
             "conflicts/resolve",
             "conflicts/resolveBulk",
+            "conflicts/restore",
             "prefs/recordPlace",
             "prefs/setAlignSuggestions",
             "prefs/setDraftUnit",
@@ -3229,6 +3588,12 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "resources/planGateway",
             "resources/planUpgrade",
             "session/close",
+            "session/retryCheckpoint",
+            "session/leave",
+            "session/focus",
+            "session/importKept",
+            "session/notNow",
+            "session/dismissNotice",
             "session/copy",
             "session/discardDraft",
             "session/drafts",
@@ -3243,6 +3608,7 @@ fn a_write_names_its_scope_exactly_when_its_json_has_at() {
             "editor/saveLayout",
             "editor/draft",
             "editor/discardDraft",
+            "import/updateBook",
         ])
     );
 }
@@ -3452,6 +3818,24 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                replaced: vec![tc_api::jobs::ReplacedView {
+                    by: PersonLabel {
+                        who: Who::Teammate(1),
+                        computer: None,
+                    },
+                    whose: PersonLabel {
+                        who: Who::Username("maria".into()),
+                        computer: None,
+                    },
+                    kind: tc_api::jobs::ReplacedKind::Alignment,
+                    place: tc_api::conflicts::ReviewPlace::Verse {
+                        book: BookId::Titus,
+                        chapter: 1,
+                        verse: 1,
+                    },
+                    count: 1,
+                    was: None,
+                }],
             })),
         }),
         Event::Job(JobView {
@@ -3534,10 +3918,12 @@ fn session_events() -> Vec<SessionEvent> {
         },
         SessionEvent::Checkpoint(CheckpointOutcome::Failed {
             reason: "the index is locked".into(),
+            code: None,
         }),
         SessionEvent::MaterializeBlocked {
             paths: vec!["ingredients/TIT.usfm".into()],
         },
+        SessionEvent::OutsideEdits(outside_edits()),
         SessionEvent::AlignSave {
             aligner: AlignerId::new(5),
             state: AlignSave::Failed(NotSaved::Disk("The disk is full.".into())),

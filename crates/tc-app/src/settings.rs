@@ -98,7 +98,7 @@ impl Handle<ViewFromHome> for App {
             .await?;
         let (entry, peek, settings, resources) = read.map_err(|e| match e {
             StoreError::NotAProject => ApiError::Refused(Refusal::Open(OpenRefusal::NotAProject)),
-            StoreError::Other(reason) => unreadable(reason),
+            error @ (StoreError::Other(_) | StoreError::NotKept) => unreadable(error.to_string()),
         })?;
         // A project with no book yet has none of its derived files (a create before its first
         // book, STORAGE §5.10): its settings and pins are in its history only. The dialog reads

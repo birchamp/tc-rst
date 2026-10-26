@@ -83,8 +83,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # Until CHK-7c runs the scale tests at 2, the 10x corpora outrun 75 minutes on a hosted runner.
-    timeout-minutes: 150
+    # The scale tests run at twice Psalms (CHK-7c); ten times runs at night.
+    timeout-minutes: 75
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
     if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
     steps:
@@ -175,6 +175,7 @@ jobs:
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
       - run: scripts/gates.sh --step model-long 2>&1 | tee nightly.log
+      - run: scripts/gates.sh --step scale-long 2>&1 | tee -a nightly.log
       - run: scripts/gates.sh --step sync-model-long 2>&1 | tee -a nightly.log
       - if: failure() && github.event_name == 'schedule'
         run: scripts/nightly-stub.sh store-model-nightly nightly.log
