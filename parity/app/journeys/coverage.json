@@ -216,13 +216,13 @@
       {
         "file": "parity/app/journeys/share-open.test.mjs",
         "tests": [
-          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
+          "Open a project from Door43: it asks no name (ruling H14); Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
         ]
       },
       {
         "file": "parity/app/journeys/open-door43.test.mjs",
         "tests": [
-          "J17. Another translator opens the project from Door43: it shows on Home under its new name with the text of the team, and it syncs"
+          "J17. The project opens from Door43 on another computer with the text and name of the team, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there"
         ]
       }
     ],
@@ -538,7 +538,7 @@
     "j14-join-isolation.spec.ts": {
       "file": "parity/app/journeys/open-door43.test.mjs",
       "tests": [
-        "J14. Opening the team copy beside a similar project of this computer mixes nothing: the opened project lacks the unsynced verse of this computer, and that project keeps it"
+        "J14. A teammate who opens the team copy gets none of the unsynced work of this computer, and this computer keeps it"
       ]
     },
     "j15-slow-open.spec.ts": {
@@ -557,13 +557,13 @@
       {
         "file": "parity/app/journeys/share-open.test.mjs",
         "tests": [
-          "Open a project from Door43: the name follows the repository; a name in use is an error under it; Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
+          "Open a project from Door43: it asks no name (ruling H14); Open project asks the open question; Not now sends nothing; a repository Door43 does not show asks the sign-in once, then ends in its refusal, and no project was added"
         ]
       },
       {
         "file": "parity/app/journeys/open-door43.test.mjs",
         "tests": [
-          "J17. Another translator opens the project from Door43: it shows on Home under its new name with the text of the team, and it syncs"
+          "J17. The project opens from Door43 on another computer with the text and name of the team, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there"
         ]
       }
     ],

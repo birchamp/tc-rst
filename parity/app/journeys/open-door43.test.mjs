@@ -57,7 +57,7 @@ async function openOwnFromDoor43(page, env) {
   await page.getByTestId('open-door43-modal').waitFor({ state: 'detached' });
 }
 
-browserTest('J17. The project opens from Door43 on another computer with the team\'s text and name, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there', async () => {
+browserTest('J17. The project opens from Door43 on another computer with the text and name of the team, and syncs; on the computer that has it, Open from Door43 makes no second copy and opens the one there', async () => {
   await withApp(async ({ page, env, teammate }) => {
     await teamCopy(page, env);
     const b = await teammate('teammate-b');
@@ -73,7 +73,7 @@ browserTest('J17. The project opens from Door43 on another computer with the tea
 
 const MINE = 'para la fe, solo en esta computadora';
 
-browserTest('J14. A teammate who opens the team copy gets none of this computer\'s unsynced work, and this computer keeps it', async () => {
+browserTest('J14. A teammate who opens the team copy gets none of the unsynced work of this computer, and this computer keeps it', async () => {
   await withApp(async ({ env, page, teammate }) => {
     await teamCopy(page, env);
     await saveTitus(env.call, BIBLE, 1, 2, MINE);
