@@ -244,3 +244,5 @@ G3	Branch-run artifacts hold help-desk.key for 14 days in a public repository; s
 G3	The publish guard checks installer names for -unsigned, not the Authenticode signature	release.yml publish
 G3	from_export (a burrito zip from a USB drive) has no Finder-litter filter; aquifer.rs and dcs.rs each carry their own copy of the rule	crates/tc-resources/src
 G3	Nothing tests the publish guard's refusal	release.yml publish
+PUSH-1	SyncReport.offer_exchange is set after three failed large pushes, but tc-app does not read it yet, so "Save an exchange file instead" reaches no screen	crates/tc-app/src/sync.rs reads ended, received_by, recreated, restored only; loss lens 2026-10-26
+PUSH-1	links_of pushes every commit between Door43's commit and HEAD, including a commit no app made (no Tc-Frontier) in a history adopted from another tool, which can sit as Door43's tip until the next link	crates/tc-sync/src/sync.rs links_of; no such history is reachable today; loss lens 2026-10-26

@@ -357,8 +357,8 @@ impl Writer {
         device: DeviceId,
     ) -> Result<Outcome, StoreError> {
         let head = git.head()?;
-        // A sync's merge: Door43's commit is the second parent, and its tree's entries the
-        // project does not make are kept (§9.4).
+        // A sync's merge: Door43's commit (or a chain's last link, which descends from it) is
+        // the second parent, and its tree's entries the project does not make are kept (§9.4).
         let remote = match subject {
             Subject::Checkpoint(crate::handle::CheckpointReason::SyncMerge { remote }) => {
                 Some(*remote)

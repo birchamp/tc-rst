@@ -571,7 +571,7 @@ pub enum CheckpointReason {
     Periodic,
     Other(String),
     /// §9.1 S7: a sync's merge commit, whose second parent is the commit fetched from
-    /// Door43. It is made even when the tree is HEAD's, so the push fast-forwards Door43.
+    /// Door43, or the last link of a chain grown from it (§9.5). It is made even when the tree is HEAD's, so the push fast-forwards Door43.
     SyncMerge {
         remote: tc_journal::GitOid,
     },
@@ -633,10 +633,10 @@ pub struct SyncFile {
     pub chain_failures: Option<ChainFailures>,
 }
 
-/// §9.5: after three failures in a row of one chain, "Save an exchange file instead" (§10).
+/// §9.5: after three failures in a row of a large push, "Save an exchange file instead" (§10).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ChainFailures {
-    /// The commit the chain ends at.
+    /// The commit the last failed chain ended at.
     pub tip: String,
     pub count: u8,
 }
@@ -1116,7 +1116,8 @@ impl ProjectHandle {
 
     /// A sync's merge (§9.3, §9.1 S7): takes the received packs in, each written whole
     /// beside the project's own and folded, then seals, materializes and commits with
-    /// `remote`, the commit fetched from Door43, as the second parent. A pack already held is
+    /// `remote`, the commit fetched from Door43, as the second parent (or the last link of a
+    /// chain grown from it, §9.5). A pack already held is
     /// skipped; a damaged one's readable changes are salvaged; a path another program wrote
     /// is left as it is. Saves go on meanwhile.
     pub fn sync_merge(

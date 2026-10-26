@@ -1946,8 +1946,9 @@ async fn sync_large_push_chain_resumes() {
     a.close().unwrap();
 }
 
-/// §9.5: after three failures of one chain for want of a connection, the report offers the
-/// exchange file; a sync that gets through forgets them.
+/// §9.5: after three failures of a large push for want of a connection, the report offers the
+/// exchange file, though the translator saved between the tries; a sync that gets through
+/// forgets them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_large_push_that_keeps_breaking_offers_the_exchange_file() {
     let door43 = door43("titus-weak").await;
@@ -1969,7 +1970,10 @@ async fn a_large_push_that_keeps_breaking_offers_the_exchange_file() {
     });
     let offers: Vec<bool> = {
         let mut offers = Vec::new();
-        for _ in 0..3 {
+        for n in 1..=3 {
+            // The translator keeps working between the tries: each sync's checkpoint makes a
+            // new tip, and the push is still the same one.
+            save(&a, 2, n, &format!("try {n}"));
             let report = sync(&a, &door43).await;
             assert!(matches!(report.ended, Ended::Failed(_)), "{report:?}");
             offers.push(report.offer_exchange);

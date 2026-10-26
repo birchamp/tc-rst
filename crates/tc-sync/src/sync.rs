@@ -508,16 +508,17 @@ impl Run<'_> {
     }
 
     /// Counts a large push's failure for want of a connection in `.tc/sync.json`; `true` from
-    /// the third in a row of the chain that ends at `tip`. A file that cannot be written
-    /// counts nothing.
+    /// the third in a row. Saves made between the tries give the chain a new tip but leave it
+    /// the same push, so only a confirmed push starts the count again. A file that cannot be
+    /// written counts nothing.
     async fn chain_failed(&self, tip: String) -> bool {
         let Ok(Some(mut file)) = self.project.sync_file().await else {
             return false;
         };
-        let count = match &file.chain_failures {
-            Some(f) if f.tip == tip => f.count.saturating_add(1),
-            _ => 1,
-        };
+        let count = file
+            .chain_failures
+            .as_ref()
+            .map_or(1, |f| f.count.saturating_add(1));
         file.chain_failures = Some(tc_store::ChainFailures { tip, count });
         let _ = self.project.set_sync_file(file).await;
         count >= 3

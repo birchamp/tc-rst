@@ -3744,6 +3744,7 @@ S7  [actor] Merge commit: seal and materialize (§5.13 C1, C2; this seals the in
       repo.commit(Some("HEAD"), &sig, &sig, "Sync with Door43 (tC)\n\n<trailers>", &tree, &[&head, &r])
     The trailers are those of §5.13. The merge commit holds everything this device has, so
     every commit tree is a valid burrito whose derived files equal the fold of its packs.
+    For a chain (§9.5) the second parent is the last link instead of r; it descends from r.
     Large pushes are split into a chain of such commits (§9.5).
 S8  Push (§9.5).
 S9  Confirm (§9.5).
@@ -3953,8 +3954,8 @@ last link to 16 MiB is pushed from the local ref `refs/tc/push-link`, then read 
 lost race. This also splits the first push of a long local history. Each confirmed link is
 progress that a dropped connection cannot undo, the report's `confirmed` names the last one, and
 the next sync continues from there. After three consecutive `sync.unreachable` failures of one
-chain (counted in `.tc/sync.json` `chainFailures` by the chain's tip, cleared by a confirmed
-push), the report's `offer_exchange` offers "Save an exchange file instead" (§10).
+chain (counted in `.tc/sync.json` `chainFailures`; saves between the tries do not reset it, a
+confirmed push does), the report's `offer_exchange` offers "Save an exchange file instead" (§10).
 
 ### 9.6 Share (J11), join (J17) and connecting a project
 
