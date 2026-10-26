@@ -289,3 +289,4 @@ CHK-3	STORAGE §15 L52 names only the store test that adding a removed book agai
 CHK-7c	larger_psalms keeps records with no book on both sides, so growth that reads every project-level record would be masked	crates/tc-app/tests/op_counts/corpus.rs
 CHK-7c	the plan test's Psalms-alone action skips its rows-are-Psalms assertion	crates/tc-app/tests/op_counts/plans.rs
 CHK-7c	growth messages say "on Psalms" when the baseline is the larger corpus's Psalms alone	crates/tc-app/tests/op_counts/harness.rs
+CHK-8	tc-journal fold_converges_under_any_union fails now and then: in 64 random cases the generator may place no check decision, and the census assert at tests/common/mod.rs:847 trips (seen on track-E1a2 f77e5ab9; passes 3 of 3 alone). Fix: a fixed-seed runner for the census, or a named history that places a decision (storage lane's diagnosis)	crates/tc-journal/tests/properties.rs
