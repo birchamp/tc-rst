@@ -1,7 +1,12 @@
 //! "Stay signed in" on the computer's credential store (ruling H11): `OsKeychain`'s mapping of
 //! the store's answers, on `keyring_core`'s mock store, never the real one. One test binary of
 //! its own, because the mock is installed as the process's default store.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test: a failure should stop it"
+)]
 
 use keyring_core::{Entry, Error, mock};
 use tc_app::account::{Keychain, KeychainError, OsKeychain};
