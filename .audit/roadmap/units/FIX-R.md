@@ -4,7 +4,7 @@ title: Fix the tC4 bugs the rebuild repeats; reconcile TC4-ISSUES
 track: A
 lane: app
 milestone: M1
-state: verifying
+state: done
 owner: shell lane (Claude Code 6f39d119)
 branch: track-FIX-R4
 worktree: .worktrees/track-FIX-R4
@@ -14,9 +14,9 @@ later: []
 proves: [P1, P8]
 no_loss: true
 size: 2-3 d
-merged: none
+merged: 8d02e300
 updated: 2026-10-26
-next: ready for a batch on track-FIX-R4 (step 4, its own small merge; steps 1-3 and 5 are on main). Then done.
+next: none
 blocked_by: none
 ---
 
@@ -356,3 +356,4 @@ the log. This item is no-loss: the review uses three lenses (FUNNEL.md §8).
 - 2026-10-26 11:32 EDT | shell lane (Claude Code 6f39d119) | fix | none | the crate run found `edits_joins_renumbers_and_pins_change_files_and_screens_alike` (tc-journal screens_and_fold.rs) asserting tC4's rule: its model of Check's draft index trimmed tC4's indexer body, and 1:2 (`\q1` on its own line) and 1:3 (the stub then a `\q2` line) had no text. The model now keeps tC4's index keys and decides drafted by the words on every line (H12), and 1:2 and 1:3 have their text; the five screens-and-fold tests pass. `the_no_text_rule_reads_the_body_tc4s_indexer_reads` (shared_rules.rs) asserted the same old rule; it is now `the_no_text_rule_reads_the_words_on_every_line`, and the poem, stub-then-poem and blank-first-line verses are judged like the others. tc-usfm, tc-journal, tc-store and tc-app tests pass (tc-app 695), and clippy -D warnings on the four crates | cargo test --no-fail-fast -p tc-usfm -p tc-journal -p tc-store -p tc-app
 - 2026-10-26 11:54 EDT | shell lane (Claude Code 6f39d119) | gate | a0c0d4ac | main 2947d486 merged in: `cargo check --locked --workspace --all-targets`, the tc-ui and tc-api wasm clippy with -D warnings, screens_and_fold 5, shared_rules 15 and tc-app's poetry and drafted tests 11 pass; node .audit/tools and coverage 44 pass 0 fail; board.py 0 errors. Pushed once for a batch | git log -1 a0c0d4ac
 - 2026-10-26 11:57 EDT | shell lane (Claude Code 6f39d119) | fix | none | the integration lane's merge check: with `state: done` the claims test failed on TC4-ISSUES #569 and #505 ("A5; FIX-R reconciles") and coverage.json's `sync-refusal.spec.ts` (pending FIX-R). #569 and #505 are not applicable: tC4 4.0 has no such shortcuts and opens Project settings from the Home card only, as the rebuild does (B2); the §6 counts are 7 unit todo and 20 not applicable, the totals 33 and 65. The spec's port is E1a step 4 (E1a.md, `sync-refusal.test.mjs`), so it pends on E1a. With FIX-R set to done for the run, `node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs` passes 7 of 7 | node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs
+- 2026-10-26 11:58 EDT | integration lane (Claude Code 3d07d5f8) | merge | 8d02e300 | step 4 (H12, poetry everywhere) merged into main in batch 10; with steps 1-3 and 5 in batch 1 (ec916216) the card is done; gated by scripts/gates.sh --wait-ci batch-10 | scripts/gates.sh --wait-ci batch-10
