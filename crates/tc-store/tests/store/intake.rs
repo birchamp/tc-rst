@@ -245,6 +245,65 @@ fn a_damaged_remote_pack_is_salvaged_and_kept_in_the_tree() {
     a.close().unwrap();
 }
 
+/// L77 (§5.0): lines salvaged from a teammate's damaged pack are kept as that teammate made
+/// them: the same change, device, number, time and batch, never this device's, after the
+/// salvage, after this device seals them into a pack of its own, and after a reopen.
+#[test]
+fn salvage_keeps_original_batch_ref() {
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    save_verse(&b, 1, 2, "in hope").unwrap();
+    save_verse(&b, 1, 3, "in his time").unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (theirs, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    assert_eq!(packs.len(), 1);
+    let project = project_of(&rig_a.fs, &folder);
+    let whole = tc_store::read_received_pack(&packs[0].path, &packs[0].bytes, project).changes;
+    let damaged = packs[0].bytes[..packs[0].bytes.len() - 7].to_vec();
+    let readable = tc_store::read_received_pack(&packs[0].path, &damaged, project).changes;
+    assert!(!readable.is_empty() && readable.len() < whole.len());
+    let blob = repo_a.blob(&damaged).unwrap();
+    let a = open(&rig_a, &folder);
+    let me = a.facts().device;
+    let remote = tc_journal::GitOid::from_bytes(theirs.as_bytes().try_into().unwrap());
+    let received = vec![ReceivedPack {
+        path: packs[0].path.clone(),
+        bytes: damaged,
+        blob: tc_journal::GitOid::from_bytes(blob.as_bytes().try_into().unwrap()),
+    }];
+    let report = a.sync_merge(remote, received).wait().unwrap();
+    assert_eq!(report.intake.salvaged, 1, "{report:?}");
+    let as_made = |handle: &ProjectHandle| {
+        let snapshot = handle.snapshot();
+        for change in &readable {
+            let body = change.body();
+            let view = snapshot
+                .fold()
+                .change(&change.id())
+                .expect("the salvaged change, by its own id");
+            assert_ne!(view.device, me);
+            assert_eq!(
+                (view.device, view.seq, view.at, view.batch),
+                (body.device, body.seq, body.at, body.batch.id)
+            );
+        }
+    };
+    as_made(&a);
+    checkpoint(&a);
+    as_made(&a);
+    a.close().unwrap();
+    let a = open(&rig_a, &folder);
+    as_made(&a);
+    a.close().unwrap();
+}
+
 /// §6.4 Y2 to Y4: a sync's merge killed at any write point, with or without a power cut,
 /// leaves this computer's own work, a teammate's verse whole or absent (never half a batch),
 /// a valid folder, and a retry that takes the teammate's work and commits.

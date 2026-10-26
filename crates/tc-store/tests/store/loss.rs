@@ -779,3 +779,100 @@ fn crash_seal_verifies_before_delete() {
     );
     handle.close().unwrap();
 }
+
+/// L66 (§4.4 "All copies damaged", §9.2 N3): no valid copy of a pack is left. The copy in the
+/// folder and the one the last commit holds are damaged in different lines; the open keeps
+/// the union of their readable lines, so every save is still there, and seals them again.
+#[test]
+fn loss_all_copies_damaged_union_salvaged() {
+    let (rig, folder) = titus();
+    let handle = open_ok(&rig, &folder);
+    save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
+    save_verse(&handle, 1, 2, "in hope of eternal life").unwrap();
+    save_verse(&handle, 1, 3, "at the right time").unwrap();
+    handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait()
+        .unwrap();
+    // The saves themselves, by id: a verse that came back only as an outside edit of the
+    // book file (a new change) would not be its save.
+    let saves = |handle: &tc_store::ProjectHandle| -> Vec<Vec<tc_journal::ChangeId>> {
+        (1..=3)
+            .map(|v| handle.snapshot().fold().heads(&verse(1, v)))
+            .collect()
+    };
+    let saved = saves(&handle);
+    handle.close().unwrap();
+    let rel = packs(&rig.fs, &folder)
+        .into_iter()
+        .find(|rel| {
+            String::from_utf8_lossy(&rig.fs.peek(&folder.join(rel)).unwrap())
+                .contains("servant of God")
+        })
+        .expect("the pack of the saves");
+    let good = rig.fs.peek(&folder.join(&rel)).unwrap();
+    let damage = |from: &str, to: &str| -> Vec<u8> {
+        let text = String::from_utf8(good.clone()).unwrap();
+        assert!(text.contains(from));
+        text.replacen(from, to, 1).into_bytes()
+    };
+    let in_the_commit = damage("servant of God", "servant of Gxd");
+    let in_the_folder = damage("right time", "right tome");
+    // The commit's copy is damaged too, and no other copy of the good bytes is left.
+    let outside = tc_store::Vfs::outside_dir(&rig.fs, &folder).unwrap();
+    let repo = git2::Repository::open(outside.join(".git")).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    let blob = repo.blob(&in_the_commit).unwrap();
+    let mut update = git2::build::TreeUpdateBuilder::new();
+    update.upsert(&rel, blob, git2::FileMode::Blob);
+    let tree = repo
+        .find_tree(update.create_updated(&repo, &head.tree().unwrap()).unwrap())
+        .unwrap();
+    let sig = git2::Signature::now("disk", "disk@example.org").unwrap();
+    repo.commit(Some("HEAD"), &sig, &sig, "a damaged copy", &tree, &[&head])
+        .unwrap();
+    let good_oid = git2::Oid::hash_object(git2::ObjectType::Blob, &good)
+        .unwrap()
+        .to_string();
+    let loose = outside
+        .join(".git/objects")
+        .join(&good_oid[..2])
+        .join(&good_oid[2..]);
+    std::fs::remove_file(&loose).unwrap();
+    assert!(
+        !repo
+            .odb()
+            .unwrap()
+            .exists(git2::Oid::from_str(&good_oid).unwrap())
+    );
+    rig.fs.put_unseen(&folder.join(&rel), &in_the_folder, None);
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God"),
+        "the line only the folder's copy still reads"
+    );
+    assert_eq!(
+        words(&handle, 1, 3).as_deref(),
+        Some("at the right time"),
+        "the line only the commit's copy still reads"
+    );
+    assert_eq!(
+        words(&handle, 1, 2).as_deref(),
+        Some("in hope of eternal life")
+    );
+    assert_eq!(saves(&handle), saved, "each verse is its own save");
+    handle
+        .checkpoint(tc_store::CheckpointReason::BeforeSync)
+        .wait()
+        .unwrap();
+    handle.close().unwrap();
+    let handle = open_ok(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("Paul, a servant of God")
+    );
+    assert_eq!(words(&handle, 1, 3).as_deref(), Some("at the right time"));
+    assert_eq!(saves(&handle), saved);
+    handle.close().unwrap();
+}
