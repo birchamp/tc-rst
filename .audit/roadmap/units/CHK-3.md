@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-26
-next: the review of step 5, then a batch; branch track-CHK-3b
+next: ready for a batch: branch track-CHK-3b, pushed; the integration lane gates it
 blocked_by: none
 ---
 
@@ -259,6 +259,7 @@ and each planted failure is in the log.
 - Size basis: checks-inventory ranks 5 and 15, half a day each.
 
 ## Log
+
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/done-definition.md
 - 2026-10-23 23:40 EDT | checks lane (Claude Code 2198ee19) | claim | none | Claimed on branch track-CHK-3 from main 48d29235. S2 is merging, not done: step 5 (STORAGE.md §15) waits for it. FIX-R is not claimed, so its rows of TC4-ISSUES.md are marked pending only. tC4 reference clone: ~/unfoldingword/translationcore4 (has d310bf3) | python3 -I .audit/tools/board.py
 - 2026-10-23 23:43 EDT | checks lane (Claude Code 2198ee19) | note | none | Correction to the claim line: track-CHK-3 branched from main 325244a1 (G5's merge), not 48d29235 | git merge-base track-CHK-3 claude/focused-ride-5uzj7p
@@ -277,3 +278,5 @@ and each planted failure is in the log.
 - 2026-10-26 10:55 EDT | shell lane (Claude Code 6f39d119) | verify | 3890a1cf | review (subagent, claims lens): no blocker, no major, two minors. 1 every replaced test asserts its row except L26 (convergence only, not the incremental fetch and backoff) and L52 (the store's restore, not the dialog's order); 2 every pending card exists and is open; 3 the test reads 139 rows and fails under 100, and the Test column is last; 4 no text outside the test cells changed. L26 keeps `sync_contention_three_devices_converge` pending beside the convergence test; L52's dialog half is a minor in .audit/minors.tsv | git show 3890a1cf
 - 2026-10-26 11:01 EDT | C7a session (Claude Code 2a5f27bc), for CHK-3 | verify | 3890a1cf | independent review of the diff: 1 blocker, 2 minors. Blocker: the new pending markers named cards that do not write those tests (only S3's step-9 rows and E2's `usb_export_verify_reads_device` are in their cards); X and I are done without tests they promised (X.md step 5 item 4, step 6.4). Minors: L148 still said "(to write: I)" though I is done and the test exists; the new log lines had no time | message to the shell lane
 - 2026-10-26 11:05 EDT | shell lane (Claude Code 6f39d119) | fix | none | the blocker: new card LOSS-1 owns the 26 §15 tests no card writes (L16, L17, L19, L20, L22 twice, L23, L25, L26, L28 to L32, L34, L45, L47, L59, L60, L66, L77 twice, L79, L83, L89, L95, L96), and those rows pend on it; S3 keeps its step-9 rows and E2 `usb_export_verify_reads_device`, each with a note; the notes in E1a, E1b, V, C7b and F1 are gone. L145 and L148 drop their markers, since their tests exist. Pending now: LOSS-1 27, S3 12, E2 1. The log lines carry times | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 11:20 EDT | C7a session (Claude Code 2a5f27bc), for CHK-3 | verify | c94dcb29 | the review of 3890a1cf..c94dcb29 is closed with no findings: LOSS-1 27 markers on 25 rows match its card, none of its 26 names exists as a fn, S3 12 and E2 1 are right | message to the shell lane
+- 2026-10-26 11:22 EDT | shell lane (Claude Code 6f39d119) | gate | none | the fast checks on the branch (main 1a0c8469 is its base, unchanged): `node --test .audit/tools/*.test.mjs parity/app/journeys/coverage.test.mjs` 43 pass 0 fail; board_test, union_test and `board.py --check` 0 errors. The change is docs and node only, so no cargo step runs differently | node --test .audit/tools/*.test.mjs
