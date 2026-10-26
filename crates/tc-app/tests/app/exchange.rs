@@ -362,3 +362,40 @@ async fn the_burrito_zip_item_downloads_the_exchange_file() {
         "{names:?}"
     );
 }
+
+/// A zip's entries by name, as a project's files are checked.
+fn zip_entries(path: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    (0..archive.len())
+        .filter_map(|i| {
+            let mut entry = archive.by_index(i).unwrap();
+            if entry.is_dir() {
+                return None;
+            }
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            Some((entry.name().to_owned(), bytes))
+        })
+        .collect()
+}
+
+/// P5/INV-VALID-BURRITO for the files that leave the app: a teammate's exchange file and this
+/// computer's own are each a valid Scripture Burrito, entry for entry.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_exchange_file_is_a_valid_burrito() {
+    use tc_app::ports::ExchangePort as _;
+    let w = Usb::world().await;
+    let juans = juans_file_with(&w, |_| {}).await;
+    assert_valid_burrito_files(&zip_entries(&juans));
+    let stick = w.disk.dir.path().join("own-stick");
+    std::fs::create_dir_all(&stick).unwrap();
+    let own = tc_app::ports::usb::UsbExchange
+        .export(
+            w.t.app.clone(),
+            ProjectRef::parse(SAMPLE).unwrap(),
+            stick.clone(),
+        )
+        .await
+        .unwrap();
+    assert_valid_burrito_files(&zip_entries(Path::new(&own.path)));
+}
