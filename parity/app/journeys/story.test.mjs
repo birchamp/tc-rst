@@ -142,3 +142,23 @@ browserTest('story_word_checks_move_through_each_item_in_resource_order', async 
     assert.equal(await counter.textContent(), 'Item 2 of 35');
   }, SCENARIO);
 });
+
+// REF1c, tC4 #769 (j22-obs-check.spec.ts's By figure case): a story's notes sort By figure; the
+// story title's note has no article and heads "Other notes", and its heading folds like any.
+browserTest('j22_a_storys_notes_by_figure_head_other_notes_and_fold', async () => {
+  await withApp(async ({ page, env }) => {
+    await openStory1(page, env);
+    await page.getByRole('tab', { name: 'Check' }).click();
+    await page.getByTestId('open-translationNotes').click();
+    await page.getByTestId('check-session').waitFor();
+    await page.getByTestId('sort-byFigure').click();
+    const other = page.locator('[data-testid="rail-group"][data-group=""]');
+    await other.waitFor();
+    assert.equal(await other.locator('[data-testid="rail-group-count"]').count(), 1);
+    assert.ok((await other.textContent()).includes('Other notes'), await other.textContent());
+    assert.equal(await other.getAttribute('aria-expanded'), 'true', 'it holds the active check, the title');
+    const figure = page.locator('[data-testid="rail-group"]:not([data-group=""])').first();
+    await figure.click();
+    await until('a figure folds', async () => (await figure.getAttribute('aria-expanded')) === 'false');
+  }, SCENARIO);
+});

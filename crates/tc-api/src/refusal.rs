@@ -323,39 +323,67 @@ impl Message for ImportRefusal {
     }
 }
 
-/// Exporting a book or the stories (unit D2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Exporting a book or the stories (unit D2). As tC4's export refusals do, each that tC4
+/// words with a diagnosis carries it (`facts.error`), shown before the sentence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ExportRefusal {
-    CheckpointFailed,
-    ReadFailed,
+    CheckpointFailed {
+        error: String,
+    },
+    ReadFailed {
+        error: String,
+    },
+    /// The file could not be written into the downloads folder, such as on a full disk.
+    WriteFailed {
+        error: String,
+    },
     PrintFailed,
     PrintFailedPictures,
-    NothingDrafted,
+    /// tC4's "{title} has no drafted verse yet, so the PDF has nothing to print."
+    NothingDrafted {
+        error: String,
+    },
 }
 
 impl Message for ExportRefusal {
     fn code(&self) -> Option<&'static str> {
         Some(match self {
-            Self::CheckpointFailed => "export.checkpoint-failed",
-            Self::ReadFailed => "export.read-failed",
+            Self::CheckpointFailed { .. } => "export.checkpoint-failed",
+            Self::ReadFailed { .. } => "export.read-failed",
+            Self::WriteFailed { .. } => "export.write-failed",
             Self::PrintFailed => "export.print-failed",
             Self::PrintFailedPictures => "export.print-failed-pictures",
-            Self::NothingDrafted => "export.nothing-drafted",
+            Self::NothingDrafted { .. } => "export.nothing-drafted",
         })
     }
     fn key(&self) -> &'static str {
         match self {
-            Self::CheckpointFailed => "refusal.export.checkpoint-failed",
-            Self::ReadFailed => "refusal.export.read-failed",
+            Self::CheckpointFailed { .. } => "refusal.export.checkpoint-failed",
+            Self::ReadFailed { .. } => "refusal.export.read-failed",
+            Self::WriteFailed { .. } => "refusal.export.write-failed",
             Self::PrintFailed => "refusal.export.print-failed",
             Self::PrintFailedPictures => "refusal.export.print-failed-pictures",
-            Self::NothingDrafted => "refusal.export.nothing-drafted",
+            Self::NothingDrafted { .. } => "refusal.export.nothing-drafted",
         }
     }
     fn vars(&self) -> Vec<(&'static str, String)> {
         Vec::new()
+    }
+    fn detail(&self) -> Option<&str> {
+        match self {
+            Self::CheckpointFailed { error }
+            | Self::ReadFailed { error }
+            | Self::WriteFailed { error }
+            | Self::NothingDrafted { error } => Some(error),
+            Self::PrintFailed | Self::PrintFailedPictures => None,
+        }
     }
 }
 

@@ -89,7 +89,7 @@ browserTest('read_only_align_takes_no_click_or_drag_and_sends_no_edit', async ()
     // A drop with a real payload (a card merged into the first): the card's own handler refuses it.
     await drop(page, page.locator('[data-testid^="align-card-"]').first(), { kind: 'card', from: 1 });
     await sleep(500);
-    assert.deepEqual(sent, [], 'no align edit leaves the page');
+    assert.deepEqual(sent, [], 'INV-READ-ONLY-HAS-NO-WRITE-CONTROLS: no align edit leaves the page');
   });
 });
 
@@ -109,6 +109,6 @@ browserTest('read_only_check_marks_are_disabled_and_send_no_decision', async () 
     await page.getByTestId('comment-toggle').click();
     assert.equal(await page.getByTestId('comment-text').getAttribute('readonly'), '', 'the comment takes no typing');
     await sleep(500);
-    assert.deepEqual(sent, [], 'no check decision leaves the page');
+    assert.deepEqual(sent, [], 'INV-READ-ONLY-HAS-NO-WRITE-CONTROLS: no check decision leaves the page');
   });
 });

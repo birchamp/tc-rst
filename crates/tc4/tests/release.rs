@@ -137,7 +137,7 @@ fn release_has_no_test_hooks() {
     assert_eq!(refused.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&refused.stderr).contains("unknown flag --test-hooks"),
-        "{}",
+        "INV-A-RELEASE-HAS-NO-TEST-HOOKS: {}",
         String::from_utf8_lossy(&refused.stderr)
     );
     assert!(refused.stdout.is_empty());

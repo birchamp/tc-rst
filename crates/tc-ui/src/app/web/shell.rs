@@ -520,9 +520,11 @@ fn main_view(s: &AppState) -> AnyView {
         }
         Screen::StoryUnderstand => view! { <StoryUnderstand /> }.into_any(),
         Screen::StoryDraft => view! { <StoryDraft /> }.into_any(),
-        Screen::CommunityChecking => {
-            view! { <crate::views::community_checking::CommunityChecking /> }.into_any()
+        Screen::CommunityChecking => view! {
+            <crate::views::community_checking::CommunityChecking />
+            <crate::views::review::ReviewOverOther />
         }
+        .into_any(),
         Screen::Nothing => ().into_any(),
     }
 }

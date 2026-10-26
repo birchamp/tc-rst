@@ -15,11 +15,11 @@ use std::io::Read;
 use std::time::{Duration, Instant};
 
 use common::repo_path;
+use tc_api::model::print::{FlowBlock, PageSetup};
 use tc_export::Direction;
 use tc_export::book::{
-    BookChapter, BookVerse, FlowBlock, has_undrafted, print_book, printed_items,
+    BookChapter, BookVerse, has_undrafted, print_book, print_items, printed_items,
 };
-use tc_export::page::PageSetup;
 use tc_export::stories::{StoryBlock, print_stories};
 use tc_helps::obs::ObsStory;
 use tc_obs::print::printed;
@@ -90,7 +90,7 @@ fn half_drafted(book: &[BookChapter]) -> Vec<BookChapter> {
 }
 
 fn verse_lines(book: &[BookChapter]) -> usize {
-    let items = printed_items(book);
+    let items = print_items(&printed_items(book)).unwrap();
     print_book("Psalms", &items, &PageSetup::default(), Direction::Ltr)
         .flow
         .iter()
@@ -164,7 +164,7 @@ fn the_print_model_costs_what_the_book_holds() {
 
     let runs = 21;
     let model = |book: &[BookChapter]| {
-        let items = printed_items(book);
+        let items = print_items(&printed_items(book)).unwrap();
         let view = print_book("Psalms", &items, &PageSetup::default(), Direction::Ltr);
         std::hint::black_box((view, has_undrafted(book)));
     };

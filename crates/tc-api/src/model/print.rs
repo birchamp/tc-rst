@@ -1,21 +1,26 @@
-//! The Community Checking preview's pages (unit B8): the twin of tc-export's print parts
-//! (`tc_export::book::print_parts`, a port of `PrintParts`, `tC4:src/views/print/PrintBook.jsx:37-58`)
-//! and of the paging the preview does in the page (`tC4:src/views/print/PrintPages.jsx`).
+//! The print model (unit B8, D2): the page setup and what each print part shows
+//! (`PrintParts`, `tC4:src/views/print/PrintBook.jsx:37-58`), and the paging the preview does
+//! in the page (`tC4:src/views/print/PrintPages.jsx`). It is the one print model: the
+//! Community Checking preview and tc-export's PDF both print from it (INV-ONE-PRINT-MODEL).
 //!
 //! tC4 measures the preview's pages on screen: a hidden sheet takes verses until the next one
 //! would overflow, and a verse that does not fit is split between words. The UI does the same
 //! with [`paginate`], whose `fits` measures and whose `words` is the browser's word segmenter;
 //! here both are inputs, so the paging is a pure function. [`print_parts`] then says what each
-//! page's parts show under the page setup. A differential test holds it to tc-export's on every
-//! preview page of `fixtures/export/print-vectors.json` (APP-DESIGN §3.8).
+//! page's parts show under the page setup. tc-export's `tests/vectors.rs` holds it to tC4's
+//! markup on every preview page of `fixtures/export/print-vectors.json` (APP-DESIGN §3.8).
 //!
-//! [`PageSetup`] is tc-export's page setup (`tc_export::page`): the choices, tC4's defaults
-//! (`DEFAULT_PAGE_SETUP`) and the sheet's measures.
+//! [`PageSetup`] holds the choices and tC4's defaults (`DEFAULT_PAGE_SETUP`) and the sheet's
+//! measures; tc-export's `page` adds what only the PDF reads.
+
+use serde::{Deserialize, Serialize};
 
 use crate::export::{PrintItem, PrintVerse, Run};
 
 /// The columns a Bible book's text runs in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Columns {
     #[default]
     One,
@@ -32,7 +37,9 @@ impl Columns {
 }
 
 /// The line spacing: double is twice single.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Spacing {
     #[default]
     Single,
@@ -40,7 +47,9 @@ pub enum Spacing {
 }
 
 /// The paper a print is set on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Paper {
     /// 210 × 297 mm.
     #[default]
@@ -60,7 +69,9 @@ impl Paper {
 }
 
 /// How a chapter of a Bible book opens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum ChapterOpening {
     /// The chapter's number as a drop cap.
     #[default]
@@ -70,7 +81,9 @@ pub enum ChapterOpening {
 }
 
 /// Whether a drafted verse shows its number. An undrafted verse always does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum VerseNumbers {
     #[default]
     Shown,
@@ -78,7 +91,9 @@ pub enum VerseNumbers {
 }
 
 /// Whether an OBS frame shows its picture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum Pictures {
     #[default]
     Shown,
@@ -87,7 +102,9 @@ pub enum Pictures {
 
 /// Where an OBS frame's picture sits: above its text, or a quarter of the page wide at the
 /// frame's start corner with the text wrapped around it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
 pub enum ObsLayout {
     #[default]
     Above,
@@ -95,7 +112,9 @@ pub enum ObsLayout {
 }
 
 /// Every choice of the page setup; the default is tC4's `DEFAULT_PAGE_SETUP`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PageSetup {
     pub columns: Columns,
     pub chapter_opening: ChapterOpening,

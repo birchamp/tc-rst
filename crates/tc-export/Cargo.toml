@@ -7,16 +7,24 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# The page setup and the print parts are tc-api's, so the preview and the PDF print from one
+# model. Never its `server` feature.
+tc-api = { path = "../tc-api" }
 tc-obs = { path = "../tc-obs" }
+# Aligned USFM: the book as the journal stores it (tc-usfm's codec), the one weave and the
+# one review rule (tc-align), and the alignment value (tc-journal).
+tc-align = { path = "../tc-align" }
+tc-core = { path = "../tc-core" }
+tc-journal = { path = "../tc-journal" }
+tc-usfm = { path = "../tc-usfm" }
+thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
 serde_json.workspace = true
 # The tests build stories with tc-helps' type and read the OBS sample with tc-obs' parser.
 tc-helps = { path = "../tc-helps" }
-# The benchmark reads the Psalms of fixtures/scale into book rows, and the en_obs v9 stories
-# from bundle/en.
-tc-usfm = { path = "../tc-usfm" }
+# The benchmark reads the en_obs v9 stories from bundle/en.
 zip.workspace = true
 
 [lints]

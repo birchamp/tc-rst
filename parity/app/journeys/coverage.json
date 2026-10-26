@@ -126,9 +126,20 @@
         "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
       ]
     },
-    "J7": {
-      "pending": "D2"
-    },
+    "J7": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
+          "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
+          "J7: the PDF prints the print page of its job and leaves the project unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "J8": [
       {
         "file": "parity/app/journeys/check-keyboard.test.mjs",
@@ -258,9 +269,18 @@
         ]
       }
     ],
-    "J23": {
-      "pending": "D2"
-    },
+    "J23": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "J24": {
       "file": "parity/app/journeys/share.test.mjs",
       "tests": [
@@ -433,9 +453,21 @@
         "j6_a_verse_edited_in_translate_flags_its_checks_and_keeps_their_decisions"
       ]
     },
-    "j07-publish.spec.ts": {
-      "pending": "D2"
-    },
+    "j07-publish.spec.ts": [
+      {
+        "file": "parity/app/journeys/j07-export.test.mjs",
+        "tests": [
+          "j7_aligned_and_plain_usfm_download_and_leave_the_project_unchanged",
+          "J7: an aligned word in an add span keeps the span in the aligned USFM (tC4 #420)",
+          "J7: the PDF prints the print page of its job and leaves the project unchanged",
+          "j23_story_markdown_and_the_pdf_leave_the_project_unchanged",
+          "J7 and J23: each export is named as tC4 names it"
+        ]
+      },
+      {
+        "pending": "E2"
+      }
+    ],
     "j08-resume.spec.ts": [
       {
         "file": "parity/app/journeys/check-keyboard.test.mjs",

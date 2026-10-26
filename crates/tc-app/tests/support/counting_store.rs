@@ -205,6 +205,13 @@ impl ProjectHandle for CountingHandle {
         self.inner.subscribe()
     }
 
+    fn carried_bytes(
+        &self,
+        oid: tc_journal::GitOid,
+    ) -> BoxFuture<Result<Option<Vec<u8>>, StoreError>> {
+        self.inner.carried_bytes(oid)
+    }
+
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
         let (hold, fail) = {
             let mut counts = self.shared.counts.lock().unwrap();

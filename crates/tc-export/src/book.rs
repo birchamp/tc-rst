@@ -5,14 +5,15 @@
 //! chapters. Chapters before the first or after the last are left out. Inside a printed
 //! chapter every verse prints: its text, or its number and "[ verse not yet drafted ]".
 //!
-//! [`parts_of_items`] turns those items into print parts, and [`print_parts`] says what each
-//! part shows under a page setup: the chapter's drop cap or heading, and each verse with or
-//! without its number. The Community Checking preview splits the parts across pages; a
-//! verse split by a page break is two [`Piece`]s, and its second piece shows no number.
-//! [`print_book`] is the whole book as one flow, as the PDF prints it.
+//! [`print_items`] writes those items in tc-api's print model (`tc_api::model::print`), which
+//! says what each part shows under a page setup; the Community Checking preview splits them
+//! across pages there. [`print_book`] is the whole book as one flow, as the PDF prints it.
 
-use crate::page::{ChapterOpening, PageSetup, VerseNumbers};
-use crate::{Direction, PrintText, Run};
+use tc_api::export::{PrintChapter, PrintItem, PrintVerse};
+use tc_api::ids::{IdError, RefPart};
+use tc_api::model::print::{FlowBlock, PageSetup, atoms_of, parts_of, print_parts};
+
+use crate::{Direction, Run};
 
 /// One verse of a book as its book model holds it: the fields of tC4's `bookModel` verse
 /// entry that a print reads (`src/data/bookModel.js:32-39`). The editor's verse rows carry
@@ -104,151 +105,46 @@ pub fn has_undrafted(chapters: &[BookChapter]) -> bool {
         .any(|v| v.printed_text().is_none())
 }
 
-/// What a verse of a print part shows of the verse's text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Piece<'a> {
-    /// The whole verse.
-    Whole,
-    /// The words of the verse before its first page break, never empty; its number shows
-    /// when verse numbers are on.
-    Start(&'a str),
-    /// The words of the verse after a page break, up to the next break if it has one, never
-    /// empty; no number shows.
-    Continued(&'a str),
+/// A verse whose label the wire's [`RefPart`] cannot hold.
+#[derive(Debug, thiserror::Error)]
+#[error("verse {label}: {source}")]
+pub struct LabelError {
+    pub label: String,
+    pub source: IdError,
 }
 
-/// A verse of a print part.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VersePiece<'a> {
-    pub verse: &'a BookVerse,
-    pub piece: Piece<'a>,
-}
-
-/// A run of verses of one chapter. `head` is true when the part starts the chapter, so it
-/// carries the chapter's drop cap or heading; the rest of a chapter that a page break split
-/// has none.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChapterPart<'a> {
-    pub chapter: u16,
-    pub head: bool,
-    pub verses: Vec<VersePiece<'a>>,
-}
-
-/// The flow's content: the line for a run of chapters, or a run of a chapter's verses.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PrintPart<'a> {
-    Gap(Run<u16>),
-    Chapter(ChapterPart<'a>),
-}
-
-/// The printed items as print parts: each chapter whole, with its head (`partsOfItems`,
-/// `src/views/print/PrintBook.jsx:33-35`).
-pub fn parts_of_items<'a>(items: &[PrintedItem<'a>]) -> Vec<PrintPart<'a>> {
+/// The printed items as tc-api's model holds them: what the preview pages and the PDF prints,
+/// so both build their items here (`export/book`, APP-DESIGN §3.8).
+pub fn print_items(items: &[PrintedItem<'_>]) -> Result<Vec<PrintItem>, LabelError> {
     items
         .iter()
-        .map(|item| match *item {
-            PrintedItem::Gap(run) => PrintPart::Gap(run),
-            PrintedItem::Chapter(chapter) => PrintPart::Chapter(ChapterPart {
-                chapter: chapter.number,
-                head: true,
-                verses: chapter
-                    .verses
-                    .iter()
-                    .map(|verse| VersePiece {
-                        verse,
-                        piece: Piece::Whole,
-                    })
-                    .collect(),
-            }),
-        })
-        .collect()
-}
-
-/// How a printed chapter opens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Opening {
-    /// The chapter's number as a drop cap.
-    DropCap,
-    /// A heading line, [`PrintText::ChapterHeading`].
-    Heading(PrintText),
-}
-
-/// A verse as a print shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VerseLine<'a> {
-    /// Text, after the verse's number when `number` is set.
-    Text {
-        number: Option<&'a str>,
-        text: &'a str,
-    },
-    /// The verse's number, then [`PrintText::VerseNotDrafted`].
-    NotDrafted { number: &'a str },
-}
-
-/// A chapter as a print shows it: its opening when the part starts the chapter, and its
-/// verses. `continues` is true when the chapter goes on to the next page, so it ends with
-/// no space below it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChapterBlock<'a> {
-    pub chapter: u16,
-    pub opening: Option<Opening>,
-    pub verses: Vec<VerseLine<'a>>,
-    pub continues: bool,
-}
-
-/// A block of a print's flow.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FlowBlock<'a> {
-    /// The line for a run of undrafted chapters, [`PrintText::ChaptersNotDrafted`].
-    Gap(PrintText),
-    Chapter(ChapterBlock<'a>),
-}
-
-/// What `parts` show under `setup` (`PrintParts`, `src/views/print/PrintBook.jsx:37-58`).
-/// `continues` marks the last part as going on to the next page; only a chapter takes it.
-pub fn print_parts<'a>(
-    parts: &[PrintPart<'a>],
-    setup: &PageSetup,
-    continues: bool,
-) -> Vec<FlowBlock<'a>> {
-    let last = parts.len().checked_sub(1);
-    parts
-        .iter()
-        .enumerate()
-        .map(|(i, part)| match part {
-            PrintPart::Gap(run) => FlowBlock::Gap(PrintText::ChaptersNotDrafted(*run)),
-            PrintPart::Chapter(part) => FlowBlock::Chapter(ChapterBlock {
-                chapter: part.chapter,
-                opening: part.head.then_some(match setup.chapter_opening {
-                    ChapterOpening::DropCap => Opening::DropCap,
-                    ChapterOpening::Heading => Opening::Heading(PrintText::ChapterHeading {
-                        chapter: part.chapter,
-                    }),
+        .map(|item| {
+            Ok(match item {
+                PrintedItem::Gap(run) => PrintItem::Gap(tc_api::export::Run {
+                    from: run.from,
+                    to: run.to,
                 }),
-                verses: part
-                    .verses
-                    .iter()
-                    .map(|piece| verse_line(piece, setup.verse_numbers))
-                    .collect(),
-                continues: continues && Some(i) == last,
-            }),
+                PrintedItem::Chapter(chapter) => PrintItem::Chapter(PrintChapter {
+                    chapter: chapter.number,
+                    verses: chapter
+                        .verses
+                        .iter()
+                        .map(|verse| {
+                            Ok(PrintVerse {
+                                label: RefPart::parse(&verse.label).map_err(|source| {
+                                    LabelError {
+                                        label: verse.label.clone(),
+                                        source,
+                                    }
+                                })?,
+                                text: verse.printed_text().map(str::to_owned),
+                            })
+                        })
+                        .collect::<Result<_, LabelError>>()?,
+                }),
+            })
         })
         .collect()
-}
-
-fn verse_line<'a>(piece: &VersePiece<'a>, numbers: VerseNumbers) -> VerseLine<'a> {
-    let verse = piece.verse;
-    let number = verse.label.as_str();
-    if verse.printed_text().is_none() {
-        return VerseLine::NotDrafted { number };
-    }
-    let numbered = numbers == VerseNumbers::Shown;
-    let (number, text) = match piece.piece {
-        Piece::Whole => (numbered.then_some(number), verse.text.as_str()),
-        Piece::Start(text) => (numbered.then_some(number), text),
-        Piece::Continued(text) => (None, text),
-    };
-    VerseLine::Text { number, text }
 }
 
 /// A whole book as one flow, as the PDF prints it: the title, then the flow, which the
@@ -260,16 +156,16 @@ pub struct BookView<'a> {
     pub flow: Vec<FlowBlock<'a>>,
 }
 
-/// The book's print: `items` from [`printed_items`], titled `title`.
+/// The book's print: `items` from [`print_items`], each chapter whole, titled `title`.
 pub fn print_book<'a>(
     title: &'a str,
-    items: &[PrintedItem<'a>],
+    items: &'a [PrintItem],
     setup: &PageSetup,
     dir: Direction,
 ) -> BookView<'a> {
     BookView {
         title,
         dir,
-        flow: print_parts(&parts_of_items(items), setup, false),
+        flow: print_parts(&parts_of(&atoms_of(items)), setup, false),
     }
 }
