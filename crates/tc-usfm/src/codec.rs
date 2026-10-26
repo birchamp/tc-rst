@@ -233,11 +233,19 @@ pub fn indexer_body(term: MarkerTerm, content: &str) -> &str {
     content[start..end].trim_end_matches(['\n', '\r'])
 }
 
-/// Whether tC4 reads a verse as drafted, and so gives it a text (`verseTextIndex`,
-/// `src/state.jsx:352` at d310bf3): the [`indexer_body`], trimmed as JavaScript trims, is
-/// neither empty nor the stub `___`. A verse such as `\v 1` then `\q1 Blessed is the man`
-/// on the next line is not drafted, as in tC4.
-pub fn is_drafted(term: MarkerTerm, content: &str) -> bool {
+/// The drafted rule of Home, Check, the store and the fold (owner ruling H12): a verse is
+/// drafted when its words, on any line, trimmed as JavaScript trims, are neither empty nor
+/// the stub `___`. A line of layout markers alone is layout, not words ([`split_verse`]).
+pub fn words_drafted(words: &str) -> bool {
+    let words = js_trim(words);
+    !words.is_empty() && words != "___"
+}
+
+/// Whether tC4's indexer reads a verse as drafted (`verseTextIndex`, `src/state.jsx:352` at
+/// d310bf3): the [`indexer_body`], trimmed as JavaScript trims, is neither empty nor the stub
+/// `___`. A verse such as `\v 1` then `\q1 Blessed is the man` on the next line is not
+/// drafted there. Kept to record tC4's rule; nothing in the app decides by it (H12).
+pub fn tc4_indexer_drafted(term: MarkerTerm, content: &str) -> bool {
     let body = js_trim(indexer_body(term, content));
     !body.is_empty() && body != "___"
 }

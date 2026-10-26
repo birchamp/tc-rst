@@ -3395,15 +3395,14 @@ the screen and the file read one text.
 and `decisionIsStale`, `src/data/revalidate.ts`, at d310bf3). A decision on a verse reads the
 content of a projected run only when its chapter is a number and its verse is a number (the run
 that holds that verse, a span included) or a span label `a-b` that a projected run carries
-exactly; and only when the run is drafted as tC4 reads a draft (`tc_usfm::codec::is_drafted`):
-the body tC4's indexer reads for it (`indexBook`, `src/data/usfm/indexer.ts`), trimmed as
-JavaScript trims, is neither empty nor the stub `___`. That body runs from after the marker (from
-the next line when the rest of the marker's line is blank) to the first line that starts with a
-paragraph-level marker (`PARA_MARKERS`), `\v` or `\c`, without the line breaks before it. So a
-seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and so are a verse whose text
-starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) and the stub followed by
-a line of text, though they hold words: tC4's Check screen shows them as not drafted, and the
-rebuild reads them the same way. Every other target (`front`, `intro`, a list such as
+exactly; and only when the run is drafted by the one drafted rule of Home, Check, the store and
+the fold (`tc_usfm::codec::words_drafted`, owner ruling H12): its words, on any line, trimmed as
+JavaScript trims, are neither empty nor the stub `___`; a line of layout markers alone holds no
+words. So a seeded poetry stub (`\v 2 ___` then a `\q2` line) is undrafted, and a verse whose
+text starts on a `\q1` line of its own (`\v 1` then `\q1 Blessed is the man`) is drafted. This
+differs from tC4 on purpose: tC4's Check screen, Home and aligner read only the body its indexer
+finds (up to the first line that starts with a paragraph-level marker, `\v` or `\c`;
+`tc_usfm::codec::tc4_indexer_drafted`), so they show such a poem verse as not drafted. Every other target (`front`, `intro`, a list such as
 `1,3,8,12`, a span no run carries, an undrafted verse) has no text: the text gives no evidence
 either way, so it neither changes the verse nor loses the selections, as in tC4, where such a
 decision is never stale. One difference is deliberate: tC4's indexer reads a `\v` only at the
@@ -5239,7 +5238,7 @@ Playwright drives the real UI against the real server for:
 4. **Derivations.** `plain_text_v1`, `tokenize_v1` and `selections_v1` against golden outputs
    produced once by usfm-js 3.4.3, string-punctuation-tokenizer 2.0.0 and word-aligner-lib over
    tC4's fixtures and a generated corpus, including tC4's sample hash
-   `f8aee622daff1496bccc7c2e3b358b43`; the draft test (`codec::is_drafted`) and `shown_text_v1`
+   `f8aee622daff1496bccc7c2e3b358b43`; tC4's draft test (`codec::tc4_indexer_drafted`) and `shown_text_v1`
    against tC4's own `verseTextIndex` run over every verse of its plain drafts and of drafts
    written for poetry, lists, notes and markers inside a line
    (`fixtures/usfm/check-text-vectors.json`).
@@ -5434,7 +5433,7 @@ For each mechanism, a mutation that removes it must turn a named test red:
 | Crate | Owns in this design |
 |---|---|
 | `tc-core` | `BookId`, references (exists); `GitOid` and `Md5`, the two digests every crate shares (the journal, the burrito, the Door43 client, the helps, the resource store and the screens hold one type each) |
-| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the draft test `is_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
+| `tc-usfm` | the codec (`decompose`, `recompose`, `split_verse`, `join_verse`, `PARA_MARKERS` and the layout rule, the drafted rule `words_drafted` and tC4's `tc4_indexer_drafted`), the derivations `plain_text_v1`, `tokenize_v1`, `selections_v1` and the shown text `shown_text_v1`, the OBS story splice |
 | `tc-burrito` | `build_metadata`, `check`, the vendored SB 1.0.0 schema, the extension table, `collision_form` (§3.3) |
 | `tc-journal` | identifiers, `RecordKey`, `Record`, `ChangeBody`, canonical encoding, the change line, pack and pending codecs (bytes in, values out), the fold cache's codec (`index`: sections of prepared changes keyed by path, size and fingerprint), the per-change rules, consolidation and redundancy as functions of pack listings, `format.json`, the fold, merge units, coherence, validity, projection to bytes, `ShownToken` minting and checking (edit and review kinds), the command types, the scope digests and heads lists of derived files (§6.2), the per-chapter range reads the screens and the store use (`chapters_of`, `chapter_keys`, `decisions_of`, `alignments_of`, `comments_of`, `book_keys`, APP-DESIGN R1), each costing what it returns. It is the one owner of the types and rules the domain crates share: `CheckKey`, `ResourceRef`, `DecisionRecord`, `AlignmentValue` (and it re-exports `tc-core`'s `GitOid` and `Md5`); the pin slots and the D30 ladder (`pins`); a decision's edit and computed state (`decision`); an alignment's validity, its verse order and the aligned-USFM split (`alignment`); person labels. No I/O. |
 | `tc-store` | `Vfs`, `StdFs`, `FaultFs`, `atomic_write`, the project lock, the device identity and the ledger, `Store` (open, create in a staging folder renamed without replacing, the start cleanup, a copy of a read-only project), the project actor and its commands, the `ProjectHandle` surface (§5.0), the draft writer, open and recovery, reading and writing the fold cache `.tc/index.bin` (§6.1 O8), the fold's `ValueSource` over pack and pending files and their blobs, materialize, seal, consolidate, the detection of changed files, their kept copies and the import of a kept copy (§11.1, §13.6), drafts, identity, local git (tree build, commit, index, repack, object database access; no TLS: it comes with `tc-door43`'s fetch and push) |
