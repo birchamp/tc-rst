@@ -328,3 +328,79 @@ async fn a_newcomer_creates_the_project_from_a_file() {
         std::fs::read(folder_b.join(usfm)).unwrap()
     );
 }
+
+/// L83 (§10.2 R4): a carried file whose bytes changed on the stick (a bit flip) fails its CRC.
+/// It is named as damaged and never taken in: nothing in Juan's project records it as an
+/// edit, and nothing of it reaches his folder.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn loss_usb_damaged_carried_entry_not_recorded() {
+    let dir = tempfile::tempdir().unwrap();
+    let stick = usb(dir.path());
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let a = open(&ana, &folder_a);
+    let song = "ingredients/audio/TIT_01_01.mp3";
+    let audio: Vec<u8> = (0..20_000u32).map(|i| (i * 7 % 251) as u8).collect();
+    std::fs::create_dir_all(folder_a.join("ingredients/audio")).unwrap();
+    std::fs::write(folder_a.join(song), &audio).unwrap();
+    tokio::task::block_in_place(|| a.focus().wait().unwrap());
+    a.wait_idle();
+    save(&a, 1, 1, "Paul, as Ana has it");
+    let exported = export(&a, &stick, "Ana").await.unwrap();
+    // The same file with the audio stored as it is, so one byte of it can be flipped.
+    let stored = stick.join("stored.zip");
+    {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+        let mut out = zip::ZipWriter::new(std::fs::File::create(&stored).unwrap());
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).unwrap();
+            let name = entry.name().to_owned();
+            if entry.is_dir() {
+                continue;
+            }
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            out.start_file(name.as_str(), options).unwrap();
+            out.write_all(&bytes).unwrap();
+        }
+        out.finish().unwrap();
+    }
+    let mut bytes = std::fs::read(&stored).unwrap();
+    let at = bytes
+        .windows(64)
+        .position(|w| w == &audio[1000..1064])
+        .unwrap();
+    bytes[at] ^= 0x01;
+    let flipped = stick.join("flipped.zip");
+    std::fs::write(&flipped, &bytes).unwrap();
+    let b = open(&juan, &folder_b);
+    let report = receive(&b, &flipped, "Ana").await.unwrap();
+    assert_eq!(report.damaged, vec![song.to_owned()], "{report:?}");
+    assert_eq!(
+        words(&b, 1, 1).as_deref(),
+        Some("Paul, as Ana has it"),
+        "the rest is taken"
+    );
+    b.wait_idle();
+    assert!(
+        !folder_b.join(song).exists() || std::fs::read(folder_b.join(song)).unwrap() == audio,
+        "the damaged bytes never reach the folder"
+    );
+    let mut changed = audio.clone();
+    changed[1000] ^= 0x01;
+    let damaged_oid = git2::Oid::hash_object(git2::ObjectType::Blob, &changed)
+        .unwrap()
+        .to_string();
+    let snapshot = b.snapshot();
+    for placement in snapshot.fold().carried_files() {
+        assert_ne!(placement.oid.to_string(), damaged_oid, "{placement:?}");
+        let made_by = snapshot.fold().change(&placement.head).unwrap().device;
+        assert_ne!(made_by, b.facts().device, "recorded as Juan's edit");
+    }
+    a.close().unwrap();
+    b.close().unwrap();
+}

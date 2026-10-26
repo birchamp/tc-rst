@@ -7,7 +7,9 @@
 
 use serde_json::json;
 use tc_api::account::{LinkView, OrgChoice, Orgs, RepoLink, ShareTargets, WebUrl};
-use tc_api::door43::{OpenDoor43, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo};
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+};
 use tc_api::endpoint::NetKind;
 use tc_api::error::Feature;
 use tc_api::ids::JobId;
@@ -187,6 +189,34 @@ impl Handle<ShareOnDoor43> for App {
                 port.share(app, req.project, req.owner, req.name, ctx.progress)
                     .await
             }))
+    }
+}
+
+impl App {
+    /// Whether `name` is taken by any entry of the projects folder, without letter case
+    /// (tC4 `repoPathInUse`): checked before anything is sent or written.
+    pub(crate) async fn project_name_in_use(&self, name: &ProjectName) -> Result<bool, ApiError> {
+        let name = name.clone();
+        let listed = self
+            .with_store(move |store| {
+                store.list().map(|listing| {
+                    name.in_use(
+                        listing
+                            .projects
+                            .iter()
+                            .map(|p| p.folder.as_str())
+                            .chain(listing.unusable.iter().map(|u| u.name.as_str()))
+                            .chain(listing.others.iter().map(String::as_str)),
+                    )
+                })
+            })
+            .await?;
+        listed.map_err(|e| {
+            self.internal(
+                "the projects folder could not be listed",
+                facts(json!({ "reason": e.to_string() })),
+            )
+        })
     }
 }
 

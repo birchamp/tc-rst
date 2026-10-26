@@ -502,6 +502,59 @@ fn share_action(
     }
 }
 
+/// Save work for a teammate (only where the shell picks folders) and Receive work from a file
+/// (E2; rebuild-only screens, STORAGE §10).
+fn exchange_buttons(
+    actions: &Actions,
+    card: Signal<Option<HomeCard>>,
+    project: &ProjectRef,
+) -> impl IntoView + use<> {
+    let save = {
+        let actions = actions.clone();
+        actions.can_save_for_teammate().then(|| {
+            let press = {
+                let actions = actions.clone();
+                Callback::new(move |_: web_sys::MouseEvent| {
+                    if let Some(card) = card.get_untracked() {
+                        actions.open_save_for_teammate(&card);
+                    }
+                })
+            };
+            view! {
+                <Button
+                    variant=ButtonVariant::Secondary
+                    size=Size::Sm
+                    attrs=Attrs::new().with("data-testid", format!("save-for-teammate-{project}"))
+                    title=Signal::derive(|| Some(t(keys::home::SAVE_FOR_TEAMMATE, &[])))
+                    on_click=press
+                >
+                    {move || t(keys::home::SAVE_FOR_TEAMMATE, &[])}
+                </Button>
+            }
+        })
+    };
+    let receive = {
+        let actions = actions.clone();
+        Callback::new(move |_: web_sys::MouseEvent| {
+            if let Some(card) = card.get_untracked() {
+                actions.open_receive_work(&card);
+            }
+        })
+    };
+    view! {
+        {save}
+        <Button
+            variant=ButtonVariant::Secondary
+            size=Size::Sm
+            attrs=Attrs::new().with("data-testid", format!("receive-work-{project}"))
+            title=Signal::derive(|| Some(t(keys::home::RECEIVE_WORK, &[])))
+            on_click=receive
+        >
+            {move || t(keys::home::RECEIVE_WORK, &[])}
+        </Button>
+    }
+}
+
 fn settings_button(actions: &Actions, card: Signal<Option<HomeCard>>) -> impl IntoView + use<> {
     let actions = actions.clone();
     view! {
@@ -734,6 +787,7 @@ fn header(
                 </span>
             </div>
             {share_action(s, actions, card, project)}
+            {exchange_buttons(actions, card, project)}
             {settings_button(actions, card)}
         </div>
     }

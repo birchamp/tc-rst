@@ -159,6 +159,11 @@ How a card gets ready (owner ruling, 2026-10-24, `rulings/2026-10-24-test-proces
    changed and of every crate that depends on one, tc-api's endpoint and golden lists, and every
    journey file that names a changed endpoint or test id; plus `cargo check` and the wasm clippy.
    Track-branch CI runs none of these tests.
+   The Rust tests run through cargo-nextest (CHK-8; `cargo install cargo-nextest --version
+   0.9.149 --locked`): a test still running after 60 s is named SLOW, and after 5 minutes it is
+   stopped and named TIMEOUT. A longer limit goes only to a test `.config/nextest.toml` names
+   with its measured time; a browser journey stops after 2 minutes (`browserTest` in
+   `parity/app/journeys/kit.mjs`).
 4. Push the track branch once, when the card is ready for a batch. Track-branch CI runs only the
    compile and lint jobs; the full test and journey jobs run on `gate/*` and main.
 

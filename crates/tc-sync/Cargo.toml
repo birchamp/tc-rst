@@ -27,6 +27,7 @@ tc-store = { path = "../tc-store", features = ["test-hooks"] }
 tempfile.workspace = true
 tc-api = { path = "../tc-api" }
 tc-burrito = { path = "../tc-burrito" }
+tc-obs = { path = "../tc-obs" }
 tc-versification = { path = "../tc-versification" }
 zip.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "test-util"] }

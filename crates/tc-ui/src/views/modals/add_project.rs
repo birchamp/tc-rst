@@ -44,7 +44,7 @@ pub fn AddProject() -> impl IntoView {
         let actions = actions.clone();
         Arc::new(move || {
             type Pick = fn(&Actions);
-            let cards: [(&str, Content, Key, Key, Pick); 4] = [
+            let cards: [(&str, Content, Key, Key, Pick); 5] = [
                 (
                     "bible",
                     "+".into(),
@@ -72,6 +72,13 @@ pub fn AddProject() -> impl IntoView {
                     keys::add_project::DOOR43_TITLE,
                     keys::add_project::DOOR43_DESC,
                     Actions::open_door43_dialog,
+                ),
+                (
+                    "receive",
+                    "⇥".into(),
+                    keys::add_project::RECEIVE_TITLE,
+                    keys::add_project::RECEIVE_DESC,
+                    Actions::open_receive_work_new,
                 ),
             ];
             let cards = cards

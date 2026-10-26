@@ -32,7 +32,7 @@ export const setup = browserSetup();
 
 /** A test that needs `tc4` and a browser; `hooks` also needs the probe build, `door43` the fake
  * Door43. */
-export function browserTest(name, body, { hooks = false, door43 = false, timeout = 600_000 } = {}) {
+export function browserTest(name, body, { hooks = false, door43 = false, timeout = 120_000 } = {}) {
   let skip = setup.skip ?? false;
   if (!skip && hooks && !setup.hooks) skip = 'set TC4_UI_HOOKS (build-app.sh --test-hooks --out target/tc-ui-app-hooks)';
   if (!skip && door43 && !setup.door43) skip = 'set TC4_DOOR43_FAKE (cargo build -p tc-door43-fake)';

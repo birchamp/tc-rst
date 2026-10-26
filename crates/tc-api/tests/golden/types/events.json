@@ -149,6 +149,58 @@
     "type": "job",
     "value": {
       "id": 13,
+      "kind": "exchangeExport",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "exported",
+          "value": {
+            "path": "/media/stick/tit-2026-10-25-ana.zip"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 14,
+      "kind": "exchangeReceive",
+      "project": "sample_burrito",
+      "state": {
+        "type": "done",
+        "value": {
+          "type": "received",
+          "value": {
+            "received": 3,
+            "from": [
+              {
+                "who": {
+                  "type": "username",
+                  "value": "maria"
+                },
+                "computer": null
+              }
+            ],
+            "keptNewest": 1,
+            "verseConflicts": 1,
+            "alignments": 0,
+            "handEdited": [
+              {
+                "path": "ingredients/TIT.usfm",
+                "outcome": "notTakenIn"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "job",
+    "value": {
+      "id": 15,
       "kind": "share",
       "project": "sample_burrito",
       "state": {
