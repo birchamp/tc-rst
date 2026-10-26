@@ -97,15 +97,18 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
   - `sync_port_contract!(door43, …)` in `crates/tc-app/tests/app/port_contract.rs`: UI-2's cases
     on the real port, plus new cases `a_save_during_a_sync_is_kept_and_pushed_next` and
     `a_story_project_syncs_like_a_bible` (#761) (to create); kind: contract.
-  - `no_door43_request_at_launch_or_60_s_idle`, `two_different_alignments_of_one_verse_are_listed_once`,
+  - `two_different_alignments_of_one_verse_are_listed_once` (retired by ruling H5: newest wins
+    and the Received sheet says what was replaced, C7b; the test would hold the pre-H5 note).
+  - `no_door43_request_at_launch_or_60_s_idle`,
     `a_failed_branch_lookup_is_a_failed_sync`,
     `a_dropped_connection_keeps_received_work_and_says_so` (to create) in
     `crates/tc-app/tests/app/sync.rs`; kind: unit (paused time; `FakeDoor43::requests()`,
     `crates/tc-door43-fake/src/lib.rs:714`).
-  - `stale_scope_save_keeps_text_and_home_leaves_in_one_click`,
-    `a_refused_align_save_behind_a_span_save_lets_home_leave` (to create) in
-    `crates/tc-ui/tests/app/save.rs`; `failed_open_keeps_the_sync_toast_links` (to create) in
-    `crates/tc-ui/tests/app/sync.rs`; kind: unit.
+  - `stale_scope_save_keeps_text_and_home_leaves_in_one_click` in
+    `crates/tc-ui/tests/app/save.rs`; kind: unit.
+  - `a_refused_align_save_behind_a_span_save_lets_home_leave` (pending: E1d) and
+    `failed_open_keeps_the_sync_toast_links` (pending: E1d): not written when E1a landed; card
+    E1d writes both (the J18 journey already covers Review on a refused open).
   - Journeys (to create): `parity/app/journeys/sync-refusal.test.mjs` (tC4 J2, J6, J1b) and
     `parity/app/journeys/team-sync.test.mjs` (J26, tests titled `[G1] …` and `[G6] …`, #24).
   - Proof it can fail: each step names a mutation. Run it, see the failure message start with

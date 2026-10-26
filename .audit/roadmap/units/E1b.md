@@ -104,12 +104,15 @@ Line numbers are from `resume-build-lane` at f9067bc (main after INT-4); find mo
     run on the scripted and the real port: `share_pushes_the_checkpointed_main`,
     `open_from_door43_equals_main` (`FakeDoor43::tree_of`, `crates/tc-door43-fake/src/lib.rs:742`);
     kind: contract.
-  - `share_name_taken_on_door43_is_refused_before_any_push` (RISKS #7),
-    `open_name_in_use_refused_before_request`, `open_private_repo_signs_in_and_retries` (to
-    create) in `crates/tc-app/tests/app/share.rs`; kind: unit on the fake's `requests()`.
-  - `a_join_cut_short_is_removed_and_home_says_so_once` and
-    `opening_under_a_new_name_shows_that_name_on_its_card` (to create) in
-    `crates/tc-app/tests/app/home.rs`; kind: unit.
+  - `share_name_taken_on_door43_is_refused_before_any_push` (RISKS #7) and
+    `open_private_repo_signs_in_and_retries` in `crates/tc-app/tests/app/port_contract.rs`;
+    kind: unit on the fake's `requests()`.
+  - `a_join_cut_short_is_removed_and_home_says_so_once` in `crates/tc-app/tests/app/store.rs`;
+    kind: unit.
+  - `open_name_in_use_refused_before_request` and
+    `opening_under_a_new_name_shows_that_name_on_its_card` (retired by ruling H14: the open asks
+    no name, so E1c's `an_open_asks_no_name_and_keeps_the_teams_name` and
+    `opening_a_project_you_have_makes_no_copy_and_offers_yours` replace them).
   - `the_done_step_names_team_access_for_every_project` (to create) in
     `crates/tc-ui/tests/app/share.rs`; kind: unit.
   - Journeys (to create): `parity/app/journeys/share.test.mjs` (J11, J24) and
