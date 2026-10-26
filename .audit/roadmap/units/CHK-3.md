@@ -4,18 +4,18 @@ title: Claimed tests must exist
 track: A
 lane: checks
 milestone: M1
-state: parked
-owner: checks lane (Claude Code 2198ee19)
-branch: track-CHK-3
-worktree: .worktrees/track-CHK-3
+state: verifying
+owner: shell lane (Claude Code 6f39d119)
+branch: track-CHK-3b
+worktree: .worktrees/track-CHK-3b
 depends: [INT-4, CHK-3a]
 needs_owner: []
 proves: [P1, P3]
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-24
-next: step 5 after S2 merges (docs/STORAGE.md section 15, which S2 rewrites), then the review and a merge turn; branch track-CHK-3
+updated: 2026-10-26
+next: the review of step 5, then a batch; branch track-CHK-3b
 blocked_by: none
 ---
 
@@ -273,3 +273,6 @@ and each planted failure is in the log.
 - 2026-10-24 00:27 EDT | checks lane (Claude Code 2198ee19) | park | 04f67580 | Parked: step 5 waits for S2 | python3 -I .audit/tools/board.py
 - 2026-10-24 00:31 EDT | checks lane (Claude Code 2198ee19) | note | none | Split: steps 1-4 and 3b are card CHK-3a, merged on its own; this card keeps the rest and depends on CHK-3a | .audit/roadmap/units/CHK-3a.md
 - 2026-10-23 23:50 EDT | C7a session (Claude Code 3058c665), for FIX-J | note | none | FIX-J's journeys exist on track-FIX-J: J3 `j3_a_download_from_the_seeded_fake_installs_the_pinned_version` (parity/app/journeys/source-texts.test.mjs), J12 `j12_an_upgrade_through_the_screens_moves_the_pin_on_disk` and J13 `j13_change_writes_the_primary_set_to_disk` (parity/app/journeys/upgrades.test.mjs); step 3's coverage map points J3, J12 and J13 at them, not at a pending card, once FIX-J merges | .audit/roadmap/units/FIX-J.md
+- 2026-10-26 | shell lane (Claude Code 6f39d119) | claim | none | took the card over from the parked checks lane at the orchestrator's word: S2 is done (33d2378d) and CHK-3a is on main, so step 5 runs on track-CHK-3b from main 1a0c8469 | .worktrees/track-CHK-3b
+- 2026-10-26 | shell lane (Claude Code 6f39d119) | step 5 | none | claims.test.mjs "INV-CLAIMED-TESTS-EXIST: STORAGE §15" reads every `| L<n> |` row between `## 15.` and `## 16.` (the last cell) with the TC4-ISSUES rules. Before the fix 66 claims failed. Resolved: 6 `property: x` cells written as property `x`; 3 file claims given their full path (`crates/tc-store/tests/store/model.rs`, `salvage_sources.rs`, `last_look.rs`); 15 renamed after reading each (L15, L20, L21, L26, L34, L52, L54, L57, L66, L88 twice, L94, and `a_door43_edit_by_another_tool_is_reported_once` of L67, which exists now). L54's `a_truncated_pack_salvages_every_whole_line` reads a pack by its lines with no reader identity, so a teammate's pack is the same path. X and I are done, so sync, Door43 and USB rows pend on the open app cards. Pending: S3 19 (its step-9 rows and the storage gaps L16, L17, L19, L47, L66, L77), E1a 14, E2 3, V 1 (L25), E1b 1 (L28), C7b 1 (L59), F1 1 (L60). Planted: `loss_e1_reversed_order` renamed by a letter failed `docs/STORAGE.md:4879 (L1) is prevented by loss_e1_reversed_ordex, but no such test exists`; reverted | node --test .audit/tools/claims.test.mjs
+- 2026-10-26 | shell lane (Claude Code 6f39d119) | note | none | step 6's hand-on is the notes in the logs of S3, E1a, E2, V, E1b, C7b and F1: their §15 rows are `(pending: <ID>)`; the commit that writes the test replaces the marker with the test's name | .audit/roadmap/units/S3.md
