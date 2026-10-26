@@ -58,7 +58,9 @@ anything that writes project data.
   `docs/PERFORMANCE.md` before you write code that runs when a person acts.
 - An interactive action costs what it touches (a verse, a chapter, a check, a book), never
   the size of the project or its history. Prove it with operation-count tests on the Psalms
-  corpus and on a corpus ten times larger, and meet the budgets in release builds.
+  corpus and on a larger corpus: about twice the size in the gate, ten times larger in the
+  nightly run (owner ruling, `.audit/roadmap/rulings/2026-10-26-test-scale.md`). Meet the
+  budgets in release builds.
 
 ## Commits
 
