@@ -4,10 +4,10 @@ title: Get source texts names the versions that are installed
 track: A
 lane: app
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: tc4-issues session (Claude Code dc817a96)
+branch: track-SRC-VER
+worktree: .worktrees/track-SRC-VER
 depends: []
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: FIX-R step 5)
 merged: none
 updated: 2026-10-27
-next: Claim this card, then do step 1 (a gate test that fails on main).
+next: Step 1, a gate test that fails on main: crates/tc-app/tests/app/sources.rs.
 blocked_by: none
 ---
 
@@ -64,3 +64,4 @@ Today the English card says v89 while v91 is installed and pinned, so a translat
 ## Log
 
 - 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found | docs/evidence/tc4-issues-2026-10-27/open.md
+- 2026-10-27 10:05 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed for the tc4-issues session in .worktrees/track-SRC-VER | python3 -I .audit/tools/board.py
