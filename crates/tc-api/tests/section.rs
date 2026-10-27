@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 use proptest::prelude::*;
 use serde_json::Value;
 use tc_api::model::section::{
-    ParaFormat, SectionBuffer, SectionVerse, expand_keys, indent_line, initial_text,
+    ParaFormat, SectionBuffer, SectionVerse, expand_keys, indent_line, indent_verse_line,
+    initial_text,
 };
 
 fn keys(list: &[&str]) -> Vec<String> {
@@ -689,6 +690,37 @@ fn rule_3_tab_gives_q1_a_second_tab_q2_and_tabs_win_over_a_blank_line() {
     assert_eq!(
         indent_line("10 b", 0, -1, &[]),
         ("10 b".to_owned(), 0),
+        "no tabs"
+    );
+}
+
+/// tC4 #829: the verse card's lines after the first are lines inside the verse, three tabs at
+/// most; its first line is the verse's own, which a tab never reaches.
+#[test]
+fn the_verse_card_indents_its_inner_lines_and_never_its_first() {
+    let text = "a\n\t\tb\nc";
+    assert_eq!(
+        indent_verse_line(text, 1, 1),
+        (text.to_owned(), 1),
+        "first line"
+    );
+    assert_eq!(
+        indent_verse_line(text, 7, 1),
+        ("a\n\t\tb\n\tc".to_owned(), 8)
+    );
+    assert_eq!(
+        indent_verse_line(text, 5, 1),
+        ("a\n\t\t\tb\nc".to_owned(), 6)
+    );
+    assert_eq!(
+        indent_verse_line("a\n\t\t\tb", 6, 1),
+        ("a\n\t\t\tb".to_owned(), 6),
+        "at most three"
+    );
+    assert_eq!(indent_verse_line(text, 5, -1), ("a\n\tb\nc".to_owned(), 4));
+    assert_eq!(
+        indent_verse_line(text, 7, -1),
+        (text.to_owned(), 7),
         "no tabs"
     );
 }

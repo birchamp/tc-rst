@@ -2703,6 +2703,7 @@ tC4 has no global shortcuts; the only global key is Alt+Shift+I for the dev Insp
 | Check rail is one Tab stop with roving focus; ↑ ↓ Home End | S6 | `check-keyboard` |
 | Target words: ← → in visual order, Shift+arrows, Space, Enter; drag-select | S6 | `check-keyboard`, J4 drag (DELTA:122, 889-905) |
 | Section editor: Tab and Shift+Tab indent; Place mode Enter, Space, Escape | S3 | J2 |
+| Verse editor: Tab and Shift+Tab indent a line inside the verse; Escape leaves the card and saves it, as leaving the field does *(POEM-TAB, tC4 #829: a declared difference. In tC4's verse card Tab leaves the field, which closes the card, so what the translator typed next went nowhere and a poem line could not be indented there; the card now indents as the section card does, a line inside the verse up to three tabs and the verse's first line none, since its format is the section card's to set. Escape is the keyboard's way out instead; Save and Cancel are pointer buttons as before (in tC4 the Tab that would reach them closed the card first). Both cards draw one tab two characters wide (`tab-size: 2ch`), where tC4 left the browser's eight.)* | B4a | `tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it` |
 | Align bank: Ctrl/Cmd/Shift + click, Enter, Space | S7 | J5 |
 | Focus returns to the card that opened a session | S5 | `check-keyboard` |
 | Marking row geometry within 1 px, en and ar | S6, S7 | `item-navigation` (DELTA:1118) |

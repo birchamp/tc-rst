@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, catalog, recordRequests, sleep, storageDump, until, withApp } from './kit.mjs';
+import { browserTest, catalog, recordRequests, sleep, storageDump, tabSize, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const NINE = 'Exhorta a los siervos a que se sujeten a sus amos y a que agraden en todo';
@@ -371,6 +371,8 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
     await pill(page, '9–10').click();
     const field = typing(page, '9–10');
     await field.fill(`9 ${NINE}\n10 ${TEN}`);
+    // tC4 #829: one level is two characters wide, not the browser's eight.
+    assert.equal(await tabSize(field), '2ch');
     // Tab at the start of verse 10's line.
     await field.evaluate((el) => el.setSelectionRange(el.value.indexOf('\n10') + 1, el.value.indexOf('\n10') + 1));
     assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'TEXTAREA');

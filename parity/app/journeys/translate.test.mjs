@@ -8,7 +8,7 @@
 //     node --test parity/app/journeys/translate.test.mjs
 import assert from 'node:assert/strict';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, until, withApp } from './kit.mjs';
+import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, tabSize, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const titus = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ });
@@ -227,6 +227,42 @@ browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
     await page.getByTestId('mode-switch').getByRole('tab', { name: 'Translate' }).click();
     await openVerse(page, 4);
     assert.equal(await box(page, 4).inputValue(), typed, 'the card opens again as it was typed');
+  });
+});
+
+// tC4 #829: a poem level is two characters wide, and Tab and Shift+Tab indent the caret's line
+// as in the section card instead of leaving the card; Escape leaves it and saves, as a blur does.
+// The verse's first line is the verse's own, whose format the card does not hold: Tab leaves it.
+browserTest('tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    await teammateWrites(env, 4, 'a Tito,\n\\q2 mi verdadero hijo\n\\q1 en la fe común');
+    await openVerse(page, 4);
+    const field = box(page, 4);
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\ten la fe común');
+    assert.equal(await tabSize(field), '2ch');
+    const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    await field.press('Control+End');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4', 'Tab keeps the focus');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común', 'at most three tabs');
+    await field.press('Shift+Tab');
+    await page.keyboard.type(':');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    await field.press('Control+Home');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:', 'the first line stays');
+    await field.press('Escape');
+    await field.waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    // The read shows the saved words as the card does, each `\\q2` line as two tabs.
+    assert.equal((await verse(env, 4)).words.value, 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    assert.equal((await verse(env, 4)).text, 'a Tito, mi verdadero hijo en la fe común:');
   });
 });
 
