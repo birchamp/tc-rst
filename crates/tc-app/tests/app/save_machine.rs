@@ -921,7 +921,7 @@ impl World {
         'calls: for call in dropped {
             for () in crate::store_world::for_a_minute() {
                 if call.is_finished() {
-                    let _ = call.await;
+                    call.await.expect("a call the page dropped stopped in the app");
                     continue 'calls;
                 }
                 if self.t.app.holding() > 0 {

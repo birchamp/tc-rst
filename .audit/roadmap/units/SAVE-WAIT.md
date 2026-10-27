@@ -4,7 +4,7 @@ title: The save-machine tests fail with a message instead of hanging
 track: A
 lane: checks
 milestone: M5
-state: building
+state: verifying
 owner: save-wait session (Claude Code 749c177d)
 branch: track-SAVE-WAIT
 worktree: .worktrees/track-SAVE-WAIT
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
 merged: none
 updated: 2026-10-27
-next: The three lenses (loss first), --touched, then hand to the integration lane.
+next: scripts/gates.sh --touched, then the integration lane takes it into a batch.
 blocked_by: none
 ---
 
@@ -83,3 +83,6 @@ build), and a product save never waits at it. The app needs no change; a person 
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | created | none | from the orchestrator's message: the two unbounded waits found while looking for the 18:31 hang; after the release, since no translator can reach either | side-session-notes 2026-10-26-tc-app-hang-1831.md
 - 2026-10-27 01:10 EDT | save-wait session (Claude Code 749c177d) | claim | none | a release card now: REL-1 waits for it, and it is no_loss, since save-path tests keep timing out in CI (production_reload_anywhere at 300 s on gate/batch-30, ci 40449554417; before it c3_reload and FIX-KEPT-EVENT's test); its REL-1 dependency is turned round | gh run view 40449554417 --log
 - 2026-10-27 01:55 EDT | save-wait session (Claude Code 749c177d) | step 1 | none | settle waits for the calls a reload or cut dropped (releasing a hold each reaches) and leaves no hold armed; deliver's await and settle's release loop stop after a minute with "hung: …"; the store watch's idle wait runs off the test thread and fails after a minute. New test a_save_left_at_a_hold_fails_the_store_watch_instead_of_hanging hangs without the watch fix (killed at 151 s) and passes with it (60 s); app::save_machine 20/20 pass | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop1/c6-r7.txt (gdb stacks of the hang)
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | loss lens (subagent, read-only): no blocker, no major. 1 Code: test-only; the waits are tokio and Condvar calls no type can bound. 2 Checks: the watch test hangs without the fix and passes with it. 3 Reach: release-build Hooks::wait is a no-op (tc-store hooks.rs), tc-app wait_idle is test-hooks only; no product save waits without a limit. 4 Siblings: about 78 limitless wait_reached/wait_idle in other tc-app tests, a minor. 5 No loss: finish_dropped adds coverage (a dropped save now lands before check); the final release only disarms; restart's clear drops calls the old harness never awaited. 6 Prose fine. Minors fixed: a dropped call's panic is no longer swallowed; a panicked idle wait is told from a timeout | .audit/minors.tsv
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | races-and-protocol lens (subagent, read-only): no blocker, no major. finish_dropped cannot deadlock: a call queued behind a held save makes holding() > 0, a retry waiting on the reply cache has its first attempt released by the same loop, an ended app's die() releases all; the end-of-settle release is safe for every caller; the watch test is deterministic (gated on reached > 0, the live handle keeps the project open). Minors: no deterministic test for finish_dropped (the loaded loop covers it), the test's fixed 60 s, the sibling list | .audit/minors.tsv
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | browser-and-parity lens (subagent, read-only): no finding. No product code, page, words, keys or flows change (crates/tc-ui, tc-api, tc-app/src untouched); test-hooks is opt-in in every crate and release_has_no_test_hooks checks the release binary; no journey uses the harness; no APP-DESIGN difference needed | crates/tc4/tests/release.rs

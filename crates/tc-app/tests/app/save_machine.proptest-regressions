@@ -10,3 +10,4 @@ cc 5b22aca925aadc075378ef7687ce8bedfa3924531164e38a35cdc0f44f8f5502 # shrinks to
 cc c2223623597c34180daa2a83db09ebdde1731a831f931ab32db25fe5af8ad380 # shrinks to kind = Reference, steps = [Type(0), Blur, Type(1)]
 cc 9a23896e47b2fd085a07b8b246fc41bd483a998d01d7b1c3836afdee2ed836cf # shrinks to kind = Reference, steps = [Type(2), Blur, Type(0), Deliver(false), Blur, Type(2), Cut]
 cc 8f870608eb2dea6a59f804c0940787e43fa18aba8aa46b5f88abc6cf27266131 # shrinks to kind = Comment, steps = [Type(2), Blur, Deliver(false), Type(0), Blur, Type(2), Reload]
+cc e994798e424224b8b85fac614ea6994725c301fee9b13bcbbc4fd41b9f7e0ac7 # shrinks to steps = [Type(4), Deliver(true), Hold, Blur, Release, Hold, Type(4), Deliver(false), Deliver(true), Advance(2541), Deliver(false), Deliver(false), Deliver(false), Reload, Cut, Deliver(true), Hold, Blur, Deliver(false), Blur, Release, Hold, Deliver(true)]

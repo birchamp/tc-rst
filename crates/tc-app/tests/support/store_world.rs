@@ -469,8 +469,15 @@ impl Drop for BurritoWatch {
                 // must fail here with its message rather than hang the test.
                 let (tx, rx) = std::sync::mpsc::channel();
                 std::thread::spawn(move || tx.send(idle()));
-                rx.recv_timeout(hung.saturating_duration_since(std::time::Instant::now()))
-                    .expect("hung: an open project's store did not go idle within a minute of the test (a save stopped at a hold no one released?)")
+                match rx.recv_timeout(hung.saturating_duration_since(std::time::Instant::now())) {
+                    Ok(open) => open,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => panic!(
+                        "hung: an open project's store did not go idle within a minute of the test (a save stopped at a hold no one released?)"
+                    ),
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        panic!("the wait for the open projects to go idle stopped")
+                    }
+                }
             });
             if self.fs.locks_held() <= open {
                 break;
