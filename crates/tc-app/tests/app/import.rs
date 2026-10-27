@@ -1131,3 +1131,74 @@ async fn an_import_states_the_license_in_its_metadata() {
     );
     assert_valid_burrito(&world.fs, &world.folder(&project));
 }
+
+/// tC4 #832, INV-TEXT-DIRECTION-HAS-ONE-SOURCE, INV-VALID-BURRITO: an import keeps the
+/// language name and direction the tC3 manifest's
+/// `target_language` holds, in metadata.json and in what Settings reads; a manifest with
+/// neither, or a code changed on the review step, imports as before: named by its code, left
+/// to right.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_tc3_import_keeps_the_manifest_language_name_and_direction() {
+    let (dir, t, world) = app().await;
+    let rtl = titus_edited(&|name, json| {
+        if name == "manifest.json" {
+            json["target_language"]["direction"] = serde_json::json!(" RTL");
+        }
+    });
+    let bare = titus_edited(&|name, json| {
+        if name == "manifest.json" {
+            let language = json["target_language"].as_object_mut().unwrap();
+            language.remove("name");
+            language.remove("direction");
+        }
+    });
+    let cases = [
+        (
+            tc3_titus(),
+            "Tita ltr",
+            "Chin, Falam",
+            "ltr",
+            Direction::Ltr,
+        ),
+        (
+            rtl.clone(),
+            "Tita rtl",
+            "Chin, Falam",
+            "rtl",
+            Direction::Rtl,
+        ),
+        (rtl, "Tita recoded", "cnh", "ltr", Direction::Ltr),
+        (bare, "Tita bare", "cfm", "ltr", Direction::Ltr),
+    ];
+    for (n, (bytes, typed, language, script, direction)) in (1u8..).zip(cases) {
+        let file = upload(dir.path(), n, TC3_TITUS, &bytes);
+        let code = if typed == "Tita recoded" {
+            "cnh"
+        } else {
+            "cfm"
+        };
+        let job = post(&t.app, &run(n, &file, details(typed, code)))
+            .await
+            .unwrap();
+        let JobState::Done(JobOutcome::Created { project }) = ended(&t.app, job).await else {
+            panic!("{typed}: not imported")
+        };
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&files(&world.fs, &world.folder(&project))["metadata.json"])
+                .unwrap();
+        assert_eq!(
+            metadata["languages"][0],
+            serde_json::json!({ "name": { "en": language }, "scriptDirection": script, "tag": code }),
+            "{typed}: metadata.json's language"
+        );
+        assert_valid_burrito(&world.fs, &world.folder(&project));
+        let view = post(&t.app, &tc_api::settings::ViewFromHome { project })
+            .await
+            .unwrap();
+        assert_eq!(
+            (view.language_name.as_str(), view.direction),
+            (language, direction),
+            "{typed}: what Settings reads"
+        );
+    }
+}
