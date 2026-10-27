@@ -210,6 +210,7 @@ impl Server {
             saved: vec![SavedValue { record, text }],
             rows: Vec::new(),
             disk_warning: None,
+            dropped: Vec::new(),
         };
         self.answered.insert(flight.sent.request, ack.clone());
         ack

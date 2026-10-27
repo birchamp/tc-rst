@@ -448,6 +448,7 @@ fn chapter_view(
             .unwrap_or_default();
         view! { <HelpsPanel chapter=chapter focus_verses=focus_verses helps=helps pane=pane comments=comments /> }
     };
+    let dropped = dropped_links(runtime.saves().dropped());
     view! {
         <main style=main.to_style()>
             <div style=bar.to_style()>
@@ -457,6 +458,7 @@ fn chapter_view(
                 {button}
                 <HelpsToggleButton />
             </div>
+            {dropped}
             <div style=scroll.to_style()>
                 <div style=grid.to_style()>
                     {tabs}
@@ -468,6 +470,40 @@ fn chapter_view(
         {panel}
     }
     .into_any()
+}
+
+/// The links a save sent back to the word bank, in Align's words, with the verse each was in,
+/// until the person dismisses them: a link never goes back silently (tC4 #825, owner answer
+/// Q30 (a)).
+fn dropped_links(dropped: ArcRwSignal<Vec<tc_api::write::DroppedLinks>>) -> impl IntoView {
+    move || {
+        let words = dropped.with(|d| {
+            d.iter()
+                .flat_map(|v| {
+                    v.links.iter().map(move |l| {
+                        format!(
+                            "{} ({} {}:{})",
+                            l.word.word,
+                            v.book.english_name(),
+                            v.chapter,
+                            v.verse
+                        )
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        (!words.is_empty()).then(|| {
+            let dropped = dropped.clone();
+            let dismiss = Callback::new(move |_| dropped.set(Vec::new()));
+            view! {
+                <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "10px 22px 0", "flex": "none" } attrs=Attrs::from([("role", "status"), ("data-testid", "translate-dropped")])>
+                    {t(keys::align::DROPPED_LINKS, &[("words", &words)])}" "
+                    <Button variant=ButtonVariant::Ghost size=Size::Sm on_click=dismiss>{t(keys::common::DISMISS, &[])}</Button>
+                </Callout>
+            }
+        })
+    }
 }
 
 /// tC4's `SourceTabs`: a chip per source pane and the original's, the chosen text's name and

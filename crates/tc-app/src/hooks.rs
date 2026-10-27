@@ -570,6 +570,7 @@ impl TestFields {
                 }],
                 rows: Vec::new(),
                 disk_warning: None,
+                dropped: Vec::new(),
             });
         }
 
@@ -613,6 +614,7 @@ impl TestFields {
             saved: vec![SavedValue { record, text }],
             rows: Vec::new(),
             disk_warning: None,
+            dropped: Vec::new(),
         })
     }
 

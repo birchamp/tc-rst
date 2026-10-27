@@ -256,6 +256,7 @@ fn ack() -> Ack {
             },
         }],
         disk_warning: None,
+        dropped: Vec::new(),
     }
 }
 

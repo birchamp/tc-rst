@@ -1,10 +1,10 @@
 ---
 id: LINK-DROP
-title: A Translate save that sends an alignment link back to the word bank says so
+title: A Translate save that sends an alignment link back to the word bank says so (tC4 #825, #820)
 track: A
 lane: app
 milestone: M5
-state: claimed
+state: verifying
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-LINK-DROP
 worktree: .worktrees/track-LINK-DROP
@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: FIX-R step 2, the Align half of the same list)
 merged: none
 updated: 2026-10-27
-next: Step 1, a gate test that fails on main.
+next: Step 4: the three lenses, loss first.
 blocked_by: none
 ---
 
@@ -80,8 +80,17 @@ protocol, browser and parity).
 ## References
 
 - tC4 #825; `docs/evidence/tc4-issues-2026-10-27/open.md`.
+- tC4 #820 (folded in by the orchestrator, 2026-10-27): the same cause. Branch
+  `tc4-fixed-issues-2026-10-27` holds an ignored repro,
+  `tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator`
+  (`crates/tc-app/tests/tc4_fixed_2026_10_27.rs`, listed in `scripts/ignored-tests.txt`). It reads
+  Align on reopen, which this card does not change; once LINK-DROP lands, that test and its
+  ignored-tests line are replaced by `a_translate_save_names_the_link_an_ambiguous_replacement_sends_back`.
 
 ## Log
 
 - 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found, this one first | docs/evidence/tc4-issues-2026-10-27/open.md
 - 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed at creation | none
+- 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | gate tests a_translate_save_names_the_link_a_tie_sends_back_to_the_bank (#825) and a_translate_save_names_the_link_an_ambiguous_replacement_sends_back (#820) in tc-app tests/app/align_store.rs; on the old wiring the reply is `dropped: []` while the link is gone ("left: [] right: [\"Dios\"]") | cargo nextest run -p tc-app --test app a_translate_save_names
+- 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | tc-api `Ack.dropped` (per verse: book, chapter, verse, Align's DroppedLinkView); tc-app's backend reply keeps tc-store's dropped_links and the verse and section acks carry them; both tests pass | cargo nextest run -p tc-app --test app a_translate_save_names
+- 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 3 | none | Translate shows the links under the chapter bar in Align's words with the verse (`translate-dropped`), kept until Dismiss; the page's saves collect them from every acked reply, also one the field no longer waits for. Journey a_translate_save_names_the_link_it_sends_back_to_the_bank passes (no notice exists on main) | parity/app/journeys/translate.test.mjs

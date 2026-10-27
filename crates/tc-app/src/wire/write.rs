@@ -3,9 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use tc_api::align::{DroppedLinkView, Word};
 use tc_api::ids::ConflictRef;
 use tc_api::shown::{PersonLabel, Who};
-use tc_api::write::{Ack, ConflictBrief, SavedValue};
+use tc_api::write::{Ack, ConflictBrief, DroppedLinks, SavedValue};
 use tc_journal::fold::PersonLabel as Label;
 use tc_journal::record::{CheckValue, VerseValue};
 use tc_journal::{DeviceId, Record};
@@ -103,6 +104,7 @@ fn text_ack(
         saved: vec![SavedValue { record, text }],
         rows: Vec::new(),
         disk_warning,
+        dropped: dropped(reply),
     })
 }
 
@@ -157,6 +159,7 @@ pub fn record_ack(
         saved: vec![SavedValue { record, text }],
         rows: Vec::new(),
         disk_warning,
+        dropped: Vec::new(),
     })
 }
 
@@ -207,6 +210,7 @@ pub fn ack_decision(
         saved: vec![SavedValue { record, text }],
         rows,
         disk_warning,
+        dropped: Vec::new(),
     })
 }
 
@@ -254,6 +258,7 @@ pub fn section_ack(
         }],
         rows: Vec::new(),
         disk_warning,
+        dropped: dropped(reply),
     })
 }
 
@@ -325,4 +330,36 @@ fn writer(
                 person_label,
             )
         })
+}
+
+/// The links a verse or section save sent back to the word bank, as the screen names them
+/// (tC4 #825): Align's words for the same event.
+fn dropped(reply: &StoreReply) -> Vec<DroppedLinks> {
+    let word = |word: &str, occurrence: u32, occurrences: u32| Word {
+        word: word.to_owned(),
+        occurrence,
+        occurrences,
+    };
+    reply
+        .dropped_links
+        .iter()
+        .map(|d| DroppedLinks {
+            book: d.book,
+            chapter: d.chapter.get(),
+            verse: d.verse.get(),
+            links: d
+                .links
+                .iter()
+                .map(|l| DroppedLinkView {
+                    card: u32::try_from(l.card).unwrap_or(u32::MAX),
+                    top: l
+                        .top_words
+                        .iter()
+                        .map(|w| word(&w.word, w.occurrence, w.occurrences))
+                        .collect(),
+                    word: word(&l.word.word, l.word.occurrence, l.word.occurrences),
+                })
+                .collect(),
+        })
+        .collect()
 }

@@ -66,6 +66,7 @@ fn ack_of(rows: Vec<RailRowPatch>) -> Ack {
         saved: vec![],
         rows,
         disk_warning: None,
+        dropped: Vec::new(),
     }
 }
 

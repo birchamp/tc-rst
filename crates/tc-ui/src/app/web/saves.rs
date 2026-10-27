@@ -24,7 +24,7 @@ use tc_api::event::{CheckpointOutcome, SessionMode};
 use tc_api::ids::{ProjectId, ProjectRef, RequestId, Scope, ServerInstance, ViewSeq, WallMs};
 use tc_api::shown::PersonLabel;
 use tc_api::token::ShownToken;
-use tc_api::write::Ack;
+use tc_api::write::{Ack, DroppedLinks};
 use tc_api::{ApiError, error::Feature};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
@@ -160,6 +160,9 @@ struct Inner {
     indicator: ArcRwSignal<Indicator>,
     /// Counts the machine's runs, so a view can follow what it reads with `notice` or `state`.
     changes: ArcRwSignal<u64>,
+    /// Alignment links this page's saves sent back to the word bank, until the person
+    /// dismisses them (tC4 #825).
+    dropped: ArcRwSignal<Vec<DroppedLinks>>,
     can_close: Cell<Option<bool>>,
     hooks: RefCell<Vec<(GateHookId, GateHook)>>,
     next_hook: Cell<u64>,
@@ -208,6 +211,7 @@ impl Saves {
                     retry: indicator::Retry::Save,
                 }),
                 changes: ArcRwSignal::new(0),
+                dropped: ArcRwSignal::new(Vec::new()),
                 can_close: Cell::new(None),
                 hooks: RefCell::new(Vec::new()),
                 next_hook: Cell::new(0),
@@ -451,6 +455,11 @@ impl Saves {
     /// Changes after every run of the machine: a view that reads a field's `notice` tracks it.
     pub fn changes(&self) -> ArcRwSignal<u64> {
         self.0.changes.clone()
+    }
+
+    /// The links the saves sent back to the word bank and nobody has dismissed yet.
+    pub fn dropped(&self) -> ArcRwSignal<Vec<DroppedLinks>> {
+        self.0.dropped.clone()
     }
 
     /// Everything saved, aligners included; a failed checkpoint does not count (6.5).
@@ -1121,6 +1130,16 @@ impl Saves {
                 None => Err(CallError::Api(ApiError::Unavailable(Feature::Writes))),
             };
             let answered = classify(result);
+            // The store sent the links back whether or not the field still waits for this
+            // reply, so they are named either way.
+            if let Answered::Acked(ack) = &answered
+                && !ack.dropped.is_empty()
+            {
+                saves
+                    .0
+                    .dropped
+                    .update(|d| d.extend(ack.dropped.iter().cloned()));
+            }
             let acked = matches!(&answered, Answered::Acked(_));
             let commands = saves.machine(|m| m.reply(&key, sent.request, answered, js::now_ms()));
             if acked

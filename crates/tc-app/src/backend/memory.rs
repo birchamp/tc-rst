@@ -667,6 +667,7 @@ impl MemoryHandle {
             changes: Vec::new(),
             skipped: Vec::new(),
             kept: Vec::new(),
+            dropped_links: Vec::new(),
         })
     }
 }
@@ -713,6 +714,7 @@ impl ProjectHandle for MemoryHandle {
                     changes: Vec::new(),
                     skipped: Vec::new(),
                     kept: Vec::new(),
+                    dropped_links: Vec::new(),
                 })
             };
             return Box::pin(async move { result });
