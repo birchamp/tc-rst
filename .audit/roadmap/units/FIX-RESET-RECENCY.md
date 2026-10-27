@@ -15,7 +15,7 @@ no_loss: false
 size: 0.25 d (basis: a test hook and one test)
 merged: none
 updated: 2026-10-26
-next: step 1, the reset waits for every job before it resets
+next: step 2, recapture the affected screens after CHK-6 step 5 lands
 blocked_by: none
 ---
 
@@ -48,7 +48,10 @@ it (open-progress-prepare's did).
   - `Handle<Reset>` cancels every live job after releasing the holds and waits for each to end
     (`JobRegistry::cancel_all`), before it closes the sessions and resets the preferences.
 - **Checks**:
-  - `a_reset_during_a_held_open_leaves_home_in_the_seed_order` (crates/tc-app/tests/app/hooks.rs).
+  - `a_reset_during_a_held_open_leaves_home_in_the_seed_order` (crates/tc-app/tests/app/store_scenario.rs),
+    on the scenario store with slow reads, as the gallery runs it.
+  - `opening_a_project_moves_its_card_to_the_top` (crates/tc-app/tests/app/understand.rs): Home
+    stays most-recently-used first (owner, 2026-10-26: "project order should be MRU").
 - **Human**: none.
 
 ## Steps
@@ -61,3 +64,4 @@ it (open-progress-prepare's did).
 
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | created | none | from the orchestrator's message: Home's card order leaks between gallery cases (checks lane, CHK-6 step 5) | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/CHK-6-step5-recapture-findings.md
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | claim | none | the open job records the project's last use after its hold; the reset releases the hold and resets the preferences without waiting for the job | crates/tc-app/src/understand.rs open_job
+- 2026-10-26 | reset-recency session (Claude Code d4604680) | step 1 | none | `test/reset` cancels every live job after releasing the holds and waits for each to end. The new store-scenario test failed without it (`left: [sample_burrito, sample_burrito_obs]`, `right: [sample_burrito_obs, sample_burrito]`) and passes with it 3 runs of 3; the 17 reset tests pass. On the memory backend the open finishes before the reset reaches the prefs, so the test runs on the scenario store. On main open-progress-prepare's residual is pixels only, for glyph anti-aliasing, not for this order: nothing to drop | cargo nextest run -p tc-app --all-features --test app reset

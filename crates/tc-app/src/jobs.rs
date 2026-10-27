@@ -437,6 +437,28 @@ impl JobRegistry {
         self.transition(&mut registry, id, JobState::Cancelling);
     }
 
+    /// `test/reset`: every live job is asked to stop, and this returns once each has ended, so
+    /// nothing begun before the reset writes after it.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) async fn cancel_all(&self) {
+        let watches: Vec<watch::Receiver<JobState>> = {
+            let registry = lock(&self.inner.registry);
+            registry
+                .jobs
+                .values()
+                .filter(|job| !Self::is_ended(&job.state))
+                .map(|job| {
+                    job.cancel.cancel();
+                    job.state_tx.subscribe()
+                })
+                .collect()
+        };
+        for mut watch in watches {
+            // A closed channel means the job is gone from the registry, so it has ended.
+            let _ = watch.wait_for(Self::is_ended).await;
+        }
+    }
+
     /// The jobs that have not ended.
     pub fn live(&self) -> usize {
         lock(&self.inner.registry)
