@@ -1913,11 +1913,11 @@
       "syncToast": {
         "ok": true,
         "code": null,
-        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "text": "Synced with Door43 · 2 changes from teammates · 1 conflict kept the newest version · 1 verse conflict to review Changes from: teammate-2 · teammate-1 Titus 1:1: teammate-2's alignment replaced teammate-1's. The older version is in History. This project now uses 5 resource versions that are not on this computer. Review Download",
         "received": 2,
-        "newestWins": 0,
+        "newestWins": 1,
         "verseConflicts": 1,
-        "from": "Changes from: teammate-1 · teammate-2",
+        "from": "Changes from: teammate-2 · teammate-1",
         "restored": 0,
         "missingPins": 5,
         "links": [
@@ -1934,9 +1934,9 @@
         }
       },
       "png": "screens/sync-ok-teammates.png",
-      "sha256": "363c1c4708b35af57063d8a44a32e6340b6604c657fcf7fdb8a2f80d343bed04",
+      "sha256": "200e1bca1740d4036b8f6eeaa277f07584761927fd67bd7442af9d95e0c21f2c",
       "dom": "dom/sync-ok-teammates.json",
-      "domSha256": "4b3532aa68352935f7e0a394d2b8eae5519cf3ecf078d67ee03b3bed43dac532",
+      "domSha256": "3ae195e3a5b94b64fdd6d386e1ae0e0c1f3e7dc510933855626aa141fa1ba594",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
