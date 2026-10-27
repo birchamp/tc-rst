@@ -704,7 +704,8 @@ mod tests {
                 label(Who::Username("teammate-1".to_owned())),
                 label(Who::Username("teammate-2".to_owned())),
                 label(Who::Teammate(1)),
-            ]
+            ],
+            "INV-TOAST-SENDERS-STABLE: senders are named in name order"
         );
     }
 

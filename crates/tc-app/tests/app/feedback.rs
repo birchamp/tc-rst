@@ -203,7 +203,7 @@ async fn the_attachment_carries_no_home_folder_and_no_account_name() {
     let home = dir.path().join("home");
     let home = home.to_str().unwrap();
     let first = compose(&t, None).await;
-    assert!(!first.contains(home), "{first}");
+    assert!(!first.contains(home), "INV-FEEDBACK-NO-HOME: {first}");
     assert!(first.contains("~/translationCore4/projects"), "{first}");
     t.app.reports().add(
         ReportOp::Sync,

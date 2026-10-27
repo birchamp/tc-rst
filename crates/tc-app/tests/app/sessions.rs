@@ -386,7 +386,7 @@ async fn home_shows_no_counts_of_a_project_while_its_leave_runs() {
     .unwrap();
     assert!(
         !known(&list),
-        "no count while the leave runs: {:?}",
+        "INV-HOME-COUNTS-AFTER-LEAVE: no count while the leave runs: {:?}",
         list.cards[0].books
     );
     let app = f.t.app.clone();

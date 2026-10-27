@@ -113,7 +113,7 @@ browserTest('a package already on this computer says so and fetches nothing', as
     await finished.waitFor({ timeout: 60_000 });
     assert.equal(await finished.textContent(), doneLine(rebuild['sources.alreadyHere']));
     const fetched = (await env.door43.requests()).filter((r) => !r.path.startsWith('/api/'));
-    assert.deepEqual(fetched, [], 'nothing was downloaded');
+    assert.deepEqual(fetched, [], 'INV-DOWNLOAD-SAYS-FETCHED: nothing was downloaded');
   }, { door43: true });
 });
 
