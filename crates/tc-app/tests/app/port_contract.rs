@@ -1326,7 +1326,11 @@ async fn a_door43_sync_names_the_alignment_it_replaced() {
             .iter()
             .filter(|row| row.kind == tc_api::jobs::ReplacedKind::Alignment)
             .collect();
-        assert_eq!(rows.len(), 1, "{who}'s sync names one alignment: {view:?}");
+        assert_eq!(
+            rows.len(),
+            1,
+            "INV-H5-RECEIVED-SAYS-WHAT-WAS-REPLACED: {who}'s sync names one alignment: {view:?}"
+        );
         assert_eq!(
             rows[0].place, titus_1_1,
             "{who}'s row is Titus 1:1: {view:?}"
