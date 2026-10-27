@@ -1,0 +1,10 @@
+   Compiling tc-ui v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-ui)
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.65s
+────────────
+ Nextest run ID c7fa6edc-35fe-4929-acb1-5db5909bb3ab with nextest profile: default
+    Starting 1 test across 1 binary (799 tests skipped)
+        PASS [   0.812s] (1/1) tc-app::app app::section::resume_card_names_the_verse_of_its_text_and_never_shows_the_stub
+────────────
+     Summary [   0.813s] 1 test run: 1 passed, 799 skipped
+exit 0

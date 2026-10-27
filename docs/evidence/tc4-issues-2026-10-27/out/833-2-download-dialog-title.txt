@@ -1,0 +1,20 @@
+$ xvfb-run -a tc-heavy node --test docs/evidence/tc4-issues-2026-10-27/repro/833-2-download-dialog-title.test.cjs
+TAP version 13
+# DOWNLOAD: [{"url":"http://127.0.0.1:40437/help/al-open.html","options":{"window":null,"title":"","message":"","buttonLabel":"","nameFieldLabel":"","defaultPath":"","filters":[],"showsTagField":true,"securityScopedBookmarks":false}}]
+# NEW X WINDOW NAMES: []
+# Subtest: 833.2: the Save dialog of an <a download> export has a readable title
+ok 1 - 833.2: the Save dialog of an <a download> export has a readable title
+  ---
+  duration_ms: 21528.353806
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 36651.306947
+NOTE: the pass is vacuous: no new X window (Save dialog) was seen under xvfb in 20 s, so the title was not read. The shell gave the download no save options (title "").

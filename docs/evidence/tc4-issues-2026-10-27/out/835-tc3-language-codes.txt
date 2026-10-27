@@ -1,0 +1,34 @@
+$ tc-heavy node --test docs/evidence/tc4-issues-2026-10-27/repro/835-tc3-language-codes.test.mjs
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:33529/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745877-1793105787020/sample/projects, Door43: http://127.0.0.1:9)
+# CODE initial: {"code":"cfm","field":"LANGUAGE CODE A language code such as kau or es-419."}
+# CODE x-scrqa: {"field":"LANGUAGE CODE A language code such as kau or es-419.","importEnabled":true,"details":"valid"}
+# CODE x-scratchqa: {"field":"LANGUAGE CODE A language code such as kau or es-419.","importEnabled":true,"details":"valid"}
+# CODE x-qiu: {"field":"LANGUAGE CODE A language code such as kau or es-419.","importEnabled":true,"details":"valid"}
+# CODE es-419: {"field":"LANGUAGE CODE The Bible is stored under “es”; the full tag es-419 is kept in its details.","importEnabled":true,"details":"valid"}
+# CODE qaa: {"field":"LANGUAGE CODE A language code such as kau or es-419.","importEnabled":true,"details":"valid"}
+# CODE kau: {"field":"LANGUAGE CODE A language code such as kau or es-419.","importEnabled":true,"details":"valid"}
+# CODE (empty): {"field":"LANGUAGE CODE A language code such as kau or es-419. ! Enter a language code such as kau or es-419.","importEnabled":false,"details":"warn"}
+# IMPORT x-scrqa: {"made":true,"tag":"x-scrqa","rawError":false}
+# IMPORT qaa: {"made":true,"tag":"qaa","rawError":false}
+# IMPORT kau: {"made":true,"tag":"kau","rawError":false}
+# Subtest: 835: the tC3 review page and import with x- codes, es-419, qaa and kau
+ok 1 - 835: the tC3 review page and import with x- codes, es-419, qaa and kau
+  ---
+  duration_ms: 28299.193294
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 38398.902159
+exit 0
