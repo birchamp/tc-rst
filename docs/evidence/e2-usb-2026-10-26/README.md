@@ -31,3 +31,7 @@ Titus 1:1 and saves a file back; A receives B's file.
 3. B has no Door43 name, so A's sheet says "Teammate 1" (13). Fine for a computer that never
    signed in, or should the file carry the sender's name from the export dialog?
    Recommendation: keep "Teammate 1" (the Door43 name is shown once the sender signs in, #680).
+
+Ruling (owner, 2026-10-26): "I agree with your recommendations": one USB menu beside Share on Door43; pin bookkeeping left out of the count; "Teammate 1" stays.
+
+Correction (2026-10-26, after the ruling): the second change in picture 13 was the alignment B's verse edit reflowed, not pin bookkeeping. The count now leaves bookkeeping out and counts one per save (a batch), so one verse shows 1 change; the pictures were retaken on 2026-10-27 with the menu and the fixed count.

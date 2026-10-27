@@ -404,3 +404,42 @@ async fn loss_usb_damaged_carried_entry_not_recorded() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// Owner ruling 2026-10-26 (E2 packet, question 2): the resource pins an open's upgrade writes
+/// are bookkeeping, as a device's profile is, so one verse from a teammate is "1 change".
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_receive_counts_a_teammates_verse_not_their_pins() {
+    use tc_journal::command::Command;
+    use tc_journal::record::PinGroupValue;
+    use tc_journal::{PinGroup, RecordKey};
+    let dir = tempfile::tempdir().unwrap();
+    let stick = usb(dir.path());
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let b = open(&juan, &folder_b);
+    save(&b, 1, 1, "Paul, as Juan has it");
+    let pins = serde_json::json!({
+        "gatewayLanguage": { "languageId": "en", "owner": "unfoldingWord" },
+        "translationNotes": { "repoPath": "git.door43.org/unfoldingWord/en_tn", "version": "v90" },
+    });
+    let shown = b.mint(&RecordKey::Pins(PinGroup::Primary), None).unwrap();
+    b.submit(Command::SetPins {
+        shown,
+        value: PinGroupValue::from_json(&pins).unwrap(),
+    })
+    .wait()
+    .unwrap();
+    let from_juan = export(&b, &stick, "Juan").await.unwrap();
+    let a = open(&ana, &folder_a);
+    let report = receive(&a, &from_juan, "Juan").await.unwrap();
+    assert_eq!(
+        report.received_by.values().sum::<u32>(),
+        1,
+        "Juan's pins are not received work: {report:?}"
+    );
+    assert_eq!(words(&a, 1, 1).as_deref(), Some("Paul, as Juan has it"));
+    a.close().unwrap();
+    b.close().unwrap();
+}

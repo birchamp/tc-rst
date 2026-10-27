@@ -6,8 +6,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { newRequestId } from '../env-rust.mjs';
-import { browserTest, until, withApps } from './kit.mjs';
+import { REPO, newRequestId } from '../env-rust.mjs';
+import { browserTest, catalog, until, withApps } from './kit.mjs';
+
+const en = { ...catalog('en'), ...JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8')) };
 
 const BIBLE = 'sample_burrito';
 const FROM_A = 'Pablo, siervo de Dios, escrito en A antes del viaje en memoria USB';
@@ -42,7 +44,8 @@ async function writes(app, at, n, words) {
 /** Saves a file for a teammate from Home's card: the one zip the folder then holds. */
 async function saveForTeammate(app, project) {
   const folder = fs.mkdtempSync(path.join(app.env.projectsDir, '..', 'stick-'));
-  await app.page.getByTestId(`save-for-teammate-${project}`).click();
+  await app.page.getByTestId(`usb-menu-${project}`).click();
+  await app.page.getByRole('menuitem', { name: en['home.saveForTeammate'], exact: true }).click();
   await app.pickFolder(folder);
   await app.page.getByTestId('save-for-teammate-choose').click();
   await until('the folder shows', () => app.page.getByTestId('save-for-teammate-folder').textContent().then((t) => t.includes(folder)));
@@ -56,7 +59,8 @@ async function saveForTeammate(app, project) {
 
 /** Receives `file` into `project` from its Home card; the Received lines. */
 async function receiveInto(app, project, file) {
-  await app.page.getByTestId(`receive-work-${project}`).click();
+  await app.page.getByTestId(`usb-menu-${project}`).click();
+  await app.page.getByRole('menuitem', { name: en['home.receiveWork'], exact: true }).click();
   await app.pickFile(file);
   await app.page.getByTestId('receive-work-choose').click();
   await app.page.getByTestId('receive-work-confirm').waitFor();
@@ -110,9 +114,9 @@ browserTest('E2: a file saved for a teammate opens on their computer, comes back
     await goHome(a);
     const kept = await a.env.call('door43/lastSync', { project: BIBLE });
     assert.ok(kept.view, 'the receive is the last sync');
-    // B's verse, and the pin changes B's open wrote (an upgrade plan over the installed
-    // resources), which a receive counts as a sync does.
-    assert.ok(kept.view.received >= 1, JSON.stringify(kept.view));
+    // B's one save: the verse and the alignment its edit reflowed are one batch, counted
+    // once; bookkeeping (B's resource pins) is never counted (owner ruling 2026-10-26).
+    assert.equal(kept.view.received, 1, JSON.stringify(kept.view));
     assert.equal(kept.view.verseConflicts, 0, JSON.stringify(kept.view));
 
     const onC = await receiveNew(c, fromB);

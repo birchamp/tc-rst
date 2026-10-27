@@ -398,7 +398,7 @@ pub async fn receive(
             let fold = project.snapshot();
             let some_held = changes
                 .iter()
-                .any(|(_, id)| fold.fold().change(id).is_some());
+                .any(|(_, id, _)| fold.fold().change(id).is_some());
             return Err(if some_held {
                 ExchangeError::PartlyReceived(e.to_string())
             } else {
@@ -418,9 +418,15 @@ pub async fn receive(
     // Received: new before the file, and in the project after it.
     let mut received_from: BTreeMap<tc_journal::DeviceId, u32> = BTreeMap::new();
     let mut received_ids = Vec::new();
-    for (device, change) in changes {
+    let mut batches: std::collections::BTreeSet<(tc_journal::DeviceId, tc_journal::BatchId)> =
+        std::collections::BTreeSet::new();
+    for (device, change, batch) in changes {
         if held.fold().change(&change).is_none() && snapshot.fold().change(&change).is_some() {
-            *received_from.entry(device).or_insert(0) += 1;
+            if let Some(batch) = batch
+                && batches.insert((device, batch))
+            {
+                *received_from.entry(device).or_insert(0) += 1;
+            }
             received_ids.push(change);
         }
     }
@@ -454,7 +460,11 @@ type Read_ = (
     Vec<ReceivedPack>,
     Vec<String>,
     Vec<String>,
-    Vec<(tc_journal::DeviceId, tc_journal::ChangeId)>,
+    Vec<(
+        tc_journal::DeviceId,
+        tc_journal::ChangeId,
+        Option<tc_journal::BatchId>,
+    )>,
 );
 
 fn read_received(
@@ -501,7 +511,11 @@ fn read_received(
             let read = tc_store::read_received_pack(name, bytes, id);
             all_valid &= read.valid;
             for change in read.changes {
-                changes.push((change.body().device, change.id()));
+                // Bookkeeping joins the project but is never counted; work is counted once
+                // per batch, one save (`crate::is_bookkeeping`).
+                let body = change.body();
+                let batch = (!crate::is_bookkeeping(&body.record)).then_some(body.batch.id);
+                changes.push((body.device, change.id(), batch));
                 inputs.push(tc_journal::fold::FoldInput::from(change));
             }
             packs.push(ReceivedPack {

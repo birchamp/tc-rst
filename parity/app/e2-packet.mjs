@@ -9,7 +9,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { REPO, newRequestId } from './env-rust.mjs';
-import { setup, withApps } from './journeys/kit.mjs';
+import { catalog, setup, withApps } from './journeys/kit.mjs';
+
+const en = { ...catalog('en'), ...JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8')) };
 
 const OUT = path.join(REPO, 'docs', 'evidence', 'e2-usb-2026-10-26');
 const BIBLE = 'sample_burrito';
@@ -29,7 +31,8 @@ await withApps(['sample', 'store'], async ([a, b]) => {
   await shot(a.page, '02-home-card-1280');
 
   const folder = fs.mkdtempSync(path.join(a.env.projectsDir, '..', 'stick-'));
-  await a.page.getByTestId(`save-for-teammate-${BIBLE}`).click();
+  await a.page.getByTestId(`usb-menu-${BIBLE}`).click();
+  await a.page.getByRole('menuitem', { name: en['home.saveForTeammate'], exact: true }).click();
   await shot(a.page, '03-save-choose-folder');
   await a.pickFolder(folder);
   await a.page.getByTestId('save-for-teammate-choose').click();
@@ -67,7 +70,8 @@ await withApps(['sample', 'store'], async ([a, b]) => {
   await b.page.getByTestId('project-switch').click();
   await b.page.getByTestId('account-menu').waitFor();
   const folderB = fs.mkdtempSync(path.join(b.env.projectsDir, '..', 'stick-'));
-  await b.page.getByTestId(`save-for-teammate-${onB}`).click();
+  await b.page.getByTestId(`usb-menu-${onB}`).click();
+  await b.page.getByRole('menuitem', { name: en['home.saveForTeammate'], exact: true }).click();
   await b.pickFolder(folderB);
   await b.page.getByTestId('save-for-teammate-choose').click();
   await b.page.getByTestId('save-for-teammate-save').click();
@@ -75,7 +79,8 @@ await withApps(['sample', 'store'], async ([a, b]) => {
   await b.page.getByTestId('save-for-teammate-leave').click();
   const fromB = path.join(folderB, fs.readdirSync(folderB).find((f) => f.endsWith('.zip')));
 
-  await a.page.getByTestId(`receive-work-${BIBLE}`).click();
+  await a.page.getByTestId(`usb-menu-${BIBLE}`).click();
+  await a.page.getByRole('menuitem', { name: en['home.receiveWork'], exact: true }).click();
   await shot(a.page, '11-receive-choose-file');
   await a.pickFile(fromB);
   await a.page.getByTestId('receive-work-choose').click();
