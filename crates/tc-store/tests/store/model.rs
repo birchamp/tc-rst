@@ -1457,6 +1457,13 @@ impl Run {
                 if journal_before[i] && !journal_after[i] {
                     save.fate = Fate::InMemory;
                 }
+            } else if open && !readable && journal_before[i] && !journal_after[i] {
+                // The journal's only copy was changed in place under a session that did not
+                // make the save and can give its bytes no more: a file still showing it is
+                // that session's own projection, which its next save writes over before any
+                // seal or open finds the damage (row N4 keeps a shown copy only when the
+                // damage is found while the file still shows it).
+                save.fate = Fate::Destroyed;
             } else if before[i] && !after[i] {
                 save.fate = Fate::Destroyed;
             }
@@ -3049,8 +3056,54 @@ fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
     ]
 }
 
+/// Found by proptest on 2026-10-26 (gate/batch-24): a save in a pending file, its session
+/// killed, then one byte of that file changed in place while a later session that only read
+/// it runs and saves again. The session's next save writes over the book file that showed
+/// it before the seal finds the damage, and the quarantined line salvages nothing: the save
+/// is gone, as for a pack (`a_flipped_pack_after_a_cut_pending_and_a_reverted_book`).
+fn a_flipped_pending_file_under_a_session_that_saves_again() -> Vec<Step> {
+    let usfm = Holdable::File(File::Usfm);
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Name),
+        act(Act::Leave),
+        Step::Lock {
+            what: usfm,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: usfm,
+            on: false,
+        },
+        killed(Act::Save(1), 30),
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 136,
+            at: 0,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        killed(Act::Close, 0),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_flipped_pending_file_under_a_session_that_saves_again",
+            a_flipped_pending_file_under_a_session_that_saves_again(),
+        ),
         (
             "a_flipped_pack_after_a_cut_pending_and_a_reverted_book",
             a_flipped_pack_after_a_cut_pending_and_a_reverted_book(),
