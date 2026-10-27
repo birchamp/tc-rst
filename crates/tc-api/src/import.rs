@@ -48,6 +48,9 @@ pub struct Review {
     /// `importUseInstalled`).
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::maybe_few()"))]
     pub use_installed: Option<Vec<FoundVersion>>,
+    /// The versification the decisions carried over are placed in: the one the review page
+    /// shows; none takes the guess.
+    pub versification: Option<String>,
 }
 
 /// The review step. Nothing was written.
@@ -98,6 +101,40 @@ pub struct ImportFound {
     /// `NOT_LOOKED_UP`).
     #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
     pub slots: Vec<VersionSlot>,
+    /// The versification the books' verse counts fit, the review page's default (H13).
+    pub versification: SchemeGuess,
+}
+
+/// The versification an import offers, and why (H13). The person can choose another.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct SchemeGuess {
+    /// The default: a standard versification's name.
+    pub scheme: String,
+    pub fit: SchemeFit,
+    /// The standard versifications' names, `eng` first: what the person can choose from.
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub names: Vec<String>,
+}
+
+/// How the books' verse counts settled the default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum SchemeFit {
+    /// One versification holds them exactly.
+    Exact,
+    /// `eng` holds them exactly, and so do others: the content did not decide.
+    Undecided,
+    /// These versifications hold them exactly, `eng` not among them; the default is the first
+    /// of org, lxx, vul, rso, rsc.
+    Tied {
+        #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+        schemes: Vec<String>,
+    },
+    /// No versification holds them exactly; the default is the nearest.
+    Nearest,
 }
 
 /// One book of the import.
@@ -192,6 +229,8 @@ pub struct Run {
     /// The license the project's metadata states: the files' one license, or the one the
     /// person picked where they differ. `""` states none.
     pub license: String,
+    /// The standard versification the project gets: the one the review page showed.
+    pub versification: String,
 }
 
 /// `import/updateBook`: "Update a book from USFM" on the open project (STORAGE §13.6). A

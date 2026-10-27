@@ -671,6 +671,9 @@ pub struct ImportForm {
     /// The license the project states: the files' one, or the one picked where they differ
     /// (tC4 `im.license`); `None` until picked, `Some("")` for none.
     pub license: Option<String>,
+    /// The versification the project gets: the review's guess until the person chooses
+    /// another (H13).
+    pub versification: String,
     /// The run's attempt: one request per attempt (UI-3).
     pub submit: crate::app::submit::Submit,
     pub state: ImportState,
@@ -690,6 +693,7 @@ impl ImportForm {
             versions: VersionLookup::NotLookedUp,
             asked: None,
             license: None,
+            versification: String::new(),
             submit: crate::app::submit::Submit::new(request),
             state: ImportState::Idle,
         }
@@ -798,6 +802,7 @@ impl ImportForm {
     pub fn reviewed(&mut self, review: tc_api::import::ImportReview, next: RequestId) {
         self.name = review.details.name.clone();
         self.code = review.details.code.clone();
+        self.versification = review.found.versification.scheme.clone();
         self.license = match review.found.licenses.as_slice() {
             [one] => Some(one.clone()),
             [] => Some(String::new()),
@@ -967,6 +972,7 @@ impl ImportForm {
             files: self.sent(),
             details: Some(self.details()),
             use_installed: Some(found),
+            versification: Some(self.versification.clone()),
         })
     }
 
@@ -998,6 +1004,23 @@ impl ImportForm {
     pub fn pick_license(&mut self, license: Option<String>, next: RequestId) {
         self.license = license;
         self.submit.edited(next);
+    }
+
+    /// The versification picker of the review step. A count of what the installed versions do
+    /// was made in the other versification's checks, so it is asked for again.
+    pub fn pick_versification(&mut self, name: String, next: RequestId) {
+        if name == self.versification {
+            return;
+        }
+        self.versification = name;
+        self.submit.edited(next);
+        if let VersionLookup::Installed(view, _) = &self.versions {
+            self.versions = if view.found.is_empty() {
+                VersionLookup::NotLookedUp
+            } else {
+                VersionLookup::Found(view.clone())
+            };
+        }
     }
 
     /// tC4 `cantImport`, inverted.
@@ -1037,6 +1060,7 @@ impl ImportForm {
             details: self.details(),
             found: self.versions.found(),
             license: self.license.clone().unwrap_or_default(),
+            versification: self.versification.clone(),
         })
     }
 

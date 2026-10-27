@@ -7,11 +7,14 @@
 //     node --test parity/app/journeys/import.test.mjs
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { REPO } from '../env-rust.mjs';
 import { browserTest, catalog, until, withApp } from './kit.mjs';
 
 const en = catalog('en');
+const rebuildEn = JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8'));
+const schemeJson = (name) => JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-versification', 'schemes', `${name}.json`), 'utf8'));
 const TC3 = path.join(REPO, 'fixtures', 'tc4', 'conformance-fixtures', 'import', 'tc3');
 const TIT = path.join(TC3, 'cfm_fbt_tit_book.zip');
 const MULTI = ['jhn', 'job', 'luk'].map((b) => path.join(TC3, 'multi', `en_kjv_${b}_book.zip`));
@@ -237,5 +240,57 @@ browserTest('tC3 name clash: a Bible name of a project on this computer is flagg
     assert.ok((await failed.textContent()).includes(message));
     assert.deepEqual(listed(env), [...before, 'tita_tc3_clash'].sort(), 'nothing else written');
     fs.rmSync(path.join(env.projectsDir, 'tita_tc3_clash'), { recursive: true, force: true });
+  });
+});
+
+/** The tC3 Titus fixture rewritten as Malachi in 3 chapters, as Hebrew Bibles number it (#822). */
+function hebrewMalachi() {
+  // Resolved here, not at load: CI's node job installs nothing, and the file must still load there.
+  // fflate sits beside Playwright: in this checkout's tc4-baseline, or next to PLAYWRIGHT_MODULE.
+  const modules = process.env.PLAYWRIGHT_MODULE ? path.dirname(process.env.PLAYWRIGHT_MODULE) : path.join(REPO, 'parity', 'tc4-baseline', 'node_modules');
+  const fflate = createRequire(import.meta.url)(path.join(modules, 'fflate'));
+  const src = fflate.unzipSync(fs.readFileSync(TIT));
+  const text = (name) => fflate.strFromU8(src[name]);
+  const out = {
+    'LICENSE.md': src['LICENSE.md'],
+    'settings.json': src['settings.json'],
+    'manifest.json': fflate.strToU8(text('manifest.json').replace('"id": "tit"', '"id": "mal"').replace('"Titus"', '"Malachi"')),
+    'mal/manifest.json': src['tit/manifest.json'],
+  };
+  [14, 17, 24].forEach((verses, i) => {
+    const body = Object.fromEntries(Array.from({ length: verses }, (_, v) => [String(v + 1), `Malakai ${i + 1}:${v + 1} thu.`]));
+    out[`mal/${i + 1}.json`] = fflate.strToU8(JSON.stringify(body));
+  });
+  return { name: 'cfm_mal_book.zip', mimeType: 'application/zip', buffer: Buffer.from(fflate.zipSync(out)) };
+}
+
+browserTest('tC3 versification (H13): a tie with eng offers eng and says the verse counts did not decide', async () => {
+  await withApp(async ({ page }) => {
+    await review(page, [TIT], { name: 'Tita versification' });
+    const note = page.getByTestId('import-versification-note');
+    assert.equal(await note.getAttribute('data-fit'), 'undecided');
+    assert.equal(await note.textContent(), rebuildEn['importer.review.schemeUndecided'].replace('{scheme}', 'eng'));
+    assert.match(await page.getByTestId('import-versification').textContent(), /\beng\b/);
+  });
+});
+
+browserTest('tC3 versification (H13, #822): Hebrew-numbered Malachi offers org; the versification chosen instead is written and no verse is lost', async () => {
+  await withApp(async ({ page, env }) => {
+    const pick = page.getByTestId('import-versification');
+    const note = page.getByTestId('import-versification-note');
+    const name = 'Malakai tC3';
+    await review(page, [hebrewMalachi()], { name });
+    await page.getByTestId('import-book-MAL').waitFor();
+    assert.equal(await note.getAttribute('data-fit'), 'tied');
+    assert.equal(await note.textContent(), rebuildEn['importer.review.schemeTied'].replace('{schemes}', 'lxx, org').replace('{scheme}', 'org'));
+    assert.match(await pick.textContent(), /\borg\b/);
+    await pickOption(page, pick, 'vul');
+    assert.match(await pick.textContent(), /\bvul\b/);
+    await page.getByTestId('import-use-installed').click();
+    await until('the carry-over is counted', async () => /decisions? must be checked again/.test(await resources(page).textContent()));
+    await imported(page, name);
+    assert.deepEqual(projectFile(env, name, path.join('ingredients', 'vrs.json')), schemeJson('vul'), 'the versification chosen on the review page');
+    const usfm = fs.readFileSync(path.join(env.projectsDir, abbrOf(name), 'ingredients', 'MAL.usfm'), 'utf8');
+    for (let v = 19; v <= 24; v += 1) assert.ok(usfm.includes(`\\v ${v} Malakai 3:${v} thu.`), `3:${v} is kept`);
   });
 });

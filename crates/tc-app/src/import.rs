@@ -12,7 +12,8 @@ use tc_api::error::Feature;
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::import::{
     CarryOver, FoundBook, FoundVersion, ImportDetails, ImportFile, ImportFound, ImportReview,
-    Review, Run, UpdateBook, UpdateReport, VerseAt, VersionSlot, Versions, VersionsView,
+    Review, Run, SchemeFit, SchemeGuess, UpdateBook, UpdateReport, VerseAt, VersionSlot, Versions,
+    VersionsView,
 };
 use tc_api::jobs::{JobKind, Phase};
 use tc_api::refusal::{CreateRefusal, ImportRefusal};
@@ -118,9 +119,60 @@ fn verse_counts(parts: &BookParts) -> (u32, u32) {
     (verses, drafted)
 }
 
+/// A book's chapters as its verse markers number them, for the versification guess.
+fn shape(book: BookId, parts: &BookParts) -> tc_versification::BookShape {
+    tc_versification::BookShape {
+        book: book.into(),
+        chapters: parts
+            .chapters
+            .iter()
+            .filter(|(chapter, _)| **chapter > 0)
+            .filter_map(|(chapter, part)| {
+                let last = part
+                    .verses
+                    .iter()
+                    .map(|(n, verse)| match verse {
+                        VersePart::Text(text) => text.last.max(*n),
+                        VersePart::Covered { .. } => *n,
+                    })
+                    .max()?;
+                Some((*chapter, last))
+            })
+            .collect(),
+    }
+}
+
+/// The review page's default versification (H13), from the books' verse counts.
+fn scheme_guess(shapes: &[tc_versification::BookShape]) -> SchemeGuess {
+    use tc_versification::SchemeGuess as G;
+    let guess = tc_versification::guess(shapes);
+    let names = |schemes: &[StandardScheme]| schemes.iter().map(|s| s.name().to_owned()).collect();
+    SchemeGuess {
+        scheme: guess.scheme().name().to_owned(),
+        fit: match &guess {
+            G::Fits(_) => SchemeFit::Exact,
+            G::Undecided => SchemeFit::Undecided,
+            G::Tied { tied, .. } => SchemeFit::Tied {
+                schemes: names(tied),
+            },
+            G::Nearest(_) => SchemeFit::Nearest,
+        },
+        names: names(&StandardScheme::ALL),
+    }
+}
+
+/// A standard versification the person chose, by name.
+fn chosen_scheme(name: &str) -> Result<StandardScheme, ApiError> {
+    StandardScheme::from_name(name).ok_or_else(|| ApiError::BadRequest {
+        field: "versification".to_owned(),
+        reason: "not a standard versification".to_owned(),
+    })
+}
+
 /// What the review step shows of an import.
 pub fn found(import: &Tc3Import) -> ImportFound {
     let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    let mut shapes = Vec::new();
     ImportFound {
         details: ImportDetails {
             name: import.name.clone(),
@@ -133,6 +185,7 @@ pub fn found(import: &Tc3Import) -> ImportFound {
             .iter()
             .map(|book| {
                 let parts = tc_usfm::codec::decompose(&book.usfm).ok();
+                shapes.extend(parts.as_ref().map(|p| shape(book.book, p)));
                 let (verses, drafted) = parts.as_ref().map(verse_counts).unwrap_or_default();
                 FoundBook {
                     book: book.book,
@@ -159,6 +212,7 @@ pub fn found(import: &Tc3Import) -> ImportFound {
             .into_keys()
             .map(slot_of)
             .collect(),
+        versification: scheme_guess(&shapes),
     }
 }
 
@@ -276,16 +330,23 @@ impl App {
 impl Handle<Review> for App {
     async fn handle(&self, req: Review) -> Result<ImportReview, ApiError> {
         let files = self.uploaded(&req.files).await?;
+        let found = self.inner.import.review(files.clone()).await?;
         let carry_over = match &req.use_installed {
-            Some(kept) => Some(
-                self.inner
-                    .import
-                    .carry_over(self.clone(), files.clone(), found_pins(kept)?)
-                    .await?,
-            ),
+            Some(kept) => {
+                let scheme = chosen_scheme(
+                    req.versification
+                        .as_deref()
+                        .unwrap_or(&found.versification.scheme),
+                )?;
+                Some(
+                    self.inner
+                        .import
+                        .carry_over(self.clone(), files, found_pins(kept)?, scheme)
+                        .await?,
+                )
+            }
             None => None,
         };
-        let found = self.inner.import.review(files).await?;
         let details = req.details.unwrap_or_else(|| found.details.clone());
         let (folder, refusal) = match self.import_target(&details).await? {
             Ok(folder) => (Some(folder), None),
@@ -325,6 +386,7 @@ impl Handle<Run> for App {
             .await?
             .map_err(ApiError::Refused)?;
         let found = found_pins(&req.found)?;
+        let scheme = chosen_scheme(&req.versification)?;
         let files = self.uploaded(&req.files).await?;
         let pass = self.inner.flows.enter(FlowRequest::Import)?;
         let app = self.clone();
@@ -341,6 +403,7 @@ impl Handle<Run> for App {
                         req.details,
                         found,
                         req.license,
+                        scheme,
                         folder,
                         ctx,
                     )
@@ -683,6 +746,7 @@ fn carry_over(
     tool: ToolId,
     source: &ListSource,
     sources: &dyn PlanSources,
+    frame: StandardScheme,
     counts: &mut CarryOver,
 ) -> Result<Vec<Record>, PlanError> {
     let mut out = Vec::with_capacity(records.len());
@@ -703,8 +767,10 @@ fn carry_over(
             other => out.push(other),
         }
     }
-    let frame = StandardScheme::DEFAULT.scheme();
-    let spec = UnitSpec { frame, scope: &[] };
+    let spec = UnitSpec {
+        frame: frame.scheme(),
+        scope: &[],
+    };
     for (book, stored) in by_book {
         let list = sources.list(tool, Collection::Book(book), source, &spec)?;
         let plan = carry::plan(&list.items, &source.list, &stored);
@@ -736,11 +802,13 @@ fn carry_over(
 }
 
 /// The books' records, their decisions on the versions `found` and, for a helps slot not
-/// found, carried over to the installed version (tC4 `applyVersions`), with what that did.
+/// found, carried over to the installed version's checks in the project's `frame` (tC4
+/// `applyVersions`), with what that did.
 async fn imported_records(
     app: &App,
     import: &Tc3Import,
     found: &[(VersionSlot, ResourcePin)],
+    frame: StandardScheme,
 ) -> Result<(Vec<Record>, CarryOver), ApiError> {
     let installed = installed_pins().ok_or(ApiError::Unavailable(Feature::Import))?;
     let pins = DecisionPins {
@@ -794,7 +862,7 @@ async fn imported_records(
                         articles: articles.clone(),
                     },
                 };
-                carry_over(records, tool, &source, &sources, &mut counts)
+                carry_over(records, tool, &source, &sources, frame, &mut counts)
             })
             .map(|records| (records, counts))
     })
@@ -813,10 +881,11 @@ impl ImportPort for TcImport {
         app: App,
         files: Vec<SourceFile>,
         found: Vec<(VersionSlot, ResourcePin)>,
+        frame: StandardScheme,
     ) -> BoxFuture<Result<CarryOver, ApiError>> {
         Box::pin(async move {
             let import = read_tc3(files).await?;
-            Ok(imported_records(&app, &import, &found).await?.1)
+            Ok(imported_records(&app, &import, &found, frame).await?.1)
         })
     }
 
@@ -890,6 +959,7 @@ impl ImportPort for TcImport {
         details: ImportDetails,
         found: Vec<(VersionSlot, ResourcePin)>,
         license: String,
+        scheme: StandardScheme,
         folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
@@ -918,7 +988,7 @@ impl ImportPort for TcImport {
                 &imported_details(&details, &import),
                 &folder,
                 ProjectKind::Bible,
-                Some(StandardScheme::DEFAULT),
+                Some(scheme),
                 app.inner.clock.now(),
                 None,
             )
@@ -941,7 +1011,7 @@ impl ImportPort for TcImport {
                     ),
                 });
             }
-            let (imported, _) = imported_records(&app, &import, &found).await?;
+            let (imported, _) = imported_records(&app, &import, &found, scheme).await?;
             records.extend(imported);
             let spec = NewProjectSpec {
                 folder: folder.clone(),

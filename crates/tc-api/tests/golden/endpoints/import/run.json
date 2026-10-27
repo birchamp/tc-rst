@@ -22,7 +22,8 @@
         "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
       }
     ],
-    "license": "CC BY-SA 4.0"
+    "license": "CC BY-SA 4.0",
+    "versification": "org"
   },
   "reply": {
     "type": "ok",

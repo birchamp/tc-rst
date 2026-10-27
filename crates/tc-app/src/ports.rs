@@ -107,18 +107,20 @@ pub trait ImportPort: Send + Sync {
     fn versions(&self, app: App, files: Vec<SourceFile>)
     -> BoxFuture<Result<VersionsView, JobEnd>>;
 
-    /// What "Use installed versions" does to the decisions of the slots not in `found`,
-    /// before anything is written.
+    /// What "Use installed versions" does to the decisions of the slots not in `found`, placed
+    /// on the checks in `frame`, before anything is written.
     fn carry_over(
         &self,
         app: App,
         files: Vec<SourceFile>,
         found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
+        frame: tc_versification::StandardScheme,
     ) -> BoxFuture<Result<tc_api::import::CarryOver, ApiError>>;
 
     /// Makes the project `folder` from the files with `details`: one whole project, or none.
     /// `found` are the versions the person accepted from the lookup, one per slot; `license`
-    /// is one the files name, `""` for none.
+    /// is one the files name, `""` for none; `scheme` is the versification the review page
+    /// showed (H13).
     #[expect(
         clippy::too_many_arguments,
         reason = "each is one thing the person chose or the job holds; a struct of them would \
@@ -131,6 +133,7 @@ pub trait ImportPort: Send + Sync {
         details: ImportDetails,
         found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         license: String,
+        scheme: tc_versification::StandardScheme,
         folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>>;
@@ -211,6 +214,7 @@ impl ImportPort for UnavailableImport {
         _app: App,
         _files: Vec<SourceFile>,
         _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
+        _frame: tc_versification::StandardScheme,
     ) -> BoxFuture<Result<tc_api::import::CarryOver, ApiError>> {
         Box::pin(async { Err(ApiError::Unavailable(Feature::Import)) })
     }
@@ -222,6 +226,7 @@ impl ImportPort for UnavailableImport {
         _details: ImportDetails,
         _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         _license: String,
+        _scheme: tc_versification::StandardScheme,
         _folder: ProjectRef,
         _ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {

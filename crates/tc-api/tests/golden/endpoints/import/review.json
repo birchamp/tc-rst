@@ -20,7 +20,8 @@
         "tag": "v87",
         "sha": "e586762e330f482a60c52aedd1c7b3a2f155df8a"
       }
-    ]
+    ],
+    "versification": "org"
   },
   "reply": {
     "type": "ok",
@@ -50,7 +51,25 @@
         "slots": [
           "translationNotes",
           "originalNewTestament"
-        ]
+        ],
+        "versification": {
+          "scheme": "org",
+          "fit": {
+            "kind": "tied",
+            "schemes": [
+              "lxx",
+              "org"
+            ]
+          },
+          "names": [
+            "eng",
+            "lxx",
+            "org",
+            "rsc",
+            "rso",
+            "vul"
+          ]
+        }
       },
       "details": {
         "name": "Tita tC3",

@@ -43,6 +43,7 @@ mod app {
     mod home;
     mod hooks;
     mod import;
+    mod import_scheme;
     mod internet;
     mod jobs;
     mod keychain;

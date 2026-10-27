@@ -142,6 +142,7 @@ pub(super) fn run(n: u8, file: &ImportFile, details: ImportDetails) -> Run {
         details,
         found: Vec::new(),
         license: "CC BY-SA 4.0".to_owned(),
+        versification: "eng".to_owned(),
     }
 }
 
@@ -263,6 +264,7 @@ async fn import_accepts_x_codes_and_refuses_unusable_codes_before_import() {
                 files: vec![file.clone()],
                 details: Some(details(&name, code)),
                 use_installed: None,
+                versification: None,
             },
         )
         .await
@@ -329,6 +331,7 @@ async fn typed_import_name_is_the_project_name() {
             files: vec![file.clone()],
             details: None,
             use_installed: None,
+            versification: None,
         },
     )
     .await
@@ -360,6 +363,7 @@ async fn typed_import_name_is_the_project_name() {
             files: vec![file.clone()],
             details: Some(typed.clone()),
             use_installed: None,
+            versification: None,
         },
     )
     .await
@@ -991,6 +995,7 @@ async fn the_review_counts_as_tc4_counts() {
             files: vec![file],
             details: None,
             use_installed: None,
+            versification: None,
         },
     )
     .await
@@ -1028,6 +1033,7 @@ async fn use_installed_versions_counts_what_carries_over_and_writes_nothing() {
         files: vec![file.clone()],
         details: None,
         use_installed: Some(found),
+        versification: None,
     };
     let review = post(&t.app, &ask(Vec::new())).await.unwrap();
     assert_eq!(
