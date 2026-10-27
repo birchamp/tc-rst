@@ -245,3 +245,32 @@ From the counters `storebench materialize` printed for the last run of each case
   translator is told their draft changed when it did not. The import review had said all 2,461
   verses were aligned.
 - **An Arabic project is shown LTR.** Home's card for `ar_avd` says "LTR".
+
+## Part 5: the cold rows, after a reboot
+
+- Boot 15:35:41; the script waited to 170 s after it (the `.cmd` waits until 120 s; the owner logged in
+  first). Nothing else was open (Task Manager's list: the command window and Settings). Defender on.
+  Release `storebench` from commit 003aa087; the installed unsigned 4.1.0-preview app.
+- **One run of each.** A corpus is cold once per boot, so each figure is a single run. The earlier
+  ruling that a row at its budget needs at least 5 runs cannot be met in one boot; it would take 5
+  reboots with a fresh corpus copy each time.
+
+| Row | Budget | Figure after the reboot | Warm, for comparison | Result |
+|---|---|---|---|---|
+| Open with a usable fold cache, first open after a restart | 10 s (3 s warm) | usable 4.92 s; background work done at 12.3 s | median 2.71 s, p95 3.15 s | met against the restart budget |
+| Open with no fold cache, disk cold | 10 s | usable 9.53 s (one run); done at 15.6 s | median 6.60 s, p95 7.24 s | met, with 0.47 s to spare on one run |
+| First progress report of an open | within 300 ms | 307 ms (with the cache), 303 ms (without) | about 310 to 314 ms in the store adapter bench | 3 to 7 ms over the line, every time |
+| Installed app, repeat launch, cold: spawn to Home | proposed 3 s | **42.2 s**; the Preparing page shown at 4.2 s | 0.58 s median | **missed** by 14 times the proposal, and 73 times the warm figure |
+
+- The app's cold launch is the finding. After a boot, the app sat on its Preparing page for about
+  38 s before Home. Warm, a repeat launch never shows that page. The seeded resources hold 3,785
+  files and 304 MB. At the 70 ms per MB that PERF-LEXICON-LOAD found for the operating system's
+  first read of newly seen text, 304 MB is about 21 s, and 3,785 file opens add more. So a cold
+  launch that reads or checks every resource file would explain most of it. That is **inferred, not
+  shown**: the shell's own log for this run was not kept (`shell.log` holds no entry after 14:49),
+  so the phases are unknown, and the launch was one run.
+- The rule for a repeat launch is "no read and no write of a resource content file". The count
+  test checks that on a warm app. A cold launch that shows "Preparing resources" suggests the
+  check reads them, or that something else makes the page appear. It needs the card's step 1.
+- Warm figures are in Parts 1 and 3. The cold-open rows of the store are met by the 10 s restart
+  budget; the app's cold launch is the open item.

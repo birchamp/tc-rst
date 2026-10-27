@@ -185,6 +185,7 @@ needed on this PC, and INT-7's contract still applies.
 | PERF-CLOSE | Close a project in 3 s on the reference laptop (laptop: median 3.13 s) | none | 1-2 d |
 | PERF-LEXICON-LOAD | First load of the Hebrew lexicon in 100 ms (laptop: 312 ms) | none | 1 d |
 | PERF-SUGGEST | A suggestion for one verse in 50 ms (laptop: 232 ms on the new model) | none | 2-4 d |
+| PERF-COLD-LAUNCH | The app reaches Home in 3 s after a reboot (laptop: 42 s, mostly a Preparing page) | none | 1-2 d |
 | PERF-OPEN-BOOK | Open a book to its first passage in 150 ms (laptop: 1.27 s on Understand) | none | 1-2 d |
 | PERF-CHAPTER | Move to another chapter in 16 ms (laptop: 34 ms; Psalm 119 145 ms) | none | 1-2 d |
 | PERF-DECISION | A check decision shows in 25 ms (laptop: 90 ms; the count lags) | none | 1-2 d |

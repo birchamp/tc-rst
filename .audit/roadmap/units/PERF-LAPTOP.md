@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: S2's store measurements on the owner's Linux machine, 2026-10-18)
 merged: none
 updated: 2026-10-27
-next: Step 1 is done except the cold open after a reboot, memory growth with history, USB export, sync, and the start-up rows on the signed installer (they wait for it; the unsigned figures stand). Step 2 has 10 cards. A verify line (someone other than the measurer) is still due.
+next: Step 1 is done except memory growth with history, USB export, sync, import of a tC4 project, and the start-up rows on the signed installer (they wait for it; the unsigned figures stand). Step 2 has 11 cards. A verify line (someone other than the measurer) is still due.
 blocked_by: none
 ---
 
@@ -103,3 +103,4 @@ here is named and has a card, before it reaches more translators.
 - 2026-10-27 | reference-laptop session (Claude Code) | step 2 | none | Cards written for the five missed rows: PERF-CHECKPOINT, PERF-MATERIALIZE-BOOK, PERF-CLOSE, PERF-LEXICON-LOAD, PERF-SUGGEST; open-rows table in PERFORMANCE.md names them. board.py --check not run here (no Python) | docs/PERFORMANCE.md
 - 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | UI rows measured in the installed app on the owner's tC3 Psalms projects (Part 4): open a book, chapter move, decision, aligner open and the cached Check open miss; typing needs a definition (a bare textarea measures the same); three non-speed leads recorded | docs/evidence/perf-laptop-2026-10-27.md
 - 2026-10-27 | reference-laptop session (Claude Code) | step 2 | none | Five more cards: PERF-OPEN-BOOK, PERF-CHAPTER, PERF-DECISION, PERF-ALIGNER-OPEN, PERF-CHECK-CACHE; in ROADMAP.md M5 and DONE's depends | .audit/roadmap/ROADMAP.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | Cold rows after a reboot (one run each; a corpus is cold once per boot): open with cache 4.92 s, no cache 9.53 s, both inside the 10 s restart budget; the installed app's cold launch took 42.2 s to Home against 0.58 s warm; card PERF-COLD-LAUNCH | docs/evidence/perf-laptop-2026-10-27.md
