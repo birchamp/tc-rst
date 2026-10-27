@@ -4,7 +4,7 @@ title: Fix two store losses the model test wrongly excused
 track: A
 lane: storage
 milestone: M1
-state: gating
+state: done
 owner: storage lane (Claude Code LOSS-2)
 branch: track-LOSS-2
 worktree: /home/bot/tc-rst/.worktrees/track-LOSS-2
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P1]
 no_loss: true
 size: 1-2 d (basis: two named model cases, three store paths named by the review)
-merged: none
+merged: 5e3da206
 updated: 2026-10-27
-next: Pushed; the integration lane takes it into a batch. BURRITO-HOLD (checks lane) builds on this branch.
+next: none
 blocked_by: none
 ---
 
@@ -106,3 +106,4 @@ the app still has a good copy (a stored blob, or the book file that shows the te
 - 2026-10-27 05:10 EDT | storage lane (Claude Code LOSS-2) | fix | 33ad3595 | the open's write group never closed (the flag was taken by the wrong condition), which kept the store's own I7 probes off for the session; p5 found it in the gate | scripts/gates.sh --touched
 - 2026-10-27 05:30 EDT | storage lane (Claude Code LOSS-2) | gate | 33ad3595 | scripts/gates.sh --touched passed: 5 crates, 1577 tests, every step | scripts/gates.sh --touched
 - 2026-10-27 06:40 EDT | storage lane (Claude Code LOSS-2) | fix | e6fdf3d7 | held from batch 31 by the integration lane: clippy type_complexity in fault.rs (a type alias now), and INV-NO-EXCUSED-LOSS and INV-PACK-RESTORE named in no test (now in the model's assert messages); main fb960700 merged (REL-1, DONE and ROADMAP depends taken as the union). Workspace clippy (Linux and Windows) clean; claims passes with LOSS-2 set done | cargo clippy --locked --workspace --all-targets (both targets); node --test .audit/tools/claims.test.mjs
+- 2026-10-27 00:51 EDT | integration lane (Claude Code 3d07d5f8) | merge | 5e3da206 | merged into main in batch 31; the held oracle widening 7fbbed45 never reached main; gated by scripts/gates.sh --wait-ci batch-31 | scripts/gates.sh --wait-ci batch-31
