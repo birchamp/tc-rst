@@ -177,7 +177,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, BURRITO-HOLD | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path
