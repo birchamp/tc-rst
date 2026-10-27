@@ -8,14 +8,14 @@ state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-REL-1
 worktree: .worktrees/track-REL-1
-depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD, SAVE-WAIT]
+depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD, SAVE-WAIT, LINK-DROP, TC3-LANG, SRC-VER, POEM-TAB]
 needs_owner: []
 proves: []
 no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-27
-next: blocked on the owner: signing set-up (H4, A4), 319 untranslated keys in nine languages (H10), then step 4 (the owner reviews the installed app, which also stands in for the P7 review)
+next: waits for LINK-DROP, TC3-LANG, SRC-VER and POEM-TAB (the tC4 issue sweep's 4.1.0 blockers), and on the owner: signing set-up (H4, A4), 319 untranslated keys in nine languages (H10), then step 4 (the owner reviews the installed app, which also stands in for the P7 review)
 blocked_by: none
 ---
 
@@ -79,3 +79,4 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | P7: the owner's review of the installed app in step 4 stands in for G2 in 4.1.0 | .audit/roadmap/rulings/2026-10-27-p7-review.md
 - 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | note | none | The version is now 4.1.0-preview. About and Feedback were recaptured with B7, rebuilt first. They show "4.1.0-preview (dev)"; no report row changed its verdict, and screen_record passes 49 of 49 | UPDATE_REPORT=1 cargo test --locked -p tc-ui --test screen_record
 - 2026-10-27 08:46 EDT | integration lane (Claude Code 3d07d5f8) | note | 58e8e10b | Release run 40501623818 by hand on main 58e8e10b, unsigned: the 4.1.0-preview installers build and pass their smoke tests on windows-x64, linux-x64 and macos-arm64 (Inno and the macOS pkg take the pre-release version). translations fails by design (H10) | gh run view 40501623818
+- 2026-10-27 09:18 EDT | integration lane (Claude Code 3d07d5f8) | note | none | depends gains LINK-DROP, TC3-LANG, SRC-VER and POEM-TAB: the 4.1.0 blockers the tC4 issue sweep found (the orchestrator, through the checks lane) | git show dae9b6b3
