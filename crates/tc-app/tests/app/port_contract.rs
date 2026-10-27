@@ -1207,6 +1207,134 @@ async fn sign_in_again(app: &App, n: u8) {
     .unwrap();
 }
 
+/// The aligner's save of Titus 1:1 in `project`: its placements as they are, marked done or
+/// not, so two computers' saves differ.
+async fn align_titus_1_1(app: &App, project: &ProjectRef, n: u8, done: bool) {
+    use tc_journal::command::AlignmentEdit;
+    let key = alignment_1_1();
+    let at = app
+        .sessions()
+        .open_screen(project, open_progress())
+        .await
+        .unwrap()
+        .at;
+    let session = app.sessions().reader(&at).unwrap();
+    let read = session.read();
+    let (alignments, word_bank) = match read.projected(&key) {
+        Some(Record::Alignment { value, .. }) => (value.alignments, value.word_bank),
+        _ => (Vec::new(), Vec::new()),
+    };
+    let command = tc_app::backend::StoreCommand::save_alignment(
+        read.mint(&key, None).unwrap(),
+        read.mint(&tit(1, 1), None).unwrap(),
+        AlignmentEdit {
+            alignments,
+            word_bank,
+            done,
+        },
+    );
+    session.handle().submit(command).await.unwrap();
+    post(
+        app,
+        &Close {
+            at,
+            request: rid(n),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+fn alignment_1_1() -> tc_journal::RecordKey {
+    tc_journal::RecordKey::Alignment(
+        tc_journal::BookId::Titus,
+        tc_journal::ChapterNo::new(1).unwrap(),
+        tc_journal::VerseNo::new(1).unwrap(),
+    )
+}
+
+async fn synced_project(app: &App, project: &ProjectRef, n: u8) -> tc_api::jobs::SyncResultView {
+    sign_in_again(app, n).await;
+    let job = post(
+        app,
+        &SyncProject {
+            request: rid(n.wrapping_add(1)),
+            project: project.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    match ended(app, job).await {
+        JobState::Done(JobOutcome::Synced(view)) => view,
+        other => panic!("the sync ends synced: {other:?}"),
+    }
+}
+
+/// Owner ruling H5 (tC4 #791): two computers align Titus 1:1 differently between syncs. The
+/// newest wins, and a real Door43 sync's Received sheet names the alignment it replaced, as an
+/// exchange file's receive does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_door43_sync_names_the_alignment_it_replaced() {
+    let w = <Door43 as SyncPortFixture>::world().await;
+    let a = &w.t.app;
+    internet_on(a).await;
+    sign_in(a).await;
+    synced(a, 60).await;
+    let b = teammate_b(&w).await;
+    align_titus_1_1(a, &folder(SAMPLE), 61, true).await;
+    align_titus_1_1(&b.t.app, &b.project, 62, false).await;
+
+    let first_b = synced_project(&b.t.app, &b.project, 63).await;
+    let view_a = synced_project(a, &folder(SAMPLE), 65).await;
+    let view_b = synced_project(&b.t.app, &b.project, 67).await;
+
+    let at = a
+        .sessions()
+        .open_screen(&folder(SAMPLE), open_progress())
+        .await
+        .unwrap()
+        .at;
+    let heads = a
+        .sessions()
+        .reader(&at)
+        .unwrap()
+        .read()
+        .heads(&alignment_1_1());
+    post(
+        a,
+        &Close {
+            at,
+            request: rid(69),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(heads.len(), 2, "the two alignments of Titus 1:1 met at A");
+    assert!(
+        first_b.replaced.is_empty(),
+        "B's first sync met nothing: {first_b:?}"
+    );
+    // Each computer that met the other's version is told, whichever won (H5: never silently).
+    let titus_1_1 = tc_api::conflicts::ReviewPlace::Verse {
+        book: tc_journal::BookId::Titus,
+        chapter: 1,
+        verse: 1,
+    };
+    for (who, view) in [("A", &view_a), ("B", &view_b)] {
+        let rows: Vec<_> = view
+            .replaced
+            .iter()
+            .filter(|row| row.kind == tc_api::jobs::ReplacedKind::Alignment)
+            .collect();
+        assert_eq!(rows.len(), 1, "{who}'s sync names one alignment: {view:?}");
+        assert_eq!(
+            rows[0].place, titus_1_1,
+            "{who}'s row is Titus 1:1: {view:?}"
+        );
+        assert_eq!(view.kept_newest, 1, "{who}'s newest-kept count: {view:?}");
+    }
+}
+
 /// Owner ruling of 2026-10-24: Door43's branch deleted by its owner; the next sync puts this
 /// copy back and the toast says so, once.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

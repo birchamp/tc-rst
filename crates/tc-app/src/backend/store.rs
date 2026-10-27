@@ -1648,6 +1648,7 @@ impl ProjectHandle for StoreHandle {
                 for (person, n) in next.received_by {
                     *report.received_by.entry(person).or_default() += n;
                 }
+                report.received_ids.extend(next.received_ids);
                 report.recreated |= next.recreated;
                 report.restored += next.restored;
                 // A failed second sync takes nothing back from the first; the name goes out
