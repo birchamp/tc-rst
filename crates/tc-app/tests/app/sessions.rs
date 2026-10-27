@@ -855,8 +855,19 @@ async fn a_cancelled_screen_open_with_no_other_caller_closes_the_project() {
 /// focus or by the watcher) raises no notice of its own, only the file's write. The pages
 /// hear of the new kept copy then, without a reload; a write that changes no list tells
 /// nothing.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn lost_work_kept_at_a_look_reaches_the_pages_without_a_reload() {
+#[test]
+fn lost_work_kept_at_a_look_reaches_the_pages_without_a_reload() {
+    // One task per tick: the session's pump starts only after the test has run on from the
+    // open and the store has kept the copy, the order that once hid the keep.
+    tokio::runtime::Builder::new_current_thread()
+        .event_interval(1)
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(lost_work_kept_at_a_look());
+}
+
+async fn lost_work_kept_at_a_look() {
     use tc_api::session::{KeptCopy, KeptWhy, OutsideEdits};
     let f = one_project().await;
     let at = f.open("kr_ulb").await;
