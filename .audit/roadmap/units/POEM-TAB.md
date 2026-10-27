@@ -4,7 +4,7 @@ title: Poem indents are two characters wide, and Tab indents in the Verse editor
 track: A
 lane: app
 milestone: M5
-state: verifying
+state: gating
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-POEM-TAB
 worktree: .worktrees/track-POEM-TAB
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: REF1b)
 merged: none
 updated: 2026-10-27
-next: Step 3: the three review lenses (loss, races and protocol, browser and parity), then main merged in and scripts/gates.sh --touched.
+next: Ready for a batch except the screen captures: the batch recaptures its final tree with parity/app/capture-rust.mjs (tc-ui/src changed; LINK-DROP changes it too), then cargo test -p tc-ui --test screen_record passes; push track-POEM-TAB once for the integration lane.
 blocked_by: none
 ---
 
@@ -72,3 +72,4 @@ Today a level is 8 characters wide, so poem lines start a third of the way acros
 - 2026-10-27 10:08 EDT | tc4-issues session (Claude Code dc817a96) | verify | bb16f335 | races and protocol lens (read-only reviewer, subagent aceb0e84): 1 Code: a Tab is a Program edit on the typing path (touched, Dirty, timers reset, buffer and mirror written at once), a no-op Tab never reaches the machine, Escape is the click-away path; 2 Checks: the journey covers Tab then typing then Escape; 3 Reach: all reachable; 4 Siblings: the section card's Tab under a running save still neither edits nor leaves; 5 No loss: a Tab during Saving saves again on the Ack, a Tab-only edit makes a teammate's change a notice and a second version, Escape twice or a quick reopen meet the field mid-save as a click-away does; 6 Prose: declared difference recorded, owner to be told. No blocker or major; two minors to minors.tsv | .audit/minors.tsv (POEM-TAB rows of 2026-10-27)
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | verify | 777f981f | browser and parity lens (reviewer who did not write the code, subagent a06ba4f5, Playwright on this build): 1 Code: one indent core, one Tab entry point for both cards; 2 Checks: unit test and journey deterministic, translate + section journeys 39 of 39 pass; 3 Reach: all reachable; 4 Siblings: the two poem fields changed, the OBS, check and comment fields hold no poetry; 5 No loss: a level draws 24.78 px, two characters of the field's font; first line keeps no tab and the focus; Save and Cancel by pointer after Tabs, and Tab then Escape at once, keep or put back the right text; 6 Prose: tC4's verse card has no key handler (Tab blurs and saves, Escape nothing, tab of 8), every difference is in the APP-DESIGN §6.10 row; Escape saving wants a line to the owner. No blocker or major; minors: focus after Escape (minors.tsv), undo after a Tab (already logged) | scratchpad probe poem.test.mjs (not in git): "39 tests, 39 pass"; .audit/minors.tsv
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-POEM-TAB on the merge with main 50d43b19 | scripts/gates.sh --touched
+- 2026-10-27 11:16 EDT | tc4-issues session (Claude Code dc817a96) | gate | 88f367d3 | failed on one step only: scripts/gates.sh --touched (7 crates, 2 journey files) ran 2009 Rust tests, 2008 passed, 1 failed: tc-ui::screen_record captures_match_the_current_ui_source (INV-CAPTURES-FRESH, 123 captures taken at tc-ui/src 05fb233a, now ec567a1c), which any tc-ui/src change trips until the screens are recaptured; journeys "app-e2e: 39 tests, 0 skipped", 39 pass. Not recaptured here: LINK-DROP in the same batch also changes tc-ui/src, so one recapture on the batch's tree serves both | target/gates-touched.log (not in git); scripts/gates.sh --touched
