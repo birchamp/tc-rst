@@ -2587,9 +2587,8 @@ mod tests {
         hooks.release(tc_store::Point::BeforeCheckpoint);
         dropper.join().unwrap();
         assert!(returned, "the drop returned while the checkpoint is held");
-        // The held checkpoint still ends once released. The open already sealed and committed
-        // the seed's pending saves (STORAGE §6.1 O15), so this one finds nothing new.
+        // The open's first checkpoint commits the project's first tree (S2).
         let outcome = current_thread().block_on(checkpoint);
-        assert_eq!(outcome, CheckpointOutcome::Unchanged);
+        assert_eq!(outcome, CheckpointOutcome::Committed);
     }
 }

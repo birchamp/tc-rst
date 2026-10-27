@@ -351,10 +351,7 @@ impl Writer {
             reply,
             checkpoint,
         } = job;
-        if checkpoint.is_some()
-            || origin == Origin::Sealed
-            || (origin == Origin::Open && std::mem::take(&mut self.sealed_at_open))
-        {
+        if checkpoint.is_some() {
             self.begin_exact(&snapshot, packs, complete);
         } else {
             self.begin(&snapshot, packs, complete);
@@ -368,6 +365,7 @@ impl Writer {
         let result = self.materialize_now();
         self.opening = false;
         if checkpoint.is_some()
+            || origin == Origin::Sealed
             || (origin == Origin::Open && std::mem::take(&mut self.sealed_at_open))
         {
             // The seal's packs are listed now, or the job failed and the next open repairs it.
