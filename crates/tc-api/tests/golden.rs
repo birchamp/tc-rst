@@ -3,7 +3,12 @@
 //! change to a wire shape changes a file, so it shows in review. Run with `UPDATE_GOLDEN=1`
 //! to write the files again after a deliberate change.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 
@@ -44,7 +49,10 @@ use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
     UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    SyncProject,
+};
 use tc_api::editor::{
     AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
     DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
@@ -69,7 +77,8 @@ use tc_api::helps::{
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
     LanguagesView, LastEditView, List, ProjectKind, RecentStory, RepoPlace, ResumePlace,
-    StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
+    StartNotice, StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications,
+    VersificationsView,
 };
 use tc_api::ids::{
     AlignerId, ChangeRef, CheckSessionId, ConflictRef, DownloadId, Epoch, JobId, LocaleId,
@@ -111,13 +120,13 @@ use tc_api::settings::{
 };
 use tc_api::shown::{Computer, ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::story;
+use tc_api::test::{ConnectDoor43, InvalidProject, Validate, ValidateView};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
-use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -556,7 +565,6 @@ impl Example for OpenDoor43 {
         OpenDoor43 {
             request: request(20),
             repo: RepoSource::new("facilitator-zq", "es-419_tit_equipo").unwrap(),
-            name: ProjectName::parse("es-419_tit_equipo").unwrap(),
         }
     }
 }
@@ -599,6 +607,7 @@ impl Example for tc_api::door43::LastSyncView {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 0,
+                recreated: false,
                 replaced: vec![
                     setting(
                         ReplacedKind::Setting,
@@ -623,6 +632,17 @@ impl Example for SyncProject {
         SyncProject {
             request: request(21),
             project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for ShareOnDoor43 {
+    fn example() -> Self {
+        ShareOnDoor43 {
+            request: request(22),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: ShareOwner::Organization(RepoName::parse("es-419_gl").unwrap()),
+            name: RepoName::parse("es-419_tit_equipo").unwrap(),
         }
     }
 }
@@ -1718,6 +1738,7 @@ impl Example for HomeView {
                 tool: None,
                 snippet: "Pablo, siervo de Dios".into(),
             }),
+            notices: vec![StartNotice::OpenDoor43Removed],
             import_removed: true,
         }
     }
@@ -3225,6 +3246,18 @@ fn review_entries() -> Vec<ReviewEntries> {
     ]
 }
 
+impl Example for ConnectDoor43 {
+    fn example() -> Self {
+        ConnectDoor43 {
+            request: request(23),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: "facilitator-zq".into(),
+            name: "sample_burrito".into(),
+            branch: "master".into(),
+        }
+    }
+}
+
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -3898,6 +3931,7 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                recreated: false,
                 replaced: vec![tc_api::jobs::ReplacedView {
                     by: PersonLabel {
                         who: Who::Teammate(1),
@@ -3929,6 +3963,15 @@ fn events() -> Vec<Event> {
             kind: JobKind::ExchangeReceive,
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
             state: JobState::Done(JobOutcome::Received(ReceivedView::example())),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(15),
+            kind: JobKind::Share,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Shared(SharedRepo {
+                repo: RepoSource::new("es-419_gl", "es-419_tit_equipo").unwrap(),
+                url: WebUrl::parse("https://git.door43.org/es-419_gl/es-419_tit_equipo").unwrap(),
+            })),
         }),
         Event::Job(JobView {
             id: JobId::new(12),

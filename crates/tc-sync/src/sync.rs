@@ -45,6 +45,9 @@ pub struct SyncReport {
     /// as the branch again (owner ruling, `rulings/2026-10-24-H5.md`): "The project was missing
     /// from Door43, so tC4 put your copy back. Ask your teammates to sync."
     pub recreated: bool,
+    /// A large push failed for want of a connection three times in a row (§9.5): the report
+    /// offers "Save an exchange file instead" (§10).
+    pub offer_exchange: bool,
     /// Changes of teammates this sync pushed again because Door43's branch had lost them
     /// (moved back behind a teammate's push; §9.7 `restored`): "Door43 did not have 1 change
     /// from a teammate. tC4 sent it again."
@@ -124,6 +127,7 @@ pub async fn sync(
             received_by: Default::default(),
             new_conflicts: Vec::new(),
             recreated: false,
+            offer_exchange: false,
             restored: 0,
         },
         conflicts_before: project
@@ -451,61 +455,97 @@ impl Run<'_> {
             .any(|id| snapshot.fold().change(id).is_some())
     }
 
-    /// S8: HEAD onto Door43's branch, a fast-forward or nothing.
+    /// S8: HEAD onto Door43's branch, a fast-forward or nothing. A large push goes as a chain
+    /// (§9.5): each link is pushed and read back before the next, so a dropped connection
+    /// loses only the link in flight and the next sync goes on from the last one confirmed.
     async fn push(&mut self) -> SyncEvent {
         let Some(target) = self.target.clone() else {
             return SyncEvent::PushFailed(SyncRefusal::NotSignedIn);
         };
         let http = self.client.http().clone();
-        let fetched = self.fetched;
+        let remote = self.fetched;
+        let bound = self.project.chain_bytes();
         let facts = self.project.facts();
         let (device, project) = (facts.device, facts.id);
         let pushed = tokio::task::spawn_blocking(move || {
-            let repo = open(&target.git_dir).map_err(Pushed::Failed)?;
-            let head = repo
-                .head()
-                .ok()
-                .and_then(|h| h.target())
-                .ok_or(Pushed::Nothing)?;
-            // Door43's branch behind ours holds fewer packs than HEAD: the teammates' changes
-            // in the packs it lacks are sent again (§9.7 `restored`); our own are new work.
-            let restored = match fetched {
-                Some(remote) if remote != head => {
-                    restored_changes(&repo, head, remote, device, project)
-                }
-                _ => 0,
-            };
-            let local = repo
-                .head()
-                .ok()
-                .and_then(|h| h.shorthand().ok().map(str::to_owned))
-                .unwrap_or_else(|| target.branch.clone());
-            let refspec = FastForwardRefspec::onto(&local, &target.branch)
-                .map_err(|e| Pushed::Failed(refusal_of(&e)))?;
-            match tc_door43::git::push(&http, &repo, &target.remote, &refspec) {
-                Ok(()) => Ok(restored),
-                Err(Door43Error::RefMoved { .. }) => Err(Pushed::Raced),
-                Err(e) => Err(Pushed::Failed(refusal_of(&e))),
-            }
+            let mut chain = Chain::default();
+            let result = push_chain(&http, &target, remote, bound, (device, project), &mut chain);
+            (result, chain)
         })
         .await;
-        match pushed {
-            Ok(Ok(restored)) => {
+        let (result, chain) = match pushed {
+            Ok(done) => done,
+            Err(e) => {
+                return SyncEvent::PushFailed(SyncRefusal::Io {
+                    reason: e.to_string(),
+                });
+            }
+        };
+        if let Some(link) = chain.confirmed {
+            self.report.confirmed = Some(link.to_string());
+        }
+        match result {
+            Ok(restored) => {
                 // Said only once the push made the branch again (tC4 reports it after the push).
-                self.report.recreated = self.branch_gone;
+                self.report.recreated = self.branch_gone || self.put_back(None).await;
                 self.report.restored += restored;
                 SyncEvent::Pushed
             }
-            Ok(Err(Pushed::Nothing)) => {
+            Err(Pushed::Nothing) => {
                 self.report.recreated = self.branch_gone;
                 SyncEvent::Pushed
             }
-            Ok(Err(Pushed::Raced)) => SyncEvent::PushRaced,
-            Ok(Err(Pushed::Failed(refusal))) => SyncEvent::PushFailed(refusal),
-            Err(e) => SyncEvent::PushFailed(SyncRefusal::Io {
-                reason: e.to_string(),
-            }),
+            Err(Pushed::Raced) => SyncEvent::PushRaced,
+            Err(Pushed::Failed(refusal)) => {
+                if self.branch_gone && chain.confirmed.is_some() {
+                    // A link made the branch again; this failed sync cannot say so.
+                    self.put_back(Some(true)).await;
+                }
+                if refusal == SyncRefusal::Unreachable
+                    && let Some(tip) = chain.tip
+                {
+                    self.report.offer_exchange =
+                        self.chain_failed(tip.to_string(), chain.links > 0).await;
+                }
+                SyncEvent::PushFailed(refusal)
+            }
         }
+    }
+
+    /// The mark of a branch put back that no report has said yet: `Some(true)` sets it, `None`
+    /// reads and clears it. A file that cannot be read or written holds no mark.
+    async fn put_back(&self, set: Option<bool>) -> bool {
+        let Ok(Some(mut file)) = self.project.sync_file().await else {
+            return false;
+        };
+        let was = file.put_back_unsaid;
+        let now = set.unwrap_or(false);
+        if was != now {
+            file.put_back_unsaid = now;
+            let _ = self.project.set_sync_file(file).await;
+        }
+        was
+    }
+
+    /// Counts a large push's failure for want of a connection in `.tc/sync.json`; `true` from
+    /// the third in a row. Saves made between the tries give the chain a new tip but leave it
+    /// the same push, so only a confirmed push starts the count again. A push with no links
+    /// counts only as the rest of a chain that failed before: its last commit, after every link
+    /// went through. A file that cannot be written counts nothing.
+    async fn chain_failed(&self, tip: String, chained: bool) -> bool {
+        let Ok(Some(mut file)) = self.project.sync_file().await else {
+            return false;
+        };
+        if !chained && file.chain_failures.is_none() {
+            return false;
+        }
+        let count = file
+            .chain_failures
+            .as_ref()
+            .map_or(1, |f| f.count.saturating_add(1));
+        file.chain_failures = Some(tc_store::ChainFailures { tip, count });
+        let _ = self.project.set_sync_file(file).await;
+        count >= 3
     }
 
     /// S9: Door43's branch read back; at HEAD, it is confirmed.
@@ -548,6 +588,177 @@ impl Run<'_> {
             _ => SyncEvent::ConfirmFailed,
         }
     }
+}
+
+/// What a push did of its chain (§9.5).
+#[derive(Default)]
+struct Chain {
+    /// The commit the push ends at.
+    tip: Option<git2::Oid>,
+    /// Links before it.
+    links: usize,
+    /// The last link Door43's branch was read back at.
+    confirmed: Option<git2::Oid>,
+}
+
+/// S8 on the blocking thread: the links of the chain, each pushed and read back, then HEAD.
+fn push_chain(
+    http: &tc_door43::Http,
+    target: &Target,
+    remote: Option<git2::Oid>,
+    bound: u64,
+    (device, project): (tc_journal::DeviceId, tc_journal::ProjectId),
+    chain: &mut Chain,
+) -> Result<u32, Pushed> {
+    let repo = open(&target.git_dir).map_err(Pushed::Failed)?;
+    let head = repo
+        .head()
+        .ok()
+        .and_then(|h| h.target())
+        .ok_or(Pushed::Nothing)?;
+    chain.tip = Some(head);
+    // Door43's branch behind ours holds fewer packs than HEAD: the teammates' changes in the
+    // packs it lacks are sent again (§9.7 `restored`); our own are new work.
+    let restored = match remote {
+        Some(remote) if remote != head => restored_changes(&repo, head, remote, device, project),
+        _ => 0,
+    };
+    let local = repo
+        .head()
+        .ok()
+        .and_then(|h| h.shorthand().ok().map(str::to_owned))
+        .unwrap_or_else(|| target.branch.clone());
+    let links = links_of(&repo, head, remote, bound).unwrap_or_default();
+    chain.links = links.len();
+    let sent = (|| {
+        for link in links {
+            repo.reference(
+                tc_door43::git::LINK_REF,
+                link,
+                true,
+                "a link of a large push",
+            )
+            .map_err(|e| {
+                Pushed::Failed(SyncRefusal::Io {
+                    reason: e.message().to_owned(),
+                })
+            })?;
+            let refspec = FastForwardRefspec::link_onto(&target.branch)
+                .map_err(|e| Pushed::Failed(refusal_of(&e)))?;
+            send(http, &repo, &target.remote, &refspec)?;
+            if read_back(http, &repo, target)? != Some(link) {
+                // Door43's branch is elsewhere: someone pushed after this link.
+                return Err(Pushed::Raced);
+            }
+            chain.confirmed = Some(link);
+        }
+        Ok(())
+    })();
+    if let Ok(mut made) = repo.find_reference(tc_door43::git::LINK_REF) {
+        let _ = made.delete();
+    }
+    sent?;
+    let refspec = FastForwardRefspec::onto(&local, &target.branch)
+        .map_err(|e| Pushed::Failed(refusal_of(&e)))?;
+    send(http, &repo, &target.remote, &refspec)?;
+    Ok(restored)
+}
+
+fn send(
+    http: &tc_door43::Http,
+    repo: &git2::Repository,
+    remote: &GitRemote,
+    refspec: &FastForwardRefspec,
+) -> Result<(), Pushed> {
+    match tc_door43::git::push(http, repo, remote, refspec) {
+        Ok(()) => Ok(()),
+        Err(Door43Error::RefMoved { .. }) => Err(Pushed::Raced),
+        Err(e) => Err(Pushed::Failed(refusal_of(&e))),
+    }
+}
+
+/// Door43's branch as it advertises it now; at a commit, `refs/remotes/origin/{b}` is set
+/// to it, so the next sync's fetch starts from there.
+fn read_back(
+    http: &tc_door43::Http,
+    repo: &git2::Repository,
+    target: &Target,
+) -> Result<Option<git2::Oid>, Pushed> {
+    let advertised = tc_door43::git::ls_remote(http, repo, &target.remote)
+        .map_err(|e| Pushed::Failed(refusal_of(&e)))?;
+    let name = format!("refs/heads/{}", target.branch);
+    let at = advertised
+        .iter()
+        .find(|(n, _)| *n == name)
+        .and_then(|(_, oid)| git2::Oid::from_str(&oid.to_string()).ok());
+    if let Some(at) = at {
+        let _ = repo.reference(
+            &format!("refs/remotes/origin/{}", target.branch),
+            at,
+            true,
+            "confirmed by tC",
+        );
+    }
+    Ok(at)
+}
+
+/// §9.5: the commits a push sends before `head`, oldest first. On the way from Door43's
+/// commit `remote` (or the first commit) to `head`, each commit whose new blobs bring the
+/// run since the last link to `bound` bytes is a link. Every one is a descendant of `remote`,
+/// so each push is a fast-forward of the one before. None when `head` is not reached from
+/// `remote` this way.
+fn links_of(
+    repo: &git2::Repository,
+    head: git2::Oid,
+    remote: Option<git2::Oid>,
+    bound: u64,
+) -> Result<Vec<git2::Oid>, git2::Error> {
+    let mut way: Vec<(git2::Oid, Option<git2::Oid>)> = Vec::new();
+    let mut at = head;
+    while Some(at) != remote {
+        let commit = repo.find_commit(at)?;
+        let mut next = None;
+        for parent in commit.parent_ids() {
+            let on_the_way = match remote {
+                None => true,
+                Some(r) => parent == r || repo.graph_descendant_of(parent, r).unwrap_or(false),
+            };
+            if on_the_way {
+                next = Some(parent);
+                break;
+            }
+        }
+        way.push((at, next));
+        match next {
+            Some(parent) => at = parent,
+            None if remote.is_none() => break,
+            None => return Ok(Vec::new()),
+        }
+    }
+    let odb = repo.odb()?;
+    let mut links = Vec::new();
+    let mut run = 0u64;
+    for (commit, parent) in way.into_iter().rev() {
+        let old = parent
+            .map(|p| repo.find_commit(p).and_then(|c| c.tree()))
+            .transpose()?;
+        let new = repo.find_commit(commit)?.tree()?;
+        let diff = repo.diff_tree_to_tree(old.as_ref(), Some(&new), None)?;
+        for delta in diff.deltas() {
+            let blob = delta.new_file().id();
+            if !blob.is_zero() {
+                run += odb
+                    .read_header(blob)
+                    .map(|(size, _)| size as u64)
+                    .unwrap_or(0);
+            }
+        }
+        if run >= bound && commit != head {
+            links.push(commit);
+            run = 0;
+        }
+    }
+    Ok(links)
 }
 
 enum Pushed {

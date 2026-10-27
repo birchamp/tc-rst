@@ -7,7 +7,12 @@
 //! The benchmark times the same actions in a release build:
 //! `cargo test --release -p tc-obs --test performance -- --nocapture`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

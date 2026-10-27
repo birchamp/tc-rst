@@ -228,6 +228,10 @@ struct Editor {
 }
 
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "A4b no-loss code, property-tested; new states go in FieldSave"
+)]
 struct Field {
     rules: FieldRules,
     scope: FieldScope,

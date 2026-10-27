@@ -3,7 +3,12 @@
 //! unused, no two sync refusals read the same, and the rebuild's own keys never shadow
 //! tC4's and are translated before a release.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

@@ -8,7 +8,12 @@
 //! (APP-DESIGN AD19, a declared difference): tC4 writes nothing at open. Every other case
 //! here writes nothing at open, as in tC4.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

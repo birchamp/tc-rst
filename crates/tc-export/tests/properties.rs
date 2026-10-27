@@ -2,7 +2,12 @@
 //! with text prints exactly once, in order; every other verse of a printed chapter prints
 //! once as not yet drafted; the gap lines stand for exactly the parts left between.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use tc_api::export::PrintVerse;

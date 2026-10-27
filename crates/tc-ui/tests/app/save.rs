@@ -1059,7 +1059,7 @@ fn a_restart_keeps_only_the_fields_on_screen_sends_nothing_and_ignores_late_repl
         "the text on screen is not saved"
     );
     assert!(
-        page.gate(|_, _| unreachable!("nothing is sent"), |_| {}),
+        page.gate(|_, _| panic!("nothing is sent"), |_| {}),
         "a held field does not block the gate"
     );
     // Late replies of the old run change nothing.
@@ -2008,4 +2008,47 @@ fn a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text() {
         |_, _| Answered::Failed(SaveError::NotSaved(NotSaved::Disk("full".into()))),
         |_| {}
     ));
+}
+
+/// E1a, INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR (tC4 #801, #807): a sync replaced the open
+/// a save was made in, so the save is refused as stale. The text stays, and once no open of
+/// the project is left (the person left it), Home is not held waiting for one.
+#[test]
+fn stale_scope_save_keeps_text_and_home_leaves_in_one_click() {
+    let mut page = Page::new();
+    let k = key_of(FieldKind::Verse, "TIT 1:1");
+    page.open_with(
+        &k,
+        FieldScope::Project(Some(scope(1))),
+        pair("old", 7, Some(1)),
+    );
+    let commands = page.m.sessions(&[writable(1)], 0.0);
+    page.run(commands);
+    page.focus(&k);
+    page.type_text(&k, "typed before the sync replaced the open");
+    page.blur(&k);
+    page.deliver(Answered::Reattach);
+    assert_eq!(
+        page.m.gate(),
+        GateState::Waiting,
+        "it waits for the new open"
+    );
+    // The project is no longer open anywhere: nothing will ever answer the wait.
+    let commands = page.m.sessions(&[], page.now);
+    page.run(commands);
+    assert_ne!(
+        page.m.gate(),
+        GateState::Waiting,
+        "INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR: Home is not held for an open that is gone"
+    );
+    assert_ne!(
+        page.m.gate(),
+        GateState::Blocked,
+        "Home leaves in one click"
+    );
+    assert_eq!(
+        page.entry(&k).map(|e| e.text).as_deref(),
+        Some("typed before the sync replaced the open"),
+        "the text stays for the next open"
+    );
 }

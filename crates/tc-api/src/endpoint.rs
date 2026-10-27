@@ -218,6 +218,7 @@ unscoped!(
     crate::session::Open,
     crate::door43::OpenDoor43,
     crate::door43::SyncProject,
+    crate::door43::ShareOnDoor43,
     crate::exchange::Export,
     crate::exchange::Receive,
     crate::exchange::ReceiveNew,
@@ -240,6 +241,7 @@ unscoped!(
     crate::test::Reset,
     crate::test::LastEdit,
     crate::test::Script,
+    crate::test::ConnectDoor43,
 );
 
 /// What an endpoint answers inside an HTTP 200 (AD9). On the wire it follows the crate's

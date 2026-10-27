@@ -783,7 +783,7 @@ fn a_layout_save_changes_only_the_layout() {
         .find(|(n, _)| *n == "SaveLayout")
         .unwrap();
     let Command::SaveLayout { layout, .. } = &command else {
-        unreachable!()
+        panic!("unexpected")
     };
     let layout = layout.clone();
     submit(&handle, command).unwrap();

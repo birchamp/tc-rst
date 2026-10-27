@@ -2,7 +2,12 @@
 //! (`tC4:src/state.jsx` `rememberPlace` and its callers; `tC4:test/place.test.ts`), so a Home
 //! tile can return where tC4 returns.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

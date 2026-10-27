@@ -1,7 +1,12 @@
 //! The block renderer against tC4's own (`fixtures/helps/article-block-vectors.json`, made by
 //! `tools/gen-article-block-vectors.mjs` from tC4's `renderArticleBlocks` and `takeSpans`):
 //! every Titus note of en_tn v91 and es-419_tn v66, two articles and the marks of #619.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use serde_json::Value;
 use tc_helps::blocks::{Block, BlockKind, Span, js_len, render_article_blocks, take_spans};

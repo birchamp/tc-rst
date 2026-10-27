@@ -126,6 +126,10 @@ fn place_of(key: &RecordKey) -> String {
     }
 }
 
+#[expect(
+    clippy::unreachable,
+    reason = "'?' is one printable character under MAX_BYTES, which FieldPlace::parse accepts"
+)]
 fn field_place(text: &str) -> FieldPlace {
     let cut: String = text
         .chars()

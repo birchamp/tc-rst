@@ -222,7 +222,12 @@ pub(super) fn next(machine: Machine, event: Event) -> (Machine, Vec<Effect>) {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     //! A model of the store against the machine, over random histories of edits, ticks,
     //! flushes and outcomes: whatever the order, a change is never forgotten, a failed save

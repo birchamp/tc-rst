@@ -4,6 +4,10 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-dbg-in-tests = true
+# INV-NO-BAGS-OF-BOOLEANS
+max-struct-bools = 3
+# INV-NO-BAGS-OF-BOOLEANS
+max-fn-params-bools = 3
 
 # INV-ATOMIC-WRITES: a project file is written through tc_store::atomic (temporary file, fsync,
 # rename, fsync of the folder), never in place. A site that must mutate the filesystem itself

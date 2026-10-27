@@ -4,7 +4,12 @@
 //! burrito's stored record, and generated alignments over hand-written verses.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

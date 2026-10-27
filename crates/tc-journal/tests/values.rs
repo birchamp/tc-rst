@@ -2,7 +2,12 @@
 //! reads them from its source when it merges, lists a conflict or projects, is the fold of
 //! the same changes kept in memory.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod support;
 

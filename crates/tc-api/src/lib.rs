@@ -124,6 +124,7 @@ macro_rules! endpoint_table {
 
             job [Open] "door43/open": $crate::door43::OpenDoor43 => $crate::ids::JobId;
             job [Sync] "door43/sync": $crate::door43::SyncProject => $crate::ids::JobId;
+            job [Share] "door43/share": $crate::door43::ShareOnDoor43 => $crate::ids::JobId;
             query "door43/lastSync": $crate::door43::LastSync => $crate::door43::LastSyncView;
 
             query "exchange/identify": $crate::exchange::Identify => $crate::exchange::IdentifyView;
@@ -260,6 +261,7 @@ macro_rules! test_hook_table {
             command "test/reset": $crate::test::Reset => ();
             command "test/lastEdit": $crate::test::LastEdit => ();
             command "test/script": $crate::test::Script => ();
+            command "test/connectDoor43": $crate::test::ConnectDoor43 => ();
             query "test/validate": $crate::test::Validate => $crate::test::ValidateView;
         }
     };

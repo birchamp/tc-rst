@@ -765,7 +765,7 @@ mod tests {
                         assert!(rig.source.moved(private.file, mapping(&private, &next)));
                         &private
                     }
-                    _ => unreachable!(),
+                    _ => panic!("unexpected"),
                 };
                 let destination =
                     rig.image("destination", target_exposure, &[Label::B, Label::A], 29);

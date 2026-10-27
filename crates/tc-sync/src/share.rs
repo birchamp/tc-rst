@@ -3,7 +3,9 @@
 
 use crate::sync::{Pause, SyncReport, refusal_of};
 use tc_api::refusal::SyncRefusal;
-use tc_door43::{Door43Client, Door43Error, NewRepoName, NewRepoOwner, Session, Visibility};
+use tc_door43::{
+    CreatedRepo, Door43Client, Door43Error, NewRepoName, NewRepoOwner, Session, Visibility,
+};
 use tc_store::ProjectHandle;
 
 #[derive(Debug, thiserror::Error)]
@@ -17,8 +19,12 @@ pub enum ShareError {
     Connect(#[from] crate::connect::ConnectError),
 }
 
-/// Makes `name` under `owner`, connects `project` to it on `main` and syncs. The sync's
-/// report says whether the push was confirmed.
+/// Makes `name` under `owner`, connects `project` to it on `main`, calls `pushing`, and syncs.
+/// The sync's report says whether the push was confirmed.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the share needs the project, the client, the session, the owner, the name and the progress hooks, each different"
+)]
 pub async fn share(
     project: &ProjectHandle,
     client: &Door43Client,
@@ -27,7 +33,8 @@ pub async fn share(
     name: &NewRepoName,
     visibility: Visibility,
     pause: &impl Pause,
-) -> Result<SyncReport, ShareError> {
+    pushing: impl FnOnce(),
+) -> Result<(CreatedRepo, SyncReport), ShareError> {
     if !client.internet().is_on() {
         return Err(ShareError::Refused(SyncRefusal::Offline));
     }
@@ -37,5 +44,7 @@ pub async fn share(
         Err(e) => return Err(ShareError::Refused(refusal_of(&e))),
     };
     crate::connect::connect(project, client.server(), &created.repo, "main").await?;
-    Ok(crate::sync::sync(project, client, Some(session), pause).await)
+    pushing();
+    let report = crate::sync::sync(project, client, Some(session), pause).await;
+    Ok((created, report))
 }

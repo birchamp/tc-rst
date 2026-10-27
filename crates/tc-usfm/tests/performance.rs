@@ -3,7 +3,12 @@
 //! Run `cargo test --release -p tc-usfm --test performance -- --nocapture` to see times.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::path::Path;
 use std::time::{Duration, Instant};

@@ -4,7 +4,11 @@
 //! of a Psalms tN and TWL table with one row per form
 //! (`crates/tc-check/tools/gen-psalms-vectors.cjs` runs it). tC4 reads every Reference
 //! cell, so such a row must cost no more than itself, never the book's check list.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

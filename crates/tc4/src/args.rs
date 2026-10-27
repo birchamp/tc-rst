@@ -10,7 +10,7 @@ use tc_door43::ServerUrl;
 #[cfg(feature = "test-hooks")]
 macro_rules! hook_flags {
     () => {
-        " [--test-hooks] [--test-seed-pace <ms>]"
+        " [--test-hooks] [--real-sync] [--test-seed-pace <ms>]"
     };
 }
 #[cfg(not(feature = "test-hooks"))]
@@ -57,6 +57,10 @@ pub(crate) struct Args {
     /// Route the `test` service (AD35). The flag exists only with the cargo feature.
     #[cfg(feature = "test-hooks")]
     pub test_hooks: bool,
+    /// `--real-sync`: with the test hooks, sync and open from Door43 go to `--door43` for real
+    /// (a fake Door43) instead of the scripted port. Exists only with the cargo feature.
+    #[cfg(feature = "test-hooks")]
+    pub real_sync: bool,
     /// `--test-seed-pace <ms>`: the seed waits this long before each file, so a process test
     /// can watch it and close it on any disk. Exists only with the cargo feature.
     #[cfg(feature = "test-hooks")]
@@ -121,6 +125,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
     let mut test_hooks = false;
     #[cfg(feature = "test-hooks")]
     let mut seed_pace = None;
+    #[cfg(feature = "test-hooks")]
+    let mut real_sync = false;
     #[cfg(feature = "fixture-backend")]
     let mut scenario = None;
     #[cfg(feature = "fixture-backend")]
@@ -147,6 +153,13 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
                     return Err(ArgsError::Repeated("--test-hooks"));
                 }
                 test_hooks = true;
+            }
+            #[cfg(feature = "test-hooks")]
+            "--real-sync" => {
+                if real_sync {
+                    return Err(ArgsError::Repeated("--real-sync"));
+                }
+                real_sync = true;
             }
             #[cfg(feature = "test-hooks")]
             "--test-seed-pace" => {
@@ -197,6 +210,8 @@ pub(crate) fn parse(mut args: impl Iterator<Item = OsString>) -> Result<Args, Ar
         bundle: bundle.map(PathBuf::from),
         #[cfg(feature = "test-hooks")]
         test_hooks,
+        #[cfg(feature = "test-hooks")]
+        real_sync,
         #[cfg(feature = "test-hooks")]
         seed_pace,
         #[cfg(feature = "fixture-backend")]

@@ -66,9 +66,10 @@ pub trait EventSource: Send + 'static {
     fn next(&mut self) -> impl Future<Output = Next> + Send;
 }
 
-// A frame is yielded and written at once, never stored, so boxing it would only add an
-// allocation per event.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a frame is yielded and written at once, never stored, so boxing it would only add an allocation per event"
+)]
 pub enum Next {
     Frame(EventFrame),
     /// The reader fell too far behind. The server ends the connection; the UI reconnects

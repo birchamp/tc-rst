@@ -82,7 +82,6 @@ fn rows_of(
 
 /// tC4's `SectionEditor`: the editing card of one section.
 #[component]
-#[allow(clippy::too_many_lines)]
 pub fn SectionEditor(
     key: BufferKey,
     keys: Vec<String>,
@@ -395,7 +394,10 @@ pub fn SectionEditor(
 
 /// The Type field: the section as text, one verse a line; Tab and Shift+Tab indent the line for
 /// poetry (#54).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view's inputs: the state, handles and signals it reads"
+)]
 fn type_field(
     saves: &SendWrapper<crate::app::web::Saves>,
     key: &SendWrapper<BufferKey>,
@@ -490,7 +492,6 @@ fn type_field(
 }
 
 /// Place mode: the bank of unplaced pins, then the words with their pins.
-#[allow(clippy::too_many_lines)]
 fn place_view(
     buffer: Memo<SectionBuffer>,
     place: Callback<SectionBuffer>,
@@ -711,7 +712,10 @@ fn place_view(
 /// One word in Place mode: the pins before it (the held pin's ghost where it may land, the
 /// fixed first number as a plain superscript, each pin of a verse that begins here), then the
 /// word itself, a real control while a pin is in hand and may land here.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view's inputs: the state, handles and signals it reads"
+)]
 fn place_word(
     i: usize,
     word: String,

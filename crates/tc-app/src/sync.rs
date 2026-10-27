@@ -97,6 +97,7 @@ pub fn synced_view(
         alignments: tally.alignments,
         restored,
         missing_pins: missing_pins(snapshot, installed),
+        recreated: false,
         replaced,
     }
 }
@@ -348,6 +349,110 @@ impl App {
         Ok(view)
     }
 
+    /// One real sync of `folder` with its Door43 repository (E1a): unit X's `tc_sync::sync` on
+    /// the project's store, then the toast's view of what came in. A sync that fails after
+    /// intake keeps what came in, and the card is told either way.
+    pub(crate) async fn door43_sync(&self, folder: ProjectRef) -> Result<SyncResultView, JobEnd> {
+        let client = self.door43().map_err(JobEnd::Failed)?.clone();
+        let session = self.door43_session().await.map_err(JobEnd::Failed)?;
+        let progress = crate::jobs::ProgressSink::new(Phase::Sync(tc_api::jobs::SyncPhase::Fetch));
+        let lease = self
+            .inner
+            .sessions
+            .open_side(&folder, progress)
+            .await
+            .map_err(|e| {
+                JobEnd::Failed(self.internal(
+                    "the project to sync did not open",
+                    crate::reports::facts(serde_json::json!({ "reason": format!("{e:?}") })),
+                ))
+            })?;
+        let handle = lease.session().handle().clone();
+        let report = handle.door43_sync(client, Some(session.clone())).await;
+        let (ended, received_by, recreated, restored) = match report {
+            Some(report) => (
+                match report.ended {
+                    tc_sync::machine::Ended::Synced { .. } => Ok(()),
+                    tc_sync::machine::Ended::Failed(failure) => {
+                        Err(ApiError::Refused(tc_api::Refusal::Sync(failure)))
+                    }
+                },
+                report.received_by,
+                report.recreated,
+                report.restored,
+            ),
+            None => (
+                Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
+                BTreeMap::new(),
+                false,
+                0,
+            ),
+        };
+        let view = {
+            let session = lease.session();
+            let me = session.handle().facts().device;
+            let snapshot = session.read();
+            let resources = &self.inner.resources;
+            let mut view = synced_view(&snapshot, me, &[], restored, &|pin| resources.has_dcs(pin));
+            view.recreated = recreated;
+            // Unit X counts what came in, by the person who made it (§9.7 `received`).
+            view.received = received_by.values().sum();
+            view.from = received_by
+                .keys()
+                .map(crate::wire::scope::person_label)
+                .collect();
+            view
+        };
+        drop(lease);
+        self.inner.sessions.settled(&folder).await;
+        self.inner
+            .bus
+            .publish(tc_api::event::Event::HomeCard { project: folder });
+        match ended {
+            Ok(()) => Ok(view),
+            // Door43 refused the token: both copies are forgotten and the person signs in again
+            // (DELTA §3.15.1 item 6).
+            Err(ApiError::Refused(tc_api::Refusal::Sync(
+                tc_api::refusal::SyncFailure::BeforeIntake(
+                    tc_api::refusal::SyncRefusal::AuthFailed,
+                )
+                | tc_api::refusal::SyncFailure::AfterIntake(tc_api::refusal::SyncRefusal::AuthFailed),
+            ))) => Err(JobEnd::Failed(self.door43_refused(&session).await)),
+            Err(error) => Err(JobEnd::Failed(error)),
+        }
+    }
+
+    /// Points `folder`'s repository at Door43's `owner/name` and its `branch` (unit X's
+    /// connect): what share sets, for tests of a project shared before they start.
+    #[cfg(feature = "test-hooks")]
+    pub async fn connect_door43(
+        &self,
+        folder: &ProjectRef,
+        owner: &str,
+        name: &str,
+        branch: &str,
+    ) -> Result<(), String> {
+        let progress = crate::jobs::ProgressSink::new(Phase::Sync(tc_api::jobs::SyncPhase::Fetch));
+        let lease = self
+            .inner
+            .sessions
+            .open_side(folder, progress)
+            .await
+            .map_err(|e| format!("{e:?}"))?;
+        let handle = lease.session().handle().clone();
+        let server = self.door43().map_err(|e| e.to_string())?.server().clone();
+        let repo = format!("{owner}/{name}")
+            .parse()
+            .map_err(|e| format!("{e:?}"))?;
+        let connected = handle
+            .door43_connect(server, repo, branch.to_owned())
+            .await
+            .ok_or("this store keeps no history")?;
+        drop(lease);
+        self.inner.sessions.settled(folder).await;
+        connected.map_err(|e| e.to_string())
+    }
+
     /// What the scripted sync port does for a sync a test scripted: the teammates' changes
     /// written through the store, then the project read again as a sync's intake does.
     #[cfg(feature = "test-hooks")]
@@ -497,14 +602,24 @@ impl Handle<SyncProject> for App {
 }
 
 #[cfg(feature = "test-hooks")]
+impl Handle<tc_api::test::ConnectDoor43> for App {
+    async fn handle(&self, req: tc_api::test::ConnectDoor43) -> Result<(), ApiError> {
+        self.hooks()?;
+        self.connect_door43(&req.project, &req.owner, &req.name, &req.branch)
+            .await
+            .map_err(|reason| ApiError::BadRequest {
+                field: "project".to_owned(),
+                reason,
+            })
+    }
+}
+
+#[cfg(feature = "test-hooks")]
 impl Handle<tc_api::test::Script> for App {
     async fn handle(&self, req: tc_api::test::Script) -> Result<(), ApiError> {
         use tc_api::test::Scripted;
         self.hooks()?;
-        let scripts_door43 = matches!(
-            req.next,
-            Scripted::OpenDoor43Fails(_) | Scripted::Sync { .. }
-        );
+        let scripts_door43 = matches!(req.next, Scripted::Sync { .. });
         if scripts_door43 && self.scripted_sync_port().is_none() {
             return Err(ApiError::BadRequest {
                 field: "next".to_owned(),
@@ -512,9 +627,6 @@ impl Handle<tc_api::test::Script> for App {
             });
         }
         match req.next {
-            Scripted::OpenDoor43Fails(failure) => {
-                self.script_open_door43(Err(ApiError::Refused(tc_api::Refusal::Sync(failure))))
-            }
             Scripted::Sync { project, outcome } => self.script_sync(project, outcome),
             Scripted::CheckpointFails { project } => {
                 self.inner.sessions.script_checkpoint_failure(project);
@@ -528,7 +640,11 @@ impl Handle<tc_api::test::Script> for App {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     use tc_api::jobs::ReplacedValue;
     use tc_api::shown::Direction;

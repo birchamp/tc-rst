@@ -137,8 +137,10 @@ pub async fn install_dcs_watched(
 }
 
 /// What [`install_lexicon_zip`] did.
-// Made once per install; boxing the install would only make every match harder to read.
-#[allow(clippy::large_enum_variant)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "made once per install; boxing the install would only make every match harder to read"
+)]
 #[derive(Debug)]
 pub enum LexiconInstall {
     Installed(Installed),

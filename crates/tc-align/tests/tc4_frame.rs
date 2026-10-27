@@ -3,7 +3,12 @@
 //! source verse with the same numbers, so the lookup maps project to `eng` and refuses
 //! rather than align against the wrong Greek or Hebrew.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use tc_align::frame::{NoSourceVerse, RESOURCE_FRAME, source_reference};
 use tc_core::{BookId, ChapterNo, Reference, VerseNo, VerseSpan};

@@ -101,6 +101,10 @@ pub(super) struct Env {
     pub learner: Learner,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts about one session: a refused mark, a Suggest asked or running, the actor ending"
+)]
 struct Actor {
     env: Env,
     facts: Facts,

@@ -306,7 +306,10 @@ fn helps_divider(actions: &Actions, panel: NodeRef<html::Aside>) -> impl IntoVie
 }
 
 /// tC4's `HelpsTab`.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view's inputs: the state, handles and signals it reads"
+)]
 fn helps_tab(
     s: &crate::app::web::AppState,
     actions: &Actions,

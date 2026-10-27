@@ -3,7 +3,10 @@
 //! asked for are `.test` names that no request ever resolves.
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::sync::{Arc, Mutex, PoisonError};
 

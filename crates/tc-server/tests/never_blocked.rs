@@ -6,7 +6,12 @@
 //! stealing hides a blocked worker. The load is paced, not unbounded: a saturated single
 //! worker polls its timers only every 61 tasks and looks blocked with no blocking call in it,
 //! and this test is after blocking calls.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

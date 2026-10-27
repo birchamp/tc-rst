@@ -2,7 +2,12 @@
 //! (`docs/STORAGE.md` §7.7, §16.5 item 4): `fixtures/derivations/`, made by
 //! `tools/gen-derivation-vectors.cjs`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod census;
 

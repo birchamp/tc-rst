@@ -1,6 +1,11 @@
 //! Identifiers and tokens are checked where they enter (APP-DESIGN §3.2, §3.4, AD3).
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use serde::de::DeserializeOwned;
@@ -73,12 +78,12 @@ fn a_token_body_must_be_base64url_of_a_plausible_length() {
 macro_rules! implements {
     ($ty:ty: $($bound:tt)+) => {{
         struct Probe<T: ?Sized>(std::marker::PhantomData<T>);
-        #[allow(dead_code)]
+        #[allow(dead_code, reason = "the probe trait exists only to be resolved, never named")]
         trait No {
             const YES: bool = false;
         }
         impl<T: ?Sized> No for Probe<T> {}
-        #[allow(dead_code)]
+        #[allow(dead_code, reason = "the probe trait exists only to be resolved, never named")]
         impl<T: ?Sized + $($bound)+> Probe<T> {
             const YES: bool = true;
         }
@@ -342,7 +347,7 @@ fn a_sign_in_never_prints_the_password() {
 /// M6's rules, shared by the dialog and the server (tC4 `openSourceOf`, `openDefaultName`,
 /// `openRepoPathOf`, `repoPathInUse`; `test/openFromDoor43Dialog.test.tsx`).
 mod open_from_door43 {
-    use tc_api::door43::{ProjectName, RepoSource, default_project_name};
+    use tc_api::door43::{ProjectName, RepoSource, default_project_name, open_folder};
     use tc_api::ids::ProjectRef;
 
     const HOST: &str = "git.door43.org";
@@ -426,6 +431,18 @@ mod open_from_door43 {
             ProjectName::parse("Titus_2").unwrap().folder(),
             ProjectRef::parse("Titus_2").unwrap()
         );
+    }
+
+    /// Ruling H14: an open asks for no name; its folder is the repository's name, or the
+    /// first `-n` no folder has, without letter case.
+    #[test]
+    fn an_open_takes_the_first_free_folder_of_the_repository_name() {
+        let repo = RepoSource::new("Juan", "es_tit.text").unwrap();
+        assert_eq!(open_folder(&repo, []).as_str(), "es_tit-text");
+        let taken = ["ES_TIT-TEXT", "es_tit-text-2", "es_tit-text-4"];
+        assert_eq!(open_folder(&repo, taken).as_str(), "es_tit-text-3");
+        let dots = RepoSource::new("Juan", "...").unwrap();
+        assert_eq!(open_folder(&dots, ["project"]).as_str(), "project-2");
     }
 }
 

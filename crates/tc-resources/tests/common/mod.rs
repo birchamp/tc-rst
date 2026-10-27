@@ -1,7 +1,15 @@
 // Each test binary uses a different subset of these helpers.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 pub mod aquifer_fake;
 pub mod bundled;

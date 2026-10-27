@@ -78,6 +78,10 @@ pub fn fetch(
         .map_err(|e| failed(http, &route, e))
 }
 
+/// The local ref a link of a large push's chain is pushed from (STORAGE §9.5): libgit2 pushes
+/// a ref, not a commit id.
+pub const LINK_REF: &str = "refs/tc/push-link";
+
 /// The one refspec a push may send: a local branch onto a remote branch, never forced. It is
 /// built only from two branch names that git accepts, so it can never start with `+`
 /// (INV-PUSH-IS-NEVER-FORCED).
@@ -101,6 +105,12 @@ impl FastForwardRefspec {
             }
         }
         Ok(Self(format!("refs/heads/{local}:refs/heads/{remote}")))
+    }
+
+    /// [`LINK_REF`] onto `refs/heads/{remote}`: a link of a large push's chain (STORAGE §9.5).
+    pub fn link_onto(remote: &str) -> Result<Self, Door43Error> {
+        Self::onto(remote, remote)?;
+        Ok(Self(format!("{LINK_REF}:refs/heads/{remote}")))
     }
 
     pub fn as_str(&self) -> &str {

@@ -19,8 +19,8 @@ use serde_json::Value;
 use tc_api::event::Event;
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
-    LanguagesView, LastEditView, List, ProjectKind, RepoPlace, ResumePlace, StoriesView,
-    StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
+    LanguagesView, LastEditView, List, ProjectKind, RepoPlace, ResumePlace, StartNotice,
+    StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
 };
 use tc_api::ids::{ProjectRef, StoryNo, WallMs};
 use tc_api::jobs::{JobKind, JobOutcome, Phase};
@@ -769,10 +769,11 @@ impl Handle<List> for App {
                     .iter()
                     .map(|entry| (entry.clone(), store.peek(&entry.folder)))
                     .collect();
-                Ok::<_, StoreError>((peeks, listing.unusable, listing.others))
+                let removed_open = store.removed_an_open_at_start();
+                Ok::<_, StoreError>((peeks, listing.unusable, listing.others, removed_open))
             })
             .await?;
-        let (peeks, unusable, others) = read.map_err(|e| {
+        let (peeks, unusable, others, removed_open) = read.map_err(|e| {
             self.internal(
                 "the projects folder could not be listed",
                 crate::reports::facts(serde_json::json!({"reason": e.to_string()})),
@@ -812,6 +813,10 @@ impl Handle<List> for App {
             cards,
             unusable,
             others,
+            notices: removed_open
+                .then_some(StartNotice::OpenDoor43Removed)
+                .into_iter()
+                .collect(),
             import_removed: self
                 .inner
                 .import_removed

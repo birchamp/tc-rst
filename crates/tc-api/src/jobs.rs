@@ -92,6 +92,7 @@ pub struct Progress {
 pub enum Phase {
     Open(OpenPhase),
     Sync(SyncPhase),
+    Share(SharePhase),
     Exchange(ExchangePhase),
     /// Installing one resource repository.
     Install {
@@ -143,6 +144,17 @@ pub enum SyncPhase {
     Confirm,
 }
 
+/// The progress lines of a share (D84 point 5): before its first step, the repository's
+/// creation, the push.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum SharePhase {
+    Preparing,
+    Create,
+    Push,
+}
+
 /// The phases of a USB export (STORAGE §10.1: checkpoint, write, verify from the device) and of
 /// a receive (§10.2: read the file, take its packs in).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -177,6 +189,8 @@ pub enum JobOutcome {
     ExportReady(crate::export::Exported),
     /// A sync that completed (B10): what its toast shows.
     Synced(SyncResultView),
+    /// A first share that pushed the project (E1b).
+    Shared(crate::door43::SharedRepo),
     /// An exchange file written and verified (E2): "You can remove the stick".
     Exported(crate::exchange::ExportedView),
     /// A receive from an exchange file that completed (E2): what the Received sheet shows.
@@ -212,6 +226,9 @@ pub struct SyncResultView {
     pub restored: u32,
     /// The project's pinned resource versions that this computer does not have (D88 point 6).
     pub missing_pins: u32,
+    /// Door43 no longer had the project's branch, and this sync put this computer's copy back
+    /// (owner ruling of 2026-10-24; tC4 says nothing).
+    pub recreated: bool,
     /// What a teammate's newer version replaced, with no question (owner ruling H5): "Juan's
     /// alignment of Titus 1:1 replaced yours. Your version is in History."
     #[serde(default)]
@@ -315,6 +332,9 @@ starts_job! {
     }
     crate::door43::SyncProject => SyncResultView {
         JobOutcome::Synced(view) => view, view => JobOutcome::Synced(view)
+    }
+    crate::door43::ShareOnDoor43 => crate::door43::SharedRepo {
+        JobOutcome::Shared(repo) => repo, repo => JobOutcome::Shared(repo)
     }
     crate::exchange::Export => crate::exchange::ExportedView {
         JobOutcome::Exported(view) => view, view => JobOutcome::Exported(view)

@@ -1,6 +1,12 @@
 //! Generators and builders shared by the integration tests.
 
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use proptest::prelude::*;
 use std::collections::BTreeMap;

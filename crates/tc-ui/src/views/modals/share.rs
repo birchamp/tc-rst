@@ -1,14 +1,19 @@
 //! Share on Door43 (unit B9b, `tC4:src/views/modals/ShareDialog.jsx`, #362, D84): the
 //! where-it-goes step (the person's own account or an organization they can create in, one
-//! marked Recommended) and the check step (the repository name and the books or stories). A
-//! Home card's Share opens it once a sign-in is held; the run, its progress line and its end
-//! are unit E1b's.
+//! marked Recommended), the check step (the repository name and the books or stories), then
+//! the run's progress line and the done step (E1b). A Home card's Share opens it once a sign-in
+//! is held.
 
 use std::sync::Arc;
 
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
+use tc_api::account::WebUrl;
+use tc_api::door43::SharedRepo;
+use tc_api::jobs::SharePhase;
+
+use crate::app::internet::LinkKind;
 use crate::app::share::{Choices, ShareForm, ShareStep, SharedItems, Target};
 use crate::app::web::{AppCtx, use_app};
 use crate::ds::{
@@ -51,8 +56,11 @@ pub fn ShareDialog() -> impl IntoView {
             Memo::new(move |_| sh.with(|sh| sh.as_ref().and_then(get)))
         }
     };
-    let step =
-        { Memo::new(move |_| sh.with(|sh| sh.as_ref().map_or(ShareStep::Target, |sh| sh.step))) };
+    let step = Memo::new(move |_| {
+        sh.with(|sh| sh.as_ref().map_or(ShareStep::Target, |sh| sh.step.clone()))
+    });
+    // No footer and no close while the run is in progress.
+    let running = Memo::new(move |_| matches!(step.get(), ShareStep::Running(_)));
     let project_name = read(|sh| Some(sh.project.name.clone()));
     let account = s.server.account.clone();
     let user = Memo::new({
@@ -113,6 +121,16 @@ pub fn ShareDialog() -> impl IntoView {
                         </Button>
                     }
                     .into_any(),
+                    ShareStep::Running(_) => ().into_any(),
+                    ShareStep::Done(_) => view! {
+                        <Button
+                            attrs=Attrs::from([("data-testid", "share-close")])
+                            on_click=Callback::new(move |_| first.close_modal())
+                        >
+                            {move || t(keys::common::CLOSE, &[])}
+                        </Button>
+                    }
+                    .into_any(),
                 }
             })
             .into_any()
@@ -123,15 +141,23 @@ pub fn ShareDialog() -> impl IntoView {
         let (actions, s) = (actions.clone(), s.clone());
         Arc::new(move || {
             let (actions, s) = (actions.clone(), s.clone());
-            let sharing_as = sharing_as(&actions, &s, user);
+            let sharing_as = {
+                let (actions, s) = (actions.clone(), s.clone());
+                let before_run =
+                    Memo::new(move |_| matches!(step.get(), ShareStep::Target | ShareStep::Check));
+                move || before_run.get().then(|| sharing_as(&actions, &s, user))
+            };
             let body = {
                 let (actions, sh) = (actions.clone(), s.share_form());
                 move || match step.get() {
                     ShareStep::Target => target_step(&actions, &sh, user).into_any(),
                     ShareStep::Check => check_step(&actions, &sh, user).into_any(),
+                    ShareStep::Running(phase) => progress_step(phase, &sh).into_any(),
+                    ShareStep::Done(repo) => done_step(&actions, &sh, repo).into_any(),
                 }
             };
-            view! { {sharing_as} {body} }.into_any()
+            let error = share_error(&s.share_form());
+            view! { {sharing_as} {body} {error} }.into_any()
         })
     };
 
@@ -144,6 +170,8 @@ pub fn ShareDialog() -> impl IntoView {
                         match step.get() {
                             ShareStep::Target => keys::share_dialog::WHERE_TITLE,
                             ShareStep::Check => keys::share_dialog::CHECK_TITLE,
+                            ShareStep::Running(_) => keys::share_dialog::PROGRESS_TITLE,
+                            ShareStep::Done(_) => keys::share_dialog::DONE_TITLE,
                         },
                         &[],
                     )
@@ -159,6 +187,8 @@ pub fn ShareDialog() -> impl IntoView {
                         match step.get() {
                             ShareStep::Target => keys::share_dialog::WHERE_SUBTITLE,
                             ShareStep::Check => keys::share_dialog::CHECK_SUBTITLE,
+                            ShareStep::Running(_) => keys::share_dialog::PROGRESS_SUBTITLE,
+                            ShareStep::Done(_) => keys::share_dialog::DONE_SUBTITLE,
                         },
                         &[("name", &name)],
                     )
@@ -168,7 +198,9 @@ pub fn ShareDialog() -> impl IntoView {
         ),
         close_label: Some(Signal::derive(|| t(keys::common::CLOSE, &[]))),
         on_close: Some(Callback::new(move |()| close.close_modal())),
+        closable: Signal::derive(move || !running.get()),
         footer: Some(footer),
+        footer_shown: Some(Signal::derive(move || !running.get())),
         attrs: Attrs::from([("data-testid", "share-dialog")]),
         children: Some(children),
         ..Default::default()
@@ -382,7 +414,7 @@ fn check_step(
         let actions = actions.clone();
         Callback::new(move |e: web_sys::Event| {
             let value = event_target_value(&e);
-            actions.patch_sh(|sh| sh.type_name(value));
+            actions.type_share_name(value);
         })
     };
     let items = sh.with_untracked(|sh| sh.as_ref().map(|sh| sh.project.items.clone()));
@@ -418,5 +450,129 @@ fn check_step(
                 <Text role=TextRole::Body attrs=Attrs::from([("data-testid", "share-items")])>{items}</Text>
             </div>
         </div>
+    }
+}
+
+/// The lines shown so far, as tC4's `data-steps` keeps them for the journeys.
+fn steps_attr(sh: &Signal<Option<ShareForm>>) -> String {
+    sh.with(|sh| {
+        sh.as_ref()
+            .map(|sh| {
+                sh.shown
+                    .iter()
+                    .map(|phase| match phase {
+                        SharePhase::Preparing => "preparing",
+                        SharePhase::Create => "create",
+                        SharePhase::Push => "push",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// One progress line (D84 point 5, `ProgressStep`).
+fn progress_step(phase: SharePhase, sh: &Signal<Option<ShareForm>>) -> impl IntoView + use<> {
+    let label = t(
+        match phase {
+            SharePhase::Preparing => keys::share_dialog::PREPARING,
+            SharePhase::Create => keys::share_dialog::CREATING,
+            SharePhase::Push => keys::share_dialog::PUSHING,
+        },
+        &[],
+    );
+    view! {
+        <div
+            role="status"
+            style="padding: 26px 0px 30px; display: flex; justify-content: center;"
+            data-testid="share-progress"
+            data-steps=steps_attr(sh)
+        >
+            <Spinner label=label />
+        </div>
+    }
+}
+
+/// Shared (`DoneStep`): the repository's address, what teammates need, Copy link and Open on
+/// Door43.
+fn done_step(
+    actions: &crate::app::web::Actions,
+    sh: &Signal<Option<ShareForm>>,
+    repo: SharedRepo,
+) -> impl IntoView + use<> {
+    let sh = *sh;
+    let lines = sh.with_untracked(|sh| sh.as_ref().map(ShareForm::done_lines).unwrap_or_default());
+    let mut lines = lines.into_iter();
+    let first = lines.next().map(|key| {
+        view! {
+            <Text role=TextRole::Body attrs=Attrs::from([("data-testid", "share-done-text")])>
+                <span role="status">{move || t(key, &[])}</span>
+            </Text>
+        }
+    });
+    let rest = lines
+        .map(|key| {
+            view! {
+                <Text role=TextRole::Body attrs=Attrs::from([("data-testid", "share-team-access")])>
+                    {move || t(key, &[])}
+                </Text>
+            }
+        })
+        .collect::<Vec<_>>();
+    let copied = Memo::new(move |_| sh.with(|sh| sh.as_ref().is_some_and(|sh| sh.copied)));
+    let (copy, open) = (actions.clone(), actions.clone());
+    let url: WebUrl = repo.url;
+    let shown_url = url.as_str().to_owned();
+    view! {
+        <div data-testid="share-done" data-steps=steps_attr(&sh) style="display: flex; flex-direction: column; gap: 12px;">
+            {first}
+            <Text role=TextRole::Strong attrs=Attrs::from([("data-testid", "share-url")]) style=crate::css! { "overflow-wrap": "anywhere" }>
+                {shown_url}
+            </Text>
+            {rest}
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <Button
+                    variant=ButtonVariant::Secondary
+                    size=crate::ds::Size::Sm
+                    attrs=Attrs::from([("data-testid", "share-copy")])
+                    on_click=Callback::new(move |_| copy.share_copy_link())
+                >
+                    {move || t(if copied.get() { keys::share_dialog::COPIED } else { keys::share_dialog::COPY_LINK }, &[])}
+                </Button>
+                <Button
+                    size=crate::ds::Size::Sm
+                    attrs=Attrs::from([("data-testid", "share-open")])
+                    on_click=Callback::new(move |_| open.open_door43_page(LinkKind::Repo, url.clone()))
+                >
+                    {move || t(keys::share_dialog::OPEN_ON_DOOR43, &[])}
+                </Button>
+            </div>
+        </div>
+    }
+}
+
+/// Why the last run did not share (`sh.error`): "Not shared." and the refusal's sentence,
+/// picked by its code (tC4 `shareErrorText`).
+fn share_error(sh: &Signal<Option<ShareForm>>) -> impl IntoView + use<> {
+    let sh = *sh;
+    let error = Memo::new(move |_| sh.with(|sh| sh.as_ref().and_then(|sh| sh.error.clone())));
+    move || {
+        error.get().map(|error| {
+            let code = error.code.clone().unwrap_or_default();
+            let text = error.text.clone();
+            view! {
+                <Callout
+                    tone=CalloutTone::Warn
+                    attrs=Attrs::from([("role", "alert"), ("data-testid", "share-error")])
+                        .with("data-code", code)
+                    style=crate::css! { "overflow-wrap": "anywhere" }
+                >
+                    <strong>{t(keys::share_dialog::FAILED, &[])}</strong>
+                    " "
+                    {text}
+                </Callout>
+            }
+        })
     }
 }

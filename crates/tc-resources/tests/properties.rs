@@ -1,7 +1,11 @@
 //! Round trips of the stored forms this crate reads, and the ladder's rule.
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use tc_core::BookId;

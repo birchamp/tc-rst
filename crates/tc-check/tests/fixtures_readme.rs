@@ -1,7 +1,11 @@
 //! Every file in `fixtures/check/` has its provenance in the table of
 //! `fixtures/check/README.md`. A GitHub table ends at the first line that is not a row, so
 //! a row after a blank line renders as a paragraph and is not in the table.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

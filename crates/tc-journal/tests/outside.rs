@@ -2,7 +2,12 @@
 //! compared with what the app wrote, one test for each rule of `plan_outside_edit`. The
 //! store's half (reading the bytes, the copy, the batch) is `tc-store`'s tests.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod support;
 
@@ -142,7 +147,7 @@ fn without_digests_whitespace_differences_are_counted_not_recorded() {
     let (bytes, base) = world.written(&DerivedFile::Usfm(BOOK));
     // A heads file of S1's form holds no digests: every key is looked at.
     let Base::Heads(mut records) = base else {
-        unreachable!()
+        panic!("unexpected")
     };
     for record in &mut records {
         record.shown = None;
@@ -893,7 +898,7 @@ fn metadata_decodes_into_the_fields_the_records_hold() {
     let decoded = decode_metadata(&bytes).expect("decodes");
     for want in &records {
         let Record::ProjectMeta { field, value } = want else {
-            unreachable!()
+            panic!("unexpected")
         };
         let found = decoded.fields.iter().find(|(f, _)| f == field);
         assert_eq!(found.map(|(_, v)| v), value.as_ref(), "{field:?}");

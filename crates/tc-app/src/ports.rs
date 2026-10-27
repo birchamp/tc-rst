@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tc_api::door43::{ProjectName, RepoSource};
+use tc_api::door43::{ProjectName, RepoName, RepoSource, ShareOwner, SharedRepo};
 use tc_api::error::{ApiError, Feature};
 use tc_api::exchange::{ExchangeFile, ExportedView, IdentifyView, ReceivedView};
 use tc_api::ids::ProjectRef;
@@ -17,18 +17,30 @@ use tc_import::SourceFile;
 
 use crate::app::App;
 use crate::backend::BoxFuture;
-use crate::jobs::{JobCtx, JobEnd};
+use crate::jobs::{JobCtx, JobEnd, ProgressSink};
 use crate::session::ProjectSession;
 
+pub mod door43;
 #[cfg(feature = "test-hooks")]
 pub mod scripted;
 pub mod usb;
 
-/// Sync, share and open from Door43. E1a adds the real sync and open; E1b adds share's push.
+/// Sync, share and open from Door43 (E1a, E1b).
 pub trait SyncPort: Send + Sync {
     /// One sync of `folder`, after its checkpoint. `app` is the app the sync's intake writes
     /// the received changes through.
     fn sync(&self, app: App, folder: ProjectRef) -> BoxFuture<Result<SyncResultView, JobEnd>>;
+
+    /// The first share of `folder`: its checkpoint, the repository `name` under `owner`, the
+    /// push. Each step goes to `progress` as a `SharePhase` when it begins.
+    fn share(
+        &self,
+        app: App,
+        folder: ProjectRef,
+        owner: ShareOwner,
+        name: RepoName,
+        progress: ProgressSink,
+    ) -> BoxFuture<Result<SharedRepo, JobEnd>>;
 
     /// The open of Door43's `repo` as the project `name`: the project it added.
     fn open(
@@ -132,24 +144,6 @@ pub trait ImportPort: Send + Sync {
         file: SourceFile,
         ctx: JobCtx,
     ) -> BoxFuture<Result<UpdateReport, JobEnd>>;
-}
-
-/// The release sync until E1a: nothing to sync with yet.
-pub struct UnavailableSync;
-
-impl SyncPort for UnavailableSync {
-    fn sync(&self, _app: App, _folder: ProjectRef) -> BoxFuture<Result<SyncResultView, JobEnd>> {
-        Box::pin(async { Err(JobEnd::Failed(ApiError::Unavailable(Feature::Sync))) })
-    }
-
-    fn open(
-        &self,
-        _app: App,
-        _repo: RepoSource,
-        _name: ProjectName,
-    ) -> BoxFuture<Result<ProjectRef, ApiError>> {
-        Box::pin(async { Err(ApiError::Unavailable(Feature::Sync)) })
-    }
 }
 
 /// The release exchange until E2's real port lands.

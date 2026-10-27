@@ -265,7 +265,10 @@ fn psalms_alone(journal: &Journal, folded: &MemoryProject) -> Journal {
     }
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the bundle builder's example code; this test uses part of it"
+)]
 #[path = "../../examples/bundle_store/build.rs"]
 mod bundle_build;
 

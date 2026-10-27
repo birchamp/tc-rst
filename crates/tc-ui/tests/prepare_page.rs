@@ -7,7 +7,12 @@
 //! `UPDATE_PREPARE=1 cargo test -p tc-ui --test prepare_page`, which rewrites the page's text
 //! block and the hash its policy allows its script by, then run the tests without it.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

@@ -5,7 +5,11 @@
 //! (docs/APP-DESIGN.md §4.6, docs/PERFORMANCE.md "Start-up").
 
 // Test helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

@@ -9,7 +9,12 @@
 //! DOM lines. A declared case that no longer differs, or differs in more than it declares, fails,
 //! as `screen_record` holds `parity/app/residuals.json` (APP-DESIGN §7.5).
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

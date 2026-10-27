@@ -206,7 +206,7 @@ fn snapshot_text(snapshot: &tc_app::backend::Snapshot, key: &RecordKey) -> Strin
         RecordKey::Frame(_, FrameNo::TITLE) => rendered.title,
         RecordKey::Frame(_, frame) => rendered.frames[usize::from(frame.get()) - 1].text.clone(),
         RecordKey::StoryRef(_) => rendered.reference.unwrap_or_default(),
-        _ => unreachable!(),
+        _ => panic!("unexpected"),
     }
 }
 

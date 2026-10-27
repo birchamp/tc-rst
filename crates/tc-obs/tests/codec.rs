@@ -1,7 +1,12 @@
 //! The story file codec reads and writes without losing a byte, and its records render back
 //! into the file they came from.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

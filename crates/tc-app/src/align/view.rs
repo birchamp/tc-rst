@@ -84,6 +84,10 @@ pub(super) struct Facts {
 
 /// What the session knows beside the aligner.
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent facts the screen shows beside the aligner, one per control"
+)]
 pub(super) struct Moment {
     pub seq: u64,
     pub save: AlignSave,
@@ -232,7 +236,12 @@ pub(super) fn build(aligner: &Aligner, facts: &Facts, now: &Moment) -> AlignerVi
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 mod tests {
     use unicode_normalization::UnicodeNormalization;
 

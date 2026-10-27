@@ -1,6 +1,11 @@
 //! The help pages as this app serves them name its own projects folder and download page, not
 //! tC4 4.0's (H16), while the vendored files stay tc-website's bytes.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::path::PathBuf;
 

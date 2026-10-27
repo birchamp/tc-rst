@@ -3,7 +3,12 @@
 //! Every run counts the states its generator reached and fails when one was never reached.
 
 // Helpers outside `#[test]` functions build known-valid values and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 mod sim;

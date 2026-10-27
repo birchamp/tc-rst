@@ -2,7 +2,11 @@
 //! speaks git smart HTTP.
 
 // The helpers sit outside `#[test]` functions, where clippy.toml already allows these.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use serde_json::Value;
 use std::collections::BTreeSet;

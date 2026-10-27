@@ -8,7 +8,12 @@
 //! letter at the end of a verse in tC4's cut is woven.
 
 // Helpers outside `#[test]` functions read fixtures and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};

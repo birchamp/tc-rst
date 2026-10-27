@@ -1130,7 +1130,12 @@ mod tests {
         clippy::disallowed_methods,
         reason = "test code builds and damages scratch .git folders, never a project"
     )]
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::*;
 
@@ -1156,7 +1161,10 @@ mod tests {
             .join(&hex[..2])
             .join(&hex[2..]);
         let mut permissions = std::fs::metadata(&path).unwrap().permissions();
-        #[allow(clippy::permissions_set_readonly_false)]
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "a test file, read by this test process alone"
+        )]
         permissions.set_readonly(false);
         std::fs::set_permissions(&path, permissions).unwrap();
         std::fs::File::options()

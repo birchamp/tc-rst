@@ -2,7 +2,12 @@
 //! test breaks one rule in otherwise valid bytes and checks the change is quarantined for
 //! that rule, and that the writer refuses to produce it.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

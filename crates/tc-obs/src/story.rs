@@ -43,6 +43,10 @@ fn emit(lines: &[&str]) -> String {
 
 /// The number of the frame at `index` (from 0) of a story `split` read, which refuses a
 /// story with more frames than a `FrameNo` can number.
+#[expect(
+    clippy::unreachable,
+    reason = "split refuses a story with more frames than a FrameNo can number"
+)]
 fn frame_no(index: usize) -> FrameNo {
     u16::try_from(index + 1)
         .map(FrameNo::new)

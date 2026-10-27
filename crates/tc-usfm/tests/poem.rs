@@ -1,7 +1,12 @@
 //! INV-EVERY-POEM-LINE-STAYS (REF1b): the editors show a verse's poem lines with tabs, its
 //! breaks as empty lines, and saving gives back the markers; an unchanged verse saves its exact
 //! bytes. Cases ported from tC4's `test/poemLines.test.ts` (d25b7871), on its fixtures.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use proptest::prelude::*;
 use tc_usfm::poem::{editor_text, shows_tabs, words_from_editor_text};

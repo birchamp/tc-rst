@@ -1,7 +1,12 @@
 //! The OBS template and a new project: ports of tC4's `test/obsTemplateServed.test.ts`
 //! (#347) and `test/obsCreate.test.ts` (#287, J20), and the rules behind `NewObs.jsx`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

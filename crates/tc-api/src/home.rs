@@ -70,9 +70,22 @@ pub struct HomeView {
     /// Home shows none of them, and a new project's name must not take one (B9b D5).
     pub others: Vec<String>,
     pub resume: Option<LastEditView>,
+    /// What this launch's start did to work that did not finish, for Home to say once.
+    pub notices: Vec<StartNotice>,
     /// This launch's start removed the part copy of an import that did not finish
     /// (`home.importRemoved`): true in the first listing after that cleanup, false after.
     pub import_removed: bool,
+}
+
+/// Work cut short in an earlier run that this launch's start removed (STORAGE §6.4 N1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum StartNotice {
+    /// An open from Door43 did not finish; its part copy was removed and no project kept it
+    /// (`refusal.open-door43.removed`). tC4 says so when the person opens that project; this
+    /// app's open never puts a half project at the name, so Home says it.
+    OpenDoor43Removed,
 }
 
 /// `home/card`: one card, read by each card when it is drawn (`AppTopic::HomeCard`).

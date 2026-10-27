@@ -71,6 +71,17 @@ fn digest_of(heads: &[ChangeId]) -> [u8; 32] {
     sha256(&bytes)
 }
 
+/// A change's batch as [`FoldState::batch_of`] gives it (§7.4, §9.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchOf {
+    /// Its valid changes, folded or held.
+    pub members: Vec<crate::ids::ChangeId>,
+    /// Every one of its changes is valid and here, so the fold applies it.
+    pub whole: bool,
+    /// A `BatchRelease` names it.
+    pub released: bool,
+}
+
 /// Names one exact state: the digest of the sorted set of every head id.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Frontier([u8; 32]);
@@ -329,6 +340,10 @@ impl ConflictId {
 /// What one call of [`FoldState::add`] changed: what `tc-store` marks dirty (§5.0 B5) and
 /// what the reply to a command says (B6).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per kind of derived file a change touches; any mix can change at once"
+)]
 pub struct Delta {
     /// Records whose state or projected value may have changed, sorted.
     pub keys: Vec<RecordKey>,

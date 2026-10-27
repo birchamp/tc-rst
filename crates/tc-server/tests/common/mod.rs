@@ -1,7 +1,13 @@
 //! What the integration tests share: a server on its own thread, a blocking HTTP client over
 //! a raw `TcpStream` (a client library might route loopback through the container's proxy),
 //! and a reader for server-sent events.
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::io::{Read, Write};
 use std::net::TcpStream;

@@ -68,7 +68,10 @@ fn age(path: &Path, days: u64) {
         Err(_) => {
             // Loose objects are read-only; the time is set through a writable copy of the mode.
             let mut permissions = std::fs::metadata(path).unwrap().permissions();
-            #[allow(clippy::permissions_set_readonly_false)]
+            #[allow(
+                clippy::permissions_set_readonly_false,
+                reason = "a test file, read by this test process alone"
+            )]
             permissions.set_readonly(false);
             std::fs::set_permissions(path, permissions).unwrap();
             std::fs::File::options().write(true).open(path).unwrap()

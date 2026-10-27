@@ -21,6 +21,14 @@ expect_used = "warn"
 panic = "warn"
 dbg_macro = "warn"
 todo = "warn"
+# INV-PROVEN-PANICS
+unreachable = "warn"
+# INV-EVERY-ALLOW-HAS-A-REASON
+allow_attributes_without_reason = "warn"
+# INV-NO-BAGS-OF-BOOLEANS
+struct_excessive_bools = "warn"
+# INV-NO-BAGS-OF-BOOLEANS
+fn_params_excessive_bools = "warn"
 
 # The UI's WebAssembly: smallest code, one unit, link-time optimisation.
 [profile.wasm-release]
@@ -85,6 +93,11 @@ rustix = { version = "1.1.5", features = ["fs"] }
 # Local git (docs/STORAGE.md §9): libgit2 1.9.7 built from source, without TLS. Only
 # tc-door43, which sends sync's fetch and push, adds `features = ["https"]`.
 git2 = { version = "=0.21.0", default-features = false, features = ["vendored-libgit2"] }
+# "Stay signed in" keeps the Door43 token in the computer's credential store (Windows Credential
+# Manager, macOS Keychain, the Secret Service), ruling H11 (rulings/2026-10-25-H11.md).
+keyring = { version = "=4.2.0" }
+# The entry the app reads and writes, over whichever store keyring installed (or a test's mock).
+keyring-core = { version = "=1.0.1" }
 # tc-store: the file watcher of docs/STORAGE.md §11.1 (inotify, FSEvents, ReadDirectoryChangesW).
 notify = "8.2.0"
 

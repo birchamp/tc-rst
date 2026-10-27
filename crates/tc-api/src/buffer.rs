@@ -250,6 +250,7 @@ mod arbitrary {
     impl Arbitrary for FieldPlace {
         type Parameters = ();
         type Strategy = BoxedStrategy<Self>;
+        #[expect(clippy::unreachable, reason = "the pattern is a literal that compiles")]
         fn arbitrary_with((): ()) -> Self::Strategy {
             // Any text a unit could use, `|`, quotes and non-Latin letters included.
             proptest::string::string_regex("[^\\x00-\\x1f\\x7f]{1,40}")

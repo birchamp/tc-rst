@@ -604,7 +604,12 @@ fn other_event(state: &State, event: &Event) -> (State, Vec<Action>) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "test code: a failed unwrap is a failed test"
+    )]
 
     use super::*;
 

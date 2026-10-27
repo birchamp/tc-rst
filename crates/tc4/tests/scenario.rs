@@ -2,7 +2,12 @@
 //! binary starts on a parity scenario's projects, written into its empty projects folder through
 //! tc-store (or held by the memory backend with `--backend memory`, which writes nothing), with
 //! the scenario's sideloaded resources in its own store.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

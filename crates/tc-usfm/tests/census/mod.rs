@@ -2,7 +2,7 @@
 //! generator reached and fails when one was never reached, because a generator that never
 //! builds a state tests nothing about it.
 
-#![allow(clippy::panic)]
+#![allow(clippy::panic, reason = "test code: a failed unwrap is a failed test")]
 
 use proptest::prelude::*;
 use std::cell::RefCell;

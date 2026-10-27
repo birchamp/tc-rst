@@ -10,8 +10,11 @@
 //!
 //! Prints one JSON line per measurement: its name, the runs, and the median and p95.
 
-// A benchmark stops at its first failure, with the reason: nothing to keep going for.
-#![allow(clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a benchmark stops at its first failure, with the reason"
+)]
 
 use std::path::Path;
 use std::sync::Arc;

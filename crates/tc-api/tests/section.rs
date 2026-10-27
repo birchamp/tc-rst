@@ -3,7 +3,12 @@
 //! lists of verses and 249 indents), the ports of tC4's `test/sectionDraft.test.ts`, and
 //! properties: a placement never changes the words, and the Type text is a fixed point.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use std::collections::BTreeMap;
 

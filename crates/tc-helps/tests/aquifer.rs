@@ -2,7 +2,11 @@
 
 // Helpers outside #[test] functions unwrap too; clippy's test exemption covers only
 // #[test] bodies.
-#![allow(clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

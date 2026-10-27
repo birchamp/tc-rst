@@ -1,5 +1,10 @@
 //! Where a load's CPU time goes, one thread: `loadprof <psalms|bible> [parse]`.
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "a benchmark stops at its first failure, with the reason"
+)]
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

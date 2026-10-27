@@ -255,7 +255,6 @@ fn testament_key(book: BookId) -> &'static str {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn chapter_view(
     s: &AppState,
     actions: &Actions,
@@ -819,7 +818,10 @@ fn source_paragraphs(
 /// tC4's `TargetCell`: the section's "Draft section" pill, its verses as paragraphs, and the
 /// verse card under them while one of its verses is open. The paragraphs follow the chapter's
 /// read; the card follows only which verse is open, so a refresh never closes it.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a view's inputs: the state, handles and signals it reads"
+)]
 fn target_cell(
     s: &AppState,
     actions: &Actions,

@@ -199,6 +199,32 @@ pub fn location(place: &RepoPlace) -> String {
     }
 }
 
+/// The names more than one card holds: those cards say where each lives (ruling H14).
+pub fn shared_names(cards: &[HomeCard]) -> Vec<String> {
+    let mut names: Vec<&str> = cards.iter().map(|c| c.name.as_str()).collect();
+    names.sort_unstable();
+    let mut shared: Vec<String> = names
+        .iter()
+        .zip(names.iter().skip(1))
+        .filter(|(a, b)| a == b)
+        .map(|(a, _)| (*a).to_owned())
+        .collect();
+    shared.dedup();
+    shared
+}
+
+/// The second line of a card whose name another card has (ruling H14): "On Door43:
+/// owner/repo" or "Only on this computer". `None` for a name no other card has.
+pub fn where_line(card: &HomeCard, shared: &[String]) -> Option<String> {
+    shared.contains(&card.name).then(|| match &card.door43 {
+        Door43Card::Shared { place } => t(
+            keys::home::WHERE_ON_DOOR43,
+            &[("location", &location(place))],
+        ),
+        Door43Card::Local => t(keys::home::ONLY_HERE, &[]),
+    })
+}
+
 /// The Resume card's title after the project's name: "Titus 1", or "Story 3".
 pub fn resume_place(resume: &LastEditView) -> String {
     match &resume.place {

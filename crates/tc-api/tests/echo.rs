@@ -1,6 +1,11 @@
 //! `test/echo` answers a reply of the size the loopback measurement asks for (unit A2).
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use tc_api::test::{EchoView, MAX_ECHO};
 use tc_api::upload::UploadFlow;

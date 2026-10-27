@@ -1,7 +1,10 @@
 //! Each kind of failure maps to its own error.
 
 // `repo_error` sits outside `#[test]` functions, where clippy.toml already allows unwrap.
-#![allow(clippy::unwrap_used)]
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

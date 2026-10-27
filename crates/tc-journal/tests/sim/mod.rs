@@ -10,7 +10,8 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
-    clippy::large_enum_variant
+    clippy::large_enum_variant,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper; a simulated event's size costs nothing"
 )]
 
 use crate::support::{

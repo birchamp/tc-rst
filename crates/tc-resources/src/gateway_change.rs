@@ -137,7 +137,10 @@ const SIMPLIFIED_PANES: [&str; 2] = ["ust", "gst"];
 fn pane_id(id: &str) -> PaneId {
     match id.parse() {
         Ok(id) => id,
-        // The four gateway pane ids are valid pane ids.
+        #[expect(
+            clippy::unreachable,
+            reason = "the four gateway pane ids are valid pane ids"
+        )]
         Err(_) => unreachable!("pane id {id} must parse"),
     }
 }

@@ -2,7 +2,10 @@
 //! opened, which checkpoints ran and how many closes, with an open or a checkpoint held until
 //! a test lets it go, or a checkpoint made to fail. It knows nothing of the backend inside, so
 //! C0's store instance of the contract suite uses it as the memory instance does.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "test code: a failed unwrap is a failed test, and not every test binary uses each shared helper"
+)]
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex};

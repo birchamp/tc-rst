@@ -15,7 +15,12 @@
 //! team history.
 
 // Helpers outside `#[test]` functions build known-valid values and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod support;
 
@@ -718,7 +723,7 @@ fn edits_joins_renumbers_and_pins_change_files_and_screens_alike() {
     .unwrap()
     {
         Json::Obj(map) => map,
-        _ => unreachable!(),
+        _ => panic!("unexpected"),
     };
     against_fallback.judgement.nothing_to_select = true;
     against_fallback.resource = en_twl;

@@ -252,13 +252,16 @@ pub fn map_reference(from: &Scheme, to: &Scheme, reference: &RowReference) -> Ma
         }
     }
     let reached = candidates(&landings);
+    #[expect(
+        clippy::unreachable,
+        reason = "tc4_verses gives a span only when first <= last, so the loop ran"
+    )]
     let Some(&TcLanding {
         book: first_book,
         chapter: first_chapter,
         ..
     }) = landings.first()
     else {
-        // `tc4_verses` gives a span only when `first <= last`, so the loop ran.
         unreachable!("a span with no verse");
     };
     if landings
@@ -350,8 +353,11 @@ fn finish(to: &Scheme, landing: TcLanding) -> MapOutcome {
             return refuse(absence.into(), reached());
         }
     }
+    #[expect(
+        clippy::unreachable,
+        reason = "a landing holds every target of a Hop, which always has one"
+    )]
     let (Some(&lo), Some(&hi)) = (landing.verses.first(), landing.verses.last()) else {
-        // A landing holds every target of a `Hop`, which always has one.
         unreachable!("a landing with no verse");
     };
     // Verse 0 was refused above, so `lo >= 1` and the range is valid.

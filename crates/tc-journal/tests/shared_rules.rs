@@ -5,7 +5,12 @@
 //! aligned-USFM split.
 
 // Tests build fixed, known-valid values and may fail loudly.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod support;
 

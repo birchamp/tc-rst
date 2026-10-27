@@ -10,7 +10,12 @@
 //! prove that a planted pixel, DOM, meaning or behaviour difference and a screen that reached
 //! the settle deadline fail it.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 #[path = "support/plan_rulings.rs"]
 mod plan_rulings;

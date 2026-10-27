@@ -2,7 +2,12 @@
 //! takes a file's prepared changes from the cache gets exactly what reading and parsing the
 //! file gives, and a cache that does not stand for the file's bytes is never used.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 #![allow(
     clippy::disallowed_methods,
     reason = "test code writes its own fixture and snapshot files, never a project"

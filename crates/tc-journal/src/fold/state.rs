@@ -372,6 +372,10 @@ pub(crate) type ConflictSort = (u8, RecordKey, u8, ConflictId);
 
 /// What the fold made dirty and must recompute.
 #[derive(Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per stage the fold recomputes; any mix can be dirty at once"
+)]
 pub(crate) struct Dirty {
     pub batches: BTreeSet<BatchIdx>,
     pub keys: BTreeSet<KeyIdx>,
@@ -1166,6 +1170,18 @@ impl FoldState {
             }
         }
         out
+    }
+
+    /// §9.5: the batch of change `id` as a link of a large push's chain needs it: its valid
+    /// changes, whether the fold applies it whole, and whether a release names it (then some
+    /// of its changes apply one by one). `None` for a change the fold does not hold.
+    pub fn batch_of(&self, id: &ChangeId) -> Option<super::BatchOf> {
+        let b = self.meta(self.change_idx(id)?).batch;
+        Some(super::BatchOf {
+            members: self.members(b).iter().map(|m| self.meta(*m).id).collect(),
+            whole: self.is_complete(b),
+            released: self.released.get(&self.batch(b).id).is_some(),
+        })
     }
 
     /// F1 for a fold from scratch: the tables [`FoldState::insert`] builds one change at a

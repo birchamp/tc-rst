@@ -8,7 +8,12 @@
 //! reaches the header and the lines, and mix in arbitrary bytes. Each run counts the
 //! statuses it produced and fails when one was never produced (§16.1).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 mod common;
 

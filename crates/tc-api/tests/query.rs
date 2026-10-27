@@ -1,7 +1,12 @@
 //! Which queries a change makes stale (APP-DESIGN §3.6, §6.2): a refresh is never missed
 //! for a part a change names, and a change elsewhere sends no request.
 #![cfg(not(target_arch = "wasm32"))]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: a failed unwrap is a failed test"
+)]
 
 use tc_api::check::{CheckListRef, CheckUnit, Tool};
 use tc_api::event::{Aspect, ChangeParts, ChangeScope, ChapterRef, RecordChange};
