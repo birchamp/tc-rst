@@ -4,7 +4,7 @@ title: A tC3 import keeps the project's language name and direction
 track: A
 lane: app
 milestone: M5
-state: verifying
+state: gating
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-TC3-LANG
 worktree: .worktrees/track-TC3-LANG
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: FIX-R step 1's Settings reader)
 merged: none
 updated: 2026-10-27
-next: Step 3: the three review lenses (loss, races and protocol, browser and parity), then gates.sh --touched with main merged in.
+next: scripts/gates.sh --touched is running on the branch with main merged in; then it waits for a batch.
 blocked_by: none
 ---
 
@@ -72,3 +72,4 @@ Today the name is replaced by the code ("cfm" for "Chin, Falam") in metadata.jso
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | verify | b890cab5 | races and protocol lens (independent subagent): no blocker, no major; 2 minors (a code differing only in case dropped the name and direction: fixed; the test never saves through Settings: logged). §8: 1 Code: typed enum, one entry point; 2 Checks: gate test names both invariants, failed on main, runs in the tc-app suite; 3 Reach: all reachable; 4 Siblings: as the loss lens; 5 No loss: Review and Run parse the same uploads, Run is pure in its inputs, the create stays staged and atomic, settings/save's compare-and-swap holds rtl; 6 Prose: reasons only, no owner question | subagent a287f0b1f629918d7 report
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | verify | b890cab5 | browser and parity lens (independent subagent): no blocker; 1 major (prose: the declared difference was missing from docs/APP-DESIGN.md F1: fixed), 1 minor (letter case: fixed). Journey 832-tc3-rtl-badge on b890cab5 in Chromium passed: Settings language name "Chin, Falam", metadata name.en "Chin, Falam", card LTR before (the fixture says ltr) and RTL after a reload. tC4 d310bf3 src/data/import/tc3.ts:41,261,299-300 and shell.ts:182,186-192 read only target_language.id. §8: 1 Code: good; 2 Checks: four cases, failed on main; 3 Reach: all reachable; 4 Siblings: none new; 5 No loss: create unchanged, Burrito validated; 6 Prose: declared difference added, no owner question | subagent af51b9b7d16d3447c report; node --test docs/evidence/tc4-issues-2026-10-27/repro/832-tc3-rtl-badge.test.mjs
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | the lenses' fixes: the review-step code is compared without regard to letter case (gate test case "CFM"), and docs/APP-DESIGN.md F1 declares the difference from tC4 4.0 with its reason; the save-through-Settings minor is logged | cargo test -p tc-app --test app import::
+- 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-TC3-LANG, main 17c9fb18 merged in | scripts/gates.sh --touched
