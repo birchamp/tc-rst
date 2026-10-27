@@ -443,3 +443,82 @@ async fn a_receive_counts_a_teammates_verse_not_their_pins() {
     a.close().unwrap();
     b.close().unwrap();
 }
+
+/// INV-BOTH-RECORDINGS-STAY (delta §2.14, `rulings/2026-10-22-H19.md`): Ana and Juan each
+/// replace the same recording from the same version; when Ana receives Juan's file, both
+/// recordings stay on her disk, hers at the path and Juan's beside it, and both are listed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_recording_changed_on_both_sides_keeps_both_files_after_a_receive() {
+    let dir = tempfile::tempdir().unwrap();
+    let stick = usb(dir.path());
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let song = "ingredients/audio/TIT_01_01.mp3";
+    let first: Vec<u8> = (0..4_000u32).map(|i| (i * 13 % 251) as u8).collect();
+    let a = open(&ana, &folder_a);
+    std::fs::create_dir_all(folder_a.join("ingredients/audio")).unwrap();
+    std::fs::write(folder_a.join(song), &first).unwrap();
+    tokio::task::block_in_place(|| a.focus().wait().unwrap());
+    a.wait_idle();
+    a.close().unwrap();
+    // Juan starts from the same version of the recording.
+    let juan = computer(dir.path(), "juan");
+    let folder_b = copy_to(&folder_a, &juan);
+    let mine: Vec<u8> = (0..4_000u32).map(|i| (i * 17 % 251) as u8).collect();
+    let theirs: Vec<u8> = (0..5_000u32).map(|i| (i * 19 % 251) as u8).collect();
+    let a = open(&ana, &folder_a);
+    std::fs::write(folder_a.join(song), &mine).unwrap();
+    tokio::task::block_in_place(|| a.focus().wait().unwrap());
+    a.wait_idle();
+    let b = open(&juan, &folder_b);
+    std::fs::write(folder_b.join(song), &theirs).unwrap();
+    tokio::task::block_in_place(|| b.focus().wait().unwrap());
+    b.wait_idle();
+    let from_juan = export(&b, &stick, "Juan").await.unwrap();
+    receive(&a, &from_juan, "Juan").await.unwrap();
+    a.wait_idle();
+    let audio: Vec<(String, Vec<u8>)> = std::fs::read_dir(folder_a.join("ingredients/audio"))
+        .unwrap()
+        .map(|e| {
+            let e = e.unwrap();
+            (
+                e.file_name().to_string_lossy().into_owned(),
+                std::fs::read(e.path()).unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        audio.len(),
+        2,
+        "INV-BOTH-RECORDINGS-STAY: both recordings stay on disk: {:?}",
+        audio.iter().map(|(n, _)| n).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        std::fs::read(folder_a.join(song)).unwrap(),
+        mine,
+        "INV-BOTH-RECORDINGS-STAY: Ana's recording keeps its path"
+    );
+    let copy = audio
+        .iter()
+        .find(|(name, _)| name != "TIT_01_01.mp3")
+        .expect("INV-BOTH-RECORDINGS-STAY: Juan's recording beside Ana's");
+    // The store names the other version `<stem>-<oid8>.<ext>` beside the file.
+    assert!(
+        copy.0.starts_with("TIT_01_01-")
+            && copy.0.ends_with(".mp3")
+            && copy.0.len() == "TIT_01_01-99dc4d43.mp3".len(),
+        "INV-BOTH-RECORDINGS-STAY: the copy is named for its version: {}",
+        copy.0
+    );
+    assert_eq!(
+        copy.1, theirs,
+        "INV-BOTH-RECORDINGS-STAY: the copy holds Juan's bytes"
+    );
+    let metadata = std::fs::read_to_string(folder_a.join("metadata.json")).unwrap();
+    assert!(
+        metadata.contains("TIT_01_01.mp3") && metadata.contains(&copy.0),
+        "INV-BOTH-RECORDINGS-STAY: both are listed"
+    );
+    a.close().unwrap();
+    b.close().unwrap();
+}
