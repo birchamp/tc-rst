@@ -408,6 +408,14 @@ async fn home_shows_no_counts_of_a_project_while_its_leave_runs() {
         .unwrap()
         .unwrap();
     assert_eq!(card.project, folder("sample_burrito"));
+    let mut back = false;
+    for () in crate::store_world::for_a_minute() {
+        if known(&post(&f.t.app, &tc_api::home::List {}).await.unwrap()) {
+            back = true;
+            break;
+        }
+    }
+    assert!(back, "the counts are known again once the leave has ended");
 }
 
 #[tokio::test]
