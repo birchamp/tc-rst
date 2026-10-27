@@ -4,7 +4,7 @@ title: First release candidate (4.1.0): the cut scope green, the owner's reviews
 track: A
 lane: integration
 milestone: M5
-state: claimed
+state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-REL-1
 worktree: .worktrees/track-REL-1
@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-27
-next: step 1
+next: step 2, then step 3 on this branch (its push runs release.yml unsigned)
 blocked_by: none
 ---
 
@@ -56,3 +56,5 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | ruling | none | depends gains FIX-KEPT-EVENT, on the orchestrator's word: a copy kept just after an open was not told until a reload | message from the orchestrator, 2026-10-26
 - 2026-10-26 23:31 EDT | storage lane (Claude Code LOSS-2) | note | none | depends gains LOSS-2 (two store losses the model test excused), on the orchestrator's word: "REL-1 waits for it" | message from the orchestrator, 2026-10-26
 - 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | Claimed on branch track-REL-1 from main b9d42bb4 (batch 36b), the orchestrator's go | python3 -I .audit/tools/board.py
+- 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | b9d42bb4 | All 41 cards in depends are done on main b9d42bb4, except UI-3, which is parked because it was split into UI-3a and UI-3b, both done. The board reads 75 cards, 0 errors, 4 warnings (stale updated dates on T and X, and two more). Green on b9d42bb4: ci 40480182362 (test, test-app, parity-baseline, alignment-budget, lint-linux, lint-windows, lint-wasm), app-e2e 40480182382 (journeys) and shell 40480182361 (unit, builds, e2e-linux, e2e-windows, e2e-macos) | scripts/gates.sh --check-receipt b9d42bb4
+- 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | note | none | release.yml has never passed: 30 failed runs and 1 cancelled. The late G3 runs and gate/batch-7 failed only at translations, which is expected off a tag while 264 keys are English (H10). Since run 40349886927, common also fails: notices.test.mjs runs cargo offline, and adler2 (a test-only crate the screen record added in 8412f07f) is never downloaded by the job's builds. Fixed: common runs cargo fetch --locked first. Locally the test passes after a fetch (3 of 3) | node --test scripts/release/notices.test.mjs
