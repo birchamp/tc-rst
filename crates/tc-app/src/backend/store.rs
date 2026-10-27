@@ -1089,6 +1089,7 @@ fn reply(reply: tc_store::StoreReply) -> StoreReply {
         changes: reply.changes,
         skipped: reply.skipped,
         kept: reply.kept,
+        dropped_links: reply.dropped_links,
     }
 }
 

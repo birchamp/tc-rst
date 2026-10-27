@@ -67,6 +67,24 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Polls `read` until it gives something truthy; fails after `ms` with `what`. The bound only
  * catches a hang, never slowness: a loaded runner took over 10 s for waits that pass in 1 s
  * (ruling 2026-10-23, tests prove behavior, not speed). */
+/**
+ * A field's computed `tab-size` in its own `ch` (`2ch`), or as the browser gives it when it is a
+ * count of spaces (`8`): Chromium computes a length in px.
+ */
+export async function tabSize(field) {
+  return field.evaluate((el) => {
+    const size = getComputedStyle(el).tabSize;
+    if (!size.endsWith('px')) return size;
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;width:1ch;display:inline-block';
+    probe.style.font = getComputedStyle(el).font;
+    el.parentNode.append(probe);
+    const ch = probe.getBoundingClientRect().width;
+    probe.remove();
+    return `${Math.round((parseFloat(size) / ch) * 100) / 100}ch`;
+  });
+}
+
 export async function until(what, read, ms = 60_000) {
   const stop = Date.now() + ms;
   let last;

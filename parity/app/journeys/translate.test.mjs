@@ -8,7 +8,7 @@
 //     node --test parity/app/journeys/translate.test.mjs
 import assert from 'node:assert/strict';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, until, withApp } from './kit.mjs';
+import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, tabSize, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const titus = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ });
@@ -230,6 +230,42 @@ browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
   });
 });
 
+// tC4 #829: a poem level is two characters wide, and Tab and Shift+Tab indent the caret's line
+// as in the section card instead of leaving the card; Escape leaves it and saves, as a blur does.
+// The verse's first line is the verse's own, whose format the card does not hold: Tab leaves it.
+browserTest('tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    await teammateWrites(env, 4, 'a Tito,\n\\q2 mi verdadero hijo\n\\q1 en la fe común');
+    await openVerse(page, 4);
+    const field = box(page, 4);
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\ten la fe común');
+    assert.equal(await tabSize(field), '2ch');
+    const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    await field.press('Control+End');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4', 'Tab keeps the focus');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común', 'at most three tabs');
+    await field.press('Shift+Tab');
+    await page.keyboard.type(':');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    await field.press('Control+Home');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:', 'the first line stays');
+    await field.press('Escape');
+    await field.waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    // The read shows the saved words as the card does, each `\\q2` line as two tabs.
+    assert.equal((await verse(env, 4)).words.value, 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    assert.equal((await verse(env, 4)).text, 'a Tito, mi verdadero hijo en la fe común:');
+  });
+});
+
 // AD37: a card with no input takes a teammate's change whole, value and token together.
 browserTest('refresh_under_open_clean_editor_swaps_value_and_token_together', async () => {
   await withApp(async ({ page, env }) => {
@@ -408,4 +444,43 @@ browserTest('app_language_i_scripture_follows_the_project_under_an_arabic_interf
     assert.equal(await direction(card), 'ltr');
     assert.equal(await card.getAttribute('dir'), 'ltr');
   }, { locale: 'ar' });
+});
+
+// tC4 #825, LINK-DROP: Titus 1:1 reads "Dios y Dios y y Dios" with only the first Dios linked
+// (to Θεοῦ). Saved in Translate as "y y Dios y", the text cannot say where that Dios went, so
+// the store sends the link back to the word bank; Translate names it in Align's words until
+// the person dismisses it.
+browserTest('a_translate_save_names_the_link_it_sends_back_to_the_bank', async () => {
+  await withApp(async ({ page, env }) => {
+    const placed = () => page.locator('[data-testid^="align-card-"] button[data-word]');
+    const chipOf = (word) => page.locator(`[data-testid="align-bank"] > button[data-word="${word}"]`).first();
+    await titus(page).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
+    await teammateWrites(env, 1, 'Dios y Dios y y Dios');
+    await page.getByRole('tab', { name: 'Check', exact: true }).click();
+    await page.getByTestId('open-align').click();
+    await page.getByTestId('align-bank').waitFor();
+    while ((await placed().count()) > 0) {
+      const n = await placed().count();
+      await placed().first().click();
+      await until('one sent back', async () => (await placed().count()) < n);
+    }
+    await chipOf('Dios').click();
+    await until('Dios chosen', async () => (await chipOf('Dios').getAttribute('data-armed')) === '1');
+    // The third card is Θεοῦ.
+    await page.locator('[data-testid^="align-card-"]').nth(2).click();
+    await until('one placed', async () => (await placed().count()) === 1);
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await page.getByTestId('mode-switch').getByRole('tab', { name: 'Translate' }).click();
+    await openVerse(page, 1);
+    assert.equal(await page.getByTestId('translate-dropped').count(), 0);
+    await box(page, 1).fill('y y Dios y');
+    await page.getByRole('button', { name: 'Save verse' }).click();
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    const notice = page.getByTestId('translate-dropped');
+    await notice.waitFor();
+    assert.match(await notice.textContent(), /Sent back to the word bank after the text changed: Dios \(Titus 1:1\)/);
+    await notice.getByRole('button', { name: 'Dismiss' }).click();
+    await notice.waitFor({ state: 'detached' });
+  });
 });

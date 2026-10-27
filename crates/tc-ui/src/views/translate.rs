@@ -23,6 +23,7 @@ use tc_api::editor::{
 use tc_api::event::{ChangeScope, Event, SessionEvent};
 use tc_api::helps::Passage;
 use tc_api::ids::{Scope, ViewSeq};
+use tc_api::model::section::indent_verse_line;
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use tc_core::{BookId, Testament};
 use wasm_bindgen::JsCast;
@@ -448,6 +449,7 @@ fn chapter_view(
             .unwrap_or_default();
         view! { <HelpsPanel chapter=chapter focus_verses=focus_verses helps=helps pane=pane comments=comments /> }
     };
+    let dropped = dropped_links(runtime.saves().dropped(), open.at.clone());
     view! {
         <main style=main.to_style()>
             <div style=bar.to_style()>
@@ -457,6 +459,7 @@ fn chapter_view(
                 {button}
                 <HelpsToggleButton />
             </div>
+            {dropped}
             <div style=scroll.to_style()>
                 <div style=grid.to_style()>
                     {tabs}
@@ -468,6 +471,46 @@ fn chapter_view(
         {panel}
     }
     .into_any()
+}
+
+/// The links a save sent back to the word bank, in Align's words, with the verse each was in,
+/// until the person dismisses them: a link never goes back silently (tC4 #825, owner answer
+/// Q30 (a)). Only the links of the open shown are listed; another project's stay its own.
+fn dropped_links(
+    dropped: ArcRwSignal<Vec<(Scope, tc_api::write::DroppedLinks)>>,
+    at: Scope,
+) -> impl IntoView {
+    move || {
+        let words = dropped.with(|d| {
+            d.iter()
+                .filter(|(scope, _)| *scope == at)
+                .map(|(_, v)| v)
+                .flat_map(|v| {
+                    v.links.iter().map(move |l| {
+                        format!(
+                            "{} ({} {}:{})",
+                            l.word.word,
+                            v.book.english_name(),
+                            v.chapter,
+                            v.verse
+                        )
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        (!words.is_empty()).then(|| {
+            let (dropped, at) = (dropped.clone(), at.clone());
+            let dismiss =
+                Callback::new(move |_| dropped.update(|d| d.retain(|(scope, _)| *scope != at)));
+            view! {
+                <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "10px 22px 0", "flex": "none" } attrs=Attrs::from([("role", "status"), ("data-testid", "translate-dropped")])>
+                    {t(keys::align::DROPPED_LINKS, &[("words", &words)])}" "
+                    <Button variant=ButtonVariant::Ghost size=Size::Sm on_click=dismiss>{t(keys::common::DISMISS, &[])}</Button>
+                </Callout>
+            }
+        })
+    }
 }
 
 /// tC4's `SourceTabs`: a chip per source pane and the original's, the chosen text's name and
@@ -1245,6 +1288,27 @@ fn VerseEditor(
         let actions = actions.clone();
         move || actions.close_verse()
     };
+    let on_key = {
+        let saves = SendWrapper::new(saves.clone());
+        let key = SendWrapper::new(key.clone());
+        move |event: leptos::ev::KeyboardEvent| {
+            // Tab indents here (tC4 #829), so Escape is the keyboard's way out: it leaves the
+            // field as tC4's Tab did, which saves and closes the card (a declared difference).
+            if event.key() == "Escape" && !event.is_composing() {
+                if let Some(el) = area.get_untracked() {
+                    let _ = el.blur();
+                }
+                return;
+            }
+            if let Some(next) = crate::views::section_editor::tab_indent(
+                &event,
+                area.get_untracked(),
+                indent_verse_line,
+            ) {
+                saves.typed(&key, &next, Source::Program);
+            }
+        }
+    };
     let on_blur = {
         let close = close.clone();
         move |_: leptos::ev::FocusEvent| close()
@@ -1267,6 +1331,7 @@ fn VerseEditor(
         "border": 0,
         "outline": "none",
         "resize": "vertical",
+        "tab-size": "2ch",
     };
     field.extend(&target_type());
     field.extend(&crate::css! { "color": "var(--text-scripture)", "background": "transparent" });
@@ -1298,6 +1363,7 @@ fn VerseEditor(
             on:focus=on_focus
             on:blur=on_blur
             on:compositionstart=on_composition
+            on:keydown=on_key
         >
             {initial}
         </textarea>

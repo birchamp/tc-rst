@@ -22,7 +22,7 @@ use tc_store::{FakePlatform, Hooks, Point};
 
 use super::super::common::{Parts, TestApp, folder, post};
 use super::super::scenario::scenario;
-use super::{SAMPLE, edit, place, ready, request};
+use super::{SAMPLE, edit, flush, place, ready, request};
 use crate::store_world::{APP, PROJECTS, START_MS, assert_valid_burrito, backend_over, progress};
 
 struct Rig {
@@ -664,4 +664,125 @@ async fn an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen() 
     drop(read);
     drop(session);
     rig.t.app.quit().await;
+}
+
+/// Titus 1:1 saved in Translate as `first`, with every link cleared and only its first Dios
+/// placed on Θεοῦ, then saved as `then`: the reply to the second save.
+async fn translate_save_over_one_dios_link(
+    first: &'static str,
+    then: &'static str,
+    by_section: bool,
+) -> tc_api::write::Ack {
+    use tc_api::editor::SaveVerse;
+    let rig = Rig::new().await;
+    let session = rig.open().await;
+    let at = session.scope().clone();
+    let key = RecordKey::Verse(
+        BookId::Titus,
+        ChapterNo::new(1).unwrap(),
+        VerseNo::new(1).unwrap(),
+    );
+    let app = &rig.t.app;
+    let save = |n: u8, words: &'static str| {
+        let token = session.read().mint(&key, None).unwrap();
+        let request = SaveVerse {
+            at: at.clone(),
+            request: request(n),
+            shown: tc_app::wire::token::shown(&token).unwrap(),
+            words: words.to_owned(),
+        };
+        async move { post(app, &request).await }
+    };
+    let _: tc_api::write::Ack = save(250, first).await.unwrap();
+    let mut view = ready(app, &at, 1, 1).await;
+    let placed: Vec<_> = view
+        .cards
+        .iter()
+        .flat_map(|c| c.placed.iter().map(move |w| (c.index, w.clone())))
+        .collect();
+    for (card, word) in placed {
+        view = edit(app, &at, &view, 251, AlignEdit::Unplace { card, word })
+            .await
+            .unwrap();
+    }
+    let view = place(app, &at, &view, 240, "Dios", "Θεοῦ").await;
+    assert_eq!(view.placed, 1, "{:?}", view.cards);
+    assert_eq!(flush(app, &at, 242).await, AlignSave::Saved);
+    assert!(has_link(&stored(&session), "Θεοῦ", "Dios"));
+    let ack: tc_api::write::Ack = if by_section {
+        let view: tc_api::editor::ChaptersView = post(
+            app,
+            &tc_api::editor::Chapters {
+                at: at.clone(),
+                book: BookId::Titus,
+            },
+        )
+        .await
+        .unwrap();
+        let one = view.chapters[0]
+            .verses
+            .iter()
+            .find(|v| v.key.as_str() == "1")
+            .unwrap();
+        post(
+            app,
+            &tc_api::editor::SaveSection {
+                at: at.clone(),
+                request: request(243),
+                book: BookId::Titus,
+                displayed: vec![one.words.token.clone()],
+                text: format!("1 {then}"),
+            },
+        )
+        .await
+        .unwrap()
+    } else {
+        save(243, then).await.unwrap()
+    };
+    assert!(
+        !has_link(&stored(&session), "Θεοῦ", "Dios"),
+        "the text cannot say where the linked Dios went"
+    );
+    ack
+}
+
+fn assert_names_one_dios(ack: &tc_api::write::Ack) {
+    let words: Vec<_> = ack
+        .dropped
+        .iter()
+        .flat_map(|v| v.links.iter().map(|l| l.word.word.as_str()))
+        .collect();
+    assert_eq!(
+        words,
+        ["Dios"],
+        "INV-NO-SILENT-LINK-DROP: the reply names the link it sent back: {ack:?}"
+    );
+    let verse = &ack.dropped[0];
+    assert_eq!(
+        (verse.book, verse.chapter, verse.verse),
+        (BookId::Titus, 1, 1)
+    );
+}
+
+/// tC4 #825: a Translate save whose new text cannot say where a linked word went (a move-rule
+/// tie) sends that link back to the bank, and the save's reply names it, so Translate can tell
+/// the person. The issue's own case: `Dios y Dios y y Dios`, saved as `y y Dios y`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_translate_save_names_the_link_a_tie_sends_back_to_the_bank() {
+    let ack = translate_save_over_one_dios_link("Dios y Dios y y Dios", "y y Dios y", false).await;
+    assert_names_one_dios(&ack);
+}
+
+/// tC4 #820: `Dios Dios` saved as `Dios Pablo`; which Dios stayed is ambiguous.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_translate_save_names_the_link_an_ambiguous_replacement_sends_back() {
+    let ack = translate_save_over_one_dios_link("Dios Dios", "Dios Pablo", false).await;
+    assert_names_one_dios(&ack);
+}
+
+/// The same through the section card's save (`editor/saveSection`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_section_save_names_the_link_it_sends_back_to_the_bank() {
+    let ack = translate_save_over_one_dios_link("Dios y Dios y y Dios", "y y Dios y", true).await;
+    assert_names_one_dios(&ack);
 }
