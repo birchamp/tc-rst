@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::resources::{
-    GatewayPackage, PackageRole, PackageRow, RepoMove, SetOffer, SetRung, SourceGateway, TextKind,
-    TextOffer,
+    Downloaded, GatewayPackage, PackageRole, PackageRow, RepoMove, SetOffer, SetRung,
+    SourceGateway, TextKind, TextOffer,
 };
 use tc_api::shown::Direction;
 use tc_core::BookId;
@@ -627,9 +627,15 @@ fn footer(
     let lang = g.autonym.clone();
     let status = move || {
         match state.get() {
-        (Some(Dl::Done), _, book) => Some(view! {
+        (Some(Dl::Done(done)), _, book) => Some(view! {
             <span data-testid="sources-done" style="font-size: var(--fs-caption-lg); letter-spacing: var(--track-12-5); font-weight: var(--fw-heavy); color: var(--tc-valid-strong);">
-                {t(keys::sources::READY, &[("book", &book.english_name()), ("lang", &lang)])}
+                {t(
+                    match done {
+                        Downloaded::Fetched => keys::sources::READY,
+                        Downloaded::AlreadyHere => keys::sources::ALREADY_HERE,
+                    },
+                    &[("book", &book.english_name()), ("lang", &lang)],
+                )}
             </span>
         }
         .into_any()),

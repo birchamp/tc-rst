@@ -713,9 +713,12 @@ impl App {
             kind,
         );
         // With no stamp no summary can be said to be the folder's, and none could be kept.
-        let summary = peek
-            .stamp
-            .and_then(|stamp| match self.inner.home.get(entry, stamp) {
+        // `session/close` answers before its leave writes the derived files, so a summary
+        // read meanwhile would show the progress from before the last edits as known; the
+        // leave's end sends `Event::HomeCard`, and `home/card` reads after it.
+        let leaving = self.inner.sessions.leaving().contains(&entry.folder);
+        let summary = peek.stamp.filter(|_| !leaving).and_then(|stamp| {
+            match self.inner.home.get(entry, stamp) {
                 Lookup::Ready(summary) => Some(summary),
                 Lookup::Failed => None,
                 Lookup::Missing => {
@@ -730,7 +733,8 @@ impl App {
                     }
                     kept
                 }
-            });
+            }
+        });
         let card = card(
             entry,
             &facts,
@@ -828,6 +832,7 @@ impl Handle<List> for App {
 impl Handle<Card> for App {
     async fn handle(&self, req: Card) -> Result<HomeCard, ApiError> {
         let folder = req.project;
+        self.inner.sessions.settled(&folder).await;
         // The card's project as the last listing named it, so a card's read costs its own
         // files and no listing (§8.2); a folder Home has not listed yet is looked for.
         let listed = self.inner.home.listed(&folder);

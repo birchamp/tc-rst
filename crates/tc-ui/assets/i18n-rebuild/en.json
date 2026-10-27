@@ -256,6 +256,7 @@
   "settings.directionNotSaved": "The text direction was not saved. Nothing was changed.",
   "settings.fontNotSaved": "The font was not saved. Nothing was changed.",
   "settings.fontNotSavedAfterDirection": "The font was not saved. The text direction was saved.",
+  "sources.alreadyHere": "✓ {book} · {lang} is already on this computer",
   "syncResult.alignmentsMany": "{n} verses have two alignments to review.",
   "syncResult.alignmentsOne": "1 verse has two alignments to review.",
   "syncResult.error.keptStopped": "Your teammates' changes were received and kept, but the sync stopped. Ask for help.",

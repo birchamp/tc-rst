@@ -255,6 +255,7 @@
   "settings.directionNotSaved",
   "settings.fontNotSaved",
   "settings.fontNotSavedAfterDirection",
+  "sources.alreadyHere",
   "syncResult.alignmentsMany",
   "syncResult.alignmentsOne",
   "syncResult.error.keptStopped",

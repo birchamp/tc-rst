@@ -197,7 +197,10 @@ impl Handle<Compose> for App {
         let line = feedback::version_line(&inner.config.build, &feedback::platform());
         let report = inner.reports.to_attach(req.report);
         Ok(FeedbackDraft {
-            attachment: feedback::attachment_text(&line, report.as_ref()),
+            attachment: feedback::redact(
+                &feedback::attachment_text(&line, report.as_ref()),
+                inner.home_folder.as_deref(),
+            ),
         })
     }
 }

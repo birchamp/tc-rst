@@ -11,9 +11,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { REPO } from '../env-rust.mjs';
 import { browserTest, catalog, sleep, until, withApp } from './kit.mjs';
 
 const en = catalog('en');
+const rebuild = JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'en.json'), 'utf8'));
+const doneLine = (key) => key.replace('{book}', 'Titus').replace('{lang}', 'English');
 const BIBLE = 'sample_burrito';
 const settings = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: en['home.settings'], exact: true });
 const apiRequests = async (door43) => (await door43.requests()).filter((r) => r.path.startsWith('/api/'));
@@ -82,11 +85,35 @@ browserTest('j3_a_download_from_the_seeded_fake_installs_the_pinned_version', as
     await finished.waitFor({ timeout: 60_000 });
     assert.equal(await page.getByTestId('sources-error').count(), 0,
       `the download says no failure: ${await finished.textContent()}`);
+    assert.equal(await finished.textContent(), doneLine(en['sources.ready']), 'a download that fetched says ready');
     assert.equal(installs(env, 'unfoldingWord', 'en_ult').length, 1, 'the source text is installed');
     assert.ok((await env.door43.requests()).some((r) => r.path.startsWith('/unfoldingWord/en_ult/')), 'the text came from the fake');
     const [installed] = installs(env, 'unfoldingWord', 'en_ult');
     assert.equal(installed.sha, pinned.sha, 'the install on disk is the pinned commit');
     assert.equal(installed.version, pinned.version, 'at the pinned version');
+  }, { door43: true });
+});
+
+// Owner, 2026-10-27 (4.1.0-preview tester): English comes with the app, so its download fetches
+// nothing and says so, where tC4 says "is ready" (declared difference download-already-here).
+browserTest('a package already on this computer says so and fetches nothing', async () => {
+  await withApp(async ({ page, env }) => {
+    await settings(page).click();
+    await page.getByTestId('settings-manage-sources').click();
+    await page.getByTestId('sources-modal').waitFor();
+    await page.getByTestId('understand').waitFor();
+    await page.getByTestId('sources-modal').getByText('English', { exact: true }).first().click();
+    await page.getByTestId('net-ask').waitFor();
+    await page.getByTestId('net-confirm').click();
+    const download = page.getByTestId('sources-download');
+    await download.waitFor();
+    await env.door43.clear();
+    await download.click();
+    const finished = page.getByTestId('sources-done').or(page.getByTestId('sources-error'));
+    await finished.waitFor({ timeout: 60_000 });
+    assert.equal(await finished.textContent(), doneLine(rebuild['sources.alreadyHere']));
+    const fetched = (await env.door43.requests()).filter((r) => !r.path.startsWith('/api/'));
+    assert.deepEqual(fetched, [], 'nothing was downloaded');
   }, { door43: true });
 });
 

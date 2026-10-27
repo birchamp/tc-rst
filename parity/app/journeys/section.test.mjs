@@ -347,6 +347,35 @@ browserTest('break_a_span_with_two_clicks', async () => {
   });
 });
 
+// tC4 D70.3: a span breaks with a drag too: press its number, move, release on the word.
+browserTest('break_a_span_by_dragging_its_number', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTitus2(page);
+    await draftTwoVerses(page);
+    await pill(page, '9–10').click();
+    await page.getByRole('tab', { name: 'Place verse numbers' }).click();
+    await words(page).getByRole('button', { name: 'Move where verse 10 begins' }).click();
+    await page.getByRole('button', { name: 'Join verse 10 to verse 9 at Exhorta' }).click();
+    await saveButton(page).click();
+    await card(page).waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await pill(page, '9-10').click();
+    await page.getByRole('tab', { name: 'Place verse numbers' }).click();
+    const from = await words(page).getByRole('button', { name: 'Move where verse 10 begins' }).boundingBox();
+    const to = await words(page).getByText('no', { exact: true }).boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.mouse.up();
+    assert.equal(await bank(page).getByText('Click the word where verse 10 begins').isVisible(), false, 'the release placed it');
+    await saveButton(page).click();
+    await card(page).waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verseOf(env, '9')).words.value, NINE);
+    assert.equal((await verseOf(env, '10')).words.value, TEN);
+  });
+});
+
 // #575: the blank line a paragraph left between two verses is one space once they are a span.
 browserTest('joined_span_collapses_blank_lines_to_one_space', async () => {
   await withApp(async ({ page, env }) => {

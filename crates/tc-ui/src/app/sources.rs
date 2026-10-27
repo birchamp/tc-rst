@@ -163,7 +163,7 @@ pub enum Dl {
         job: JobId,
         repo: Option<String>,
     },
-    Done,
+    Done(tc_api::resources::Downloaded),
 }
 
 /// tC4's `src`: kept across the dialog's openings, as tC4 keeps it.

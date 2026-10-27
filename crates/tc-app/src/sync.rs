@@ -12,7 +12,7 @@ use tc_api::ApiError;
 use tc_api::door43::{LastSyncView, SyncProject};
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobKind, Phase, SyncPhase, SyncResultView};
-use tc_api::shown::PersonLabel;
+use tc_api::shown::{Computer, PersonLabel, Who};
 use tc_journal::change::ChangeBody;
 use tc_journal::fold::{ConflictCounts, ConflictKind};
 use tc_journal::{ChangeId, DeviceId};
@@ -95,6 +95,7 @@ pub fn synced_view(
             from.push(label);
         }
     }
+    sort_senders(&mut from);
     let (replaced, records) = replaced(snapshot, received, &labels);
     let saves = work
         .iter()
@@ -115,6 +116,23 @@ pub fn synced_view(
         replaced,
         hand_edited: Vec::new(),
     }
+}
+
+/// Names first, by name, then unnamed teammates by number: by device, the toast's order changed
+/// from run to run, since device ids are random.
+fn sort_senders(from: &mut [PersonLabel]) {
+    from.sort_by_key(|label| {
+        let (rank, name, n) = match &label.who {
+            Who::Mine => (0, String::new(), 0),
+            Who::Username(name) | Who::DisplayName(name) => (1, name.to_lowercase(), 0),
+            Who::Teammate(n) => (2, String::new(), *n),
+        };
+        let computer = match label.computer {
+            None | Some(Computer::This) => 0,
+            Some(Computer::Other(n)) => n,
+        };
+        (rank, name, n, computer)
+    });
 }
 
 /// Owner ruling H5: each received change that won as the newest over another version, by who
@@ -663,7 +681,32 @@ mod tests {
     use tc_journal::record::PinGroupValue;
     use tc_journal::{Json, Record};
 
-    use super::was_of;
+    use super::{sort_senders, was_of};
+
+    #[test]
+    fn senders_are_named_in_name_order_whatever_their_devices() {
+        use tc_api::shown::{PersonLabel, Who};
+        let label = |who| PersonLabel {
+            who,
+            computer: None,
+        };
+        let mut from = vec![
+            label(Who::Teammate(1)),
+            label(Who::Username("teammate-2".to_owned())),
+            label(Who::DisplayName("Ana".to_owned())),
+            label(Who::Username("teammate-1".to_owned())),
+        ];
+        sort_senders(&mut from);
+        assert_eq!(
+            from,
+            vec![
+                label(Who::DisplayName("Ana".to_owned())),
+                label(Who::Username("teammate-1".to_owned())),
+                label(Who::Username("teammate-2".to_owned())),
+                label(Who::Teammate(1)),
+            ]
+        );
+    }
 
     fn setting(key: &str, text: &str) -> Record {
         Record::Setting {

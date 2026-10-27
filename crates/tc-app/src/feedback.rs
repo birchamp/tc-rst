@@ -47,6 +47,70 @@ pub fn attachment_text(version_line: &str, report: Option<&OperationReport>) -> 
     )
 }
 
+/// The attachment with the person's home folder as `~` and their account name as `<user>`
+/// wherever it is a whole path segment (`/media/ana`, `D:\\Users\\Ana`), so neither leaves the
+/// computer. A declared difference from tC4, which sends its report's paths whole. Both
+/// separators are matched, and doubled backslashes, as JSON writes a Windows path; letters
+/// are matched without regard to ASCII case, as Windows and macOS name folders.
+pub fn redact(text: &str, home: Option<&std::path::Path>) -> String {
+    let Some(home) = home.and_then(std::path::Path::to_str) else {
+        return text.to_owned();
+    };
+    let home = home.trim_end_matches(['/', '\\']);
+    let Some(name) = home.rsplit(['/', '\\']).next().filter(|n| n.len() > 1) else {
+        return text.to_owned();
+    };
+    let is_separator = |c: Option<char>| matches!(c, Some('/' | '\\'));
+    let ends_segment =
+        |c: Option<char>| !c.is_some_and(|c| c.is_alphanumeric() || "-_.".contains(c));
+    let mut out = text.to_owned();
+    for form in [
+        home.replace('\\', "/"),
+        home.replace('/', "\\"),
+        home.replace('/', "\\").replace('\\', "\\\\"),
+    ] {
+        out = replace_ignoring_case(&out, &form, |_, after| ends_segment(after), "~");
+    }
+    replace_ignoring_case(
+        &out,
+        name,
+        |before, after| is_separator(before) && ends_segment(after),
+        "<user>",
+    )
+}
+
+/// `text` with each match of `needle` (ASCII case aside) replaced by `with`, where `keep` holds
+/// of the characters just before and after it.
+fn replace_ignoring_case(
+    text: &str,
+    needle: &str,
+    keep: impl Fn(Option<char>, Option<char>) -> bool,
+    with: &str,
+) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = 0;
+    let mut at = 0;
+    while at + needle.len() <= text.len() {
+        let hit = text.is_char_boundary(at)
+            && text.is_char_boundary(at + needle.len())
+            && text[at..at + needle.len()].eq_ignore_ascii_case(needle)
+            && keep(
+                text[..at].chars().next_back(),
+                text[at + needle.len()..].chars().next(),
+            );
+        if hit {
+            out.push_str(&text[rest..at]);
+            out.push_str(with);
+            at += needle.len();
+            rest = at;
+        } else {
+            at += 1;
+        }
+    }
+    out.push_str(&text[rest..]);
+    out
+}
+
 /// tC4's `Report` shape (`tC4:src/data/journal/runtime.ts:261-272`), in its key order: `op`,
 /// `ok`, `code` when a refusal has one, `facts`, `startedAt`, `endedAt`. tC4's `rule` has no
 /// counterpart here; the rebuild adds `key` (the refusal's sentence) and `reason` (what failed
