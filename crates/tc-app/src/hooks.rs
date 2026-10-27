@@ -957,6 +957,9 @@ impl Handle<Reset> for App {
         self.inner.replies.forget_settled();
         // Holds go next: a held operation could keep a session from closing.
         hooks.holds.release_all();
+        // A released open would otherwise record its project's last use after the prefs reset,
+        // and the next case's Home would list that project first.
+        self.inner.jobs.cancel_all().await;
         // Every session closes after its leave checkpoint, then every project goes back to
         // its seed. Epochs go on counting, so a page from before the reset is stale.
         self.inner.sessions.close_all().await;

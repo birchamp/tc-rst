@@ -26,6 +26,7 @@ use crate::views::item_nav::{Which, item_nav_button};
 /// What is on the screen where the aligner goes: loading, a failure with a Retry, why there is
 /// nothing to align, or the verse (tC4's `Align` and `AlignBlocked`).
 pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl IntoView + use<> {
+    let question = leave_question(s, actions);
     let (s, actions) = (s.clone(), actions.clone());
     // Through a Memo, so that the verse redraws when the cap changes, not on every read of the
     // open sessions (a drag in progress or the focus would go with it).
@@ -67,7 +68,24 @@ pub fn align_session(s: &AppState, actions: &Actions, book: BookId) -> impl Into
             Screen::Ready(view) => ready(&s, &actions, cap.get(), book, *view),
         }
     };
-    (read_only, notice, screen).into_any()
+    (read_only, notice, screen, question).into_any()
+}
+
+/// Home's question when a click cannot be saved (owner ruling ALIGN-LEAVE). Escape stays.
+fn leave_question(s: &AppState, actions: &Actions) -> impl IntoView + use<> {
+    let asking = s.a.leave_ask.clone();
+    let (stay, go) = (actions.clone(), actions.clone());
+    crate::ds::ConfirmDialog(crate::ds::ConfirmDialogProps {
+        open: Signal::derive(move || asking.get()),
+        title: t(keys::align::leave::TITLE, &[]),
+        description: Some(t(keys::align::leave::BODY, &[])),
+        consequence: None,
+        confirm_label: Some(t(keys::align::leave::LEAVE, &[])),
+        cancel_label: Some(t(keys::align::leave::STAY, &[])),
+        destructive: true,
+        on_confirm: Some(Callback::new(move |()| go.answer_align_leave(true))),
+        on_cancel: Some(Callback::new(move |()| stay.answer_align_leave(false))),
+    })
 }
 
 fn notice_box() -> Css {

@@ -257,14 +257,14 @@ pub fn export_items(kind: ProjectKind, pdf_bridge: bool) -> Vec<Key> {
     items
 }
 
-/// The producer behind an export menu item; `None` for the Burrito zip, which stays off until
-/// E2 builds the exchange file.
+/// The producer behind an export menu item.
 pub fn producer_of(item: Key) -> Option<Producer> {
     Some(match item {
         keys::cc::EXPORT_PDF => Producer::PrintHtml,
         keys::cc::EXPORT_USFM_ALIGNED => Producer::AlignedUsfm,
         keys::cc::EXPORT_USFM_PLAIN => Producer::PlainUsfm,
         keys::cc::EXPORT_STORY_MARKDOWN => Producer::StoryMarkdown,
+        keys::cc::EXPORT_BURRITO_ZIP => Producer::BurritoZip,
         _ => return None,
     })
 }

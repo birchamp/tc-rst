@@ -360,7 +360,11 @@ browserTest('app_language_e_a_verse_typed_before_the_switch_survives_it', async 
     await until('the note is saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
     await page.getByTestId('mode-switch').getByRole('tab', { name: en['nav.draft'] }).click();
     await page.getByRole('tab', { name: 'Verse', exact: true }).click();
+    // The fifteen rows of Titus 2 are listed before the first row's button is pressed: a
+    // press on a row the list was still replacing opened no card (CI, 2026-10-26).
+    await until('the verses of Titus 2 are listed', async () => (await page.getByRole('button', { name: 'start this verse' }).count()) === 15);
     await page.getByRole('button', { name: 'start this verse' }).first().click();
+    await box(page, 1).waitFor();
     await box(page, 1).fill(TEXT);
     // Opening the menu leaves the card: its blur saves the text.
     await openLanguage(page);

@@ -236,7 +236,7 @@ fn the_export_menu_lists_the_producers_that_apply() {
 }
 
 #[test]
-fn every_export_item_but_the_burrito_zip_runs_its_producer() {
+fn every_export_item_runs_its_producer() {
     let runs = |kind| -> Vec<(String, Option<Producer>)> {
         export_items(kind, true)
             .into_iter()
@@ -249,7 +249,10 @@ fn every_export_item_but_the_burrito_zip_runs_its_producer() {
             ("Export PDF".to_owned(), Some(Producer::PrintHtml)),
             ("USFM, aligned".to_owned(), Some(Producer::AlignedUsfm)),
             ("USFM, plain".to_owned(), Some(Producer::PlainUsfm)),
-            ("Scripture Burrito (.zip)".to_owned(), None),
+            (
+                "Scripture Burrito (.zip)".to_owned(),
+                Some(Producer::BurritoZip)
+            ),
         ]
     );
     assert_eq!(
@@ -260,7 +263,10 @@ fn every_export_item_but_the_burrito_zip_runs_its_producer() {
                 "Story Markdown (.zip)".to_owned(),
                 Some(Producer::StoryMarkdown)
             ),
-            ("Scripture Burrito (.zip)".to_owned(), None),
+            (
+                "Scripture Burrito (.zip)".to_owned(),
+                Some(Producer::BurritoZip)
+            ),
         ]
     );
 }

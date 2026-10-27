@@ -706,6 +706,56 @@ async fn a_reset_releases_the_store_holds() {
     t.app.quit().await;
 }
 
+/// The gallery resets between cases while an open-progress case's open is still held. The
+/// released open must not mark its project as last used after the reset, or the next case's
+/// Home lists that project first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_reset_during_a_held_open_leaves_home_in_the_seed_order() {
+    use tc_api::home::{HomeView, List};
+    use tc_api::session::Open;
+    let fs = FaultFs::new();
+    let (store, _, _watch) = scenario_on(&fs, "sample");
+    let dir = tempfile::tempdir().unwrap();
+    let t = app_over(dir.path(), Arc::new(store)).await;
+    let order =
+        |home: HomeView| -> Vec<_> { home.cards.into_iter().map(|card| card.project).collect() };
+    let seed = order(post(&t.app, &List {}).await.unwrap());
+    let last = seed.last().unwrap().clone();
+    assert!(seed.len() > 1 && seed[0] != last, "{seed:?}");
+    // Later than every seed project's dateCreated, so a recorded use would come first.
+    t.clock.set(4_000_000_000_000);
+    let hold = Hold {
+        request: rid(1),
+        at: HoldPoint::Open,
+    };
+    post(&t.app, &hold).await.unwrap();
+    let open = Open {
+        request: rid(2),
+        project: last,
+        unit: None,
+    };
+    let job = post(&t.app, &open).await.unwrap();
+    until_held_count(&t.app, 1).await;
+    // The released open reads slowly, so it outlasts the rest of the reset.
+    fs.set_read_delay(Some(Duration::from_millis(20)));
+    post(&t.app, &Reset { request: rid(3) }).await.unwrap();
+    fs.set_read_delay(None);
+    let mut state = t.app.jobs().watch(job).unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        state.wait_for(tc_app::jobs::JobRegistry::is_ended),
+    )
+    .await
+    .expect("hung: the open never ended")
+    .unwrap();
+    assert_eq!(
+        order(post(&t.app, &List {}).await.unwrap()),
+        seed,
+        "INV-RESET-STOPS-OLD-WORK: an open begun before the reset recorded its use after it"
+    );
+    t.app.quit().await;
+}
+
 // --- J15 on real FaultFs delays ----------------------------------------------------------
 
 /// The open's progress, sampled every 2 ms on a thread of its own from the moment the open

@@ -66,7 +66,7 @@ use tc_api::event::{
 };
 use tc_api::exchange::{
     ExchangeFile, Export, ExportedView, HandEditOutcome, HandEdited, Identify, IdentifyView,
-    Receive, ReceiveNew, ReceivedView,
+    Receive, ReceiveNew,
 };
 use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
@@ -608,6 +608,7 @@ impl Example for tc_api::door43::LastSyncView {
                 restored: 0,
                 missing_pins: 0,
                 recreated: false,
+                hand_edited: Vec::new(),
                 replaced: vec![
                     setting(
                         ReplacedKind::Setting,
@@ -700,25 +701,6 @@ impl Example for ReceiveNew {
             request: request(24),
             file: ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
             name: ProjectName::parse("tito_de_maria").unwrap(),
-        }
-    }
-}
-
-impl Example for ReceivedView {
-    fn example() -> Self {
-        ReceivedView {
-            received: 3,
-            from: vec![PersonLabel {
-                who: Who::Username("maria".into()),
-                computer: None,
-            }],
-            kept_newest: 1,
-            verse_conflicts: 1,
-            alignments: 0,
-            hand_edited: vec![HandEdited {
-                path: "ingredients/TIT.usfm".into(),
-                outcome: HandEditOutcome::NotTakenIn,
-            }],
         }
     }
 }
@@ -3932,6 +3914,7 @@ fn events() -> Vec<Event> {
                 restored: 0,
                 missing_pins: 5,
                 recreated: false,
+                hand_edited: Vec::new(),
                 replaced: vec![tc_api::jobs::ReplacedView {
                     by: PersonLabel {
                         who: Who::Teammate(1),
@@ -3962,7 +3945,24 @@ fn events() -> Vec<Event> {
             id: JobId::new(14),
             kind: JobKind::ExchangeReceive,
             project: Some(ProjectRef::parse("sample_burrito").unwrap()),
-            state: JobState::Done(JobOutcome::Received(ReceivedView::example())),
+            state: JobState::Done(JobOutcome::Received(SyncResultView {
+                received: 3,
+                from: vec![PersonLabel {
+                    who: Who::Username("maria".into()),
+                    computer: None,
+                }],
+                kept_newest: 1,
+                verse_conflicts: 1,
+                alignments: 0,
+                restored: 0,
+                missing_pins: 0,
+                replaced: Vec::new(),
+                recreated: false,
+                hand_edited: vec![HandEdited {
+                    path: "ingredients/TIT.usfm".into(),
+                    outcome: HandEditOutcome::NotTakenIn,
+                }],
+            })),
         }),
         Event::Job(JobView {
             id: JobId::new(15),
