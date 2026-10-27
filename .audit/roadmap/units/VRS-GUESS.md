@@ -4,10 +4,10 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: tc4-issues session (Claude Code dc817a96)
+branch: track-VRS-GUESS
+worktree: .worktrees/track-VRS-GUESS
 depends: []
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
 merged: none
 updated: 2026-10-27
-next: Claim this card, then do step 1 (the fit function and its tests).
+next: Step 1: the fit function in crates/tc-versification and its tests.
 blocked_by: none
 ---
 
@@ -92,3 +92,4 @@ source verse sits beside the draft, for the life of the project.
 
 - 2026-10-27 10:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: the owner wants #822 in the preview, rule as the issue proposes (H13) | rulings/2026-10-27-H13.md
 - 2026-10-27 10:10 EDT | tc4-issues session (Claude Code dc817a96) | ruling | none | H13 answered for the tC3 import | rulings/2026-10-27-H13.md
+- 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed in .worktrees/track-VRS-GUESS on track-VRS-GUESS | python3 -I .audit/tools/board.py
