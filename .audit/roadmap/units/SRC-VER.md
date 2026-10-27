@@ -36,7 +36,10 @@ Today the English card says v89 while v91 is installed and pinned, so a translat
 
 ## Funnel card
 
-- **Invariants**: none new.
+- **Invariants**:
+  - INV-SOURCE-CARD-NAMES-INSTALLED: a Get source texts package card names, for its notes, words
+    and academy, the release installed on this computer (the install a language set would pin),
+    else tC4's registry release; never a release this computer lacks for one it has.
 - **Code**: The card's line reads the installed versions; the fixed `Seen` numbers go if nothing else needs them.
 - **Checks**: A test on the en-pins scenario: the English card names v91 for notes, words and academy.
   - Proof it can fail: the test fails on main 003aa087.
