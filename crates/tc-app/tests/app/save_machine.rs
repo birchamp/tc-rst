@@ -99,6 +99,11 @@ struct Page {
     focused: bool,
 }
 
+/// Calls the page dropped (a reload, a lost reply) whose work goes on in the app. Under load
+/// one may reach the store only after the run settles: `settle` waits for each, so none lands
+/// unchecked or stops at a hold after the last release.
+type Dropped = Vec<JoinHandle<Answer>>;
+
 impl Page {
     fn new(app: &App, store: MemStore) -> Self {
         Self {
@@ -124,6 +129,7 @@ struct World {
     production: Option<ProjectField>,
     /// The page was loaded again since the run began: its fields no longer know the stored text.
     reloaded: bool,
+    dropped: Dropped,
 }
 
 /// The production mode reads its audit from the actual journal, independently of Acks.
@@ -237,6 +243,7 @@ impl World {
             clean_checks: Vec::new(),
             production: None,
             reloaded: false,
+            dropped: Dropped::new(),
         }
     }
 
@@ -338,6 +345,7 @@ impl World {
             clean_checks: Vec::new(),
             production: Some(verse),
             reloaded: false,
+            dropped: Dropped::new(),
         }
     }
 
@@ -681,7 +689,10 @@ impl World {
             return Delivered::Held;
         }
         let request = flight.sent.request;
-        let answer = flight.handle.await.unwrap();
+        let answer = tokio::time::timeout(Duration::from_secs(60), flight.handle)
+            .await
+            .expect("hung: a save neither answered nor reached its hold in a minute")
+            .unwrap();
         let (reply, ended) = match answer {
             Answer::Reply { body, then } => {
                 let reply: Reply<Ack> = serde_json::from_slice(&body).unwrap();
@@ -718,7 +729,7 @@ impl World {
     async fn cut(&mut self) {
         let key = self.key();
         if let Some(flight) = self.page.inflight.pop_front() {
-            drop(flight.handle);
+            self.dropped.push(flight.handle);
             let commands = self
                 .page
                 .m
@@ -733,7 +744,8 @@ impl World {
         let store = std::mem::take(&mut self.page.store);
         let old = std::mem::replace(&mut self.page, Page::new(&self.t.app, store));
         self.reloaded = true;
-        drop(old.inflight);
+        self.dropped
+            .extend(old.inflight.into_iter().map(|flight| flight.handle));
         for (k, entry) in buffer::entries(&self.page.store) {
             if entry.instance == self.page.m.instance() {
                 let scope = self.scope();
@@ -801,6 +813,8 @@ impl World {
             }
         }
         self.t = TestApp::start_in(self.dir.path(), |_, _| {}).await;
+        // The calls the page dropped went to the app that ended; its holds went with it.
+        self.dropped.clear();
         self.page = Page::new(&self.t.app, MemStore::new());
         self.reloaded = true;
         self.offer().await;
@@ -856,10 +870,8 @@ impl World {
         self.page.m.begin_gate();
         for _ in 0..40 {
             self.keep_alive().await;
-            while self.t.app.holding() > 0 {
-                self.release().await;
-                tokio::time::sleep(Duration::from_millis(1)).await;
-            }
+            self.release_held().await;
+            self.finish_dropped().await;
             let mut held = 0;
             while !self.page.inflight.is_empty() {
                 match self.deliver(true).await {
@@ -887,7 +899,38 @@ impl World {
             }
         }
         self.page.m.end_gate();
+        // A hold armed with nothing at it yet would stop the next store that came.
+        self.release().await;
         super::common::until_quiet(&self.t.app).await;
+    }
+
+    async fn release_held(&mut self) {
+        for () in crate::store_world::for_a_minute() {
+            if self.t.app.holding() == 0 {
+                return;
+            }
+            self.release().await;
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        panic!("hung: a store stayed held for a minute of releases");
+    }
+
+    /// The dropped calls end, each released from a hold it reaches.
+    async fn finish_dropped(&mut self) {
+        let dropped = std::mem::take(&mut self.dropped);
+        'calls: for call in dropped {
+            for () in crate::store_world::for_a_minute() {
+                if call.is_finished() {
+                    let _ = call.await;
+                    continue 'calls;
+                }
+                if self.t.app.holding() > 0 {
+                    self.release().await;
+                }
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            panic!("hung: a call the page dropped did not end in a minute");
+        }
     }
 
     /// The row's assertions: the last text stored, once; no request id twice; no store over an
@@ -1462,4 +1505,26 @@ multi! {
         assert_eq!(after.fold().history(&field.record), before.fold().history(&field.record));
         assert_eq!(record_text(after.fold().projected(&field.record).unwrap()), "the comment already shown");
     }
+}
+
+/// SAVE-WAIT: a store's watch whose project stays stopped at a hold fails with its message.
+/// It once waited for the store to go idle with no limit, on the test's own thread, so a save
+/// that reached an armed hold after a run settled hung the test without a word (CI runs
+/// 40423604313 and 40449554417).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[should_panic(expected = "hung: an open project's store did not go idle")]
+async fn a_save_left_at_a_hold_fails_the_store_watch_instead_of_hanging() {
+    let world = store_world();
+    let handle = world.open(&world.bible);
+    world.hooks.hold(tc_store::Point::BeforeDurablePending);
+    let saving = handle.clone();
+    let _save = tokio::spawn(async move {
+        crate::store_world::save(saving.as_ref(), &tit(1, 12), "left at the hold").await
+    });
+    super::common::until("the save reaches its hold", || {
+        world.hooks.reached(tc_store::Point::BeforeDurablePending) > 0
+    })
+    .await;
+    drop(world);
+    drop(handle);
 }

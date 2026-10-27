@@ -434,13 +434,13 @@ pub struct BurritoWatch {
     stopped: bool,
     /// Waits until each project the store still has open has written all it was asked to,
     /// and answers how many are open.
-    open_projects: Option<Box<dyn Fn() -> usize + Send + Sync>>,
+    open_projects: Option<Arc<dyn Fn() -> usize + Send + Sync>>,
 }
 
 impl BurritoWatch {
     /// Has the watch wait for the projects `backend` opens before it reads what the writer saw.
     pub fn follow(&mut self, backend: &StoreBackend) {
-        self.open_projects = Some(Box::new(backend.idle_waiter()));
+        self.open_projects = Some(Arc::new(backend.idle_waiter()));
     }
 
     /// The test leaves a folder that is not a valid Burrito on purpose (an outside edit, a
@@ -464,7 +464,14 @@ impl Drop for BurritoWatch {
         // saves wrote was seen. A minute is a hang, never slowness.
         let hung = std::time::Instant::now() + std::time::Duration::from_secs(60);
         loop {
-            let open = self.open_projects.as_ref().map_or(0, |idle| idle());
+            let open = self.open_projects.clone().map_or(0, |idle| {
+                // Off this thread: a store stopped at a hold never goes idle, and the wait
+                // must fail here with its message rather than hang the test.
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || tx.send(idle()));
+                rx.recv_timeout(hung.saturating_duration_since(std::time::Instant::now()))
+                    .expect("hung: an open project's store did not go idle within a minute of the test (a save stopped at a hold no one released?)")
+            });
             if self.fs.locks_held() <= open {
                 break;
             }
