@@ -15,7 +15,7 @@ no_loss: false
 size: 0.25 d (basis: a test hook and one test)
 merged: none
 updated: 2026-10-26
-next: step 2, recapture the affected screens after CHK-6 step 5 lands
+next: Ready for a batch: reviewed, touched gate passed. No recapture here: CHK-6 step 5's full recapture covers the screens (orchestrator, 2026-10-26).
 blocked_by: none
 ---
 
@@ -58,10 +58,11 @@ it (open-progress-prepare's did).
 
 ### Step 1: The reset waits for every job; the test
 
-### Step 2: Recapture the affected screens (after CHK-6 step 5 lands)
-
 ## Log
 
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | created | none | from the orchestrator's message: Home's card order leaks between gallery cases (checks lane, CHK-6 step 5) | /home/bot/.config/Claude/side-session-notes/local_d49edca7-414b-4925-aa79-3e6882b3638b/CHK-6-step5-recapture-findings.md
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | claim | none | the open job records the project's last use after its hold; the reset releases the hold and resets the preferences without waiting for the job | crates/tc-app/src/understand.rs open_job
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | step 1 | none | `test/reset` cancels every live job after releasing the holds and waits for each to end. The new store-scenario test failed without it (`left: [sample_burrito, sample_burrito_obs]`, `right: [sample_burrito_obs, sample_burrito]`) and passes with it 3 runs of 3; the 17 reset tests pass. On the memory backend the open finishes before the reset reaches the prefs, so the test runs on the scenario store. On main open-progress-prepare's residual is pixels only, for glyph anti-aliasing, not for this order: nothing to drop | cargo nextest run -p tc-app --all-features --test app reset
+- 2026-10-26 | reviewer (Claude Code subagent of d4604680) | verify | f42d712b | no blocker, no major. No job the harness reaches ignores cancel while the reset waits (open's hold is released first; train, download and the Home summary stop on cancel); the registry lock is dropped before any await; the test is red without the fix and cannot fail spuriously, because the recorded use and the prefs reset go through one FIFO channel. Two minors to minors.tsv | code reading
+- 2026-10-26 | reset-recency session (Claude Code d4604680) | gate | f42d712b | `scripts/gates.sh --touched` exits 0 with main merged: tc-app 1039 tests pass (6 slow, none new), app-e2e 8 of 8 | scripts/gates.sh --touched
+- 2026-10-26 | reset-recency session (Claude Code d4604680) | note | none | step 2 (recapture) dropped on the orchestrator's word: CHK-6 step 5 lands last with one full recapture | none
