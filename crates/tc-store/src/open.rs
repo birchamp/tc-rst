@@ -645,6 +645,7 @@ fn open_inner(
         values_told: None,
         opening: false,
         sealed_at_open: false,
+        derived_unread: false,
         git,
         device,
         recover: broken_git,
@@ -809,7 +810,10 @@ fn repair_and_classify(
     // files against the packs they were written from, so O10 lists the new packs. Their only
     // copy is a pending file and their age is unknown (ruling 2026-10-22: at most the last 2
     // minutes may be lost). K3 stores each pack as a blob; the next checkpoint commits them.
-    if project.journal.has_unsealed() {
+    // Not while O9 could not read a derived file: a seal then makes `metadata.json` read as
+    // edited outside (an older bug a checkpoint meets too, LOSS-2 minors); the 2-minute seal
+    // takes these saves instead.
+    if project.journal.has_unsealed() && !writer.derived_unread {
         project.shared.open_group();
         writer.sealed_at_open = true;
         let mut run = project.seal_start()?;

@@ -238,6 +238,8 @@ pub(crate) struct Writer {
     pub opening: bool,
     /// The open sealed (§6.1 O15): its write group ends with the open's materialization.
     pub sealed_at_open: bool,
+    /// O9 could not read a derived file (another program holds it).
+    pub derived_unread: bool,
     /// The writer's own handle on the project's repository: blobs, trees and commit objects.
     pub git: Option<crate::git::Git>,
     /// This computer's device, for the trailers of a commit.
@@ -841,6 +843,7 @@ mod tests {
             values_told: None,
             opening: false,
             sealed_at_open: false,
+            derived_unread: false,
             git: None,
             device: DeviceId::local([9; 15]),
             recover: None,
