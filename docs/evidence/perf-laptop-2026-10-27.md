@@ -164,3 +164,44 @@ From the counters `storebench materialize` printed for the last run of each case
 - Next for the card: print the counters of every run, not only the last, and the bytes written
   per derived file; if a second file's bytes are written each time without changing, that is
   the fix. Fewer bytes written is the lever whatever the cause.
+
+### PERF-CHECKPOINT: one core of CPU, not flushes; the clean case is at the budget
+
+- A flush costs little on this laptop. Create, write, fsync and rename of 25 files each:
+  fsync median 1.1 ms (4 KB), 1.5 ms (64 KB), 4.9 ms (1 MB), 12.7 ms (4 MB). A checkpoint's 24
+  fsyncs are 30 to 100 ms of it. Writing one pack in place of 24 flushes, the remedy
+  `PERFORMANCE.md` proposes, saves at most that much here.
+- A second `storebench checkpoint` run, with the process's CPU time sampled every 500 ms (67 s
+  wall, 129 s CPU): during the checkpoint loops it kept one core busy (75 to 125 percent of a
+  core in most samples); the samples at 300 to 400 percent are the open and fold at the start.
+  So a checkpoint is single-thread CPU work on this machine: md5, zlib, libgit2's SHA-1 and its
+  delta search (none has hardware help here, and the i5-8350U has no SHA instructions).
+- Its figures moved between the two runs:
+
+  | Case | First run (after the materialize bench) | Second run |
+  |---|---|---|
+  | Checkpoint after the materialization already ran | median 706 ms, p95 1,318 ms | median 428 ms, p95 494 ms (**met**) |
+  | Checkpoint with Psalms dirty | median 1,518 ms, p95 2,098 ms | median 1,040 ms, p95 1,328 ms |
+  | Save during a checkpoint | p95 20.0 ms | p95 9.8 ms |
+
+- The Psalms-dirty case includes that book's materialize. Its last run wrote 8.7 MB in derived
+  files (2 written) and read 60 MB; at the materialize finding's 0.12 s per MB written, that
+  is about 1 s, which is most of the difference between the two cases. So the
+  Psalms-dirty half of this row shares PERF-MATERIALIZE-BOOK's lever, and the clean half is at
+  the budget, with run-to-run spread of 1.6 times.
+- Next for the card: time the checkpoint's phases (seal, files, tree, commit) in `storebench`;
+  the bench prints none today.
+
+### PERF-CLOSE: not profiled
+
+- A close is a seal, the files, tree and commit, the fold cache and the drafts, so it carries the
+  checkpoint's and the materialize's costs, plus the fold-cache write. Not profiled on the
+  laptop. The store-adapter bench's close after 10 saves (median 1.15 s, p95 1.86 s) against
+  `storebench close` with Psalms changed (median 3.13 s) says most of a close is the Psalms
+  materialize and checkpoint. Measure again after those two cards land.
+
+### PERF-SUGGEST: not profiled here
+
+- A suggestion's time grows with the model (52 ms at 3,994 aligned verses, 232 ms at 7,958); that
+  is the code's work, not this machine's, so it can be profiled on any machine. The laptop
+  figures above are its reference.

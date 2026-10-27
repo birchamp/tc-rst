@@ -87,3 +87,4 @@ clippy step from .github/workflows/ci.yml), plus:
 ## Log
 
 - 2026-10-27 | reference-laptop session (Claude Code) | create | none | Card created by PERF-LAPTOP step 2 for the missed row "Aligning, suggestions for one verse: 50 ms" | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (none on the laptop) | none | The cost grows with the model, not the machine; profile on any machine. The laptop figures are the reference | docs/evidence/perf-laptop-2026-10-27.md

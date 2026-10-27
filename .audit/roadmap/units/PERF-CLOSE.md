@@ -87,3 +87,4 @@ clippy step from .github/workflows/ci.yml), plus:
 ## Log
 
 - 2026-10-27 | reference-laptop session (Claude Code) | create | none | Card created by PERF-LAPTOP step 2 for the missed row "Close a project, whole Bible, Psalms changed: 3 s" | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (none on the laptop) | none | Not profiled; a close carries the checkpoint's and the Psalms materialize's costs. Measure again after PERF-CHECKPOINT and PERF-MATERIALIZE-BOOK | docs/evidence/perf-laptop-2026-10-27.md

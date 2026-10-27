@@ -87,3 +87,4 @@ clippy step from .github/workflows/ci.yml), plus:
 ## Log
 
 - 2026-10-27 | reference-laptop session (Claude Code) | create | none | Card created by PERF-LAPTOP step 2 for the missed row "Checkpoint, whole Bible: 500 ms" | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 | none | Not flushes (fsync 1 to 13 ms here; 24 of them are 30 to 100 ms): one core of CPU. A second run met the clean case (median 428 ms, p95 494 ms; the first gave 706 ms). The Psalms-dirty case (1.04 to 1.52 s) is mostly that book's materialize, which shares PERF-MATERIALIZE-BOOK's lever. Phase timings still to add to storebench | docs/evidence/perf-laptop-2026-10-27.md
