@@ -80,10 +80,14 @@ fn create_details(details: &ImportDetails) -> Details {
 }
 
 /// The create form's details for `import`: the language name and direction its manifest
-/// holds, where it holds them (tC4 #832).
+/// holds, where it holds them (tC4 #832). A code changed on the review step is another
+/// language, so the manifest's name and direction are not its own.
 fn imported_details(details: &ImportDetails, import: &Tc3Import) -> Details {
     use tc_import::tc3::Direction as Read;
     let mut form = create_details(details);
+    if form.code != import.language.trim() {
+        return form;
+    }
     if let Some(name) = &import.language_name {
         form.language_name.clone_from(name);
     }

@@ -725,7 +725,7 @@ pub fn read(files: &[SourceFile]) -> Result<Tc3Import, ImportRefusal> {
         .filter(|n| !n.is_empty());
     let direction = first
         .and_then(|m| text_at(m, &["target_language", "direction"]))
-        .and_then(|d| match d.trim() {
+        .and_then(|d| match d.trim().to_ascii_lowercase().as_str() {
             "ltr" => Some(Direction::Ltr),
             "rtl" => Some(Direction::Rtl),
             _ => None,
