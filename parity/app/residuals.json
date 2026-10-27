@@ -682,7 +682,7 @@
         "pixels",
         "dom"
       ],
-      "why": "A stand-in: the USFM kind has no review in this release (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 review with Use installed versions chosen. The row stays until the USFM importer lands; it shows the review frame, not the USFM review. Since E2 (6db93580, its step 2) each Home card also offers \"Receive work from a file\" between Share and Settings, the way in for a teammate's exchange file, which tC4 has not: the DOM has the button and the pixels show it, with the card's buttons moved left.",
+      "why": "A stand-in: the USFM kind has no review in this release (rulings/2026-10-24-H3-H4-H7-fast-release.md), so the Rust case is the tC3 review with Use installed versions chosen. The row stays until the USFM importer lands; it shows the review frame, not the USFM review. Since E2 (6db93580, its step 2) each Home card also offers \"Receive work from a file\" between Share and Settings, the way in for a teammate's exchange file, which tC4 has not: the DOM has the button and the pixels show it, with the card's buttons moved left. Since VRS-GUESS (tC4 #822, ruling H13) the review also shows a Versification picker under the language, with a note when the books' verse counts fit more than one scheme or none, as tC4 #822 asks: the DOM has the picker and the note, and the pixels show them.",
       "until": null
     },
     "import-review-tc3": {
@@ -690,7 +690,7 @@
         "pixels",
         "dom"
       ],
-      "why": "The tC3 review draws tC4's pixels. The DOM differs in two attributes: the dialog's Close button holds the focus, because the Rust dialog draws itself again for the review step and the modal focuses its first control when it opens; and the Back button carries `data-testid=\"import-review-back\"`, which the import journey presses. Since E2 (6db93580, its step 2) each Home card also offers \"Receive work from a file\" between Share and Settings, the way in for a teammate's exchange file, which tC4 has not: the DOM has the button and the pixels show it, with the card's buttons moved left.",
+      "why": "The tC3 review draws tC4's pixels. The DOM differs in two attributes: the dialog's Close button holds the focus, because the Rust dialog draws itself again for the review step and the modal focuses its first control when it opens; and the Back button carries `data-testid=\"import-review-back\"`, which the import journey presses. Since E2 (6db93580, its step 2) each Home card also offers \"Receive work from a file\" between Share and Settings, the way in for a teammate's exchange file, which tC4 has not: the DOM has the button and the pixels show it, with the card's buttons moved left. Since VRS-GUESS (tC4 #822, ruling H13) the review also shows a Versification picker under the language, with a note when the books' verse counts fit more than one scheme or none, as tC4 #822 asks: the DOM has the picker and the note, and the pixels show them.",
       "until": null
     },
     "import-working": {
