@@ -409,3 +409,42 @@ browserTest('app_language_i_scripture_follows_the_project_under_an_arabic_interf
     assert.equal(await card.getAttribute('dir'), 'ltr');
   }, { locale: 'ar' });
 });
+
+// tC4 #825, LINK-DROP: Titus 1:1 reads "Dios y Dios y y Dios" with only the first Dios linked
+// (to Θεοῦ). Saved in Translate as "y y Dios y", the text cannot say where that Dios went, so
+// the store sends the link back to the word bank; Translate names it in Align's words until
+// the person dismisses it.
+browserTest('a_translate_save_names_the_link_it_sends_back_to_the_bank', async () => {
+  await withApp(async ({ page, env }) => {
+    const placed = () => page.locator('[data-testid^="align-card-"] button[data-word]');
+    const chipOf = (word) => page.locator(`[data-testid="align-bank"] > button[data-word="${word}"]`).first();
+    await titus(page).click();
+    await page.getByTestId('understand-unit-s1').waitFor();
+    await teammateWrites(env, 1, 'Dios y Dios y y Dios');
+    await page.getByRole('tab', { name: 'Check', exact: true }).click();
+    await page.getByTestId('open-align').click();
+    await page.getByTestId('align-bank').waitFor();
+    while ((await placed().count()) > 0) {
+      const n = await placed().count();
+      await placed().first().click();
+      await until('one sent back', async () => (await placed().count()) < n);
+    }
+    await chipOf('Dios').click();
+    await until('Dios chosen', async () => (await chipOf('Dios').getAttribute('data-armed')) === '1');
+    // The third card is Θεοῦ.
+    await page.locator('[data-testid^="align-card-"]').nth(2).click();
+    await until('one placed', async () => (await placed().count()) === 1);
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    await page.getByTestId('mode-switch').getByRole('tab', { name: 'Translate' }).click();
+    await openVerse(page, 1);
+    assert.equal(await page.getByTestId('translate-dropped').count(), 0);
+    await box(page, 1).fill('y y Dios y');
+    await page.getByRole('button', { name: 'Save verse' }).click();
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    const notice = page.getByTestId('translate-dropped');
+    await notice.waitFor();
+    assert.match(await notice.textContent(), /Sent back to the word bank after the text changed: Dios \(Titus 1:1\)/);
+    await notice.getByRole('button', { name: 'Dismiss' }).click();
+    await notice.waitFor({ state: 'detached' });
+  });
+});

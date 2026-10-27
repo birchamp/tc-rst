@@ -220,8 +220,11 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
   registry's, so English said v89 while v91 was installed and pinned (#833.5).
 - Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
   Dropbox installed on Linux or macOS no longer makes every project read-only.
-- Align lists the links its open sent back to the word bank (owner answer Q30 (a)); the list
-  after a verse save in Translate waits for the storage unit S2.
+- Align lists the links its open sent back to the word bank (owner answer Q30 (a)), and
+  Translate lists the links a verse or section save sent back, with the verse, until the person
+  dismisses them (LINK-DROP, tC4 #825 and #820); tC4 changes the alignment after a save and says
+  nothing. The Translate list lives in the page: a crash between a save's write and its reply
+  loses the notice, while the old link stays in History.
 
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:

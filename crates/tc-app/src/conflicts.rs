@@ -716,6 +716,7 @@ impl App {
             saved: Vec::new(),
             rows: Vec::new(),
             disk_warning,
+            dropped: Vec::new(),
         })
     }
 

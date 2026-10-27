@@ -100,6 +100,7 @@ pub fn ack(text: &str, token: u64, view: u64) -> Ack {
         }],
         rows: Vec::new(),
         disk_warning: None,
+        dropped: Vec::new(),
     }
 }
 

@@ -678,6 +678,8 @@ pub struct StoreReply {
     /// Records the command left as they were (tc-store): the verses an Update a book's `Fill`
     /// did not change.
     pub kept: Vec<RecordKey>,
+    /// The alignment links a verse or section save sent back to the bank (tC4 #825).
+    pub dropped_links: Vec<tc_store::DroppedLinks>,
 }
 
 /// Why a command wrote nothing (tc-store `CommandError`). The memory backend makes none of

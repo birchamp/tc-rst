@@ -17,6 +17,9 @@ what changed for each finding, which parts were done another way, and why.
   still in the verse are kept and the others return to the bank, as tC4 does (#213), but
   atomically, where tC4 writes the reflow afterwards. A lossless reflow leaves the verse
   aligned; a lossy one shows it partly aligned, as tC4 does. Requested from unit S1 as R25.
+  The links a save sends back are named on Translate in Align's words, with the verse, until
+  dismissed (owner answer Q30 (a), LINK-DROP; tC4 #825 and #820): a declared difference, since
+  tC4 sends them back silently.
 - **Q-24, the Understand comment box:** (c). R24, a record that revises the comment the box
   showed and keeps the earlier text in History, is requested from unit S1.
 - **Q-4, projects folder:** `%USERPROFILE%\translationCore4\projects` (or

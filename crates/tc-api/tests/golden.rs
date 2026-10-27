@@ -129,7 +129,8 @@ use tc_api::test::{
 };
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
-    Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
+    Ack, ConflictBrief, DroppedLinks, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored,
+    TokenUpdate,
 };
 use tc_api::{ALL, Endpoint, Kind, Reply, ReplyOf, ReviewToken, ShownToken};
 use tc_core::BookId;
@@ -256,6 +257,16 @@ fn ack() -> Ack {
             },
         }],
         disk_warning: None,
+        dropped: vec![DroppedLinks {
+            book: BookId::Titus,
+            chapter: 1,
+            verse: 1,
+            links: vec![DroppedLinkView {
+                card: 2,
+                top: vec![align_word("Θεοῦ", 1, 1)],
+                word: align_word("Dios", 1, 2),
+            }],
+        }],
     }
 }
 

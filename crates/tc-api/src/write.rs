@@ -7,6 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use tc_core::BookId;
+
+use crate::align::DroppedLinkView;
 use crate::check::RailRowPatch;
 use crate::ids::{ConflictRef, RecordRef, ViewSeq};
 use crate::shown::PersonLabel;
@@ -33,6 +36,23 @@ pub struct Ack {
     /// The change was renamed into place but the disk reported an error after it
     /// (STORAGE:1424-1428): saved, with a warning.
     pub disk_warning: Option<String>,
+    /// The alignment links the save could not follow into the new text: they went back to the
+    /// word bank, and the screen names them (tC4 #825, owner answer Q30 (a)).
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub dropped: Vec<DroppedLinks>,
+}
+
+/// The links of one verse's alignment that a save sent back to the bank.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct DroppedLinks {
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::book()"))]
+    pub book: BookId,
+    pub chapter: u16,
+    pub verse: u16,
+    #[cfg_attr(feature = "proptest", proptest(strategy = "crate::arb::few()"))]
+    pub links: Vec<DroppedLinkView>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
