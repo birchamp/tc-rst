@@ -197,7 +197,9 @@ pub enum JobOutcome {
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase")]
 pub struct SyncResultView {
-    /// The teammates' changes this sync received.
+    /// The teammates' saves this sync received: one per batch of their changes (a verse and
+    /// the alignment its edit reflowed are one), bookkeeping (a device's profile, resource
+    /// pins) left out.
     pub received: u32,
     /// Who sent them, each person once, named as the conflict review names them (#680).
     pub from: Vec<PersonLabel>,

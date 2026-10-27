@@ -83,6 +83,7 @@
   "home.unusable.noProjectFile": "This folder holds a project's files but no ingredients/tc/project.json, so translationCore cannot open it. If it is a translationCore 4.0 project, import it. Nothing in the folder was changed.",
   "home.unusable.projectFileDamaged": "Its project file (ingredients/tc/project.json) is damaged: {reason}. Nothing in the folder was changed.",
   "home.unusable.projectFileUnreadable": "Its project file (ingredients/tc/project.json) could not be read: {reason}. Nothing in the folder was changed.",
+  "home.usbMenu": "Save or receive work by USB",
   "importer.files.tooBig": "{file} is larger than 512 MB, so it cannot be imported.",
   "importer.review.decisionsCounting": "Counting the checking decisions that carry over…",
   "importer.tc3.textChanged": "The text of {book} would change in the import, so nothing was imported.",

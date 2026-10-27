@@ -87,8 +87,23 @@ pub fn synced_view(
         }
     }
     let (replaced, records) = replaced(snapshot, received, &labels);
+    // A device's profile and its resource pins are bookkeeping, not a teammate's work (owner
+    // ruling 2026-10-26): the count leaves them out, the replaced rows keep them. Work counts
+    // once per batch, one save: a verse and the alignment its edit reflowed are one.
+    let work = received
+        .iter()
+        .filter_map(|id| snapshot.body(id))
+        .filter(|body| {
+            !matches!(
+                body.record,
+                tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
+            )
+        })
+        .map(|body| (body.device, body.batch.id))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
     SyncResultView {
-        received: u32::try_from(received.len()).unwrap_or(u32::MAX),
+        received: u32::try_from(work).unwrap_or(u32::MAX),
         from,
         // tC4's "{n} conflicts kept the newest version", one per record that held two
         // versions (tC4 sync.mjs): under H5, each such record a newer version settled.
