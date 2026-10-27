@@ -4,7 +4,7 @@ title: A Feedback report never carries the home folder or the account name
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tester findings lane (Claude Code 76125a0f)
 branch: track-REL1-tester
 worktree: .worktrees/track-REL1-tester
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: one pure function at the one place the attachment is composed)
-merged: none
+merged: a3a5bc83
 updated: 2026-10-27
-next: Ready for a batch: the integration lane merges track-REL1-tester (all four cards ride one branch).
+next: none
 blocked_by: none
 ---
 
@@ -72,3 +72,4 @@ naming a translator puts them at risk.
 - 2026-10-27 13:05 EDT | tester findings lane (Claude Code 76125a0f) | claim | none | Claimed with the fix on track-REL1-tester | none
 - 2026-10-27 12:45 EDT | tester findings lane (Claude Code 76125a0f) | verify | 1943b005 | One review (general-purpose agent, FUNNEL §8): pass with minors. Windows, JSON-escaped, \\?\ and macOS/Linux forms redact; /home/anabel is not matched; char boundaries checked; a home of / leaks nothing; bridge.cjs sends exactly the text the dialog shows and the mail body has only typed fields. Minors (minors.tsv): names with - _ . in another folder, an account named like a segment, ASCII-only case | review report relayed in the session; crates/tc-app/tests/app/feedback.rs
 - 2026-10-27 14:05 EDT | tester findings lane (Claude Code 76125a0f) | gate | eb1c7aa6 | passed scripts/gates.sh --touched with main 829f63f4 merged: 2019 Rust tests, 31 journeys, board, claims and coverage | scripts/gates.sh --touched
+- 2026-10-27 14:06 EDT | integration lane (Claude Code 3d07d5f8) | merge | a3a5bc83 | merged into main in batch 47 with the other tester findings, every screen recaptured on the batch tree; gated by scripts/gates.sh --wait-ci batch-47 | scripts/gates.sh --wait-ci batch-47

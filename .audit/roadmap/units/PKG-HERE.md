@@ -4,7 +4,7 @@ title: Download package says when the package was already on this computer
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tester findings lane (Claude Code 76125a0f)
 branch: track-REL1-tester
 worktree: .worktrees/track-REL1-tester
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: one job outcome and one string)
-merged: none
+merged: a3a5bc83
 updated: 2026-10-27
-next: Ready for a batch: the integration lane merges track-REL1-tester (all four cards ride one branch).
+next: none
 blocked_by: none
 ---
 
@@ -71,3 +71,4 @@ go online.
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | verify | 8e92de5b | One review (general-purpose agent, FUNNEL §8): blocker. Eight tc-app tests still expected JobOutcome::Finished for Download. Logic passes: Ok only with no cancel, offline, adopt or partial failure; a present repo at another version is fetched; FixFetch unchanged; tc-api 151/151 incl. catalog checks. Minor: the key was out of order in the catalogs | review report relayed in the session
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | fix | none | The tests assert Downloaded::Fetched and, on the second download, AlreadyHere (sources.rs); the upgrades helper accepts either, since its repos may be here; the key sits in order | crates/tc-app/tests/app/sources.rs a_download_installs_the_latest_release_and_counts_the_package
 - 2026-10-27 14:05 EDT | tester findings lane (Claude Code 76125a0f) | gate | eb1c7aa6 | passed scripts/gates.sh --touched with main 829f63f4 merged: 2019 Rust tests, 31 journeys, board, claims and coverage | scripts/gates.sh --touched
+- 2026-10-27 14:06 EDT | integration lane (Claude Code 3d07d5f8) | merge | a3a5bc83 | merged into main in batch 47 with the other tester findings, every screen recaptured on the batch tree; gated by scripts/gates.sh --wait-ci batch-47 | scripts/gates.sh --wait-ci batch-47

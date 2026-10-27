@@ -8,7 +8,7 @@ state: building
 owner: integration lane (Claude Code 3d07d5f8)
 branch: track-REL-1
 worktree: .worktrees/track-REL-1
-depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD, SAVE-WAIT, LINK-DROP, TC3-LANG, SRC-VER, POEM-TAB, VRS-GUESS, FIX-791]
+depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD, SAVE-WAIT, LINK-DROP, TC3-LANG, SRC-VER, POEM-TAB, VRS-GUESS, FIX-791, HOME-SETTLE, FEEDBACK-PATHS, PKG-HERE, TOAST-ORDER]
 needs_owner: []
 proves: []
 no_loss: false
@@ -81,3 +81,4 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-27 08:46 EDT | integration lane (Claude Code 3d07d5f8) | note | 58e8e10b | Release run 40501623818 by hand on main 58e8e10b, unsigned: the 4.1.0-preview installers build and pass their smoke tests on windows-x64, linux-x64 and macos-arm64 (Inno and the macOS pkg take the pre-release version). translations fails by design (H10) | gh run view 40501623818
 - 2026-10-27 09:18 EDT | integration lane (Claude Code 3d07d5f8) | note | none | depends gains LINK-DROP, TC3-LANG, SRC-VER and POEM-TAB: the 4.1.0 blockers the tC4 issue sweep found (the orchestrator, through the checks lane) | git show dae9b6b3
 - 2026-10-27 09:53 EDT | integration lane (Claude Code 3d07d5f8) | note | none | depends gains VRS-GUESS (tC4 #822). The owner put it in the preview (ruling H13), relayed by the checks lane | .audit/roadmap/rulings/2026-10-27-H13.md
+- 2026-10-27 14:06 EDT | integration lane (Claude Code 3d07d5f8) | note | none | depends gains HOME-SETTLE, FEEDBACK-PATHS, PKG-HERE and TOAST-ORDER, the 4.1.0-preview tester findings from the shell lane; all four merge in batch 47 | git show a3a5bc83

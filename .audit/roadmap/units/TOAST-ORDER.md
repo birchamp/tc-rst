@@ -4,7 +4,7 @@ title: The sync toast names its teammates in the same order on every run
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tester findings lane (Claude Code 76125a0f)
 branch: track-REL1-tester
 worktree: .worktrees/track-REL1-tester
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.1 d (basis: one sort)
-merged: none
+merged: a3a5bc83
 updated: 2026-10-27
-next: Ready for a batch: the integration lane merges track-REL1-tester (all four cards ride one branch).
+next: none
 blocked_by: none
 ---
 
@@ -43,3 +43,4 @@ number.
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | claim | none | Claimed with the fix on track-REL1-tester | none
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | verify | none | Self-review only: a pure sort with its unit test; the toast's other fields are untouched | crates/tc-app/src/sync.rs
 - 2026-10-27 14:05 EDT | tester findings lane (Claude Code 76125a0f) | gate | eb1c7aa6 | passed scripts/gates.sh --touched with main 829f63f4 merged: 2019 Rust tests, 31 journeys, board, claims and coverage | scripts/gates.sh --touched
+- 2026-10-27 14:06 EDT | integration lane (Claude Code 3d07d5f8) | merge | a3a5bc83 | merged into main in batch 47 with the other tester findings, every screen recaptured on the batch tree; gated by scripts/gates.sh --wait-ci batch-47 | scripts/gates.sh --wait-ci batch-47
