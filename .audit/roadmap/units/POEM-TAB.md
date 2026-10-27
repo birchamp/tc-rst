@@ -4,7 +4,7 @@ title: Poem indents are two characters wide, and Tab indents in the Verse editor
 track: A
 lane: app
 milestone: M5
-state: claimed
+state: building
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-POEM-TAB
 worktree: .worktrees/track-POEM-TAB
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: REF1b)
 merged: none
 updated: 2026-10-27
-next: Step 1: journey cases in parity/app/journeys/translate.test.mjs that fail on main.
+next: Step 2: tab-size 2ch on both fields and the Verse editor's Tab and Escape (crates/tc-ui/src/views/translate.rs).
 blocked_by: none
 ---
 
@@ -65,3 +65,4 @@ Today a level is 8 characters wide, so poem lines start a third of the way acros
 
 - 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found | docs/evidence/tc4-issues-2026-10-27/open.md
 - 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed in its worktree on track-POEM-TAB | .worktrees/track-POEM-TAB
+- 2026-10-27 09:25 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | journeys fail on main 003aa087's code: tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it "expected: '2ch' actual: '8'" (and, with that line left out, "Tab keeps the focus" expected 'Verse 4' actual null); paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before "expected: '2ch' actual: '8'"; tc-api the_verse_card_indents_its_inner_lines_and_never_its_first does not compile without indent_verse_line | TC4_BIN=… node --test --test-name-pattern='tab_indents_a_poem_line|paragraph_and_poetry_lines_from_the_card' parity/app/journeys/translate.test.mjs parity/app/journeys/section.test.mjs

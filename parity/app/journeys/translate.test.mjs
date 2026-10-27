@@ -230,6 +230,40 @@ browserTest('poem_lines_show_as_tabs_and_save_as_their_markers', async () => {
   });
 });
 
+// tC4 #829: a poem level is two characters wide, and Tab and Shift+Tab indent the caret's line
+// as in the section card instead of leaving the card; Escape leaves it and saves, as a blur does.
+// The verse's first line is the verse's own, whose format the card does not hold: Tab leaves it.
+browserTest('tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it', async () => {
+  await withApp(async ({ page, env }) => {
+    await openTranslate(page);
+    await teammateWrites(env, 4, 'a Tito,\n\\q2 mi verdadero hijo\n\\q1 en la fe común');
+    await openVerse(page, 4);
+    const field = box(page, 4);
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\ten la fe común');
+    assert.equal(await field.evaluate((el) => getComputedStyle(el).tabSize), '2ch');
+    const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    await field.press('Control+End');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4', 'Tab keeps the focus');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común');
+    await field.press('Tab');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\t\ten la fe común', 'at most three tabs');
+    await field.press('Shift+Tab');
+    await page.keyboard.type(':');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    await field.press('Control+Home');
+    await field.press('Tab');
+    assert.equal(await focused(), 'Verse 4');
+    assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:', 'the first line stays');
+    await field.press('Escape');
+    await field.waitFor({ state: 'detached' });
+    await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
+    assert.equal((await verse(env, 4)).words.value, 'a Tito,\n\\q2 mi verdadero hijo\n\\q2 en la fe común:');
+  });
+});
+
 // AD37: a card with no input takes a teammate's change whole, value and token together.
 browserTest('refresh_under_open_clean_editor_swaps_value_and_token_together', async () => {
   await withApp(async ({ page, env }) => {

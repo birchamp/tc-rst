@@ -371,6 +371,8 @@ browserTest('paragraph_and_poetry_lines_from_the_card_land_in_the_verse_before',
     await pill(page, '9–10').click();
     const field = typing(page, '9–10');
     await field.fill(`9 ${NINE}\n10 ${TEN}`);
+    // tC4 #829: one level is two characters wide, not the browser's eight.
+    assert.equal(await field.evaluate((el) => getComputedStyle(el).tabSize), '2ch');
     // Tab at the start of verse 10's line.
     await field.evaluate((el) => el.setSelectionRange(el.value.indexOf('\n10') + 1, el.value.indexOf('\n10') + 1));
     assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'TEXTAREA');
