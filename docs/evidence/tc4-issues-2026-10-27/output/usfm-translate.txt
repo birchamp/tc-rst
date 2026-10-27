@@ -1,0 +1,14 @@
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.01s
+────────────
+ Nextest run ID 5c43d883-822b-4ca2-8d02-fbfed2ffdeb3 with nextest profile: default
+    Starting 6 tests across 1 binary
+        PASS [   1.526s] (1/6) tc-app::tc4_fixed_2026_10_27 tc4_786_saving_a_poem_verse_replaces_every_line_of_it
+        PASS [   1.548s] (2/6) tc-app::tc4_fixed_2026_10_27 tc4_782_align_and_translate_show_the_heavens_in_genesis_1_1
+        PASS [   3.150s] (3/6) tc-app::tc4_fixed_2026_10_27 tc4_767_a_book_over_4_mb_is_added_whole_never_empty
+        PASS [   3.328s] (4/6) tc-app::tc4_fixed_2026_10_27 tc4_784_psalms_verses_after_q1_are_in_translate_and_align
+        PASS [   2.042s] (5/6) tc-app::tc4_fixed_2026_10_27 tc4_812_no_change_save_leaves_the_book_byte_for_byte
+        PASS [   2.084s] (6/6) tc-app::tc4_fixed_2026_10_27 tc4_812_verse_with_a_mid_verse_marker_shows_and_saves_whole
+────────────
+     Summary [   3.632s] 6 tests run: 6 passed, 0 skipped
+nextest exit 0

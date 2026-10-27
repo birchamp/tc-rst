@@ -1,0 +1,18 @@
+# helps-check, 2026-10-27T13:02:02Z, 58e8e10b + uncommitted test files
+## tc-check
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+────────────
+ Nextest run ID db3f931b-369a-4342-b411-70f10a789ef6 with nextest profile: default
+    Starting 2 tests across 1 binary
+        PASS [   0.089s] (1/2) tc-check::tc4_fixed_2026_10_27 tc4_773_reordered_quotes_title_and_light_only_their_own_phrase
+        PASS [   0.136s] (2/2) tc-check::tc4_fixed_2026_10_27 tc4_765_maqaf_quotes_show_english_titles_in_the_genesis_1_lists
+────────────
+     Summary [   0.136s] 2 tests run: 2 passed, 0 skipped
+## tc4
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+────────────
+ Nextest run ID 9f05188d-8ced-4f2b-9523-4509ae209bd1 with nextest profile: default
+    Starting 1 test across 1 binary
+        PASS [   0.360s] (1/1) tc4::tc4_fixed_2026_10_27 tc4_769_by_figure_groups_fold_and_the_fold_survives_a_restart
+────────────
+     Summary [   0.360s] 1 test run: 1 passed, 0 skipped

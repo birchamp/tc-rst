@@ -1,0 +1,54 @@
+# align area, 2026-10-27, main 58e8e10b
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+────────────
+ Nextest run ID f8bdc195-78c8-417e-b47b-dbc4cc7f256c with nextest profile: default
+    Starting 18 tests across 3 binaries
+        PASS [   0.003s] ( 1/18) tc-align::tc4_fixed_2026_10_27 tc4_787_a_never_saved_titus_1_1_opens_with_its_bank_in_verse_order
+        PASS [   0.004s] ( 2/18) tc-align::tc4_fixed_2026_10_27 tc4_788_a_card_click_places_no_word_a_suggestion_moved
+        PASS [   0.004s] ( 3/18) tc-align::tc4_fixed_2026_10_27 tc4_768_genesis_1_1_saved_with_nfc_hebrew_reopens_with_every_card_and_link
+        PASS [   0.007s] ( 4/18) tc-align::tc4_fixed_2026_10_27 tc4_787_reopen_after_siervo_became_esclavo_banks_esclavo_not_siervo
+        PASS [   0.004s] ( 5/18) tc-align::tc4_fixed_2026_10_27 tc4_790_sample_titus_1_1_shows_all_17_ugnt_words_and_a_foreign_source_link_is_listed
+        PASS [   0.005s] ( 6/18) tc-align::tc4_fixed_2026_10_27 tc4_789_dios_never_moves_to_the_other_theou_card_when_the_text_changes_outside_align
+        PASS [   0.003s] ( 7/18) tc-align::tc4_fixed_2026_10_27 tc4_796_footnote_after_siervo_banks_two_words_and_the_aligned_verse_weaves
+        PASS [   0.004s] ( 8/18) tc-align::tc4_fixed_2026_10_27 tc4_820_dios_dios_first_linked_saved_as_dios_pablo_keeps_no_unsure_link
+        PASS [   0.007s] ( 9/18) tc-align::tc4_fixed_2026_10_27 tc4_794_titus_1_1_holding_inline_zaln_opens_no_aligner_and_reflows_nothing
+        PASS [   0.005s] (10/18) tc-export::tc4_fixed_2026_10_27 tc4_794_export_keeps_the_19_inline_zaln_of_titus_1_1_with_a_matching_record
+        PASS [   0.004s] (11/18) tc-export::tc4_fixed_2026_10_27 tc4_795_a_psalm_verse_with_qs_selah_aligned_in_align_exports_woven
+        PASS [   0.004s] (12/18) tc-export::tc4_fixed_2026_10_27 tc4_796_a_footnote_right_after_siervo_exports_aligned_and_keeps_the_footnote
+        PASS [   0.005s] (13/18) tc-export::tc4_fixed_2026_10_27 tc4_796_mark_valid_with_nothing_placed_exports_the_stored_bytes
+        PASS [   0.008s] (14/18) tc-export::tc4_fixed_2026_10_27 tc4_796_rail_notice_and_export_give_one_answer_for_each_review_case
+        PASS [   0.093s] (15/18) tc-align::tc4_fixed_2026_10_27 tc4_793_memory_trained_on_nfc_jonah_suggests_for_fresh_raw_hbo_uhb_verses
+        PASS [   0.147s] (16/18) tc-store::tc4_fixed_2026_10_27 tc4_789_translate_save_deleting_de_dios_after_siervo_keeps_dios_on_its_own_theou
+        PASS [   0.142s] (17/18) tc-store::tc4_fixed_2026_10_27 tc4_820_translate_save_of_dios_dios_as_dios_pablo_keeps_no_unsure_link
+        PASS [   0.162s] (18/18) tc-store::tc4_fixed_2026_10_27 tc4_795_an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen
+────────────
+     Summary [   0.183s] 18 tests run: 18 passed, 0 skipped
+
+# align area, tc-app #820 app-level test (run with --run-ignored all), 2026-10-27
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.12s
+────────────
+ Nextest run ID caa6f4eb-8f06-41d3-9662-134df87b826f with nextest profile: default
+    Starting 1 test across 1 binary (6 tests skipped)
+        FAIL [   0.468s] (1/1) tc-app::tc4_fixed_2026_10_27 tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator
+  stdout ───
+
+    running 1 test
+    test tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator ... FAILED
+
+    failures:
+
+    failures:
+        tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.46s
+
+  stderr ───
+
+    thread 'tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator' (1777353) panicked at crates/tc-app/tests/tc4_fixed_2026_10_27.rs:790:5:
+    nothing tells the translator the Dios link went back to the bank: dropped [], freshness Current
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+────────────
+     Summary [   0.469s] 1 test run: 0 passed, 1 failed, 6 skipped
+        FAIL [   0.468s] (1/1) tc-app::tc4_fixed_2026_10_27 tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator
+error: test run failed

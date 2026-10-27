@@ -9,3 +9,5 @@ the_growth_bench_on_en_ult_and_en_ust_titus_gives_tc4s_recall	local: over a minu
 the_shown_text_is_what_tc4_reads_on_a_dump	local: needs a 12 MB dump of tC4's text (TC_USFM_SHOWN_TEXT_DUMP), not committed
 model::random_histories_lose_no_work_long	store-model-nightly
 model::random_syncs_lose_no_work_long	store-model-nightly
+tc4_791_after_sync_the_translator_is_told_a_teammates_alignment_replaced_theirs	local: tC4 #791 repro, same bug in the rebuild (Door43 sync passes no received ids, so no replaced rows); docs/evidence/tc4-issues-2026-10-27/fixed.md
+tc4_820_a_translate_save_that_sends_a_link_back_to_the_bank_tells_the_translator	local: tC4 #820 repro, same bug in the rebuild (tc-app drops StoreReply.dropped_links, link goes back to the bank silently); docs/evidence/tc4-issues-2026-10-27/fixed.md

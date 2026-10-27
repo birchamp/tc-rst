@@ -1,0 +1,340 @@
+   Compiling tc-server v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-server)
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-sync)
+   Compiling tc-resources v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-resources)
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-app)
+   Compiling tc-align v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-align)
+   Compiling tc4 v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc4)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 42s
+────────────
+ Nextest run ID 591860aa-27cc-40a8-bd71-c0478dfa3988 with nextest profile: default
+    Starting 33 tests across 9 binaries (2 tests and 56 binaries skipped)
+        PASS [   0.007s] ( 1/33) tc-align::tc4_fixed_2026_10_27 tc4_768_genesis_1_1_saved_with_nfc_hebrew_reopens_with_every_card_and_link
+        PASS [   0.007s] ( 2/33) tc-align::tc4_fixed_2026_10_27 tc4_787_a_never_saved_titus_1_1_opens_with_its_bank_in_verse_order
+        PASS [   0.010s] ( 3/33) tc-align::tc4_fixed_2026_10_27 tc4_788_a_card_click_places_no_word_a_suggestion_moved
+        PASS [   0.013s] ( 4/33) tc-align::tc4_fixed_2026_10_27 tc4_787_reopen_after_siervo_became_esclavo_banks_esclavo_not_siervo
+        PASS [   0.006s] ( 5/33) tc-align::tc4_fixed_2026_10_27 tc4_789_dios_never_moves_to_the_other_theou_card_when_the_text_changes_outside_align
+        PASS [   0.010s] ( 6/33) tc-align::tc4_fixed_2026_10_27 tc4_790_sample_titus_1_1_shows_all_17_ugnt_words_and_a_foreign_source_link_is_listed
+        PASS [   0.007s] ( 7/33) tc-align::tc4_fixed_2026_10_27 tc4_796_footnote_after_siervo_banks_two_words_and_the_aligned_verse_weaves
+        PASS [   0.007s] ( 8/33) tc-align::tc4_fixed_2026_10_27 tc4_820_dios_dios_first_linked_saved_as_dios_pablo_keeps_no_unsure_link
+        PASS [   0.012s] ( 9/33) tc-align::tc4_fixed_2026_10_27 tc4_794_titus_1_1_holding_inline_zaln_opens_no_aligner_and_reflows_nothing
+        PASS [   0.206s] (10/33) tc-align::tc4_fixed_2026_10_27 tc4_793_memory_trained_on_nfc_jonah_suggests_for_fresh_raw_hbo_uhb_verses
+        PASS [   6.031s] (11/33) tc-app::tc4_fixed_2026_10_27 tc4_767_a_book_over_4_mb_is_added_whole_never_empty
+        PASS [   6.131s] (12/33) tc-app::tc4_fixed_2026_10_27 tc4_782_align_and_translate_show_the_heavens_in_genesis_1_1
+        PASS [   5.949s] (13/33) tc-app::tc4_fixed_2026_10_27 tc4_786_saving_a_poem_verse_replaces_every_line_of_it
+        PASS [   6.546s] (14/33) tc-app::tc4_fixed_2026_10_27 tc4_784_psalms_verses_after_q1_are_in_translate_and_align
+        PASS [   2.342s] (15/33) tc-app::tc4_fixed_2026_10_27_sync_store tc4_766_a_project_opened_from_door43_with_no_pins_gets_the_creation_pins
+        PASS [   2.838s] (16/33) tc-app::tc4_fixed_2026_10_27_sync_store tc4_801_a_save_after_a_sync_is_kept_and_home_leaves
+        PASS [   3.679s] (17/33) tc-app::tc4_fixed_2026_10_27 tc4_812_no_change_save_leaves_the_book_byte_for_byte
+        PASS [   0.334s] (18/33) tc-check::tc4_fixed_2026_10_27 tc4_765_maqaf_quotes_show_english_titles_in_the_genesis_1_lists
+        PASS [   0.013s] (19/33) tc-export::tc4_fixed_2026_10_27 tc4_794_export_keeps_the_19_inline_zaln_of_titus_1_1_with_a_matching_record
+        PASS [   0.008s] (20/33) tc-export::tc4_fixed_2026_10_27 tc4_795_a_psalm_verse_with_qs_selah_aligned_in_align_exports_woven
+        PASS [   0.009s] (21/33) tc-export::tc4_fixed_2026_10_27 tc4_796_a_footnote_right_after_siervo_exports_aligned_and_keeps_the_footnote
+        PASS [   0.009s] (22/33) tc-export::tc4_fixed_2026_10_27 tc4_796_mark_valid_with_nothing_placed_exports_the_stored_bytes
+        PASS [   0.014s] (23/33) tc-export::tc4_fixed_2026_10_27 tc4_796_rail_notice_and_export_give_one_answer_for_each_review_case
+        PASS [   0.216s] (24/33) tc-check::tc4_fixed_2026_10_27 tc4_773_reordered_quotes_title_and_light_only_their_own_phrase
+        PASS [   0.335s] (25/33) tc-store::tc4_fixed_2026_10_27 tc4_789_translate_save_deleting_de_dios_after_siervo_keeps_dios_on_its_own_theou
+        PASS [   0.373s] (26/33) tc-store::tc4_fixed_2026_10_27 tc4_795_an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen
+        PASS [   1.909s] (27/33) tc-app::tc4_fixed_2026_10_27_sync_store tc4_807_a_span_save_after_a_sync_does_not_block_home
+        PASS [   0.394s] (28/33) tc-store::tc4_fixed_2026_10_27 tc4_820_translate_save_of_dios_dios_as_dios_pablo_keeps_no_unsure_link
+        PASS [   4.431s] (29/33) tc-app::tc4_fixed_2026_10_27 tc4_812_verse_with_a_mid_verse_marker_shows_and_saves_whole
+        PASS [   0.409s] (30/33) tc-store::tc4_fixed_2026_10_27_sync_store tc4_792_a_late_alignment_save_after_a_span_leaves_no_orphan_alignment
+        PASS [   0.952s] (31/33) tc-sync::tc4_fixed_2026_10_27 tc4_823_a_project_with_no_versification_frame_opened_from_door43_still_checkpoints
+        PASS [   0.950s] (32/33) tc-sync::tc4_fixed_2026_10_27 tc4_823_a_repository_without_vrs_json_opened_from_door43_still_checkpoints
+        PASS [   0.912s] (33/33) tc4::tc4_fixed_2026_10_27 tc4_769_by_figure_groups_fold_and_the_fold_survives_a_restart
+────────────
+     Summary [  11.499s] 33 tests run: 33 passed, 2 skipped
+nextest exit 0
+    Checking tc-app v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-app)
+    Checking tc4 v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc4)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 34.76s
+clippy exit 0
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling zlib-rs v0.6.8
+   Compiling log v0.4.34
+   Compiling tracing-core v0.1.36
+   Compiling lazy_static v1.5.1
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.10
+   Compiling miniz_oxide v0.9.1
+   Compiling mio v1.2.4
+   Compiling git2 v0.21.0
+   Compiling tokio v1.53.3
+   Compiling tracing v0.1.44
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling notify v8.2.0
+   Compiling zbus v5.19.0
+   Compiling keyring-core v1.0.1
+   Compiling tracing-log v0.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling tc-store v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-store)
+   Compiling miniz_oxide v0.8.9
+   Compiling zip v8.6.0
+   Compiling tc-arch v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-arch)
+   Compiling png v0.18.1
+   Compiling tc-corpus v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-corpus)
+   Compiling tc-import v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-import)
+   Compiling hyper v1.12.0
+   Compiling tower v0.5.3
+   Compiling hyper-util v0.1.21
+   Compiling tokio-rustls v0.26.6
+   Compiling tower-http v0.6.11
+   Compiling secret-service v5.2.0
+   Compiling tc-ui v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-ui)
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.13.5
+   Compiling axum v0.8.9
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-door43)
+   Compiling zbus-secret-service-keyring-store v1.0.1
+   Compiling keyring v4.2.0
+   Compiling tc-door43-fake v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-door43-fake)
+   Compiling tc-resources v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-resources)
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-sync)
+   Compiling tc-server v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-server)
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-app)
+   Compiling tc-obs v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-obs)
+   Compiling tc-journal v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-journal)
+   Compiling tc4 v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc4)
+   Compiling tc-align v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-align)
+   Compiling tc-export v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-export)
+   Compiling tc-helps v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-helps)
+   Compiling tc-check v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-check)
+   Compiling tc-usfm v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-usfm)
+   Compiling tc-api v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-api)
+   Compiling tc-versification v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-versification)
+   Compiling tc-burrito v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-burrito)
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst-wt/tc4-fixed-2026-10-27/crates/tc-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 46s
+     Running unittests src/lib.rs (target/debug/deps/tc_align-87ffd84d28cc1fce)
+     Running tests/aligner.rs (target/debug/deps/aligner-dc1065da6e64b213)
+     Running tests/bank_words.rs (target/debug/deps/bank_words-9192aa76c064a116)
+     Running tests/bench.rs (target/debug/deps/bench-464f73104375588b)
+     Running tests/one_reader_per_job.rs (target/debug/deps/one_reader_per_job-c1b57efa3beca923)
+     Running tests/properties.rs (target/debug/deps/properties-4e9aff0c3ebde76f)
+     Running tests/psalms.rs (target/debug/deps/psalms-b8cfc1fdbd1803f8)
+     Running tests/rtl.rs (target/debug/deps/rtl-e9a63920aaef7893)
+     Running tests/suggestion_budget.rs (target/debug/deps/suggestion_budget-77f999c12ca0875a)
+     Running tests/tc3_import.rs (target/debug/deps/tc3_import-f73e8565130813ab)
+     Running tests/tc4_card_order.rs (target/debug/deps/tc4_card_order-2c97e125acac27ba)
+     Running tests/tc4_edit.rs (target/debug/deps/tc4_edit-99412b647619c5fa)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-49d10ea15d3665ff)
+     Running tests/tc4_frame.rs (target/debug/deps/tc4_frame-dc8d3919340e3102)
+     Running tests/tc4_reconcile_open.rs (target/debug/deps/tc4_reconcile_open-7bb1f9b632b9f46f)
+     Running tests/tc4_reflow.rs (target/debug/deps/tc4_reflow-991f76b946cb0b38)
+     Running tests/tc4_selection.rs (target/debug/deps/tc4_selection-69113bef76e1b088)
+     Running tests/tc4_suggest.rs (target/debug/deps/tc4_suggest-ac89cd58318fe15c)
+     Running tests/tc4_vectors.rs (target/debug/deps/tc4_vectors-5ed67d5b55c970d0)
+     Running unittests src/lib.rs (target/debug/deps/tc_api-dcc7a6cfdd999333)
+     Running tests/buffer.rs (target/debug/deps/buffer-f9485cdabf276c48)
+     Running tests/check.rs (target/debug/deps/check-5d2c882f135ba9b5)
+     Running tests/draft_next.rs (target/debug/deps/draft_next-fe19e5d2760175e3)
+     Running tests/echo.rs (target/debug/deps/echo-0e8a4b1760b08dae)
+     Running tests/endpoints.rs (target/debug/deps/endpoints-4b1b78cfcc2e6036)
+     Running tests/golden.rs (target/debug/deps/golden-d29e17f12be6e01e)
+     Running tests/ids.rs (target/debug/deps/ids-95020824c5c506f1)
+     Running tests/place.rs (target/debug/deps/place-483c364bb1402bb4)
+     Running tests/print.rs (target/debug/deps/print-cf865c8b494a1764)
+     Running tests/query.rs (target/debug/deps/query-e5ff9640470897ef)
+     Running tests/rail.rs (target/debug/deps/rail-f20c32008b08b99a)
+     Running tests/refusals.rs (target/debug/deps/refusals-5eef583945458d4c)
+     Running tests/roundtrip.rs (target/debug/deps/roundtrip-bc82e822763432c1)
+     Running tests/section.rs (target/debug/deps/section-3bdd6d691808d607)
+     Running unittests src/lib.rs (target/debug/deps/tc_app-66c3b70257ec7dde)
+     Running tests/app.rs (target/debug/deps/app-f594e3d3f5877fde)
+     Running tests/op_counts.rs (target/debug/deps/op_counts-75a4a468d7391446)
+     Running tests/os_keychain.rs (target/debug/deps/os_keychain-04e8b6123daf0b5d)
+     Running tests/store_adapter.rs (target/debug/deps/store_adapter-829f9f8eeb7ee475)
+     Running tests/store_contract.rs (target/debug/deps/store_contract-f3fd4668dd5ba3eb)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-239ba0ca444746ee)
+     Running tests/tc4_fixed_2026_10_27_sync_store.rs (target/debug/deps/tc4_fixed_2026_10_27_sync_store-a8d58726a9a714fa)
+     Running unittests src/lib.rs (target/debug/deps/tc_arch-7b06cb82c371e6a8)
+     Running tests/architecture.rs (target/debug/deps/architecture-20f9424f54ce360e)
+     Running tests/clippy_config.rs (target/debug/deps/clippy_config-2b208692e7c8a300)
+     Running tests/common.rs (target/debug/deps/common-01dcdf9c24e00217)
+     Running tests/io_boundaries.rs (target/debug/deps/io_boundaries-94b41541058f423b)
+     Running unittests src/lib.rs (target/debug/deps/tc_burrito-5e0c114c9b8f5e33)
+     Running tests/mutations.rs (target/debug/deps/mutations-656691cd9899ab88)
+     Running tests/properties.rs (target/debug/deps/properties-7a6388fbb6565033)
+     Running tests/samples.rs (target/debug/deps/samples-371a0d93a167dd3c)
+     Running unittests src/lib.rs (target/debug/deps/tc_check-0d520a594976db1f)
+     Running tests/carry.rs (target/debug/deps/carry-fbdb9c8ed45605fc)
+     Running tests/derive.rs (target/debug/deps/derive-c8d1ea6c30b5fa0a)
+     Running tests/fix.rs (target/debug/deps/fix-468828590a02984c)
+     Running tests/fixtures_readme.rs (target/debug/deps/fixtures_readme-a619a295ffb4666f)
+     Running tests/performance.rs (target/debug/deps/performance-b89bb03f71035451)
+     Running tests/properties.rs (target/debug/deps/properties-5868d56f098f0b74)
+     Running tests/psalms.rs (target/debug/deps/psalms-e50052774b1df1dd)
+     Running tests/rail.rs (target/debug/deps/rail-3006b3ca32a561bb)
+     Running tests/reference_forms.rs (target/debug/deps/reference_forms-ccc1b84ea2acab2f)
+     Running tests/session.rs (target/debug/deps/session-8b94cb7d2c6496c7)
+     Running tests/status.rs (target/debug/deps/status-7a5f3d2f7e3ffb01)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-bfb49ca97acf372a)
+     Running tests/vectors.rs (target/debug/deps/vectors-66cf16caaa14a32b)
+     Running unittests src/lib.rs (target/debug/deps/tc_core-48b8620e461fa065)
+     Running tests/ids.rs (target/debug/deps/ids-0d26aed8ca1f3980)
+     Running unittests src/lib.rs (target/debug/deps/tc_corpus-38bd90e9231deb1a)
+     Running tests/corpus.rs (target/debug/deps/corpus-a0a451b5355898e2)
+     Running unittests src/lib.rs (target/debug/deps/tc_door43-1189b7352ce4ea28)
+     Running tests/account.rs (target/debug/deps/account-d92c1e4874a379bd)
+     Running tests/catalog_and_repos.rs (target/debug/deps/catalog_and_repos-ef5d05646d35c3b9)
+     Running tests/downloads.rs (target/debug/deps/downloads-4a6c38ab29654972)
+     Running tests/errors.rs (target/debug/deps/errors-47e866e9c6288aec)
+     Running tests/git.rs (target/debug/deps/git-84d6974252cf8de0)
+     Running tests/http_get.rs (target/debug/deps/http_get-92c06e048f3ce121)
+     Running tests/ids.rs (target/debug/deps/ids-dd74c049e20e2667)
+     Running tests/internet_switch.rs (target/debug/deps/internet_switch-09312206ee47a449)
+     Running tests/no_secret_leaks.rs (target/debug/deps/no_secret_leaks-9f28c3c7681d27e7)
+     Running tests/proxy.rs (target/debug/deps/proxy-edfeb78c75da71e2)
+     Running tests/push.rs (target/debug/deps/push-c7b1488e083c6f8f)
+     Running tests/streaming.rs (target/debug/deps/streaming-b4f171f28a3e2a72)
+     Running tests/windows_proxy.rs (target/debug/deps/windows_proxy-67f63ee0a2788fbe)
+     Running unittests src/lib.rs (target/debug/deps/tc_door43_fake-305e7e48f5791558)
+     Running unittests src/bin/tc-door43-fake.rs (target/debug/deps/tc_door43_fake-faf9689a87f65eb8)
+     Running tests/binary.rs (target/debug/deps/binary-885742c6b7826193)
+     Running tests/fake.rs (target/debug/deps/fake-d1ca172055cdfccd)
+     Running unittests src/lib.rs (target/debug/deps/tc_export-edc3ee3be62aec13)
+     Running tests/performance.rs (target/debug/deps/performance-1b5867d37ba3f2a5)
+     Running tests/producers.rs (target/debug/deps/producers-52ed4dcf44872e92)
+     Running tests/properties.rs (target/debug/deps/properties-ba7d308ef2a33de7)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-23e7eb4f0fed9c01)
+     Running tests/usfm.rs (target/debug/deps/usfm-285bc840915efa4b)
+     Running tests/vectors.rs (target/debug/deps/vectors-9847ffc2e50be6c0)
+     Running unittests src/lib.rs (target/debug/deps/tc_helps-07a1bc66875e7258)
+     Running tests/aquifer.rs (target/debug/deps/aquifer-8122df5fc1567b64)
+     Running tests/articles.rs (target/debug/deps/articles-bd9844f613628944)
+     Running tests/blocks.rs (target/debug/deps/blocks-b2553d0c89c7f502)
+     Running tests/helps.rs (target/debug/deps/helps-e28c9beb0a6d242b)
+     Running tests/highlight.rs (target/debug/deps/highlight-5b13ffead9d8473d)
+     Running tests/metadata.rs (target/debug/deps/metadata-fe25ef0799708da9)
+     Running tests/obs.rs (target/debug/deps/obs-4754c7fe333ddc30)
+     Running tests/reference_forms.rs (target/debug/deps/reference_forms-b94d4f407ef48a22)
+     Running tests/tsv.rs (target/debug/deps/tsv-8529eee6f98de0e4)
+     Running tests/v91.rs (target/debug/deps/v91-d1625f4dbec3d32d)
+     Running unittests src/lib.rs (target/debug/deps/tc_import-773de369549a9a62)
+     Running tests/tc3.rs (target/debug/deps/tc3-b1fa8c1023c45d4f)
+     Running unittests src/lib.rs (target/debug/deps/tc_journal-c53344ddae7c6297)
+     Running tests/canonical.rs (target/debug/deps/canonical-dab6a1d7db7bdd57)
+     Running tests/fold.rs (target/debug/deps/fold-d9d340fe45d8bf8e)
+     Running tests/index.rs (target/debug/deps/index-38456f3ab88a2345)
+     Running tests/loss.rs (target/debug/deps/loss-9c583372e567526b)
+     Running tests/never_panics.rs (target/debug/deps/never_panics-25625d050715d736)
+     Running tests/operation_counts.rs (target/debug/deps/operation_counts-1e219900e3534a57)
+     Running tests/outside.rs (target/debug/deps/outside-757b6bf1fc58321b)
+     Running tests/packs.rs (target/debug/deps/packs-60ea55b586c43675)
+     Running tests/projection.rs (target/debug/deps/projection-4ae4b62cb5168652)
+     Running tests/properties.rs (target/debug/deps/properties-6050985eddd3fe1e)
+     Running tests/rules.rs (target/debug/deps/rules-53223f7fbcaa25b3)
+     Running tests/scope.rs (target/debug/deps/scope-1f04ddbd287a467d)
+     Running tests/screens_and_fold.rs (target/debug/deps/screens_and_fold-a8230c1efbf5f1ba)
+     Running tests/shared_rules.rs (target/debug/deps/shared_rules-858681844188a3d3)
+     Running tests/tokens.rs (target/debug/deps/tokens-58104e979e6af4a7)
+     Running tests/values.rs (target/debug/deps/values-a580cd02a933dedc)
+     Running tests/versioning.rs (target/debug/deps/versioning-4fc6ccf96b6b1af1)
+     Running unittests src/lib.rs (target/debug/deps/tc_obs-ba4adbe18cec5cb7)
+     Running tests/codec.rs (target/debug/deps/codec-af112fa0448a6b6a)
+     Running tests/performance.rs (target/debug/deps/performance-5ec13b053285934e)
+     Running tests/project_pictures.rs (target/debug/deps/project_pictures-f3a2d4c3a0cd6f73)
+     Running tests/tc4_obs.rs (target/debug/deps/tc4_obs-7713fad827b970d5)
+     Running tests/tc4_template.rs (target/debug/deps/tc4_template-c8fd535b145cc255)
+     Running tests/vectors.rs (target/debug/deps/vectors-38b4abd5b4cb8d9e)
+     Running unittests src/lib.rs (target/debug/deps/tc_resources-4b6f824b9dc2ce42)
+     Running tests/aquifer_install.rs (target/debug/deps/aquifer_install-3369e007063f8d79)
+     Running tests/aquifer_proxy.rs (target/debug/deps/aquifer_proxy-4359ace876acab72)
+     Running tests/check_sources.rs (target/debug/deps/check_sources-58a4f10e4122b1ee)
+     Running tests/dcs_install.rs (target/debug/deps/dcs_install-98904410555180f8)
+     Running tests/fetched_lock.rs (target/debug/deps/fetched_lock-fb62d3d5fcc69d27)
+     Running tests/lexicon.rs (target/debug/deps/lexicon-f1e870d317a16288)
+     Running tests/lexicon_performance.rs (target/debug/deps/lexicon_performance-27107636a77e1703)
+     Running tests/load.rs (target/debug/deps/load-737b6e1f38c684f6)
+     Running tests/missing_pins.rs (target/debug/deps/missing_pins-d4720fff983c9902)
+     Running tests/properties.rs (target/debug/deps/properties-7dc01731e30ec688)
+     Running tests/seed.rs (target/debug/deps/seed-e71328b19c1a44d1)
+     Running tests/strongs.rs (target/debug/deps/strongs-f22c6717f4a4b17a)
+     Running tests/twl_coverage.rs (target/debug/deps/twl_coverage-79fd8dd9f1f1ba0b)
+     Running tests/updates.rs (target/debug/deps/updates-b2368dde94db8165)
+     Running tests/watched_install.rs (target/debug/deps/watched_install-255e088371684923)
+     Running unittests src/lib.rs (target/debug/deps/tc_server-75974778414789b1)
+     Running tests/applock.rs (target/debug/deps/applock-1b43f5644e09433a)
+     Running tests/downloads.rs (target/debug/deps/downloads-ad8092d2c91e1435)
+     Running tests/events.rs (target/debug/deps/events-80266c0ea65d6027)
+     Running tests/help_overlay.rs (target/debug/deps/help_overlay-6ee699835ba642a8)
+     Running tests/hooks.rs (target/debug/deps/hooks-6aa848687f15d4d9)
+     Running tests/lifecycle.rs (target/debug/deps/lifecycle-ca1642da870cccbd)
+     Running tests/media.rs (target/debug/deps/media-02dcb158b444cdf9)
+     Running tests/never_blocked.rs (target/debug/deps/never_blocked-9e8d4d63f503d02f)
+     Running tests/routes.rs (target/debug/deps/routes-7568f55d23af651a)
+     Running tests/security.rs (target/debug/deps/security-7bd2260cd5ca7b6b)
+     Running tests/upload_large.rs (target/debug/deps/upload_large-a79f97f54e9edc4c)
+     Running tests/uploads.rs (target/debug/deps/uploads-f80b36a05b7488ba)
+     Running unittests src/lib.rs (target/debug/deps/tc_store-8daf2fc6f2230c16)
+     Running tests/store.rs (target/debug/deps/store-d6517950315dce8c)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-85014eca938a1e33)
+     Running tests/tc4_fixed_2026_10_27_sync_store.rs (target/debug/deps/tc4_fixed_2026_10_27_sync_store-e4efe84493dff678)
+     Running unittests src/lib.rs (target/debug/deps/tc_sync-5798a67a29d571e2)
+     Running tests/sync.rs (target/debug/deps/sync-48a08e65c1572687)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-817f183aac9a101a)
+     Running unittests src/lib.rs (target/debug/deps/tc_ui-60510b452a5d84c6)
+     Running tests/app.rs (target/debug/deps/app-1c5772a8ade7f131)
+     Running tests/gallery_record.rs (target/debug/deps/gallery_record-4dd8be3a3edf25d5)
+     Running tests/help_pages.rs (target/debug/deps/help_pages-7781e16110c86726)
+     Running tests/i18n_catalogs.rs (target/debug/deps/i18n_catalogs-643328d290928329)
+     Running tests/i18n_keys.rs (target/debug/deps/i18n_keys-2e0e951b2937893c)
+     Running tests/i18n_runtime.rs (target/debug/deps/i18n_runtime-dc7168fe5e8b42c3)
+     Running tests/prepare_page.rs (target/debug/deps/prepare_page-c768d4d8e784b1b2)
+     Running tests/screen_record.rs (target/debug/deps/screen_record-b3b08f5d69f09d9b)
+     Running tests/vendored_assets.rs (target/debug/deps/vendored_assets-992b76bc07e7db13)
+     Running unittests src/lib.rs (target/debug/deps/tc_usfm-38cb359e0820a4b1)
+     Running tests/codec.rs (target/debug/deps/codec-c28eae90b510ddce)
+     Running tests/derivations.rs (target/debug/deps/derivations-d46f093d04eb1f43)
+     Running tests/fixtures.rs (target/debug/deps/fixtures-af62f9a5e8ca8819)
+     Running tests/performance.rs (target/debug/deps/performance-2ef36559a600d67f)
+     Running tests/poem.rs (target/debug/deps/poem-c3378abc12781c9d)
+     Running tests/properties.rs (target/debug/deps/properties-e50b66d8a7a586c6)
+     Running tests/resources.rs (target/debug/deps/resources-b86f53d938cf78d4)
+     Running tests/shown_text.rs (target/debug/deps/shown_text-b54cc0e3fcd2b9e3)
+     Running tests/superscriptions.rs (target/debug/deps/superscriptions-30c9e93c60383727)
+     Running tests/tc3_usfm.rs (target/debug/deps/tc3_usfm-df3d07fb279aa73d)
+     Running tests/tc4_weave.rs (target/debug/deps/tc4_weave-7c547fa68806454d)
+     Running unittests src/lib.rs (target/debug/deps/tc_versification-8926dda04ad90715)
+     Running tests/losses.rs (target/debug/deps/losses-4a007bd13da09615)
+     Running tests/map_reference.rs (target/debug/deps/map_reference-5d6a897e16af307d)
+     Running tests/oracle.rs (target/debug/deps/oracle-e88921e119831b4c)
+     Running tests/parse.rs (target/debug/deps/parse-fa3b8a680621438a)
+     Running tests/properties.rs (target/debug/deps/properties-6cfe6e42f3660249)
+     Running tests/resolve.rs (target/debug/deps/resolve-6c947b94088e7559)
+     Running unittests src/lib.rs (target/debug/deps/tc4-2290fc55cf0c539c)
+     Running unittests src/main.rs (target/debug/deps/tc4-166a1fade8e5ee4f)
+     Running tests/account.rs (target/debug/deps/account-cbaff69acd199c28)
+     Running tests/hooks.rs (target/debug/deps/hooks-b629abfe8759807e)
+     Running tests/join.rs (target/debug/deps/join-694466b77ded031f)
+     Running tests/lifecycle.rs (target/debug/deps/lifecycle-8bc089f3fcc9e020)
+     Running tests/release.rs (target/debug/deps/release-b4c932f646b9dc0d)
+     Running tests/scenario.rs (target/debug/deps/scenario-24930bfc8a09fe50)
+     Running tests/seed.rs (target/debug/deps/seed-933ab1c86f45000c)
+     Running tests/tc4_fixed_2026_10_27.rs (target/debug/deps/tc4_fixed_2026_10_27-abda0917eeb78541)
+   Doc-tests tc_align
+   Doc-tests tc_api
+   Doc-tests tc_app
+   Doc-tests tc_arch
+   Doc-tests tc_burrito
+   Doc-tests tc_check
+   Doc-tests tc_core
+   Doc-tests tc_corpus
+   Doc-tests tc_door43
+   Doc-tests tc_door43_fake
+   Doc-tests tc_export
+   Doc-tests tc_helps
+   Doc-tests tc_import
+   Doc-tests tc_journal
+   Doc-tests tc_obs
+   Doc-tests tc_resources
+   Doc-tests tc_server
+   Doc-tests tc_store
+   Doc-tests tc_sync
+   Doc-tests tc_ui
+   Doc-tests tc_usfm
+   Doc-tests tc_versification
+   Doc-tests tc4
+ignored exit 0
