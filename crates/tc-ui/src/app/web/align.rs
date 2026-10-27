@@ -805,9 +805,29 @@ impl Actions {
             .saves()
             .add_gate_hook(std::rc::Rc::new(move || {
                 let this = this.clone();
-                Box::pin(async move { this.flush_aligner().await })
+                Box::pin(async move {
+                    this.flush_aligner().await || (!edits_pending() && this.refused_for_good())
+                })
             }));
         HOOK.with(|h| h.set(Some(id)));
+    }
+
+    /// The open aligner's last save was refused in a way no retry in this open can fix. It
+    /// does not keep the person from Home: closing keeps the links' draft for the next open
+    /// (INV-A-REFUSED-SAVE-NEVER-TRAPS-THE-TRANSLATOR, tC4 #807).
+    fn refused_for_good(&self) -> bool {
+        let Some(aligner) = self
+            .s()
+            .a
+            .open
+            .with_untracked(|open| open.as_ref().map(|(_, aligner, _)| *aligner))
+        else {
+            return false;
+        };
+        self.runtime().0.state.align_saves.with_untracked(|saves| {
+            matches!(saves.get(&aligner), Some(AlignSave::Failed(reason))
+                if !crate::app::save::classify::retry_can_fix(reason))
+        })
     }
 
     /// Retry includes server-owned alignment saves, which are not fields of SaveMachine.

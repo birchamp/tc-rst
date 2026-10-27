@@ -205,8 +205,9 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
 - Each note, word and question text reads in its own direction under its pane's layout, so
   an English question in an Arabic set is not laid out right to left (#836).
 - A save refused for a reason no retry in this open can fix (a bad token, a newer change)
-  keeps its text for the next open's offer and does not block going Home; tC4 keeps Home
-  blocked (#801). A text refused for its content still shows why beside the field.
+  keeps its text, or the aligner's links, for the next open's offer and does not block going
+  Home; tC4 keeps Home blocked (#801, #807). A text refused for its content still shows why
+  beside the field, and a full disk still holds the person where they are.
 - A failed check for updates says one plain sentence by cause; tC4 shows the browser's
   "Failed to fetch" (#833.1).
 - Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
