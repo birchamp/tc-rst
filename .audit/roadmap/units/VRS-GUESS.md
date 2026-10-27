@@ -4,7 +4,7 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: verifying
+state: gating
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-VRS-GUESS
 worktree: .worktrees/track-VRS-GUESS
@@ -103,3 +103,4 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 16:35 EDT | tc4-issues session (Claude Code dc817a96) | verify | 6eac5f45 | races and protocol lens, a read-only subagent (Claude Code acda0311): 1 Code: the reply cache keys a request id with the body's digest, so a stale retry is RequestReused, never the old job; 2 Checks: the forms test now also drops a count answered after a pick (its minor 1, added); 3 Reach: all reachable; 4 Siblings: pick_license follows the same new-id pattern; 5 No loss: the scheme is fixed when Run is sent, cancel unchanged, Review's Option field reads missing as none, no hand-built Run body outside the UI and goldens; 6 Prose: reasons only. No blocker or major; 1 minor logged | .audit/minors.tsv
 - 2026-10-27 17:30 EDT | tc4-issues session (Claude Code dc817a96) | step 3 | none | journey import, two cases: the Titus tie offers eng and says the counts did not decide; a Hebrew-numbered Malachi offers org (tied with lxx), vul chosen is written to ingredients/vrs.json and MAL 3:19-24 stay; the file's other seven cases pass; #822 declared in docs/TC4-ISSUES.md | TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake node --test parity/app/journeys/import.test.mjs (9 pass)
 - 2026-10-27 18:10 EDT | tc4-issues session (Claude Code dc817a96) | verify | 4b7b2955 | browser and parity lens, a subagent (Claude Code a9d58d17) driving Chromium: 1 Code: SchemeFit makes the note exhaustive; 2 Checks: the import journey 9/9, both versification cases fail if the fit, the choice or a verse breaks; 3 Reach: the tC3 review page; 4 Siblings: the cut import kinds wait under H13; 5 No loss: Malachi 3:19-24 stay; 6 Prose: reasons only. Screen: labelled "Versification" combobox, Tab reaches it, no horizontal scroll at 390px. Blocker: captures_match_the_current_ui_source fails, since the UI source changed without a recapture; as POEM-TAB and SRC-VER, every screen is recaptured once on the batch tree, and import-review-tc3 and import-review-usfm then get a residual naming VRS-GUESS and H13. 4 minors logged | /tmp/claude-1000/-home-bot-tc-rst/dc817a96-3f26-478a-9cb7-3304a28410ab/scratchpad/lens3/ (local)
+- 2026-10-27 18:20 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-VRS-GUESS, main 020e0ddf merged | scripts/gates.sh --touched
