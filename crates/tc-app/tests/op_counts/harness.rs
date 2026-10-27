@@ -140,6 +140,30 @@ impl Scale {
         self.app.sessions().open_sessions()[0].at.clone()
     }
 
+    /// The draft lists the store has written so far; 0 on memory, which writes none.
+    pub fn drafts_written(&self) -> u64 {
+        self.store_counters().drafts_written
+    }
+
+    /// Waits until the draft writer has written a list since it had written `since`. A draft
+    /// and the save that clears it share one write when the save reaches the writer before it
+    /// wakes, so on a loaded machine one corpus counted one write and the other two.
+    pub fn wait_draft_written(&self, since: u64) {
+        if self.backing != Backing::Store {
+            return;
+        }
+        let started = std::time::Instant::now();
+        while self.drafts_written() <= since {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(60),
+                "hung: no draft written after 60 s"
+            );
+            tokio::task::block_in_place(|| {
+                std::thread::sleep(std::time::Duration::from_millis(5))
+            });
+        }
+    }
+
     /// The open session's handle on the store; `None` before the open.
     fn store_handle(&self) -> Option<Arc<dyn tc_app::backend::ProjectHandle>> {
         Some(self.session()?.handle().clone())
