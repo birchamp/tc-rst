@@ -4,7 +4,7 @@ title: Get source texts names the versions that are installed
 track: A
 lane: app
 milestone: M5
-state: fixing
+state: gating
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-SRC-VER
 worktree: .worktrees/track-SRC-VER
@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: FIX-R step 5)
 merged: none
 updated: 2026-10-27
-next: Step 3: one browser-and-parity review lens, then scripts/gates.sh --touched with main merged in.
+next: Waiting for scripts/gates.sh --touched on the merge of main (93a9ca77) in .worktrees/track-SRC-VER.
 blocked_by: none
 ---
 
@@ -73,3 +73,4 @@ Today the English card says v89 while v91 is installed and pinned, so a translat
 - 2026-10-27 11:45 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | each card names the notes, words and academy release installed here (the install a set would pin, `gateways::installed_release`), else tC4's registry release, as tC4 shows a package not installed; declared in docs/PLAN.md (#833.5); source-texts and the five upgrade cases recaptured, residuals explain the English line (source-texts: pixels and DOM; the cases: DOM); tc-app sources 10/10, tc-resources all, tc-ui screen_record 49/49, journey source-texts 5/5 | parity/app/residuals.json
 - 2026-10-27 12:30 EDT | tc4-issues session (Claude Code dc817a96) | verify | ddd398df | browser-and-parity lens by a read-only subagent (aa44137a): 1 Code: one function decides each value; the registry fallback stays, so no type can carry it; 2 Checks: tc-app test and journey exist, fail-before logged, deterministic, in CI; name and message lacked the invariant (minor, fixed); 3 Reach: English v91 reachable, and after an online helps update the card named the bundled v91 while the project pins v92 (major, view); 4 Siblings: `package()` in upgrades.rs carries the registry numbers but no screen shows them; 5 No loss: not a no-loss card; 6 Prose and Human: no new words, comments give reasons; parity captures, residuals and the PLAN.md entry accurate; journey source-texts 5/5 | the lens's report in this session; parity/app/diffs/source-texts.png
 - 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | the major: the current package's card names the project's own pin when it is installed, so an update's v92 shows, never a pinned release this computer lacks (`inv_source_card_names_installed_the_projects_release_first`, tc-resources); the gate test renamed `inv_source_card_names_installed_releases_else_tc4s`; the partly-installed case went to minors.tsv; tc-app sources 10/10 | tc-heavy cargo test -p tc-resources --lib inv_source
+- 2026-10-27 12:55 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-SRC-VER on 93a9ca77 (main b17d258a merged in) | scripts/gates.sh --touched
