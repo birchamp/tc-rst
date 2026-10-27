@@ -195,8 +195,9 @@ fn vars_replace_every_occurrence_in_the_order_given() {
 
 #[test]
 fn a_rebuild_key_reads_in_english_until_it_is_translated() {
-    install_all();
-    assert!(show_locale(locale("ar")));
+    let ar = locale("ar");
+    install_catalog(ar, Catalog::parse(&vendored_text("ar"), "{}").unwrap());
+    assert!(show_locale(ar));
     let reason = "disk full";
     assert_eq!(
         t(keys::upload::NOT_WRITTEN, &[("reason", &reason)]),
