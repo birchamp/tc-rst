@@ -36,6 +36,10 @@ pub struct SyncReport {
     /// New changes received, by the person who made them (§9.7 `received`; devices grouped by
     /// Door43 username).
     pub received_by: std::collections::BTreeMap<tc_journal::fold::PersonLabel, u32>,
+    /// The changes this sync took in (new before it, in the project after it), bookkeeping
+    /// included, for the Received sheet's "what replaced what" (ruling H5), as an exchange
+    /// file's receive gives them.
+    pub received_ids: Vec<tc_journal::ChangeId>,
     /// Conflicts the sync brought that were not listed before it (§9.7 `new_conflicts`).
     pub new_conflicts: Vec<tc_journal::fold::ConflictId>,
     /// Commits on Door43 made by another tool that changed the project's files (§9.2 N4,
@@ -125,6 +129,7 @@ pub async fn sync(
             raced: 0,
             other_tools: Vec::new(),
             received_by: Default::default(),
+            received_ids: Vec::new(),
             new_conflicts: Vec::new(),
             recreated: false,
             offer_exchange: false,
@@ -204,6 +209,14 @@ impl Run<'_> {
                 .unwrap_or(tc_journal::fold::PersonLabel::Teammate(0));
             *self.report.received_by.entry(label).or_insert(0) += count;
         }
+        // A raced round can read a change again before any intake took it in.
+        let mut seen = std::collections::BTreeSet::new();
+        self.report.received_ids = self
+            .received_ids
+            .iter()
+            .filter(|id| fold.change(id).is_some() && seen.insert(**id))
+            .copied()
+            .collect();
         self.report.new_conflicts = fold
             .conflicts()
             .map(|c| c.id)

@@ -2258,9 +2258,9 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "0910d21244995a259b69876e04c6ade16a8296414b04e46fe299471a58b563a6",
-        "rustSha256": "363c1c4708b35af57063d8a44a32e6340b6604c657fcf7fdb8a2f80d343bed04",
-        "mismatched": 240092,
-        "outsideMasks": 229902,
+        "rustSha256": "200e1bca1740d4036b8f6eeaa277f07584761927fd67bd7442af9d95e0c21f2c",
+        "mismatched": 264414,
+        "outsideMasks": 254224,
         "masks": [
           "q2-obs-card"
         ],
@@ -2268,7 +2268,7 @@
       },
       "dom": {
         "tc4Sha256": "1c5f4f6abe86c6d962d8ff8d7b67ba5ece4e8f375bb27623a0faae559e827bc5",
-        "rustSha256": "4b3532aa68352935f7e0a394d2b8eae5519cf3ecf078d67ee03b3bed43dac532",
+        "rustSha256": "3ae195e3a5b94b64fdd6d386e1ae0e0c1f3e7dc510933855626aa141fa1ba594",
         "scope": null,
         "same": false,
         "declared": [],
@@ -2284,8 +2284,9 @@
         "same": false,
         "declared": [],
         "diffs": [
-          "syncToast.text: tC4 \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download\", rust \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 This project now uses 5 resource versions that are not on this computer. Review Download\"",
-          "syncToast.from: tC4 Some(\"Changes from: Teammate 1 · Teammate 2\"), rust Some(\"Changes from: teammate-1 · teammate-2\")"
+          "syncToast.text: tC4 \"Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: Teammate 1 · Teammate 2 This project now uses 5 resource versions that are not on this computer. Review Download\", rust \"Synced with Door43 · 2 changes from teammates · 1 conflict kept the newest version · 1 verse conflict to review Changes from: teammate-2 · teammate-1 Titus 1:1: teammate-2's alignment replaced teammate-1's. The older version is in History. This project now uses 5 resource versions that are not on this computer. Review Download\"",
+          "syncToast.newestWins: tC4 0, rust 1",
+          "syncToast.from: tC4 Some(\"Changes from: Teammate 1 · Teammate 2\"), rust Some(\"Changes from: teammate-2 · teammate-1\")"
         ]
       }
     },
