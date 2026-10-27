@@ -36,7 +36,7 @@ A translator opening the first Hebrew word waits for it. Under a third of a seco
 - It came from PERF-LAPTOP (docs/evidence/perf-laptop-2026-10-27.md), on the Windows 10 reference
   laptop (Intel Core i5-8350U, 8 GiB, SSD, Defender on).
 - Re-measure with: $(System.Collections.Hashtable.cmd). A figure from the Linux machine alone does not close this card.
-- Remedy: none proposed. The first load is 11 times the warm one, so look at what the first call pays that the others do not (a cold file read under Defender, allocation, or a one-time index) before changing the parser; a lazy load behind the first lookup that needs it is the usual next step.
+- Remedy (step 1 found the limit): the first read of the 2 MB file waits about 140 ms in the operating system, once per newly seen file; the code's own part is 22 ms. Options: keep the lexicon compressed on disk (estimate about 40 ms), or read both lexicons in the background after launch. See "Step 1 findings" in the evidence file.
 
 ## Funnel card
 
@@ -87,3 +87,4 @@ clippy step from .github/workflows/ci.yml), plus:
 ## Log
 
 - 2026-10-27 | reference-laptop session (Claude Code) | create | none | Card created by PERF-LAPTOP step 2 for the missed row "Load a lexicon (the Hebrew lexicon, 8,674 entries): 100 ms to load once per session" | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 | none | Limit found: the first read of lexicon.json waits ~140 ms on the content (not the name or the write path); read 0.8 ms and parse 22 ms are the code. Cause inferred to be Defender's scan, not shown | docs/evidence/perf-laptop-2026-10-27.md

@@ -87,3 +87,4 @@ clippy step from .github/workflows/ci.yml), plus:
 ## Log
 
 - 2026-10-27 | reference-laptop session (Claude Code) | create | none | Card created by PERF-LAPTOP step 2 for the missed row "Materialize one book, off the project actor: 1 s p95" | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | Time tracks bytes written (110 to 131 ms per MB across Psalms and Jude); the laptop verse-save run wrote 3 derived files where S2 on Linux wrote 1, a lead for the storage lane. Cause (a scan of what the job writes) inferred, not shown. Counters of every run still to print | docs/evidence/perf-laptop-2026-10-27.md

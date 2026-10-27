@@ -1,4 +1,4 @@
-﻿# PERF-LAPTOP: budgets measured on the reference laptop, 2026-10-27 (step 1)
+# PERF-LAPTOP: budgets measured on the reference laptop, 2026-10-27 (step 1)
 
 Part 1 is the project-store rows (`storebench`). Part 2 is the release timing tests, the app benches and the installed unsigned 4.1.0-preview app. "Not yet measured" says what is left.
 
@@ -112,3 +112,55 @@ measured (there is no earlier build installed).
   the open rows (7 runs, the bench's default) and the first launches (3).
 - The measurer built and ran the benches, so the "someone other than the measurer" check of the
   review gate is still to do.
+
+## Step 1 findings
+
+### PERF-LEXICON-LOAD: the first read of `lexicon.json` waits about 140 ms; the code's part is 22 ms
+
+- The test's first load is 156 to 162 ms in 8 runs (the 312 ms of the first report was taken while a
+  build ran). Warm it is 21 to 24 ms: read 0.8 ms, parse 21 to 22 ms.
+- Splitting the first load: the lookup of the install is 0.3 ms, **the first `std::fs::read` of the
+  2,055,993-byte file is 129 to 145 ms**, the second read is 0.8 ms, and the parse is the same 21 ms
+  both times. Nothing in `open_lexicon` or `Installed::read` does one-time work.
+- The slow read follows the file's content, not its name, folder or how it was written. The same
+  bytes named `.dat` or `.txt` read in 137 to 162 ms; the first half of the file reads in 114 to
+  122 ms; a 2 MB ASCII JSON file in 7 to 17 ms; a gzip of the lexicon (455,617 bytes) in 6 to 8 ms;
+  a 2 MB Door43 TSV in 8 to 10 ms. Written by the store's own staging and folder rename, by a
+  one-file rename, or by Copy-Item, it costs the same. The file written and then read again after
+  3 s reads in 3.7 ms. The seeded original, never read since the first launch, cost 158 ms on its
+  first read.
+- So the cost sits in the operating system, and it is paid once per newly seen file. It is
+  consistent with Defender's real-time scan, but that is **inferred, not shown**: Defender must
+  stay on for these measurements, so it was not switched off to check.
+- What a fix can do, in code the card owns: (1) keep the lexicon compressed on disk. The estimate
+  is 7 ms read, about 8 to 10 ms to inflate (not measured in Rust; .NET took 25 ms), and 21 ms to
+  parse, so about 40 ms; (2) read both lexicons in a background task after launch, so the 140 ms
+  is paid before the first lookup; (3) accept it and say so in the budget: the row is 100 ms and
+  the code's own part is 22 ms. Options (1) and (2) change nothing a translator can lose.
+
+### PERF-MATERIALIZE-BOOK: the time follows the bytes the job writes, about 0.12 s per MB
+
+From the counters `storebench materialize` printed for the last run of each case (laptop, commit
+003aa087) and the medians of its 20 runs:
+
+| Case | Median | Bytes written | ms per MB written | Bytes read | Bytes hashed | Files opened / created | Derived read / projected / written | fsyncs |
+|---|---:|---:|---:|---:|---:|---:|---|---:|
+| Psalms after a verse save | 2,216 ms | 16.94 MB | 131 | 152.3 MB | 66.6 MB | 13 / 11 | 5 / 5 / 3 | 30 |
+| Psalms after a decision | 993 ms | 7.79 MB | 127 | 52.7 MB | 27.7 MB | 4 / 6 | 2 / 5 / 1 | 17 |
+| Jude after a verse save | 90 ms | 0.81 MB | 110 | 1.95 MB | 1.30 MB | 10 / 12 | 5 / 5 / 4 | 32 |
+
+- Time per MB written is the same, 110 to 131 ms, across a 20-fold range of sizes. Bytes read and
+  hashed do not fit as well (read: 14, 19 and 46 ms per MB). The lexicon finding above gives
+  about 70 ms per MB for the operating system's first read of newly written text, so a scan of
+  what the job writes is the likely limit. That is **inferred from the fit, not shown**.
+- S2's Linux counters for the same case were: Psalms after a verse save 3 / 5 files, 5 projected,
+  **1** derived file written, 34 MB read, 24.8 MB hashed, 11 fsyncs, 190 ms median. The laptop's
+  last run wrote **3** derived files, read 4.5 times the bytes, hashed 2.7 times the bytes, and
+  made 30 fsyncs. The decision case matches Linux's counts (1 derived file written, 17 fsyncs).
+  Why one verse save rewrites two more derived files on the laptop is a lead for the storage
+  lane: a derived file compared by something that differs on Windows (a time stamp, a line
+  ending, a path case) would be written again each time. The laptop's last run may also be one
+  where the watcher's echo or a periodic step ran; the counters are of one run only.
+- Next for the card: print the counters of every run, not only the last, and the bytes written
+  per derived file; if a second file's bytes are written each time without changing, that is
+  the fix. Fewer bytes written is the lever whatever the cause.
