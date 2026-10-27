@@ -4,7 +4,7 @@ title: A tC3 import keeps the project's language name and direction
 track: A
 lane: app
 milestone: M5
-state: claimed
+state: verifying
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-TC3-LANG
 worktree: .worktrees/track-TC3-LANG
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: FIX-R step 1's Settings reader)
 merged: none
 updated: 2026-10-27
-next: Step 1: a tc-app import gate test that fails on main.
+next: Step 3: the three review lenses (loss, races and protocol, browser and parity), then gates.sh --touched with main merged in.
 blocked_by: none
 ---
 
@@ -36,7 +36,7 @@ Today the name is replaced by the code ("cfm" for "Chin, Falam") in metadata.jso
 
 ## Funnel card
 
-- **Invariants**: none new.
+- **Invariants**: none new. The gate test holds two existing ones for an import: INV-TEXT-DIRECTION-HAS-ONE-SOURCE (metadata.json's scriptDirection and what Settings reads agree) and INV-VALID-BURRITO.
 - **Code**: tc-app's tC3 import reads the manifest's language name and direction; when the manifest has none, today's behaviour stays.
 - **Checks**: tc-app test: importing the cfm fixture writes metadata.json with name "Chin, Falam" and Settings reads it; an rtl tC3 manifest imports rtl.
   - Proof it can fail: the test fails on main 003aa087.
@@ -65,3 +65,5 @@ Today the name is replaced by the code ("cfm" for "Chin, Falam") in metadata.jso
 
 - 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found | docs/evidence/tc4-issues-2026-10-27/open.md
 - 2026-10-27 09:08 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed on branch track-TC3-LANG in .worktrees/track-TC3-LANG | git log -1
+- 2026-10-27 09:39 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | gate test fails on main 003aa087: `Tita ltr: metadata.json's language` left name.en "cfm", right "Chin, Falam" | cargo test -p tc-app --test app a_tc3_import_keeps_the_manifest_language_name_and_direction
+- 2026-10-27 09:39 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | tc-import reads target_language.name and .direction (ltr/rtl into an enum, else none) and the import's create uses them; a manifest without them imports as before; tc-import 90 and tc-app 800+ tests pass | cargo test -p tc-import -p tc-app

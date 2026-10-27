@@ -79,6 +79,23 @@ fn create_details(details: &ImportDetails) -> Details {
     }
 }
 
+/// The create form's details for `import`: the language name and direction its manifest
+/// holds, where it holds them (tC4 #832).
+fn imported_details(details: &ImportDetails, import: &Tc3Import) -> Details {
+    use tc_import::tc3::Direction as Read;
+    let mut form = create_details(details);
+    if let Some(name) = &import.language_name {
+        form.language_name.clone_from(name);
+    }
+    if let Some(direction) = import.direction {
+        form.direction = match direction {
+            Read::Ltr => Direction::Ltr,
+            Read::Rtl => Direction::Rtl,
+        };
+    }
+    form
+}
+
 /// The verses of a book and those with words, as Home's drafted test counts them.
 fn verse_counts(parts: &BookParts) -> (u32, u32) {
     let mut verses = 0;
@@ -894,7 +911,7 @@ impl ImportPort for TcImport {
             let mut project_pins = tc_resources::suite::project_pins();
             lay_over(&mut project_pins, &found, &import);
             let mut records = crate::create::project_records(
-                &create_details(&details),
+                &imported_details(&details, &import),
                 &folder,
                 ProjectKind::Bible,
                 Some(StandardScheme::DEFAULT),
