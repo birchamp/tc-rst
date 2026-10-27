@@ -4,7 +4,7 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: claimed
+state: blocked
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-VRS-GUESS
 worktree: .worktrees/track-VRS-GUESS
@@ -15,8 +15,8 @@ no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
 merged: none
 updated: 2026-10-27
-next: Step 1: the fit function in crates/tc-versification and its tests.
-blocked_by: none
+next: When the owner rules on a tie that leaves eng out, put the rule in tc-app's guess (step 2), then unblock.
+blocked_by: owner question on H13 - a tie between schemes that leaves eng out (org and lxx share every count of 22 books, Malachi and Joel among them)
 ---
 
 # VRS-GUESS: A tC3 import offers the versification its verse counts fit
@@ -93,3 +93,5 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 10:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: the owner wants #822 in the preview, rule as the issue proposes (H13) | rulings/2026-10-27-H13.md
 - 2026-10-27 10:10 EDT | tc4-issues session (Claude Code dc817a96) | ruling | none | H13 answered for the tC3 import | rulings/2026-10-27-H13.md
 - 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed in .worktrees/track-VRS-GUESS on track-VRS-GUESS | python3 -I .audit/tools/board.py
+- 2026-10-27 12:10 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | best_fits and distance in tc-versification: a scheme's distance is the verses between each held chapter's last verse and the scheme's, the nearest win, more than one is a tie | cargo test -p tc-versification --lib fit
+- 2026-10-27 12:15 EDT | tc4-issues session (Claude Code dc817a96) | block | none | H13 says a tie gives eng, but an org-shaped Malachi or Joel ties org with lxx (same counts in 22 books), so the literal rule keeps #822's eng for exactly the books it is meant to fix; the ruling gives no rule for a tie that leaves eng out | fit::tests::malachi_in_three_chapters_fits_the_hebrew_numbering
