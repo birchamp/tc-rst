@@ -314,6 +314,7 @@
   "updateBook.unreadable",
   "updateBook.working",
   "upgrade.checkFailedRefused",
+  "sources.alreadyHere",
   "upgrade.checkFailedServer",
   "upgrade.checkFailedUnreachable",
   "upload.notWritten",

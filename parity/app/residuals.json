@@ -32,6 +32,12 @@
       "until": null
     },
     {
+      "id": "download-already-here",
+      "why": "tC4's Download package ends with \"✓ {book} · {lang} is ready\" whether it fetched anything or not. English comes with the app, so a tester read \"is ready\" with the internet off as a download that broke the switch. When every repository was already on this computer the rebuild says \"✓ {book} · {lang} is already on this computer\" (`sources.alreadyHere`, a rebuild key whose translations are pending; `tc_api::resources::Downloaded`), and \"is ready\" when one was fetched (journeys `a package already on this computer says so and fetches nothing`, `j3_a_download_from_the_seeded_fake_installs_the_pinned_version`). No baseline screen shows a finished download.",
+      "cites": "AGENTS.md \"Matching tC4\"; owner, 2026-10-27; PKG-HERE",
+      "until": null
+    },
+    {
       "id": "poem-verse-drafted",
       "why": "A book tile's drafted percentage counts a verse as drafted when its words, trimmed, are neither empty nor ___ (tc_app::drafted, tC4 #572's span rule). tC4 reads a verse's body only up to its first paragraph marker, so a poem verse whose words are on \\q lines is undrafted there and drafted here (test a_poem_verse_with_words_counts_as_drafted). No baseline verse is such a verse.",
       "cites": "AGENTS.md \"Matching tC4\"; B2 D3",

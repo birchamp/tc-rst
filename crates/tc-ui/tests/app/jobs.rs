@@ -70,8 +70,10 @@ fn a_job_ends_once_with_the_state_the_server_gave() {
     );
     // A row's outcome is typed; another row's outcome ends lost.
     assert_eq!(
-        typed::<Download>(JobEnd::Done(JobOutcome::Finished)),
-        JobEnd::Done(())
+        typed::<Download>(JobEnd::Done(JobOutcome::Downloaded(
+            tc_api::resources::Downloaded::AlreadyHere
+        ))),
+        JobEnd::Done(tc_api::resources::Downloaded::AlreadyHere)
     );
     assert_eq!(
         typed::<Download>(JobEnd::Done(JobOutcome::Created {

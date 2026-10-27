@@ -458,7 +458,11 @@ impl Handle<Download> for App {
                     ))));
                 }
                 if failed.is_empty() {
-                    Ok(())
+                    Ok(if fetched_any {
+                        tc_api::resources::Downloaded::Fetched
+                    } else {
+                        tc_api::resources::Downloaded::AlreadyHere
+                    })
                 } else {
                     Err(JobEnd::Failed(ApiError::Refused(Refusal::Resources(
                         ResourceRefusal::SomeFailed {

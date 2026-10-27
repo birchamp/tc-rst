@@ -201,6 +201,8 @@ pub enum JobOutcome {
     VersionsFound(crate::import::VersionsView),
     /// What Update a book did (F1).
     BookUpdated(crate::import::UpdateReport),
+    /// A source-text download that ended with no failure.
+    Downloaded(crate::resources::Downloaded),
 }
 
 /// What a completed sync brought and left (tC4's `report.facts` of an ok sync, which its toast
@@ -354,8 +356,8 @@ starts_job! {
     crate::session::Open => Box<crate::session::OpenedProject> {
         JobOutcome::Opened(opened) => opened, opened => JobOutcome::Opened(opened)
     }
-    crate::resources::Download => () {
-        JobOutcome::Finished => (), _done => JobOutcome::Finished
+    crate::resources::Download => crate::resources::Downloaded {
+        JobOutcome::Downloaded(done) => done, done => JobOutcome::Downloaded(done)
     }
     crate::resources::PlanUpgrade => Box<crate::resources::PlanView> {
         JobOutcome::PlanReady(plan) => plan, plan => JobOutcome::PlanReady(plan)

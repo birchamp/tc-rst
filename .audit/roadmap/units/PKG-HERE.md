@@ -1,0 +1,70 @@
+---
+id: PKG-HERE
+title: Download package says when the package was already on this computer
+track: A
+lane: app
+milestone: M5
+state: verifying
+owner: tester findings lane (Claude Code 76125a0f)
+branch: track-REL1-tester
+worktree: .worktrees/track-REL1-tester
+depends: []
+needs_owner: []
+proves: []
+no_loss: false
+size: 0.5 d (basis: one job outcome and one string)
+merged: none
+updated: 2026-10-27
+next: One review, then scripts/gates.sh --touched with main merged in, then push and hand to the integration lane.
+blocked_by: none
+---
+
+# PKG-HERE: Download package says when the package was already on this computer
+
+## Goal
+
+A 4.1.0-preview tester read "✓ Titus · English is ready" as a download made with the internet
+switch Off. It was not: the switch held (Download asks while Off; one "Turn on internet" keeps
+it On for the session, tC4 D95), and English comes with the app, so nothing was fetched. The
+owner chose (2026-10-27) to say "✓ {book} · {lang} is already on this computer" when every
+repository was already here, and "is ready" when one was fetched.
+
+## Why it matters to a translator
+
+A translator who keeps the internet off on purpose must be able to trust that the app did not
+go online.
+
+## Funnel card
+
+- **Invariants**:
+  - INV-DOWNLOAD-SAYS-FETCHED: the finished line says "is ready" only when the job installed a
+    repository.
+- **Code**: `tc_api::resources::Downloaded { Fetched, AlreadyHere }` as the `Download` job's
+  outcome (`JobOutcome::Downloaded`); tc-app's download job returns it from `fetched_any`;
+  tc-ui's `Dl::Done` carries it to the footer.
+- **Checks**: journeys `a package already on this computer says so and fetches nothing` (no
+  request outside `/api/`, the new line) and J3 asserts "is ready" after a real fetch, in
+  `parity/app/journeys/source-texts.test.mjs`; tc-ui `tests/app/jobs.rs` types the outcome.
+  On main 020e0ddf the first journey fails: the line is "is ready".
+- **Prose**: `sources.alreadyHere` in `crates/tc-ui/assets/i18n-rebuild/en.json`, pending in
+  every other language; declared difference `download-already-here` in
+  `parity/app/residuals.json`.
+- **Human**: the owner chose the words.
+
+## Steps
+
+### Step 1: The outcome, the string and the journeys
+### Step 2: One review; `scripts/gates.sh --touched` with main merged in
+
+## Gates before merge
+
+`scripts/gates.sh --touched` with main merged in; one `verify` line.
+
+## References
+
+- tC4 `src/state.jsx` `downloadPackage`; the audit session's relay of the owner's choice, 2026-10-27.
+
+## Log
+
+- 2026-10-27 12:55 EDT | tester findings lane (Claude Code 76125a0f) | created | none | Not reproduced as a network bug: Download asks while the switch is Off and fetched nothing; the owner chose new words for a package already here | parity/app/journeys/source-texts.test.mjs
+- 2026-10-27 12:55 EDT | tester findings lane (Claude Code 76125a0f) | claim | none | Claimed with the change on track-REL1-tester | none

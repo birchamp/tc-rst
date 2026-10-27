@@ -303,7 +303,7 @@ impl Actions {
                 this.patch_src(|src| src.packages = Some(view));
             }
             match ended {
-                JobEnd::Done(()) => this.patch_src(|src| src.dl = Some(Dl::Done)),
+                JobEnd::Done(done) => this.patch_src(|src| src.dl = Some(Dl::Done(done))),
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
                     this.patch_src(|src| src.dl = None);
                 }

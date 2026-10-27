@@ -202,6 +202,18 @@ pub struct Download {
     pub repos: Vec<String>,
 }
 
+/// What a finished `Download` did: the dialog says "already on this computer" when nothing
+/// had to be fetched (owner, 2026-10-27; tC4 says "is ready" either way).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub enum Downloaded {
+    /// At least one repository was installed.
+    Fetched,
+    /// Every repository was already on this computer at the version wanted.
+    AlreadyHere,
+}
+
 // ---------------------------------------------------------------------------------------
 // Release upgrades (unit C8; tC4 `ResourceUpdates.jsx`, `UpgradeSet.jsx`)
 // ---------------------------------------------------------------------------------------
