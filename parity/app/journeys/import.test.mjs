@@ -246,7 +246,9 @@ browserTest('tC3 name clash: a Bible name of a project on this computer is flagg
 /** The tC3 Titus fixture rewritten as Malachi in 3 chapters, as Hebrew Bibles number it (#822). */
 function hebrewMalachi() {
   // Resolved here, not at load: CI's node job installs nothing, and the file must still load there.
-  const fflate = createRequire(import.meta.url)(path.join(REPO, 'parity', 'tc4-baseline', 'node_modules', 'fflate'));
+  // fflate sits beside Playwright: in this checkout's tc4-baseline, or next to PLAYWRIGHT_MODULE.
+  const modules = process.env.PLAYWRIGHT_MODULE ? path.dirname(process.env.PLAYWRIGHT_MODULE) : path.join(REPO, 'parity', 'tc4-baseline', 'node_modules');
+  const fflate = createRequire(import.meta.url)(path.join(modules, 'fflate'));
   const src = fflate.unzipSync(fs.readFileSync(TIT));
   const text = (name) => fflate.strFromU8(src[name]);
   const out = {

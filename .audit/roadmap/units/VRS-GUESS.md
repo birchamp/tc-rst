@@ -4,7 +4,7 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: building
+state: verifying
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-VRS-GUESS
 worktree: .worktrees/track-VRS-GUESS
@@ -15,7 +15,7 @@ no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
 merged: none
 updated: 2026-10-27
-next: Step 3: run the import journey (parity/app/journeys/import.test.mjs) on target/debug/tc4 and target/tc-ui-app.
+next: Step 4: the browser and parity lens, then merge main and run scripts/gates.sh --touched.
 blocked_by: none
 ---
 
@@ -99,3 +99,6 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 13:20 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | guess and SchemeGuess (Fits, Undecided, Tied, Nearest) settle the default as the addendum says | cargo test -p tc-versification --lib fit
 - 2026-10-27 15:40 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | ImportFound carries the guess (SchemeGuess: scheme, fit, names); Run carries the chosen versification, written to ingredients/vrs.json and the first project.vrs.set; Review's count and the run's carry-over place decisions in the chosen scheme; a name that is not a standard versification is a BadRequest. Fails with main's StandardScheme::DEFAULT line: "assertion `left == right` failed: INV-IMPORT-SCHEME-SHOWN: the project gets the scheme the review page showed" (import_scheme.rs:119), 3 of 4 failed; passes after | cargo test -p tc-app --features test-hooks --test app -- import_scheme
 - 2026-10-27 15:45 EDT | tc4-issues session (Claude Code dc817a96) | note | none | step 3's code is in this commit: the review page's Versification select (tC4's wizard.versification label) and its note, four rebuild keys pending in nine languages, ImportForm.pick_versification asks the carry-over count again; tc-ui form test passes; journey not yet run | cargo test -p tc-ui --test app -- import
+- 2026-10-27 16:30 EDT | tc4-issues session (Claude Code dc817a96) | verify | 6eac5f45 | loss lens, a read-only subagent (Claude Code a0263873): 1 Code: a typed StandardScheme at the run's boundary, a typed UI value is minor; 2 Checks: import_scheme.rs and the forms test name INV-IMPORT-SCHEME-SHOWN, 3 of 4 fail without the fix; 3 Reach: every path is the review page's; 4 Siblings: the other eng/DEFAULT uses are resource frames or a project with no record, correct; 5 No loss: verses and alignments never read the scheme, a decision not placed is kept marked invalid, the count and the run use one frame, the scheme rides the staged create; 6 Prose: reasons only, H13 and its addendum on file. No blocker or major; 2 minors | .audit/minors.tsv
+- 2026-10-27 16:35 EDT | tc4-issues session (Claude Code dc817a96) | verify | 6eac5f45 | races and protocol lens, a read-only subagent (Claude Code acda0311): 1 Code: the reply cache keys a request id with the body's digest, so a stale retry is RequestReused, never the old job; 2 Checks: the forms test now also drops a count answered after a pick (its minor 1, added); 3 Reach: all reachable; 4 Siblings: pick_license follows the same new-id pattern; 5 No loss: the scheme is fixed when Run is sent, cancel unchanged, Review's Option field reads missing as none, no hand-built Run body outside the UI and goldens; 6 Prose: reasons only. No blocker or major; 1 minor logged | .audit/minors.tsv
+- 2026-10-27 17:30 EDT | tc4-issues session (Claude Code dc817a96) | step 3 | none | journey import, two cases: the Titus tie offers eng and says the counts did not decide; a Hebrew-numbered Malachi offers org (tied with lxx), vul chosen is written to ingredients/vrs.json and MAL 3:19-24 stay; the file's other seven cases pass; #822 declared in docs/TC4-ISSUES.md | TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_DOOR43_FAKE=target/debug/tc-door43-fake node --test parity/app/journeys/import.test.mjs (9 pass)

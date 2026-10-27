@@ -823,6 +823,18 @@ mod import {
         form.pick_versification("eng".into(), rid(6));
         assert_eq!(form.versions, VersionLookup::NotLookedUp, "counted again");
         assert_eq!(form.press_run(NONE), None, "Import waits for the count");
+        // A count asked in one versification and answered after a pick is dropped.
+        form.use_installed(rid(72)).unwrap();
+        form.pick_versification("lxx".into(), rid(7));
+        form.carry_counted(rid(72), Some(COUNTED));
+        form.carry_failed(rid(72), "late".into());
+        assert_eq!(
+            form.versions,
+            VersionLookup::NotLookedUp,
+            "the late count is dropped"
+        );
+        assert_eq!(form.state, ImportState::Idle);
+        form.pick_versification("eng".into(), rid(6));
         let asked = form.use_installed(rid(71)).unwrap();
         assert_eq!(asked.versification.as_deref(), Some("eng"));
         form.carry_counted(rid(71), Some(COUNTED));
