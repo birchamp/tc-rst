@@ -245,6 +245,11 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
                     fs.kill_before(k, false);
                 }
                 let handle = store.open(&folder, &OpenOptions::default());
+                assert!(
+                    handle.is_ok() || fs.is_dead(),
+                    "{:?}",
+                    handle.as_ref().err()
+                );
                 if let Ok(handle) = &handle {
                     handle.wait_idle();
                     let _ = handle

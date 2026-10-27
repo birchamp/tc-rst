@@ -2514,7 +2514,11 @@ O15 A writable open that found pending files (saves a session that ended without
     packs they were written from) and K3 stores each as a blob;
     the next checkpoint commits them. Their only copy was a pending file another program could
     damage, and their age is unknown, so none may wait for the next seal (owner ruling
-    2026-10-22-acceptable-loss: no save older than 2 minutes may be lost).
+    2026-10-22-acceptable-loss: no save older than 2 minutes may be lost). One exception: when
+    O9 could not read a derived file (another program holds it), a group a kill left half done
+    cannot be finished, so the open does not seal and the 2-minute seal (§5.13) takes them. A
+    seal that fails at the open keeps its pending files and says why in Notices; the open goes
+    on writable.
 ```
 
 Open refuses only for: another process holds the lock (`LockHeld`, which names the holder),

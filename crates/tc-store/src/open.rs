@@ -685,6 +685,10 @@ fn open_inner(
                     .shared
                     .set_mode(Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())));
                 write_failed = Some(reason);
+                // No O10 job runs to end the seal's write group.
+                if std::mem::take(&mut writer.sealed_at_open) {
+                    project.shared.close_group();
+                }
             }
         }
     } else {
@@ -810,14 +814,21 @@ fn repair_and_classify(
     // files against the packs they were written from, so O10 lists the new packs. Their only
     // copy is a pending file and their age is unknown (ruling 2026-10-22: at most the last 2
     // minutes may be lost). K3 stores each pack as a blob; the next checkpoint commits them.
-    // Not while O9 could not read a derived file: a seal then makes `metadata.json` read as
-    // edited outside (an older bug a checkpoint meets too, LOSS-2 minors); the 2-minute seal
-    // takes these saves instead.
+    // Not while O9 could not read a derived file: the group a kill left half done cannot be
+    // finished, and a seal then makes `metadata.json` read as edited outside; the 2-minute
+    // seal takes these saves (§6.1 O15).
     if project.journal.has_unsealed() && !writer.derived_unread {
         project.shared.open_group();
         writer.sealed_at_open = true;
-        let mut run = project.seal_start()?;
-        while project.seal_step(&mut run)? {}
+        let sealed = (|| {
+            let mut run = project.seal_start()?;
+            while project.seal_step(&mut run)? {}
+            Ok::<(), StoreError>(())
+        })();
+        // A seal that fails keeps its pending files and says why in Notices, as at a
+        // checkpoint; the open goes on writable, O10 lists any pack it renamed (I7), and the
+        // 2-minute seal tries again.
+        drop(sealed);
         writer.packs = project.pack_facts();
     }
     tracker.phase(Phase::Writing, 1, 0);

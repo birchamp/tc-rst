@@ -256,8 +256,34 @@ impl Actor {
         self.unsealed_since = Some(since);
         if now - since >= SEAL_WITHIN_MS {
             self.unsealed_since = None;
-            let reason = CheckpointReason::Other("2 minutes after a save".into());
-            self.checkpoint(reason, Vec::new(), None);
+            self.seal_now();
+        }
+    }
+
+    /// A seal that commits nothing: its packs are stored as blobs (K3) until the next
+    /// checkpoint commits them, so typing makes no commit every 2 minutes. A write group from
+    /// the seal's first pack to the job that lists it (I7).
+    fn seal_now(&mut self) {
+        if self.read_only().is_some() || !matches!(self.second_writer(), Ok(false)) {
+            return;
+        }
+        self.project.shared.open_group();
+        let sealed = self
+            .project
+            .restore_expected_packs(false)
+            .and_then(|()| self.seal_serving());
+        // As for a periodic checkpoint nobody waits for: the seal tells what it could not take
+        // in Notices, and the next seal or checkpoint tries again. The files are written
+        // anyway, so a pack it renamed is listed (I7).
+        drop(sealed);
+        let job = self.project.materialize_job(Origin::Sealed, None, None);
+        let sent = self
+            .project
+            .writer
+            .as_ref()
+            .is_some_and(|writer| writer.send(Job::Materialize(Box::new(job))).is_ok());
+        if !sent {
+            self.project.shared.close_group();
         }
     }
 

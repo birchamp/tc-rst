@@ -59,6 +59,9 @@ pub(crate) enum Origin {
     Leave,
     /// A checkpoint: a seal ran first.
     Checkpoint,
+    /// A seal that commits nothing ran first (a save waited 2 minutes, §5.13): the job lists
+    /// its packs and ends its write group.
+    Sealed,
 }
 
 /// What the actor sends the writer.
@@ -348,7 +351,10 @@ impl Writer {
             reply,
             checkpoint,
         } = job;
-        if checkpoint.is_some() {
+        if checkpoint.is_some()
+            || origin == Origin::Sealed
+            || (origin == Origin::Open && std::mem::take(&mut self.sealed_at_open))
+        {
             self.begin_exact(&snapshot, packs, complete);
         } else {
             self.begin(&snapshot, packs, complete);

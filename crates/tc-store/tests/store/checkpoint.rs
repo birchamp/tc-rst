@@ -803,6 +803,58 @@ fn a_pending_file_a_crash_left_is_sealed_at_the_open() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
+/// The open's seal of what a crash left fails (the disk refuses the pack's rename): the
+/// pending file is kept, the open goes on writable, the save shows, and the folder is a valid
+/// Scripture Burrito once the open's materialization is done (§6.1 O15, LOSS-2).
+#[test]
+fn a_seal_that_fails_at_the_open_keeps_the_project_writable() {
+    let (rig, folder) = titus();
+    let handle = open(&rig, &folder);
+    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    // The same open on a copy tells which write point the pack's rename is.
+    let probe = fs.copy();
+    let probe_rig = rig_as(probe.clone(), APP, "host-1");
+    probe.clear_log();
+    let start = probe.ops();
+    let probed = open(&probe_rig, &folder);
+    let changes = folder.join("ingredients/tc/changes");
+    let rename = probe
+        .log()
+        .iter()
+        .find(|op| op.kind == tc_store::fault::OpKind::Rename && op.path.starts_with(&changes))
+        .map(|op| op.index - start)
+        .expect("the open seals into a pack");
+    drop(probed);
+    drop(probe_rig);
+    let rig = rig_as(fs, APP, "host-1");
+    rig.fs.fail_op(rename, std::io::ErrorKind::Other);
+    let handle = open(&rig, &folder);
+    assert_eq!(handle.facts().mode, tc_store::Mode::Writable);
+    assert_eq!(
+        pending_files(&rig, &folder).len(),
+        1,
+        "the pending file is kept"
+    );
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    handle.wait_idle();
+    assert_valid_burrito(&rig.fs, &folder);
+    save_verse(&handle, 1, 2, "a later save").unwrap();
+    handle.close().unwrap();
+    let handle = open(&rig, &folder);
+    assert_eq!(
+        words(&handle, 1, 1).as_deref(),
+        Some("saved before a crash")
+    );
+    assert_eq!(words(&handle, 1, 2).as_deref(), Some("a later save"));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
 /// §5.11 K4: a pending file another program removes after K1 read it and before K4 removes it.
 /// The verified pack holds every change of it already, so the seal goes on as if K4 had
 /// removed it: the checkpoint commits, and the next checkpoint writes no second pack of the
