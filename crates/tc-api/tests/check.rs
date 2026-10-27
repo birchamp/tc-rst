@@ -184,7 +184,7 @@ fn the_psalms_forms_that_a_numeric_reference_refused_read_back_as_written() {
         .collect();
     let wire = json!({
         "view": 1, "stored": "written", "tokens": [], "newConflicts": [], "saved": [],
-        "rows": rows, "diskWarning": null,
+        "rows": rows, "diskWarning": null, "dropped": [],
     });
     let ack: Ack = serde_json::from_value(wire.clone()).unwrap();
     let read: Vec<String> = ack.rows.iter().map(|r| r.row.place.to_string()).collect();

@@ -4,7 +4,7 @@ title: A Translate save that sends an alignment link back to the word bank says 
 track: A
 lane: app
 milestone: M5
-state: verifying
+state: gating
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-LINK-DROP
 worktree: .worktrees/track-LINK-DROP
@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: FIX-R step 2, the Align half of the same list)
 merged: none
 updated: 2026-10-27
-next: Merge main, then scripts/gates.sh --touched; then ready for a batch.
+next: Ready for a batch with POEM-TAB: both change crates/tc-ui/src, so every screen is recaptured once on the batch tree (captures_match_the_current_ui_source); the integration lane takes it.
 blocked_by: none
 ---
 
@@ -101,3 +101,4 @@ protocol, browser and parity).
 - 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | major (project crossing): each collected link keeps the open it was saved in; Translate lists only the open's own and Dismiss clears only those. The journey passes | crates/tc-ui/src/views/translate.rs dropped_links
 - 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | major (section path): a_section_save_names_the_link_it_sends_back_to_the_bank; with section_ack's list emptied it fails ("left: []") | crates/tc-app/tests/app/align_store.rs
 - 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | note | none | keepDraft (F1) is not reachable: no screen calls session/keepDraft (`grep -rn keepDraft crates/tc-ui shell` finds none), so it is a minor; the crash gap (F2) is the owner's declared limit for the preview (orchestrator, 2026-10-27, under rulings/2026-10-22-acceptable-loss.md), declared in docs/PLAN.md and docs/APP-DESIGN.md, with card LINK-MARK after 4.1.0 | .audit/roadmap/units/LINK-MARK.md
+- 2026-10-27 14:10 EDT | tc4-issues session (Claude Code dc817a96) | gate | 426acf60 | scripts/gates.sh --touched with main 69c7dc39 merged: journeys 102/102, no skips; Rust 2009/2011; failed tc-api check's the_psalms_forms_that_a_numeric_reference_refused_read_back_as_written (its wire JSON lacked `dropped`; fixed, tc-api check passes) and tc-ui screen_record captures_match_the_current_ui_source (every capture records the tc-ui source tree; recapture on the batch tree with POEM-TAB) | /tmp/claude-1000/-home-bot-tc-rst/dc817a96-3f26-478a-9cb7-3304a28410ab/scratchpad/ld-touched.log
