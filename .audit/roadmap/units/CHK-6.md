@@ -4,7 +4,7 @@ title: Lint ratchet and fresh P7 captures
 track: A
 lane: checks
 milestone: M1
-state: verifying
+state: done
 owner: checks lane (Claude Code 93835106)
 branch: track-CHK-6
 worktree: .worktrees/track-CHK-6
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P7]
 no_loss: false
 size: 1 d
-merged: none
-updated: 2026-10-26
-next: step 5 is ready for a merge batch run by the integration lane (steps 2 and 3 landed in batch 21; steps 1, 4 and 6 as CHK-6a). The batch's merge tree must keep the captures' trees: a batch that also changes crates/tc-ui/src, crates/tc-ui/assets, crates/tc-ui/app or crates/tc-api/src recaptures every screen on it. Branch track-CHK-6
+merged: d217b98e
+updated: 2026-10-27
+next: none
 blocked_by: none
 ---
 
@@ -291,3 +291,5 @@ Plus: the gate step `ignored`; the recapture of step 5 on this PC; every journey
 - 2026-10-26 21:30 EDT | checks lane (Claude Code 93835106) | note | none | Main 2fc90cc1 (batch 21) merged in; its lint fix in crates/tc-api/src/door43.rs changed that tree, so every capture was retaken on the merge: only the loopback ports and the masked clock moved | cargo test --locked -p tc-ui --test screen_record
 - 2026-10-26 21:30 EDT | checks lane (Claude Code 93835106) | note | none | To the app lane: from now on a commit that changes crates/tc-ui/src, crates/tc-ui/assets, crates/tc-ui/app or crates/tc-api/src recaptures every screen and case in the same commit (rebuild tc4 and the UI first, or capture-rust.mjs refuses), and so does a merge that changes them; captures_match_the_current_ui_source names the stale ones. A capture that differs then gets its residual naming the card, as this step did | crates/tc-ui/tests/screen_record.rs
 - 2026-10-26 21:55 EDT | checks lane (Claude Code 93835106) | gate | ca26f869 | scripts/gates.sh --touched exits 0 on the branch with main 2fc90cc1 merged | scripts/gates.sh --touched
+- 2026-10-27 03:50 EDT | integration lane (Claude Code 3d07d5f8) | note | d217b98e | The one full recapture on the final tree (main 20cf025e merged into track-CHK-6, rebuilt first): all 123 retaken with their own unit and layers in 28 runs, E1a and E1b with --real-sync, license and the two open-progress entries each alone; none failed. E2 step 7's single USB menu moved the shared OBS card to x 630 (147 by 31), so q2-obs-card widens to x 630, width 374. No report row changed its verdict: 26 same, 97 differ, 7 unported, 0 failed (130 rows), as before | UPDATE_REPORT=1 cargo test --locked -p tc-ui --test screen_record
+- 2026-10-27 04:11 EDT | integration lane (Claude Code 3d07d5f8) | merge | d217b98e | step 5 merged into main in batch 35 with the recapture on the final tree; CHK-6 is done, gated by scripts/gates.sh --wait-ci batch-35 | scripts/gates.sh --wait-ci batch-35
