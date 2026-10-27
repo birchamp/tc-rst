@@ -90,6 +90,9 @@ struct Node {
     mtime_ns: i64,
 }
 
+/// A file another program changed in place: the bytes before, the bytes after.
+type InPlace = (Arc<Vec<u8>>, Arc<Vec<u8>>);
+
 #[derive(Debug, Clone, Default)]
 struct Faults {
     kill_before: Option<u64>,
@@ -113,7 +116,7 @@ struct Faults {
     cut: BTreeMap<PathBuf, u64>,
     /// Files another program changed in place, each as (the bytes before, the bytes after):
     /// a handle opened on the bytes before reads the bytes after, as one file it names.
-    changed: Vec<(Arc<Vec<u8>>, Arc<Vec<u8>>)>,
+    changed: Vec<InPlace>,
     busy: BTreeSet<PathBuf>,
     /// Folders whose new files another program holds, each for this many refused renames
     /// or removals (`None`: until the hold is released).

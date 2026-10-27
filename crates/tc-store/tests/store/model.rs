@@ -3376,13 +3376,15 @@ fn oracle_independence_false_adoption() {
 
 fn assert_kept(steps: &[Step]) {
     if let Err(lost) = Run::run(steps) {
-        panic!("{lost}");
+        panic!("INV-NO-EXCUSED-LOSS: {lost}");
     }
 }
 
 #[test]
 fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
-    assert_kept(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book());
+    if let Err(lost) = Run::run(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book()) {
+        panic!("INV-PACK-RESTORE: {lost}");
+    }
 }
 
 #[test]
