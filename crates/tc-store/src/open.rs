@@ -1022,7 +1022,13 @@ fn journal_of(
                             .unwrap_or_default(),
                         ids: pack.ids,
                         blob: None,
-                        seen: None,
+                        // The bytes just read are the ones listed when the size agrees, so a
+                        // later change in place moves the time and is read again (§4.4).
+                        seen: read
+                            .file
+                            .mtime_ns
+                            .filter(|_| read.file.size == facts.key.size)
+                            .map(|t| (facts.key.size, t)),
                         damaged: matches!(pack.status, PackStatus::Damaged(_)),
                     },
                 );
@@ -1039,6 +1045,7 @@ fn journal_of(
                             .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                         number: Some(read.number),
                         status: pending.status,
+                        read: facts.kept,
                     },
                 );
             }
@@ -1305,6 +1312,7 @@ impl Project {
                     abs: habs,
                     kind: JournalKind::Pack,
                     size: hbytes.len() as u64,
+                    mtime_ns: None,
                 },
                 hnumber,
                 hbytes,
@@ -1315,6 +1323,7 @@ impl Project {
             abs,
             kind,
             size: bytes.len() as u64,
+            mtime_ns: None,
         };
         let refs: Vec<(&JournalFile, u32, &[u8])> = targets
             .iter()
@@ -1371,12 +1380,14 @@ impl Project {
                     abs: abs.clone(),
                     kind: JournalKind::Pending,
                     size: bytes.len() as u64,
+                    mtime_ns: None,
                 };
                 let to = JournalFile {
                     rel: new_rel.clone(),
                     abs: new_abs,
                     kind: JournalKind::Pending,
                     size: encoded.bytes.len() as u64,
+                    mtime_ns: None,
                 };
                 match relocation(self.id, (&from, &bytes), &[(&to, number, &encoded.bytes)]) {
                     Some(map) => {
@@ -1394,6 +1405,7 @@ impl Project {
                     reconciles: None,
                     number: Some(number),
                     status: PendingStatus::Valid,
+                    read: None,
                 },
             );
         }

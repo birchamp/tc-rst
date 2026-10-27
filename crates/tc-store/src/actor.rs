@@ -547,7 +547,10 @@ impl Actor {
                             replaces: pack.header.map(|h| h.replaces).unwrap_or_default(),
                             ids: Vec::new(),
                             blob: None,
-                            seen: None,
+                            seen: file
+                                .mtime_ns
+                                .filter(|_| file.size == loaded.key.size)
+                                .map(|t| (loaded.key.size, t)),
                             damaged: matches!(pack.status, PackStatus::Damaged(_)),
                         },
                     );
@@ -566,6 +569,7 @@ impl Actor {
                                 .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                             number: Some(number),
                             status: pending.status,
+                            read: Some(bytes.clone().into()),
                         },
                     );
                 }

@@ -71,7 +71,6 @@ impl Project {
             }
             match info.seen {
                 Some(seen) if seen == now => {}
-                None if meta.len == info.size => self.mark_seen(&rel, now),
                 _ => match self.vfs.read(&abs) {
                     Ok(bytes)
                         if fingerprint(&bytes) == info.fingerprint
@@ -174,6 +173,44 @@ impl Project {
                 None => {}
             }
         }
+        if at_open && let Some(head) = &head_packs {
+            self.store_unheld_packs(git, head)?;
+        }
+        Ok(())
+    }
+
+    /// Stores each valid pack no blob holds yet, as the open reads it (§4.4 "the blob stored
+    /// when the pack was first read"), so a change in place later this session, or in a
+    /// later one, can be restored. A pack sealed by a session that died before its manifest
+    /// was written, or copied into the folder, has no other copy.
+    fn store_unheld_packs(
+        &mut self,
+        git: &Git,
+        head: &BTreeMap<String, GitOid>,
+    ) -> Result<(), StoreError> {
+        let unheld: Vec<String> = self
+            .journal
+            .packs
+            .iter()
+            .filter(|(rel, info)| {
+                info.valid
+                    && !head.contains_key(*rel)
+                    && info.blob.is_none_or(|oid| !git.has(oid))
+            })
+            .map(|(rel, _)| rel.clone())
+            .collect();
+        for rel in unheld {
+            let Ok(bytes) = self.vfs.read(&self.folder.path(&rel)) else {
+                continue;
+            };
+            let Some(info) = self.journal.packs.get_mut(&rel) else {
+                continue;
+            };
+            // Only the bytes the open checked: a pack changed since is found by its stat.
+            if fingerprint(&bytes) == info.fingerprint {
+                info.blob = git.write_blob(&bytes).ok();
+            }
+        }
         Ok(())
     }
 
@@ -235,6 +272,7 @@ impl Project {
                 reconciles: None,
                 number: Some(number),
                 status: PendingStatus::Valid,
+                read: None,
             },
         );
         let delta = self.fold.add(loaded.inputs);

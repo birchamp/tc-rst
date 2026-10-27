@@ -2172,8 +2172,9 @@ K1  L = every verified change line of every pending file, deduplicated by id, so
     the file, cut it short at a line boundary, which still verifies, cut it inside a line or
     changed a byte of a line, so that the line no longer verifies, or put a file of a newer
     format or of another project at its name) is taken from the fold's own bytes, checked
-    against its id: in memory for a file this session wrote, or read through the handle the
-    open kept. Its line goes into the pack, and the person is told (`PendingWrittenAgain`, the
+    against its id: in memory for a file this session wrote, or, for a file the open read, the
+    bytes the open verified, which it keeps (a pending file is small and sealed within
+    minutes), since a handle reads a change made in place too. Its line goes into the pack, and the person is told (`PendingWrittenAgain`, the
     file and how many changes). The lines of a file that still verify are taken from the file,
     as salvage takes them (§4.4). Such a file is removed by K4 like any other (a removed one has
     nothing left to remove); one that no longer verifies is moved to `.tc/quarantine/` with its

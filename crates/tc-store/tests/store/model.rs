@@ -1295,11 +1295,9 @@ impl Run {
         let fs = self.fs();
         let path = self.path(&rel);
         self.outside = true;
-        let before = self.copies();
-        fs.put_unseen(&path, &bytes, None);
-        // A byte changed in place takes the bytes from a session that read the file at its
-        // open, as a cut in place does: it holds only the saves it made itself.
-        self.lost_copies(before, false);
+        // In place: the handles the running session opened read the new byte too, so it
+        // holds the line only if it kept the bytes its open verified (§5.11 K1, §4.4).
+        self.by_another_program(|| fs.change_in_place(&path, &bytes));
         self.log.push(format!("changed byte {i} of {rel}"));
         if self.handle.is_some() {
             self.check(false)
@@ -2990,12 +2988,10 @@ fn metadata_unreadable_but_replaceable() -> Vec<Step> {
 }
 
 /// Found by proptest on 2026-10-26 (the G5 lane's gate on main 29faa1ef): a save sealed into
-/// a pack that no commit holds yet (the process died between the seal and the commit), its
-/// pending file deleted and the book file reverted by other programs, then one byte of the
-/// pack changed in place while a later session that only read it runs. The only copy is
-/// damaged, so the save is gone (§4.4 salvages verified lines, and the line is not one); the
-/// oracle took the reading session for a holder of the bytes, as it does not for a cut in
-/// place.
+/// a pack no commit holds yet, its pending file deleted and the book file reverted by other
+/// programs, then one byte of the pack changed in place (same size) while a later session
+/// that only read it runs. The seal stored the pack as a blob (§5.11 K3) and the manifest
+/// kept it, so the next open writes the pack back from it (§4.4, LOSS-2).
 fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
     let kill = |at| {
         Some(Kill {
@@ -3049,8 +3045,78 @@ fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
     ]
 }
 
+/// Found by proptest on 2026-10-26 (gate/batch-24): a save in a pending file, its session
+/// killed, then one byte of that save's line changed in place and the next session saves
+/// again and is killed. The book file still showed the save when the damage was found, so
+/// the open keeps it in a copy with *Bring it back* (§6.2 N4). The 2d912e4a oracle missed it
+/// because its flip replaced the file, which the open's handle still read whole (LOSS-2).
+fn a_flipped_pending_file_under_a_session_that_saves_again() -> Vec<Step> {
+    let usfm = Holdable::File(File::Usfm);
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Name),
+        act(Act::Leave),
+        Step::Lock {
+            what: usfm,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: usfm,
+            on: false,
+        },
+        killed(Act::Save(1), 30),
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 136,
+            at: 0,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        killed(Act::Close, 0),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+    ]
+}
+
+/// A save another save of the same verse replaced, so only History shows it, in a pending
+/// file a later session read at its open; another program changes a byte of its line in
+/// place, and the session closes. The handle the open kept reads the damage too: the seal
+/// writes the line again from the bytes the open verified (§5.11 K1, LOSS-2).
+fn a_superseded_save_read_at_open_and_changed_in_place() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        act(Act::Close),
+    ]
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_flipped_pending_file_under_a_session_that_saves_again",
+            a_flipped_pending_file_under_a_session_that_saves_again(),
+        ),
+        (
+            "a_superseded_save_read_at_open_and_changed_in_place",
+            a_superseded_save_read_at_open_and_changed_in_place(),
+        ),
         (
             "a_flipped_pack_after_a_cut_pending_and_a_reverted_book",
             a_flipped_pack_after_a_cut_pending_and_a_reverted_book(),
@@ -3226,6 +3292,21 @@ fn assert_kept(steps: &[Step]) {
     if let Err(lost) = Run::run(steps) {
         panic!("{lost}");
     }
+}
+
+#[test]
+fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
+    assert_kept(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book());
+}
+
+#[test]
+fn a_flipped_pending_file_under_a_session_that_saves_again_is_kept() {
+    assert_kept(&a_flipped_pending_file_under_a_session_that_saves_again());
+}
+
+#[test]
+fn a_superseded_save_changed_in_place_is_written_again_from_the_opens_bytes() {
+    assert_kept(&a_superseded_save_read_at_open_and_changed_in_place());
 }
 
 #[test]

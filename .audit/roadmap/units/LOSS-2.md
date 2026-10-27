@@ -4,7 +4,7 @@ title: Fix two store losses the model test wrongly excused
 track: A
 lane: storage
 milestone: M1
-state: claimed
+state: building
 owner: storage lane (Claude Code LOSS-2)
 branch: track-LOSS-2
 worktree: /home/bot/tc-rst/.worktrees/track-LOSS-2
@@ -15,7 +15,7 @@ no_loss: true
 size: 1-2 d (basis: two named model cases, three store paths named by the review)
 merged: none
 updated: 2026-10-26
-next: Step 1, run both named cases on this branch and on batch/27's case.
+next: Run --touched and the three lenses (loss first), then push once and hand to the integration lane.
 blocked_by: none
 ---
 
@@ -91,3 +91,6 @@ the app still has a good copy (a stored blob, or the book file that shows the te
 
 - 2026-10-26 23:30 EDT | storage lane (Claude Code LOSS-2) | created | none | from the orchestrator: two model losses excused by widening the oracle; an independent review disagrees | message from the orchestrator, 2026-10-26
 - 2026-10-26 23:30 EDT | storage lane (Claude Code LOSS-2) | claim | none | claimed on track-LOSS-2 from origin/claude/focused-ride-5uzj7p | python3 -I .audit/tools/board.py
+- 2026-10-26 23:55 EDT | storage lane (Claude Code LOSS-2) | step 1 | none | case 1 (pack): real loss. Session 2 sealed zq2x (K3 blob in its PackInfo only), died before a commit; session 3 read the pack at open with `blob: None` and `seen: None`, a same-size flip went unseen, and the next open quarantined it with nothing to restore from. Case 2 (pending): no loss. The flip lands before the reading session's open; that open finds the damaged line and keeps the book file that still shows the save as `TIT.usfm.lost` with *Bring it back* (N4). The model failed it only under 2d912e4a's oracle, because FaultFs's flip replaced the file, so the open's handle still read the good bytes and nothing was kept, and the kill took them (the model's older `Fate::InMemory` rule) | TC_MODEL_TRACE runs of both named cases
+- 2026-10-26 23:58 EDT | storage lane (Claude Code LOSS-2) | step 2 | none | store: the open stores a blob of each valid pack no blob or HEAD holds (fails without it); open, seal and late-found packs record size and mtime, and the same-size shortcut is gone; a pending file's bytes as the open read them are kept, and K1 takes a lost line from them when the handle reads damage (new case `a_superseded_save_read_at_open_and_changed_in_place` fails without it). A manifest-blob restore source was tried and dropped: no reachable history needs it (250 kill points). STORAGE §5.11 K1 updated | cargo test -p tc-store --test store -- a_flipped_ a_superseded
+- 2026-10-26 23:59 EDT | storage lane (Claude Code LOSS-2) | step 3 | none | oracle: both widenings removed (flip back to `by_another_program`, the Destroyed branch gone); FaultFs gets `change_in_place` so a flip is in place for handles too. The older `Fate::InMemory` rule (outside damage plus a kill before the next seal) is untouched; asked the orchestrator whether it stands, since an inherited pending save can be 30 min old | message to the orchestrator, 2026-10-26
