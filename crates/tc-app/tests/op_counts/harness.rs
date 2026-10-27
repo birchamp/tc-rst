@@ -158,9 +158,7 @@ impl Scale {
                 started.elapsed() < std::time::Duration::from_secs(60),
                 "hung: no draft written after 60 s"
             );
-            tokio::task::block_in_place(|| {
-                std::thread::sleep(std::time::Duration::from_millis(5))
-            });
+            tokio::task::block_in_place(|| std::thread::sleep(std::time::Duration::from_millis(5)));
         }
     }
 
