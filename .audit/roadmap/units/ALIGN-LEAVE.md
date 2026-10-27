@@ -4,7 +4,7 @@ title: Home asks before it leaves an aligner click behind
 track: A
 lane: app
 milestone: M3
-state: verifying
+state: done
 owner: E1d lane (Claude Code 07ffe14c)
 branch: track-ALIGN-LEAVE
 worktree: .worktrees/track-ALIGN-LEAVE
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P2]
 no_loss: true
 size: 0.5 d (basis: one wait loop, one question, four journeys)
-merged: none
+merged: 85844e01
 updated: 2026-10-26
-next: Ready for a batch: three lenses, touched gate passed; the merge waits for E1d (this branch carries it).
+next: none
 blocked_by: none
 ---
 
@@ -87,3 +87,4 @@ click without asking.
 - 2026-10-26 21:04 EDT | E1d lane (Claude Code 07ffe14c) | fix | see branch | Only the newest Home press waits (`SETTLES`); a restart during the wait ends it; the Layer moves focus into a panel that mounts late; the question's words say the last words placed are lost; PLAN declares the difference; keys sorted. New journey `a_click_sent_again_after_a_cut_leaves_with_no_question` fails when a failed send asks at once; the focus check fails with the Layer fix removed (`hung: no focus moves into the question`). Align journeys: 22 pass | node --test parity/app/journeys/align.test.mjs
 - 2026-10-26 21:54 EDT | E1d lane (Claude Code 07ffe14c) | fix | see branch | The whole journey suite found two faults of the last fixes: the Layer's late focus also moved focus in layers that hold it on purpose (About, app language, check keyboard, help: 13 journeys), so it now runs only when the open found no panel, once per open; the restart check stopped Home from the error screen, where no project is open (`a_panic_reload_keeps_the_top_bar_and_back_to_home_gates`), so it now applies only when a project was open before the wait. Suite: 294 of 301 pass, 5 skipped (the view gallery needs TC4_ROOT), and the 2 failures pass after the fix (shell and align: 30; guided-fix: 3, with Playwright's node_modules linked) | node --test parity/app/journeys/*.test.mjs
 - 2026-10-26 22:06 EDT | E1d lane (Claude Code 07ffe14c) | gate | 539724f3 | `scripts/gates.sh --touched` exits 0 (crates' tests, 22 align journeys, 0 skipped); the whole journey suite ran above | scripts/gates.sh --touched
+- 2026-10-26 22:07 EDT | integration lane (Claude Code 3d07d5f8) | merge | 85844e01 | merged into main in batch 26 (with the SAVE-WAIT card), gated by scripts/gates.sh --wait-ci batch-26 | scripts/gates.sh --wait-ci batch-26
