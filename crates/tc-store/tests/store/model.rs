@@ -4578,3 +4578,40 @@ fn two_reverts_of_a_book_file_after_crashes() -> Vec<Step> {
 fn two_reverts_of_a_book_file_after_crashes_lose_nothing() {
     assert_kept(&two_reverts_of_a_book_file_after_crashes());
 }
+
+/// Found by CI on 2026-10-27: a power cut while leaving, then another program puts the book
+/// file back and touches it. The checkpoints keep the outside version as a copy in
+/// `.tc/external/`, and a notice must lead the translator to that copy.
+fn an_outside_revert_after_a_power_cut_while_leaving() -> Vec<Step> {
+    vec![
+        act(Act::Save(2)),
+        Step::Focus,
+        act(Act::Save(1)),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 214,
+        },
+        act(Act::Checkpoint),
+        Step::Act {
+            act: Act::Leave,
+            kill: Some(Kill {
+                at: 13,
+                power_cut: true,
+                torn: false,
+            }),
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Touch { file: File::Usfm },
+        act(Act::Checkpoint),
+        act(Act::Checkpoint),
+    ]
+}
+
+#[test]
+fn an_outside_revert_after_a_power_cut_while_leaving_is_kept_and_shown() {
+    assert_kept(&an_outside_revert_after_a_power_cut_while_leaving());
+}
