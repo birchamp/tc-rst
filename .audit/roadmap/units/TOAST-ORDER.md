@@ -15,7 +15,7 @@ no_loss: false
 size: 0.1 d (basis: one sort)
 merged: none
 updated: 2026-10-27
-next: scripts/gates.sh --touched with main merged in, then push and hand to the integration lane.
+next: Ready for a batch: the integration lane merges track-REL1-tester (all four cards ride one branch).
 blocked_by: none
 ---
 
@@ -42,3 +42,4 @@ number.
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | created | none | Asked by the audit session after the integration lane saw the order change between captures | parity/app/captures.json sync-ok-teammates
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | claim | none | Claimed with the fix on track-REL1-tester | none
 - 2026-10-27 13:17 EDT | tester findings lane (Claude Code 76125a0f) | verify | none | Self-review only: a pure sort with its unit test; the toast's other fields are untouched | crates/tc-app/src/sync.rs
+- 2026-10-27 14:05 EDT | tester findings lane (Claude Code 76125a0f) | gate | eb1c7aa6 | passed scripts/gates.sh --touched with main 829f63f4 merged: 2019 Rust tests, 31 journeys, board, claims and coverage | scripts/gates.sh --touched

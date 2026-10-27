@@ -15,7 +15,7 @@ no_loss: false
 size: 0.5 d (basis: one pure function at the one place the attachment is composed)
 merged: none
 updated: 2026-10-27
-next: scripts/gates.sh --touched with main merged in, then push and hand to the integration lane.
+next: Ready for a batch: the integration lane merges track-REL1-tester (all four cards ride one branch).
 blocked_by: none
 ---
 
@@ -71,3 +71,4 @@ naming a translator puts them at risk.
 - 2026-10-27 13:00 EDT | tester findings lane (Claude Code 76125a0f) | created | none | Reproduced: a fresh install's attachment held the projects folder under the home folder | crates/tc-app/tests/app/feedback.rs the_attachment_carries_no_home_folder_and_no_account_name
 - 2026-10-27 13:05 EDT | tester findings lane (Claude Code 76125a0f) | claim | none | Claimed with the fix on track-REL1-tester | none
 - 2026-10-27 12:45 EDT | tester findings lane (Claude Code 76125a0f) | verify | 1943b005 | One review (general-purpose agent, FUNNEL §8): pass with minors. Windows, JSON-escaped, \\?\ and macOS/Linux forms redact; /home/anabel is not matched; char boundaries checked; a home of / leaks nothing; bridge.cjs sends exactly the text the dialog shows and the mail body has only typed fields. Minors (minors.tsv): names with - _ . in another folder, an account named like a segment, ASCII-only case | review report relayed in the session; crates/tc-app/tests/app/feedback.rs
+- 2026-10-27 14:05 EDT | tester findings lane (Claude Code 76125a0f) | gate | eb1c7aa6 | passed scripts/gates.sh --touched with main 829f63f4 merged: 2019 Rust tests, 31 journeys, board, claims and coverage | scripts/gates.sh --touched
