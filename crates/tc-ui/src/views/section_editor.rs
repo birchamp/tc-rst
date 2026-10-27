@@ -488,7 +488,8 @@ pub(crate) fn tab_indent(
     field: Option<web_sys::HtmlTextAreaElement>,
     indent: impl Fn(&str, usize, i32) -> (String, usize),
 ) -> Option<String> {
-    if event.key() != "Tab" {
+    // An IME may pick a candidate with Tab; the key is its own until the composition ends.
+    if event.key() != "Tab" || event.is_composing() {
         return None;
     }
     event.prevent_default();
