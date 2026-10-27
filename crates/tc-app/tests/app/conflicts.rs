@@ -720,7 +720,10 @@ async fn joined_while_i_changed_five() -> (super::sync::World, Scope, ConflictEn
     .await;
     let synced = synced(app, 2).await;
     assert_eq!(synced.from, vec![teammate(1)]);
-    assert_eq!(synced.received, 1, "the join is one save: two changes in one batch");
+    assert_eq!(
+        synced.received, 1,
+        "the join is one save: two changes in one batch"
+    );
     let at = opened(app).await.session.at;
     let ReviewEntries::Conflicts(entries) = tab(app, &at, ReviewTab::Text).await.entries else {
         panic!()
