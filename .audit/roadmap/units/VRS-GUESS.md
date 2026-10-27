@@ -4,7 +4,7 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-VRS-GUESS
 worktree: .worktrees/track-VRS-GUESS
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
-merged: none
+merged: 54eef00a
 updated: 2026-10-27
-next: Ready; waits for a batch: the integration lane takes track-VRS-GUESS into a batch and recaptures every screen once on the batch tree (captures_match_the_current_ui_source), giving import-review-tc3 and import-review-usfm a residual naming VRS-GUESS and H13.
+next: none
 blocked_by: none
 ---
 
@@ -106,3 +106,4 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 18:20 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-VRS-GUESS, main 020e0ddf merged | scripts/gates.sh --touched
 - 2026-10-27 20:10 EDT | tc4-issues session (Claude Code dc817a96) | gate | 2b4d6056 | scripts/gates.sh --touched with main 020e0ddf merged, its board step skipped for the REL-1 errors only (REL-1's branch names FIX-791, as expected): claims and coverage 10/10; endpoints and goldens 13/13; 16 crates, 3538 Rust tests, 3537 passed, 1 failed: tc-ui::screen_record captures_match_the_current_ui_source, the recapture left to the batch as for POEM-TAB and SRC-VER; doctests pass; 8 journey files, 96/96, no skips | bash scratchpad/touched-vrs.sh (scripts/gates.sh's touched with the board line off)
 - 2026-10-27 15:40 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | browser lens minor made a fix: the difference from tC4 (every import eng) is declared in APP-DESIGN's F1 row; the sweep's held follow-ups are listed in the evidence file | docs/APP-DESIGN.md (F1 row)
+- 2026-10-27 12:51 EDT | integration lane (Claude Code 3d07d5f8) | merge | 54eef00a | merged into main in batch 46 on top of batch 45, with every screen recaptured on the batch tree; gated by scripts/gates.sh --wait-ci batch-46 | scripts/gates.sh --wait-ci batch-46
