@@ -437,7 +437,7 @@ export const CASES = [
       await runSteps(app.page, [{ do: 'click', target: '[data-testid="conflict-version"]' }]);
     },
     why: 'The same review with the first version selected (view-local in ConflictReview.jsx).' },
-  { name: 'conflict-review-mine', group: 'S4', state: 'review-mine',
+  { name: 'conflict-review-mine', masks: ['conflict-mine-date'], group: 'S4', state: 'review-mine',
     rust: (app, env) => stateNamed('review-mine').route(app, env),
     why: 'The review with three versions: two teammates\' and one I saved before the sync.' },
 

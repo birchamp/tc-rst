@@ -33,7 +33,7 @@ mod screen_record {
 }
 
 use screen_record::design::{self, Backend, Layer};
-use screen_record::inputs::{Paths, Record};
+use screen_record::inputs::{Paths, Record, UI_SOURCE};
 use screen_record::{gate, report};
 
 fn doc(paths: &Paths) -> design::Design {
@@ -72,6 +72,58 @@ fn the_committed_record_passes_the_gate() {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n")
+    );
+}
+
+/// P7/INV-CAPTURES-FRESH: a capture shows the UI source it was taken from, so a commit that
+/// changes that source without recapturing would keep the gate green on the old screens.
+#[test]
+fn captures_match_the_current_ui_source() {
+    let paths = Paths::committed();
+    let record = Record::load(paths.clone()).unwrap_or_else(|e| panic!("{e}"));
+    let head: std::collections::BTreeMap<String, String> = UI_SOURCE
+        .iter()
+        .map(|folder| {
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", &format!("HEAD:{folder}")])
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap_or_else(|e| panic!("git rev-parse HEAD:{folder}: {e}"));
+            assert!(
+                out.status.success(),
+                "git rev-parse HEAD:{folder}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            (
+                (*folder).to_owned(),
+                String::from_utf8_lossy(&out.stdout).trim().to_owned(),
+            )
+        })
+        .collect();
+    let mut stale = Vec::new();
+    let mut first = None;
+    for capture in &record.captures.screens {
+        let differs = UI_SOURCE.iter().find(|folder| {
+            capture.trees.as_ref().and_then(|t| t.get(**folder)) != head.get(**folder)
+        });
+        if let Some(folder) = differs {
+            stale.push(capture.name.as_str());
+            first.get_or_insert_with(|| {
+                let was = capture
+                    .trees
+                    .as_ref()
+                    .and_then(|t| t.get(*folder))
+                    .map_or("none", String::as_str);
+                format!("{folder} {was}, now {}", head[*folder])
+            });
+        }
+    }
+    assert!(
+        stale.is_empty(),
+        "P7/INV-CAPTURES-FRESH: {} captures were taken at an older UI source ({}): {}; recapture them with parity/app/capture-rust.mjs",
+        stale.len(),
+        first.unwrap_or_default(),
+        stale.join(", ")
     );
 }
 

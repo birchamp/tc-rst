@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "40e6965642d41c77",
+    "ui": "e148cfb97a8c7b35",
     "commit": "dev",
     "api": 1
   },
@@ -50,9 +50,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home.png",
-      "sha256": "deda26b7ff171e96d22310f0930a97ee15873a7fbf41dd30cdd54dda82bfadcc",
+      "sha256": "ed1a415f419ed8060712702978f091e185924fc9caa926bebb369983db393d69",
       "dom": "dom/home.json",
-      "domSha256": "2d6a21c4443a268ce37ea7442b60d331f13a7eccfe1e35f0178051fbe919d512"
+      "domSha256": "4b2c3527f109d0fcb50d21f55b7e3324653892f27c1a8b597b17bb02227867ca",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "understand-tit1",
@@ -75,7 +81,13 @@
       "png": "screens/understand-tit1.png",
       "sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
       "dom": "dom/understand-tit1.json",
-      "domSha256": "7c80a6e8833d312dabd4cc865bcd8540214bfce9b5eea59c13c4c66e155b06ed"
+      "domSha256": "ebd528a426251cd582ccd6ba5f2458f7141ba2db7aa92df74c0dcfacbf308fdc",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "translate-tit1",
@@ -98,7 +110,13 @@
       "png": "screens/translate-tit1.png",
       "sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
       "dom": "dom/translate-tit1.json",
-      "domSha256": "ccd601729d1a20e5b36528f3b400dac67a6b96bb937044d0d101c46d8a48c204"
+      "domSha256": "37fcdbfa53c7db31a52d9e2d8d6c958d4ed06b18165ccae74665b71906fcd1c1",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-picker",
@@ -121,7 +139,13 @@
       "png": "screens/check-picker.png",
       "sha256": "d3cf8e15f05c4a594a26cc568da140760e00b158a3c01aedca0d6667f533a180",
       "dom": "dom/check-picker.json",
-      "domSha256": "6263e7044966970cad26c70002e6edd3ce07baf4943171e830eb05639e1b1f06"
+      "domSha256": "e16f40b77c224194cad521f008c562ab10664d77a5b8b3ffa3e6446501969a10",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-tn-session",
@@ -144,7 +168,13 @@
       "png": "screens/check-tn-session.png",
       "sha256": "15a5bcf1a74d7720a3f0a1bd687942047299720da351ca77b8ce16aa69ba8872",
       "dom": "dom/check-tn-session.json",
-      "domSha256": "a97a35f6be4b1699e5279830df52c4162554cd81dcf4b2edbea67ad14f22e334"
+      "domSha256": "8b76350549eb188d00fb973c98987e1718b95861c2333c4ccd89e346ad3bfc92",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-workspace",
@@ -165,9 +195,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/align-workspace.png",
-      "sha256": "8f01c125790516aa98b1f9353809943bb3f415c6580e9ccfebdfb67a1be755d7",
+      "sha256": "848f83d5167ea883637d8b4947ead6196fecf309443bedd08845f1c6aa043545",
       "dom": "dom/align-workspace.json",
-      "domSha256": "5783006f7d8f8efc8f4786849f0b031658e898a368171ec9ff16725e24b6adb4"
+      "domSha256": "f777d8a53efc99af4fa649c4d66b6e448359795f0cfceb6a9eb7ac5c5e3db6f0",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-original",
@@ -188,9 +224,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/align-original.png",
-      "sha256": "bcf419a1de1cb357faad85eb9fcff3aa1d0a8aa9f96e70e137bc0c2a54b58faa",
+      "sha256": "f6940bd5e7dafdb7448e8aa159a33183a8e5400129c5f2b81a26b99d4666afac",
       "dom": "dom/align-original.json",
-      "domSha256": "e2ffb50abff007f25dd3d8afaa6ef79d8b707d15971f5a12653d74e5585a9659"
+      "domSha256": "dd299a07ea2939ae100d81003f556c77d6267361e69906e38e970da0b6066a0c",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-workspace-row",
@@ -211,9 +253,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/align-workspace-row.png",
-      "sha256": "a35887ec546ae6317d1e49a0b49d3c61d1a40dd34088d3c9260408be15abd9bd",
+      "sha256": "d1190eded5ac3ab14ebabd65b6a5b9ae4564093669dd26148014c28770984544",
       "dom": "dom/align-workspace-row.json",
-      "domSha256": "e15d2642629f09db46216ff73fb024dc9646e4d86df29a454fb77f728215834f"
+      "domSha256": "3e5ffc80206a12165f12d709057d4433cf1d6576f045ccdca781704c29267ef7",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-align-workspace-row",
@@ -234,9 +282,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/ar-align-workspace-row.png",
-      "sha256": "2ee6ebe7fa173d70677fdca270aa087c141701fa053accd6e562adfabea9942a",
+      "sha256": "5218b6d614556dfb25d2e9ebbc50eafd5c7f49d403f6652c3860cb202e06f082",
       "dom": "dom/ar-align-workspace-row.json",
-      "domSha256": "1f1704e4073129155603f6296569e3195911cc2d3ba712a81f823cd9195e78d9"
+      "domSha256": "82a65e83955530b5da0d6ac4f261f77d7206a256277e2d85e445b25cf66f15ce",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-workspace-620",
@@ -257,9 +311,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/align-workspace-620.png",
-      "sha256": "3cff17ef41f02301cc24afa9787b3710144418a6d9703fd570ba0f69356c565a",
+      "sha256": "263e756d68c725c1840a7a720d650e7a902eb2a384d0dcc71c59e81950432648",
       "dom": "dom/align-workspace-620.json",
-      "domSha256": "a6045d0f74740f034986b8a5692f3c46c9f1dbf93d19be2252475867830552fa"
+      "domSha256": "b93e8feb49ddb7b0a647b6eea2951d477a130d1ed355efcb2e7bd27159e25be2",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-align-workspace-620",
@@ -280,9 +340,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/ar-align-workspace-620.png",
-      "sha256": "0f628469ef0539643546ae72570b5e47ffc1d162942ba2b510e43e77028d83dc",
+      "sha256": "fd135bb66ff7442cb9c712ff4a18c83cc0ed8017333ab36d612b792695c0da0a",
       "dom": "dom/ar-align-workspace-620.json",
-      "domSha256": "e2a7e36706b3ee8cf93add5cd5ea2883d9b2e0fe1ef3179f18ace8cc3456b0bf"
+      "domSha256": "46bc0984a74fb63bbd7b61f345a144ea5d5c6ca6ef4b0c18bc6a09552aea0b89",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "project-settings",
@@ -299,16 +365,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/project-settings.png",
-      "sha256": "8596565decf123d6e886598e2b5c2cd482a3f2af120f99ec96e9a24823d634cf",
+      "sha256": "2cb007330d4d56ea840c4acf1b84abcc14eff23643c70f7e4afb63d401505ba8",
       "dom": "dom/project-settings.json",
-      "domSha256": "99876c99153bfd1f797f154e6bb1ca78d460a6f25487df6f167edde389a97646"
+      "domSha256": "c253f73b51bbafe3ec873a66940a3dc13c576d662959a91b03471082356fe6e2",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-project",
@@ -325,16 +394,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-project.png",
-      "sha256": "eb9609dea209f0d876a5a2cec6e92de03dbd71020a723f438b38d3662261f29f",
+      "sha256": "fa6de78aa4b80a47aa198cb0cb252cdc79fc2e4013d1ccd27c09db1bbc4b526f",
       "dom": "dom/add-project.json",
-      "domSha256": "04cb9b0aff3e42878d97792e6425cbc3b95e2a9f024c7f6d41bd03131a54c001"
+      "domSha256": "d59131b797d2a5f4a4c7d21a897cb177cb061de02e283503cb60a5d10c8776b7",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "new-bible",
@@ -351,16 +423,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-bible.png",
-      "sha256": "38d1f79bdaa914c790c13d38f8bcfa1005b943d2cc36b92449196101e1eddee3",
+      "sha256": "4fdf1a48cdd92d3e363c82009d3fc91783fc70de5795919d03459c4c048f1057",
       "dom": "dom/new-bible.json",
-      "domSha256": "83f251f3893d643dd12a8a57ec9dc1a565467c33621d1fc8c8f2702cc45b0127"
+      "domSha256": "63049d4df625b23ca9dcc072c920e42013c7d74c69bd45668bb2d9c09f089c34",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import",
@@ -377,16 +452,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import.png",
-      "sha256": "8e72d50d821f0ff9bab7761d2d5aba3f0386db6b4c5b0c0ae85699e7ffd4a355",
+      "sha256": "a98476dae4d260b03f16622e74acf4d8bc599df06b36bd1dda6edd2b7a0a1f30",
       "dom": "dom/import.json",
-      "domSha256": "dac638de2f10f783756992ace261bee01e9ed82bf12d308969d5046d01899da5"
+      "domSha256": "eb6bc53c967ada06e7e34b362eb2caeb59d845f66dd02a18cbbebc9bbe523f07",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-internet-consent",
@@ -410,9 +488,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-internet-consent.png",
-      "sha256": "508ba093b5e2198d6f3445eccf71a9a5592cb873d1866202bf30c5666184fe3f",
+      "sha256": "1e5126998b60bc130d79431763a6bcd514cde24b70e8d11894578ba92657cc73",
       "dom": "dom/share-internet-consent.json",
-      "domSha256": "32cfa2a9e4e86a6c12bc6a2f5a5a36c6e3a912de6640370304a5e4c450b102f5"
+      "domSha256": "5a2dcbf485397324b1e97c16043bb638f6746683bcee8ab2be4a169b98d5746f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-signin",
@@ -429,10 +513,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "signin-server": {
@@ -443,9 +524,15 @@
         }
       },
       "png": "screens/share-signin.png",
-      "sha256": "4038f73c78823439c3c354f5dc0e27070256dc34ec345ffcf7928a3b08b4798b",
+      "sha256": "2c47b1652ee597876ce145a33e3a0fe5f5ede99549e1e56a21f64bf8f23bb4a9",
       "dom": "dom/share-signin.json",
-      "domSha256": "9c065e0aaeb42d9e3abcfe7c4236eb2724e2465e19f5343606e0099639d14cf2"
+      "domSha256": "0f33b0e78fd5fc80bf6abe88876d25e17501f9779738e93d7146abb46423bc33",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-dialog",
@@ -462,16 +549,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog.png",
-      "sha256": "14f519d2439311d08e2abd0b78e9609081b72e8e3106cdbc6d27c0947d537764",
+      "sha256": "3c0ee975b574649a1ff9b43c54a5f970924e894f6bf6794e8ee1ca7efeb054ef",
       "dom": "dom/share-dialog.json",
-      "domSha256": "06a5f9fb1e469175ad1195a92a3b687ec3ed27c2f9160c52eaf550cfd5f6245d"
+      "domSha256": "8fb9cde8c42b45f6235797b2187927b9d667d95bc8e0a9ada6ad964bd11368c6",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-dialog-check",
@@ -488,16 +578,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog-check.png",
-      "sha256": "46d5ed3a511040a4766dfb6ea04f134fa59e60203a191e23c5257e668daf4b0c",
+      "sha256": "7d664bf7a1df12cba71d5ae15347900c8a16503ac29766d9a716184b15f4cdb9",
       "dom": "dom/share-dialog-check.json",
-      "domSha256": "9a4d13d08153294d0d66488996f8e45fdcf93b433ce64d76d40daefa4c9144a5"
+      "domSha256": "4f1618129e16e68a82534e0a2e683e1aeb94e26b6064d7e80dd591d091c2d46b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "account-menu",
@@ -521,9 +614,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/account-menu.png",
-      "sha256": "7f6e777bfa5f68831e6697e876a49b04f5f5526d34421b1b1b3efe942e186105",
+      "sha256": "fb873e957fa53b031112f2fb1eb4d4de2b2927c2c1b90b5d52541b661612e1fe",
       "dom": "dom/account-menu.json",
-      "domSha256": "3782aa396b5c1ed027097f56102490da2dfa66a08d758b170d62a08f738f18ca"
+      "domSha256": "02d5a8be2f2e27b1f79ca1d2ee82f2bc9637b0ed7cfb15b2d779ba8ad2cd9a83",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "app-language",
@@ -547,9 +646,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/app-language.png",
-      "sha256": "aa0c2d6393e914ed5a7668ca6d10c08e4ffa31ea9a91c1e3feedc6b54cce7d6d",
+      "sha256": "523be2160d097aa72fa3f5e6eb2ba9594b81b1cbdd352c04d98e0bff72ad60cd",
       "dom": "dom/app-language.json",
-      "domSha256": "472928c1295bce9a46e12747e435830eebc8c39a11de28400f5e211d6e6bac8d"
+      "domSha256": "692ed43d7620d845dae5354c3d85926a346c3239ba769c6257ad06a27394a876",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "help",
@@ -572,7 +677,13 @@
       "png": "screens/help.png",
       "sha256": "ca1a6a778cb7794e043d263fe406e67c8920c2cb2531116ba4fb4e0e15b4f305",
       "dom": "dom/help.json",
-      "domSha256": "d5889f20cc163b81075e8353ba373ce1818a2264001adb4fb9c216d562302b3c"
+      "domSha256": "50eedc0e912cb62887ca9b106fd1cab1dcbccaaf53a02352dc6d5c385418daf5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "about",
@@ -589,10 +700,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "about-build": {
@@ -603,9 +711,15 @@
         }
       },
       "png": "screens/about.png",
-      "sha256": "cbbcb0b1a7cac522936aa751ab21b0866962ad2d89a6b1a36b65994217f18194",
+      "sha256": "b9ea0a00b49d569b51cbad02d26e9b55a21477c8aeb00248cd232e57cf0a4a5c",
       "dom": "dom/about.json",
-      "domSha256": "28acba384d75f4b7bcf37630c2309c714909ec406a3ade903c3252c755627869"
+      "domSha256": "1ee26dc8199be7597f09216d6e0732e8029a3cd6c96840454d3db2928da50952",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "feedback",
@@ -633,9 +747,15 @@
         }
       },
       "png": "screens/feedback.png",
-      "sha256": "d9bfcf2078fddbbff53fe453e72f0f2d7abbf56243f0b8d5e6bd0a41541db76e",
+      "sha256": "2f46b79640bb3ce675c316e371dddee85e751ae650bd34672cea7c378e05a330",
       "dom": "dom/feedback.json",
-      "domSha256": "bcb0d21748fa02e4126b8b25e388f42cd2d1c14fd698bbf026a5b2cfd2f5728c"
+      "domSha256": "e974cdb5b899c993463aec3e24d88ca5a34f63b6c5c9004c530c1b435f659cc5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "new-obs",
@@ -652,16 +772,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-obs.png",
-      "sha256": "4ef81c4f5a24ed9a5744fb9dc29fcb6ae0998d20ac8a16517241540be55d7ff0",
+      "sha256": "cb4375797abf02d3aebab0e8bc99912fc741e2a0d7b34e40917a910a4be81b3d",
       "dom": "dom/new-obs.json",
-      "domSha256": "da899b7b07148103c33137c787dc25c9cc9da85a769c05e360569ae8033b89ef"
+      "domSha256": "464aeec6a36dd15f6be0b26921f596050c033dd43429e5d6f05a269d8cba0904",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-book",
@@ -678,15 +801,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book.png",
-      "sha256": "171d4a33b301c208666db25998d1d0aad9526758b1e97dc1ebc745bd4c099ae6",
+      "sha256": "fb8de5da460c4f342cd1175b45c8de3544d87b9aa5fff6f9d9fe6e96c1c80041",
       "dom": "dom/add-book.json",
-      "domSha256": "35eae7317e6dd554a7cfc063a36400a4de2b564b0f6170f7e87204b2fad34b9c"
+      "domSha256": "ceeef1dade95ab4733461f280459e50ae7e366f9e00c0f930f4ba92c8dca9bcb",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "source-texts",
@@ -709,7 +836,13 @@
       "png": "screens/source-texts.png",
       "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
       "dom": "dom/source-texts.json",
-      "domSha256": "f4e2a4e79c0a18205f867f88123dab607ca4f80264374caf48217e4064ed2161"
+      "domSha256": "34b6cdec1a52a379cb2d4e2742163484a633349fdc273e58511f17960bacd19b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "guided-fix",
@@ -732,7 +865,13 @@
       "png": "screens/guided-fix.png",
       "sha256": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
       "dom": "dom/guided-fix.json",
-      "domSha256": "05408de07b859650a2407d592aabed582881736180bd248bd96db7d671161db0"
+      "domSha256": "7b614ac0321290113b3f9874aa4d5b071c5887207c3d41cbc3e9d27ac35377bb",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "obs-understand",
@@ -755,7 +894,13 @@
       "png": "screens/obs-understand.png",
       "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
       "dom": "dom/obs-understand.json",
-      "domSha256": "9aafdcd81a8ec0e69199739f7d77ae9482b978e38327a5e0b493a438d728868b"
+      "domSha256": "03ff6231a8853f34a4777123fea23af53dcdc8df124312eb7151d0f724401878",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "obs-translate",
@@ -778,7 +923,13 @@
       "png": "screens/obs-translate.png",
       "sha256": "c3c00c0de4ee21e8054db619df6b15cee04a972b5e10594af4378230fe6c7d06",
       "dom": "dom/obs-translate.json",
-      "domSha256": "f30d8dd33dfdff5c08a33f7e40cb47282b5e4692fb1aa1af2768095f867dcfbc"
+      "domSha256": "199d72adb58d2349678f5c3c197c4badf8f064f550112ef6fb353af897766818",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "obs-check-picker",
@@ -801,7 +952,13 @@
       "png": "screens/obs-check-picker.png",
       "sha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
       "dom": "dom/obs-check-picker.json",
-      "domSha256": "35687d013e473d2e3a46481f09ac65bd44aa4f26cbc1d78142f8d594341d5be2"
+      "domSha256": "03138b0863ae56032a72e923c50378483e9149b7856d7febf9ab215f57989d6f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-door43",
@@ -818,10 +975,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "q3-where": {
@@ -832,9 +986,15 @@
         }
       },
       "png": "screens/open-door43.png",
-      "sha256": "d11aa0e243f1b507dff6ae0138eab12462c746ae2cda885420d941f98f7ce44b",
+      "sha256": "96fdf0ccb8705467b09f4ec4144867438f4a79ef98b259a44e39363645417315",
       "dom": "dom/open-door43.json",
-      "domSha256": "517dee290eb3070c32d2303b75bed5910172b40a4fd01afaa039c499f2429db1"
+      "domSha256": "51f6569c54f7d8aae2edd039a7525c7bbf7e8cd093a3a0e0f0e88104b32127f7",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-door43-internet-consent",
@@ -851,10 +1011,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "q3-where": {
@@ -865,9 +1022,15 @@
         }
       },
       "png": "screens/open-door43-internet-consent.png",
-      "sha256": "c2ff3f0b02a79a080f49cf7973a05c45e6f8a5b003f627d8cb93faed29432ebe",
+      "sha256": "a406e83c656b1d5f00ffdae6f06ff151e77a98c11526647969e592159fcbdca4",
       "dom": "dom/open-door43-internet-consent.json",
-      "domSha256": "e37cb1fee32a91df12ab9a05e6dc5be39c213184e08342b4c3f2fecc89f22cf9"
+      "domSha256": "d4d607c69116f3129734d204cefcda784e4925d57386380f70e50e2eba703676",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-door43-refused",
@@ -884,10 +1047,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "q3-where": {
@@ -904,9 +1064,15 @@
         }
       },
       "png": "screens/open-door43-refused.png",
-      "sha256": "ba6685a722c0bf2ff410d7e9e71ef516e7890dc70358cb2a83ba840eb75babe6",
+      "sha256": "5aad90611e73f178bd711adf08ad830a976892607cb317d529e6a58b9dacec12",
       "dom": "dom/open-door43-refused.json",
-      "domSha256": "2a54c6d0a0d825f1ea94e5be2a6881bdb714f0a337d98c58cfa7c1b7d1e4e831"
+      "domSha256": "df3be86644418dca29d8763b53b485a3b6a1cbbd173e20db730076d0ae9a3441",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-understand-tit1",
@@ -929,7 +1095,13 @@
       "png": "screens/en-understand-tit1.png",
       "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
       "dom": "dom/en-understand-tit1.json",
-      "domSha256": "529e03a36b08ad2a44aa847f5999e5983c8e70f3180896e5e13f37d4f182cb33"
+      "domSha256": "6ee8c5b736bfee33c13c2f6defede32358369942d9f29db3743cc1f45e35087d",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-understand-tw-article",
@@ -952,7 +1124,13 @@
       "png": "screens/en-understand-tw-article.png",
       "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
       "dom": "dom/en-understand-tw-article.json",
-      "domSha256": "1e54698a4448437a4c10eb47f748adb8add5a6ad81039b65f22618b5a7a0562f"
+      "domSha256": "4c3a846838a4cd21ee9b4cff2bb419ac702542b17c2883b595dffaa35877baf7",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-understand-questions",
@@ -975,7 +1153,13 @@
       "png": "screens/en-understand-questions.png",
       "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
       "dom": "dom/en-understand-questions.json",
-      "domSha256": "23a19152f2712791a39726d7a0229dcd6296ab2105da0f539b28fd5e53b60493"
+      "domSha256": "f8bdb214ae992100ffee9558f54fdf673d266156cbf0b4728093e5a0f153d013",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-translate-tit1",
@@ -998,7 +1182,13 @@
       "png": "screens/en-translate-tit1.png",
       "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
       "dom": "dom/en-translate-tit1.json",
-      "domSha256": "6a0e1a18b723b977d22b5c4084a620524e5b2a3f0950bad625dcba408c09cd04"
+      "domSha256": "ef7ad9b9ae6900da184516fa92f813da8a99d80aa6569cc8817e2ade29e3c958",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-translate-section-editor",
@@ -1021,7 +1211,13 @@
       "png": "screens/en-translate-section-editor.png",
       "sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
       "dom": "dom/en-translate-section-editor.json",
-      "domSha256": "e2c05f97d2406dcd8b343e29534cb8baa41bbb017b9c854e6293be35e5e1c157"
+      "domSha256": "72a69e48d1b793de36d4b67f03a1fa381d3f3b269e47acdfcd65d725bd2ce4c9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-translate-verse-editor",
@@ -1044,7 +1240,13 @@
       "png": "screens/en-translate-verse-editor.png",
       "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
       "dom": "dom/en-translate-verse-editor.json",
-      "domSha256": "88cabd2ec45ad15ad87fcde9cf3ab03e7812d7567496875bb03dc96f4d6fe244"
+      "domSha256": "6f20077b6a1152f953d2c95b18725fb4d8f06291a3a3fef0db00119812d631be",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-picker",
@@ -1067,7 +1269,13 @@
       "png": "screens/en-check-picker.png",
       "sha256": "ef6b1feeb9fcba1923604c5ee4f28a81600dd978e75fd462316c1e839298786c",
       "dom": "dom/en-check-picker.json",
-      "domSha256": "e2748f5cc279cbd9f98d355b32744d521c8582e12bc9af0ef133beb629c5d85f"
+      "domSha256": "7ef0bf8b8471edb5855efacb250c2211e66c4dcc4c521458be7ad4c5815a731f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tw-session",
@@ -1088,9 +1296,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-check-tw-session.png",
-      "sha256": "a845b16d987ec8caf92606fa1a76d2547763b3bd4dffa854f2fc89401038393b",
+      "sha256": "3e4d00a6bc259e038932ef7adeb94710a2f01aa68a01fa5ea23770415da50b93",
       "dom": "dom/en-check-tw-session.json",
-      "domSha256": "43ff7ec6c72b2da9cb2120a1342295e58ee72c7d5b12099ea83faf59bbea2a6b"
+      "domSha256": "b44edd1f5ee57491f8a856d42885d1c28bf4e737f76b5cdbf0a903470dc759a5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tw-article",
@@ -1111,9 +1325,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-check-tw-article.png",
-      "sha256": "4e3476b38cdcd8011960f58abffce8721ecf0f6d4272c1a77ac79a3566b040c6",
+      "sha256": "036b10f111f3fec2590de61e40f0293bcbf4e2abc8ec62d10fadab2f85932fe0",
       "dom": "dom/en-check-tw-article.json",
-      "domSha256": "96c1339e4b0a54de23a94b510455d9a40361a6683a9a5f043ff2d2a826ccb3b8"
+      "domSha256": "e9ebb5f86387e2a8a4000f0bac333fcca64d3c8b1f183b04cc74786e3a696d69",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tn-session",
@@ -1136,7 +1356,13 @@
       "png": "screens/en-check-tn-session.png",
       "sha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
       "dom": "dom/en-check-tn-session.json",
-      "domSha256": "f29d6d5d83da949dbd06178c1a049ed199fa5a9d165a119fcb8053cf4c9d626d"
+      "domSha256": "dc584af20a56e6244435ddbd7dcb232fc3717f1f16de79b98d82942a30bd231c",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-ta-drawer",
@@ -1159,7 +1385,13 @@
       "png": "screens/en-check-ta-drawer.png",
       "sha256": "c3ea07f68bfa2628ebc72812e979edc48ea8fd3428f54dfe959ccc04e962f892",
       "dom": "dom/en-check-ta-drawer.json",
-      "domSha256": "ce6ad5fc815f1ba617d45f6aed708c2ddb366eb2b32d06fba82110c8f5f1830b"
+      "domSha256": "cbf3431d05eea53ced6060567a31f2c0fe20d9e81233ce3b42a0d12e88391f93",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-community-checking",
@@ -1182,7 +1414,13 @@
       "png": "screens/en-community-checking.png",
       "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
       "dom": "dom/en-community-checking.json",
-      "domSha256": "f1c88495563aa419c2363c1133bca8e382f502999ec62935834eda5167832658"
+      "domSha256": "bab18397c5031ae6ebedce763402d3a0d8c294d39e58b08892ff6468ec5f01cf",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-obs-understand",
@@ -1205,7 +1443,13 @@
       "png": "screens/en-obs-understand.png",
       "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
       "dom": "dom/en-obs-understand.json",
-      "domSha256": "7f02bb54068f59c3056b2a74228d8c7fea513a998c7a8dbbc75b6f95efefb938"
+      "domSha256": "180070a26b922dd02592b9798de8cb7fc6f065a0274fcbba31c0362c8db56a1f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-obs-translate",
@@ -1228,7 +1472,13 @@
       "png": "screens/en-obs-translate.png",
       "sha256": "a3d3512ef295e0fc1ac908efcf463e13b6b7e88377bfa80e918e6e7e23a99570",
       "dom": "dom/en-obs-translate.json",
-      "domSha256": "a3bfafa9c077912bcdbf85d52ecf16ed13a36a0c567f1d9c45cfd5ee2ed29a97"
+      "domSha256": "02c8fdd7016ae3bdb75e64ae8d3718bd93189bfe303035fc32bd2d76b1da4543",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-obs-check-tn-session",
@@ -1249,9 +1499,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-obs-check-tn-session.png",
-      "sha256": "94f97cdd7e0be85444ebb398c5ab5f417f11ad99eb8000a389e2cdd0da158d31",
+      "sha256": "8bf4327caa97ca0569d1b192734d4ad5a339d8b502b4204d84999f44167d0907",
       "dom": "dom/en-obs-check-tn-session.json",
-      "domSha256": "cd4dd77499841999bf0a14c5608826ebf87ba9e57214d5707fa214cdc3ab3f6d"
+      "domSha256": "6ec5f547f991417f8e5ec029dfbe6414fb203c01a22003108b869bc536e2b0b4",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-check-tw-session",
@@ -1272,9 +1528,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/ar-check-tw-session.png",
-      "sha256": "5dca2a169bac1cad748bf2df49db6fb4584dab5c1064d6c89d6eeca368be81ff",
+      "sha256": "b5d7ebcdc2c44fc25207eb71f3bdfbc92d900f129f6fb140b37db499d39e3591",
       "dom": "dom/ar-check-tw-session.json",
-      "domSha256": "bae3a6a84abaf52fe0455155abd5a928bcbec666d0c7b6547f2b8e92f6839ba3"
+      "domSha256": "c239a67f1d08c1f29540ca275ff5284b2b32d67eff93d465ae8f86e997858fdd",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tw-session-620",
@@ -1295,9 +1557,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-check-tw-session-620.png",
-      "sha256": "7846fea64eb417b313ea53a1e1c8ef693df973d2b4d59b71e3b197c51bbf1853",
+      "sha256": "48ff3230e789965863f7962919436c97bdc091dc3c0c381dd76b7becd6f7c585",
       "dom": "dom/en-check-tw-session-620.json",
-      "domSha256": "4fac3a72bd8ee47e8b9f71c647aa892ad9eb3a7fd6f3ed080883d62d59e69218"
+      "domSha256": "05153bb4f228f83b65ef5618d14f9d28f435f76ae0e1ddd0594851d4a21519be",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-check-tw-session-620",
@@ -1318,9 +1586,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/ar-check-tw-session-620.png",
-      "sha256": "aaf47465072c9d54399ff79f03bf202c8d08890080f74ee8e5995a5db621fea1",
+      "sha256": "637e07ce734665af4b561a72aacf0b41f547e50f9cf283ee46384b1f71b944f6",
       "dom": "dom/ar-check-tw-session-620.json",
-      "domSha256": "5cbd644b925c21dedcdedca77e676049acf9410b5fa78495f60435158a9bcb11"
+      "domSha256": "d438f954706b4c0ac30f970c13fa264d3558f4c8e3b959c2e99075864832e350",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tn-session-row",
@@ -1343,7 +1617,13 @@
       "png": "screens/en-check-tn-session-row.png",
       "sha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
       "dom": "dom/en-check-tn-session-row.json",
-      "domSha256": "9e7932877802788858064d03ef6019cd99662f820d4e57d5369ca9536de6e7ae"
+      "domSha256": "cbfe4442877cdf4855647a2ca3e22a63ac01f4ca0b91180a0357c523fab6c742",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-check-tn-session-row",
@@ -1366,7 +1646,13 @@
       "png": "screens/ar-check-tn-session-row.png",
       "sha256": "dfaee7ef506a09d8da11cc59e21af487f663fcc472c1e4b9320390fb92919904",
       "dom": "dom/ar-check-tn-session-row.json",
-      "domSha256": "3908dca8d1a14b5bcf09bc60e43e8bd3114fb33f4bd04f90b68e1a135b2005c5"
+      "domSha256": "377c27acfed20996dd85d82340b8e6a31cf8ae824d9e0bc2d2339bbd8ed3bbac",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "en-check-tn-session-620",
@@ -1387,9 +1673,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/en-check-tn-session-620.png",
-      "sha256": "9d3a07aee4919dd8a4a7472fa7c2d6ddf294db1b4ff5a9d946e69668ca76a27b",
+      "sha256": "c4c5e755c0b5c3d020f29912182ffa2f3d34f13a93d0661e418cc4f1e331c634",
       "dom": "dom/en-check-tn-session-620.json",
-      "domSha256": "b717995b0617742d9e55d87eca1d1b2970d138bda30c902e7493c98ff6b8a462"
+      "domSha256": "51524f11ea3a8c58c1d4bc92829bb5b456a0ae2929365d04e9ac3412f8c9e87e",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "ar-check-tn-session-620",
@@ -1410,9 +1702,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/ar-check-tn-session-620.png",
-      "sha256": "c842e9d1d15bb4c7318a6baa1ad457407ca2042eb08048e5f8e26a89ff6997bf",
+      "sha256": "35b4d20b6f923f3716f805f3b9028f6715062491fca9339dc1e3918f0fcad033",
       "dom": "dom/ar-check-tn-session-620.json",
-      "domSha256": "577289a8e62dea0361d3228b204bd6e4e303ea002f7607f1615d53277bbf71d0"
+      "domSha256": "a88800d2aa3beaab94c1c145523bf5f9f57fcd56a4a48c4dfcd4a50df65d3791",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "shared-home",
@@ -1436,16 +1734,22 @@
       "syncToast": null,
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/shared-home.png",
-      "sha256": "45bbca1b2b1fc4c277f0f6a55f26f8d7b1bcf36ed8312671030e7dbd7390ff64",
+      "sha256": "b72ff6d56d9fb0a61c7fcde90646de7a43e73bf903bea4e2fecbef8eb08ef07c",
       "dom": "dom/shared-home.json",
-      "domSha256": "acf635a8457a7316fd9c5ea691275d20d97c51bae3551128ce519d242b2b49bf"
+      "domSha256": "bf7521940419d2c7471cfd9caa3e400e6727a215c8bf5151d09fb55d87f75b0e",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "sync-internet-consent",
@@ -1463,22 +1767,27 @@
       "pageErrors": [],
       "refused": [],
       "homeCards": {
-        "sample_burrito_obs": "sync",
         "sample_burrito": "sync"
       },
       "syncToast": null,
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-internet-consent.png",
-      "sha256": "99bdda008eb485689e07931019f249b7b4492858ea59a1f4f8bc5ad8a0d4708b",
+      "sha256": "682809622eb872a4e9be3931c5d583bce985882b785f4363db69706d0561f219",
       "dom": "dom/sync-internet-consent.json",
-      "domSha256": "79a8c8da54f44de49b4cbdcdc4988a18d49ae74ac1f69f596b564df3a61b3d70"
+      "domSha256": "a45e02f85a253ad774e6d9df091f3d0a8ce42478324a833ad89f8eb8dfdd3396",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "sync-failed",
@@ -1513,16 +1822,22 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-failed.png",
-      "sha256": "c4274730368f8db20227bb5a6efb221e97f998ef3a837f1e9c679fd60cb9430c",
+      "sha256": "3a7b5cc94e0dc054d9f36fa8c053f3f4cc648403a0139478f5af0ce16324d21d",
       "dom": "dom/sync-failed.json",
-      "domSha256": "511c32380609d4855ec74a81eff6f978b12b9fcb178f6728d342aaf755720798"
+      "domSha256": "ab0c3c1efb33790fb05fb6cd568d1a4d3ca86ad27d64745c13f19ebdb39da866",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "sync-ok",
@@ -1559,16 +1874,22 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok.png",
-      "sha256": "3fb87c1ef96a0dd6e614abe20c6c93a6add0865635081486ef0f417390d56489",
+      "sha256": "e018485eab1285e17fa3e868280793543f5daece7b128f8da9a4ee3284dda1ef",
       "dom": "dom/sync-ok.json",
-      "domSha256": "5b63adcfa21ef5e7b0cc5f6daafa61450ad6b15c2c29010e2971651228df53de"
+      "domSha256": "d26b5976243f938e7288cb9845e30dcff5126c23c92d07d3dd0e532df06bd561",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "sync-ok-teammates",
@@ -1592,7 +1913,7 @@
       "syncToast": {
         "ok": true,
         "code": null,
-        "text": "Synced with Door43 · 4 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 1 verse has two alignments to review. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "text": "Synced with Door43 · 4 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 This project now uses 5 resource versions that are not on this computer. Review Download",
         "received": 4,
         "newestWins": 0,
         "verseConflicts": 1,
@@ -1606,16 +1927,22 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok-teammates.png",
-      "sha256": "ad9a4fef3b29f9664e57505626a5e606a73ef92cf22b2134c44434cd5fd72b8c",
+      "sha256": "e81953cbd07f48213253eebd013525dd9edfdb2f1e2d700cf0a0ac018488f9b8",
       "dom": "dom/sync-ok-teammates.json",
-      "domSha256": "01c0fa2810a80b22632aababab4343d57af388fd39310bec14e63d32ece1ecec"
+      "domSha256": "caa9d756253d61fcdcafcf3434281594d97748d98e73cbce299ba695d010b27b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "sync-ok-restored",
@@ -1639,7 +1966,7 @@
       "syncToast": {
         "ok": true,
         "code": null,
-        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 2 changes from teammates. tC4 sent them again. 1 verse has two alignments to review. This project now uses 5 resource versions that are not on this computer. Review Download",
+        "text": "Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Door43 did not have 2 changes from teammates. tC4 sent them again. This project now uses 5 resource versions that are not on this computer. Review Download",
         "received": 0,
         "newestWins": 0,
         "verseConflicts": 1,
@@ -1653,16 +1980,22 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 856,
-          "y": 251,
-          "width": 148,
+          "x": 658,
+          "y": 277,
+          "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok-restored.png",
-      "sha256": "8adb3593a8f1b6606f79b62ad612e30223407448f779a02689657f6f4045cbbd",
+      "sha256": "a52a699f51387d23b46220b5b9be0b7ca38b1ccfd87e349ea975f88a67f549a0",
       "dom": "dom/sync-ok-restored.json",
-      "domSha256": "47e8e1a209b9b5b783e7b3a05bf843876e8fc65d16fdea83eade7b274da56b08"
+      "domSha256": "52a14d6a52fc3555464457cff5876ef91a235a25ddc0ce4fd3a73a8bb1eab061",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "conflict-review",
@@ -1684,7 +2017,13 @@
       "png": "screens/conflict-review.png",
       "sha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
       "dom": "dom/conflict-review.json",
-      "domSha256": "03675bc198543549345ec9981f170ef6cf09e83c04ff8060a041b5b6f5b2a605"
+      "domSha256": "7225cd3b256614fda09631b6a5146c8725e66bb19b933a54a09c418c5cdeeb81",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "conflict-review-selected",
@@ -1706,7 +2045,13 @@
       "png": "screens/conflict-review-selected.png",
       "sha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
       "dom": "dom/conflict-review-selected.json",
-      "domSha256": "7761a8e50386549a86cb22bef377bd678c7b8b3f6a177d96e757366b86a84b22"
+      "domSha256": "e05a86012e2283123c7f686266500fa7dea95a1595b2c513aa7008f67019a207",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "conflict-review-mine",
@@ -1724,11 +2069,24 @@
       "refused": [],
       "homeCards": {},
       "syncToast": null,
-      "maskRects": {},
+      "maskRects": {
+        "conflict-mine-date": {
+          "x": 323,
+          "y": 293,
+          "width": 138,
+          "height": 16
+        }
+      },
       "png": "screens/conflict-review-mine.png",
-      "sha256": "62d23c316f8bdb216ed998d3af6a05c7b5e9988e00d84b23afe3f62821beb58d",
+      "sha256": "f4885fc3cbfe9e4e37d9ace071d66b038a88144d592d52e4c6f620523f78e77e",
       "dom": "dom/conflict-review-mine.json",
-      "domSha256": "2bc7f19a2cc402cc40c01af630005e4dbc229919517f504160ede19268f8ce11"
+      "domSha256": "b36227e5826968d0f7d8f1d6f0252d6fc1c71a495682e90c0eef3e2af5259d02",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "cc-obs",
@@ -1750,7 +2108,13 @@
       "png": "screens/cc-obs.png",
       "sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
       "dom": "dom/cc-obs.json",
-      "domSha256": "e292044c871716728d8ec8cc2067dab0506f84dcebe903652da8109c78353053"
+      "domSha256": "1c756f8304c9ed104c39cd6b60b0ee1550c64a68e6b6444c808921aa7d41d3c1",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "cc-obs-wrapped",
@@ -1772,7 +2136,13 @@
       "png": "screens/cc-obs-wrapped.png",
       "sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
       "dom": "dom/cc-obs-wrapped.json",
-      "domSha256": "25f2aca25f5a9b519f174b3e17d0da38b756f0b150084b36b8c1f801ccef9387"
+      "domSha256": "2d1f9f7eae99e6fe1c4008333aca7b30877f02cd6349c5843378383a1e6bf854",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-progress-journal",
@@ -1795,9 +2165,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-journal.png",
-      "sha256": "1e9cae2af3d2a12b4b5edc4733941a1b90060940b257507f3ac561aaff4c8099",
+      "sha256": "a8215b6ec538710b9445a7b4c78fe0e6826cf61771a47b52f94f77fc0d4835f1",
       "dom": "dom/open-progress-journal.json",
-      "domSha256": "96b33927d707e82e4db40943b809d9be88e4eb2024188b8e6a6183083d8c7b67"
+      "domSha256": "c1f83331639fd373fbaad8cadf03c4759d3210e6a19e143844af1b16898dde1a",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-progress-state",
@@ -1820,9 +2196,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-state.png",
-      "sha256": "01db6eebea570151f399e3aaecf6b85a01bc1fb8f16f1d6f982e7335e703ab82",
+      "sha256": "4901660573c212f3dcfed678f39fd323ef522d36c7eb7ec87ea8a9b76abb3671",
       "dom": "dom/open-progress-state.json",
-      "domSha256": "e373bf3e4d1e6a2bb2ae6176893c66fce49b1e35cb2a262aaee8f2b2c1d69427"
+      "domSha256": "58a5df2228024fc2c87cf4f20415486a6f4e8f3f3b6f2fa4c6d72f268f2486d3",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "open-progress-prepare",
@@ -1845,9 +2227,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-prepare.png",
-      "sha256": "4bcea915d9bbbe396a6f21e73d27d9c96c3babca68851eebbe8fbe5ea28a193b",
+      "sha256": "efb791999f37952ae6b1e675005bcc56242130478c75d2e4fd0dea6ffb7ebe9c",
       "dom": "dom/open-progress-prepare.json",
-      "domSha256": "d01d29ce33a80496058cb82615d9f8389527eaa5ad81cbce712cf033780e7489"
+      "domSha256": "c1f986dea93cddf435130f74c7382c912e97182d476019eb01b4e24a5b899178",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-set",
@@ -1855,7 +2243,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1869,7 +2257,13 @@
       "png": "screens/upgrade-set.png",
       "sha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
       "dom": "dom/upgrade-set.json",
-      "domSha256": "2865263d77addbf7b29cd5aceb18bbfb7dd07044fcacee47bd1d93330433a803"
+      "domSha256": "fde21fe0f3b4caca5d1a195cda79d989331c704a86ec340e0ef8155699873129",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-set-harmless",
@@ -1877,7 +2271,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1891,7 +2285,13 @@
       "png": "screens/upgrade-set-harmless.png",
       "sha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
       "dom": "dom/upgrade-set-harmless.json",
-      "domSha256": "c6c6a9f3191601f5e08e1647fcb5eb0b4b17b651b76bcb8f3acaaa894229e81e"
+      "domSha256": "3604486772d5556394f64b8664649290839786a01677bb729f9d5542d2553f1d",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-set-blocked",
@@ -1899,7 +2299,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1913,7 +2313,13 @@
       "png": "screens/upgrade-set-blocked.png",
       "sha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
       "dom": "dom/upgrade-set-blocked.json",
-      "domSha256": "4f809e3a108a48d2c5a54db00df66a22a99794797178f7a599c3cf009d1ce6dd"
+      "domSha256": "8b021d0d4a423a8c792c99618edb95bf63c76d6bb53f6fb1475c1531b60a01f7",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-set-error",
@@ -1921,7 +2327,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1935,7 +2341,13 @@
       "png": "screens/upgrade-set-error.png",
       "sha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
       "dom": "dom/upgrade-set-error.json",
-      "domSha256": "71b5de6c609a8a23d329d69d276068835d448035c1c4d0b60d054d008669869e"
+      "domSha256": "c93726247e7c5c2725a7faabe0ecc53fdc1c8cf4a28c2c3834b33c91e84461e8",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-text",
@@ -1943,7 +2355,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1957,7 +2369,13 @@
       "png": "screens/upgrade-text.png",
       "sha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
       "dom": "dom/upgrade-text.json",
-      "domSha256": "179f63b9db9b409660c0dc69cb52c9b06cab9752c3b1f676e25b7e2ec61e1194"
+      "domSha256": "3eb624da11b4c28279532270442ddcfa511d40fcafa94a24904f70761e88cf0d",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "upgrade-repin",
@@ -1965,7 +2383,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "B5b",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -1979,7 +2397,13 @@
       "png": "screens/upgrade-repin.png",
       "sha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
       "dom": "dom/upgrade-repin.json",
-      "domSha256": "a2a1d93bd9c4e002bb3ffa1b017fe54cf2be7ebe56f64fd1ca1e16f0b6267ade"
+      "domSha256": "ab7be9638dfdbab18d1ae7553e0ecf9c892fde2b83e24b466e3fc625a6c0122a",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "gateway-change",
@@ -2001,7 +2425,13 @@
       "png": "screens/gateway-change.png",
       "sha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
       "dom": "dom/gateway-change.json",
-      "domSha256": "418b4cf13042f458f192501e0b338aeed314f8c71c0d64f519a87bb3cfdfcc87"
+      "domSha256": "33e318eb70ae7efdf7efed130a5496b208aa508616134ca4e1a1e230209f8468",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "gateway-change-busy",
@@ -2009,7 +2439,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -2023,7 +2453,13 @@
       "png": "screens/gateway-change-busy.png",
       "sha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
       "dom": "dom/gateway-change-busy.json",
-      "domSha256": "ddc58bbaa0d02d6335d8709903d2a47aa02bf4afdde6f76c8dd42904ae8a1acb"
+      "domSha256": "cdb317eaecc4361e2bb728e45071ea197a12e900c8aba709ba3f2224a202b904",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "gateway-change-blocked",
@@ -2031,7 +2467,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -2045,7 +2481,13 @@
       "png": "screens/gateway-change-blocked.png",
       "sha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
       "dom": "dom/gateway-change-blocked.json",
-      "domSha256": "9c2df49e3a553f4a014d0a3ff0d38357ec811d07d4d1c3377be5f74072051433"
+      "domSha256": "3c606ea57dd7334052d3641e9af152d47cfc21cfd1f5896ce63ad31cac2348e9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "gateway-change-error",
@@ -2053,7 +2495,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "C8",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -2067,7 +2509,13 @@
       "png": "screens/gateway-change-error.png",
       "sha256": "039ac001029c92a87923547da9f12159bba8cdd6a5f18e5eff7b0656ce5a9e3a",
       "dom": "dom/gateway-change-error.json",
-      "domSha256": "f30f21c4306dcfcf75a7f0fdc34d466b6198c196fed5cd1c0c54a91360e5552c"
+      "domSha256": "a2f7919ecf4cb326fb544428b24f62a2f515d2fde757e307ab1a2f866abde4d5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "gateway-change-failed",
@@ -2089,7 +2537,13 @@
       "png": "screens/gateway-change-failed.png",
       "sha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
       "dom": "dom/gateway-change-failed.json",
-      "domSha256": "175974c5831fb15e31a3e1620ec9774f0614c944a51ea09086df78a537105447"
+      "domSha256": "fda5360546f2ebfb9c3f45282a2b508eea4d89536f1aad0e2bedd1edd7d48c1b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "section-empty-confirm",
@@ -2111,7 +2565,13 @@
       "png": "screens/section-empty-confirm.png",
       "sha256": "7d898acb713d79d9e135a5a4654abba7aab6df2e2398c09487bf8c5360147fb7",
       "dom": "dom/section-empty-confirm.json",
-      "domSha256": "0ec406640f349c44f39c7dfeb6c9a2de5435618075421423c851f5d11ec2c016"
+      "domSha256": "6ca07b1423fb942dfce3371d34063f7e57d1dd3cd2d2920f03f4c16494db6ce5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "license",
@@ -2131,9 +2591,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/license.png",
-      "sha256": "27aeb8e2ed89b9d1ef92466a7cf4c71d046382eb21557a5313914d222d2c7782",
+      "sha256": "d0a0c880e04ccb899ffe0b2852a2fcdb79839af8e9def02d53ceb905ecf42bcc",
       "dom": "dom/license.json",
-      "domSha256": "7018b82f7d557a3cca19362d05c7daa6adf0f40a4023ecd72497271e76533c80"
+      "domSha256": "0a39f453d1af2ee2785b0b6094bc899c52f3637130e7b89f5cde7ea00e948ff9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "net-failed",
@@ -2156,9 +2622,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/net-failed.png",
-      "sha256": "cbc98e3c28f3205ae97c4f637be8ac30a319dacd0457c28bff45fede1fb4e97f",
+      "sha256": "e35a7ec6d7be57464c504f4a8cf19b8cfe5e3ce3d21aa8d6e1ad42e0d796c9be",
       "dom": "dom/net-failed.json",
-      "domSha256": "f33369429356cb454a3bac81edab07d75c8822c6d22658ba0fc6bc8240dc15c9"
+      "domSha256": "da26a511ee7428b79c17cc70b3e3139402f6ce9bc7af89c26d992706618d24f5",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-progress-preparing",
@@ -2181,9 +2653,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-preparing.png",
-      "sha256": "394889870e9bcde21e587f75cf8666bbf4c3a412270d374277cbeae22c0ff58e",
+      "sha256": "62c5a15ab9dfb1524772f81e40dd33c06afb8d64d354ca70ad2390e5854f0966",
       "dom": "dom/share-progress-preparing.json",
-      "domSha256": "dc7f4f8b433a96fec5d9d593146c70c88b931e777adcbd4a8757285311218955"
+      "domSha256": "b22ac94be51088e3b1f5cfd6b912072055a7802fdef76bf0e663797833159529",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-progress-create",
@@ -2206,9 +2684,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-create.png",
-      "sha256": "475c920d5884bfe5308bb107da4ddc331c7c7ee69fdf1e6b19f36a225d742c6c",
+      "sha256": "4ed316ead04d29943272fceb08f92abcc98969e1ca9dbf01c05bd54021b2dcf5",
       "dom": "dom/share-progress-create.json",
-      "domSha256": "66e7a7cf266d7bcfa8044fe2ff848289da31eec8fcf7e2e81d36f851e9bb8ae0"
+      "domSha256": "776d8af715910451e4b225b25da1a15f5626eb9d409227d2adf889299bd41d9e",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-progress-push",
@@ -2231,9 +2715,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-push.png",
-      "sha256": "c473ad168c858559ce58d87617f815b21850463c5490a56406aa7227fb4d1de5",
+      "sha256": "762ab36d6d1cbbea2b75635906bf808ed3dbf965720c2f63382d891c91db9f0c",
       "dom": "dom/share-progress-push.json",
-      "domSha256": "6be13704fae98bce8d97542d32ed5e19e4cad418aa73dcc9fd7cc7e1a41240c2"
+      "domSha256": "f7871c64c0445f5c5101239cf4d488422356908935fdeb996e8726f887924d51",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "share-done",
@@ -2249,16 +2739,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-done.png",
-      "sha256": "17733f52742661baeb042c0f31a36b4dd31a5cc742838174643be35aff0441c1",
+      "sha256": "9e18b0862161db58fd97f6c31d98282a3f8c8eca42cc6023b1ede74768da094d",
       "dom": "dom/share-done.json",
-      "domSha256": "d0f59813c1f6c0f32c4f28537af33d95f693cd5d56503c7e4ebe5e8f251b30be"
+      "domSha256": "4c5b646fd2daf99fe3649f36bdb924c5c50070211cd6ccd205a886e4f76654dc",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-files",
@@ -2274,16 +2767,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-files.png",
-      "sha256": "6c8a502f2b758a92ef5354382339ec40c9c1b33f500c80f8dde5e20b4c13c4f8",
+      "sha256": "80a1f21fb02cbeb03b84b215608dea0f234bfefc850effbdfd3db563fe6c64be",
       "dom": "dom/import-files.json",
-      "domSha256": "bcc6a7c68deebf7c16de96b95b1b836ed3d567a41799c27d41d50c3badba3618"
+      "domSha256": "31aa4c9ea912ae546015ba3d0234baca10399dbddbecd7e80b719ea687548c61",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-review-usfm",
@@ -2303,9 +2799,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-review-usfm.png",
-      "sha256": "c7abc1ed897df647ec67014d56c5c052b6d7df4a3967184f21b5b757229ee9aa",
+      "sha256": "aa48b01ca6242ebdebec9d0054c5d98fd8e60c2115f351eec83f5a77966ca143",
       "dom": "dom/import-review-usfm.json",
-      "domSha256": "5013cf92f521381a34f3694db392fbc952d3843b128f9330e27c79525e7684de"
+      "domSha256": "8a9ca89d5d641fd7e893a7626651e22b98638514b7ec9830998519f93d1b6eb6",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-review-tc3",
@@ -2325,9 +2827,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-review-tc3.png",
-      "sha256": "5198d5d49d77fd7fe1d0d63cc5d34d0327b906148d851d14c3daff673846e3ea",
+      "sha256": "1728c92cc3599517800ec942f27a00bbcf908f5944dbcd240d53c0f0198bdf29",
       "dom": "dom/import-review-tc3.json",
-      "domSha256": "028b2b0eb4b5ec84d1477bf3414ab293cc00ee78af733b2465706a11e2c507bf"
+      "domSha256": "3d5b8a1ca7d2d7cf1d50dd06f5f5d6b4f4146e9edf52214808a1664af71090a9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-working",
@@ -2343,16 +2851,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-working.png",
-      "sha256": "4367c9a400890f64eee2592d7eefa266f50b74c83dbfd701b7f74a9cde6838cc",
+      "sha256": "b5c3837dff51e9e6f4d52c6f292161e018cf205477e0a162a80e0e3a76f492fd",
       "dom": "dom/import-working.json",
-      "domSha256": "1377352f785783c1949eb562540a33a8be056d3b9e189fb88ce97d098fab8a46"
+      "domSha256": "707893498a04b386cb4838c1c59e6169a70f3829e811b479707c72b94bb18011",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-failed",
@@ -2368,16 +2879,19 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-failed.png",
-      "sha256": "92fb01b7a671528a413486e8596b9558c6b93a3773e50fe1d0bcc6bc0bbbcc6d",
+      "sha256": "17589b628dbd8292e01e80aeafcfcd98c8c5a924f22df50c971a8fb8f7cbd81a",
       "dom": "dom/import-failed.json",
-      "domSha256": "ba055ee4dba038236c63798a2efdd0207e8a8903009303a45b19cfb4e6eeae51"
+      "domSha256": "094ea9626fd4cdb203392da745de9951933ccbec7878e5d2fa9fabcfb7270f40",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-book-pick",
@@ -2397,9 +2911,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-pick.png",
-      "sha256": "b34ad0d0e14d84ae032af76bb4ba09bf03c7526d009be04689b3fcb0c8762b33",
+      "sha256": "f73066f4032e1ca36702ef820fbcd2ea1e7759ed819acf1aeeb4d7439cedfb4d",
       "dom": "dom/add-book-pick.json",
-      "domSha256": "afd4ea8a2cf1b0adae1d87d9745523a38671558ef4f32e5483ac1da59ebbc998"
+      "domSha256": "6a4a5be962e5d1e145e088decfaa0d9cb76e3408ccc4b74d587454a35f437f50",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-book-pick-multi",
@@ -2419,9 +2939,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-pick-multi.png",
-      "sha256": "08ff279b71992909876a957e778e9efd5adf57c3d3356442366b8232e28c76da",
+      "sha256": "eeb8d9f7cacc33dc006747536b1589d371952c3b61fbc17b1567b8c34363ddb6",
       "dom": "dom/add-book-pick-multi.json",
-      "domSha256": "9e03984c24701db37bc7cf4ec3ca393de13ce62a58e891ac39fc64a0c1f640cf"
+      "domSha256": "386912efd8c6179aeeca464372f7bd071a326efac9f4e97af0b53e0e26ee9c3d",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-book-usfm",
@@ -2441,9 +2967,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm.png",
-      "sha256": "5cb9d3f66b082e5694c97314c556fa2325bed80958d0f44ee8e432f8954afeca",
+      "sha256": "912069e2d0e73d5a66e80d0eb46b7867a0ede0618b1655d9634a0881247d6827",
       "dom": "dom/add-book-usfm.json",
-      "domSha256": "6a94c6b0795f20541edb775bc0e6257fe5bbe8abe602f3a47e8aaf1a42010771"
+      "domSha256": "2e66522143841615fee22df078a0fb224d354885838cea38a2dc37c12156528a",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "add-book-usfm-files",
@@ -2463,9 +2995,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm-files.png",
-      "sha256": "cfb15e0f4018012377d3e9ceaeb68232173adfb26df081b4a3820c499df30dfd",
+      "sha256": "785417b404622f98e2f7ccf682e0bd88aa29233f05479505dbd12bd845b3d928",
       "dom": "dom/add-book-usfm-files.json",
-      "domSha256": "6b9e2258ae452b289358fc868062b4e754ef5947e0f221dff40fd7de9f2fa7e3"
+      "domSha256": "efb785ad84966d5aa001e4c140e68ebfea8da44e96ee19bb52617b75996c270c",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "signin-error",
@@ -2481,10 +3019,7 @@
       "error": null,
       "pageErrors": [],
       "refused": [],
-      "homeCards": {
-        "sample_burrito_obs": "share",
-        "sample_burrito": "share"
-      },
+      "homeCards": {},
       "syncToast": null,
       "maskRects": {
         "signin-server": {
@@ -2495,9 +3030,15 @@
         }
       },
       "png": "screens/signin-error.png",
-      "sha256": "6bb56b45a246d461edc56795ccabd26f51cfb4acb04dca8de87931dd11ca709a",
+      "sha256": "0315859a16b8279870b3b8f18ca674015a49ec1145244e4015ce28f32f8594f9",
       "dom": "dom/signin-error.json",
-      "domSha256": "c635719ffbe35532aee7b2a27b16a2d3d3ebbbb166c821167b447e9a987c6e53"
+      "domSha256": "daa5c642a4cd03c487c72fa99cc0ca4ddb5cbb42683420446bdbdb4280cf0137",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-empty-none",
@@ -2519,7 +3060,13 @@
       "png": "screens/check-empty-none.png",
       "sha256": "c80ef91193ef183ea56a4d52f283c242f1cf1ef613af174989595620f7a6f30e",
       "dom": "dom/check-empty-none.json",
-      "domSha256": "c47605ab38b6002772807b07985df941680aea5f2f83ec68125b1e275d0997a7"
+      "domSha256": "5cb631d01e0d5ec2d612cd0ec0e7083a7678b0f1cda4616a377899349b2d1a49",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-empty-all-dropped",
@@ -2541,7 +3088,13 @@
       "png": "screens/check-empty-all-dropped.png",
       "sha256": "6be9f22d8aec5034a7ac3b627b01c92de698279b24c252a0c56926692c2680b9",
       "dom": "dom/check-empty-all-dropped.json",
-      "domSha256": "c25e7efe2a070f4a687c250b2f48f7e940de7733df0fc4cc3c542c21175935c3"
+      "domSha256": "b19a3d9a7a8e33a45ba880a200437249e29c5eba35b60d5031cbdac7437355ec",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-empty-missing",
@@ -2563,7 +3116,13 @@
       "png": "screens/check-empty-missing.png",
       "sha256": "7bfa790a1d4443376e397700790d0967004366647fca7c143c797cdc36ddcf18",
       "dom": "dom/check-empty-missing.json",
-      "domSha256": "ec5862be19624c9a869a5f08dbe2968ccb94d61e94eaf056e383c0371e3b813c"
+      "domSha256": "a01ff828591aa60abab1ab39a6403d2058151e3aae930c4eeb1284d6c4f1338a",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-empty-versification-unavailable",
@@ -2585,7 +3144,13 @@
       "png": "screens/check-empty-versification-unavailable.png",
       "sha256": "b4bbb65af7eadb605b7d71ea1466edb4aa2f8de6e19d00291260d16e89286585",
       "dom": "dom/check-empty-versification-unavailable.json",
-      "domSha256": "18f6db2da4b2364c2363c8f974ebdf46ecd4fadd04895f2078c3ee1ee92ec5a2"
+      "domSha256": "d3690874f1d042011177e34aa79d6f6907d421da67a1938d8f044301506c3c74",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-empty-versification-unknown",
@@ -2607,7 +3172,13 @@
       "png": "screens/check-empty-versification-unknown.png",
       "sha256": "152e562d3e6834cbef6f268ef0a1e662ad29e65c2a028bb4dc626887e26f63a7",
       "dom": "dom/check-empty-versification-unknown.json",
-      "domSha256": "f8973485f3bbff82a41c6f66f9e2cd4cb5e985c2a00601d93caea0cde8fb7306"
+      "domSha256": "f14a428af5593876835ee44e121e51e3b37acd11d138b11cbbb7c3ffe197927f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-deriving",
@@ -2629,7 +3200,13 @@
       "png": "screens/check-deriving.png",
       "sha256": "e10c95f6efbf2d55f2f391ff57a439bb5de03511c8309f5d62a4eafe2388165c",
       "dom": "dom/check-deriving.json",
-      "domSha256": "e46473b81479b80b10ac532715d4122e36662cab92d7b76c2b8068cc3bb90032"
+      "domSha256": "69d10da674166f606b88f19722ae15b54bfe0ff54d0569103ee09d35cffadb0b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-error",
@@ -2651,7 +3228,13 @@
       "png": "screens/check-error.png",
       "sha256": "a0c30ab7badfca84aaef06fb64182445f6a096564dfc67572f428fd06a0fd708",
       "dom": "dom/check-error.json",
-      "domSha256": "b918f89ab0ec903dba54a78b37b445ef62f43a1af9ac378272f9acdc12ed57da"
+      "domSha256": "2e743597cb5f3c63aae5b63d9ba3f8f696417dc907e74ef3616c52c7cd9c2b94",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-rail-empty",
@@ -2673,7 +3256,13 @@
       "png": "screens/check-rail-empty.png",
       "sha256": "3ed06c4558c3ccd12fec330372767a92605da67b89c2216e0adb430e3d92190b",
       "dom": "dom/check-rail-empty.json",
-      "domSha256": "27bda03e737dde80f0beb34f6fc293acdf3c821162cd1fd1b4662aac3c3e7110"
+      "domSha256": "d23e47580deb8886ae544cf7ecc6a01bc165f39458a936bf202530cd8e952bae",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "check-picker-no-items",
@@ -2695,7 +3284,13 @@
       "png": "screens/check-picker-no-items.png",
       "sha256": "4ba83a16d9b6ed700220d3a94b1e5b2c16f75a85c43e738f2d7ccc7f1a98baff",
       "dom": "dom/check-picker-no-items.json",
-      "domSha256": "1b5555b7025f23fe740a5d51134f4af2ba4e003e7776b7dd0a65990dde74f6f5"
+      "domSha256": "e29df02eba28006eba8de92317ed1b60841a9e0f45a3dbc4f42303d5425d83f9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-undrafted",
@@ -2717,7 +3312,13 @@
       "png": "screens/align-unavailable-undrafted.png",
       "sha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
       "dom": "dom/align-unavailable-undrafted.json",
-      "domSha256": "14d2c697c2e96bc61c87600e04c8b1cbc06a2f1f951516559aa09b1c4adb08e4"
+      "domSha256": "ac0ecb904d337bed8a9cb22bc6be5106374ffca6be7159572269e5f6854fa3f3",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-unpinned",
@@ -2739,7 +3340,13 @@
       "png": "screens/align-unavailable-unpinned.png",
       "sha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
       "dom": "dom/align-unavailable-unpinned.json",
-      "domSha256": "1e51ef1fc606c226478c19d095c6f3e4f01fea286eed8827ae62c6db2b4ed272"
+      "domSha256": "757b7ac78d9073db0abec2cc5c5f2fe8f9c770fcc68cc76b87681a9ee4914354",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-missing",
@@ -2761,7 +3368,13 @@
       "png": "screens/align-unavailable-missing.png",
       "sha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
       "dom": "dom/align-unavailable-missing.json",
-      "domSha256": "8c78614977b700717675e97b455ef572ba56680280b578d88fbed0845cf8a945"
+      "domSha256": "55dbb98a396b4f2f170d111166db6d8fc53caa6a8a7f66e01fce72238e42a352",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-versification-unavailable",
@@ -2783,7 +3396,13 @@
       "png": "screens/align-unavailable-versification-unavailable.png",
       "sha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
       "dom": "dom/align-unavailable-versification-unavailable.json",
-      "domSha256": "6082746d1b4681afaebbae811dc2f181ac3059df424c397fb28778d2ee7b7a6e"
+      "domSha256": "0c67df6bf0bc28145c976550f19d421c389c73d905b2f9c66a3fe480a23c7a51",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-no-counterpart",
@@ -2805,7 +3424,13 @@
       "png": "screens/align-unavailable-no-counterpart.png",
       "sha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
       "dom": "dom/align-unavailable-no-counterpart.json",
-      "domSha256": "cb3b59d20747288a366b148f04354841fffa7cf9415b321e5d5fbc3aaec902e1"
+      "domSha256": "60266efc10e6e6d66d0efadc8d86c1f7efe9f487d9017f627de150ce52a1090b",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-versification-unknown",
@@ -2827,7 +3452,13 @@
       "png": "screens/align-unavailable-versification-unknown.png",
       "sha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
       "dom": "dom/align-unavailable-versification-unknown.json",
-      "domSha256": "6affb1ec763986c69fa3f4e3b95ce6fb8aaa5294c86ab8b2a4da536fb2e2ff7b"
+      "domSha256": "e0b4e538aecc43d2843154c3c8470da13b8a87f5c3215b541c824a284d6c3d94",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-unavailable-unreadable",
@@ -2849,7 +3480,13 @@
       "png": "screens/align-unavailable-unreadable.png",
       "sha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
       "dom": "dom/align-unavailable-unreadable.json",
-      "domSha256": "95f152ecd3b21d78c73dbc4a10631b8c9874cf5795093fa59a28fefcc70f7f53"
+      "domSha256": "e8f3d4a2ca9f00b395aa2fd5b839f004088e8a5dd8ff4e6f996db63f80f310c9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-loading",
@@ -2871,7 +3508,13 @@
       "png": "screens/align-loading.png",
       "sha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
       "dom": "dom/align-loading.json",
-      "domSha256": "eb9b3674a29830e1c1a4bc5f1d2251d8754de73e5d9a58de34d1a49e675a4636"
+      "domSha256": "2a2e04dcc0908ae3f0e594005329e500dd84f4cc5ac1cf6ae9405a27e4a81849",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "align-error",
@@ -2893,7 +3536,13 @@
       "png": "screens/align-error.png",
       "sha256": "83cced400641a08cb6a31d240893babe9f249006b46048f5bbfcc128f25316eb",
       "dom": "dom/align-error.json",
-      "domSha256": "5199778f5862dc253038d6de64e9b0fa1d7ade1cf3f192374d9ac982a80d6da6"
+      "domSha256": "653d1da6b444898ef18135683e4a0630a21814ad7a54951924d0ad707089c277",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-loading",
@@ -2915,7 +3564,13 @@
       "png": "screens/home-loading.png",
       "sha256": "e8e117be3c5743d2a8fca02a9ad64369634b15213f4416edf653c009ceb0f3e2",
       "dom": "dom/home-loading.json",
-      "domSha256": "6384cadcc9c3f85baea450657cd984227f2855146755a427f5ca7ba37c6e6ec0"
+      "domSha256": "dcefcb34ac85cf4884115e5b691a0b7552708e1d8eae36c3b287f8866ef413a8",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-empty",
@@ -2937,7 +3592,13 @@
       "png": "screens/home-empty.png",
       "sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
       "dom": "dom/home-empty.json",
-      "domSha256": "c275f6c7189cd376c0e9560c0d888b6afde649feae5879037e8265c5f8b04255"
+      "domSha256": "966b7054eebaa26c33254d09a044f3d616fdcab5b976317d53cfc2d70eaf93a9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-list-error",
@@ -2959,7 +3620,13 @@
       "png": "screens/home-list-error.png",
       "sha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
       "dom": "dom/home-list-error.json",
-      "domSha256": "f15f80a135460e79dd66dac6eda7e242b8ee44355a5d3861dbec5241c2391d35"
+      "domSha256": "319aee191640ca4b7ba44457dd932d00bb98d403a473020294fc00819e6145e9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-open-error",
@@ -2982,9 +3649,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-open-error.png",
-      "sha256": "6edf81fe6c2dc8a4add50933cb616eb47a446c74a123a33e98533b871618e7a4",
+      "sha256": "8ab3a69f06ad5305d04b22a0a174838088a267a42042fd77b90d11423760efbd",
       "dom": "dom/home-open-error.json",
-      "domSha256": "3dc557a9d1a872aced02b6733ee1bd07a3667c9ecd1147ba1223c9e4e8be377f"
+      "domSha256": "0343e0e51639cdf92c59017de135a270b19a6b48e39d261a50e9d951542437f9",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-checkpoint-error",
@@ -2992,7 +3665,7 @@
       "scenario": "sample",
       "locale": "en",
       "by": "D1",
-      "backend": "store",
+      "backend": "memory+scripted",
       "layers": [
         "pixels",
         "dom"
@@ -3007,9 +3680,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-checkpoint-error.png",
-      "sha256": "18074ee24f7d5ce72fbb4e2050790a120dd701bf781fa62ce78628542a479520",
+      "sha256": "4f3a077000c9ed76c999621673863849261d23d08ffaf9ff28bb054ab69a2ad1",
       "dom": "dom/home-checkpoint-error.json",
-      "domSha256": "e16ac370bdbdd43fb56d5aa41d510f7fedf54cc280ae0e589aa3db2de0a49417"
+      "domSha256": "3857bf3ba10cddc013497266da358fd1d8415f35ea5f09f5d36a77a1628c032f",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "home-resume",
@@ -3032,9 +3711,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-resume.png",
-      "sha256": "d58143645c7db683c68a935c28fa89e9b63a9dc8490578aa889467a4328965cb",
+      "sha256": "2b0327ea9c0ab81cb7f3ab75048ca93a38c912810bb20e66406723b2490df9ee",
       "dom": "dom/home-resume.json",
-      "domSha256": "71c716c91807457f6d9d196d0ba8ecd4c7d04b4f2fe1f2649e636d5cfcff24f2"
+      "domSha256": "8b2472639f4f41f8830559e34341d27357ce2d9c00364b011849f41ec48e62ff",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     },
     {
       "name": "import-toast",
@@ -3058,9 +3743,15 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-toast.png",
-      "sha256": "dbe49f873f3567081862f76a8740014f98b6a41da9327e20bba5fea59fa2ad50",
+      "sha256": "fadb0b4a5549c99fca2974f488365561033228b0e99b48a4040ed3bf83a13c7f",
       "dom": "dom/import-toast.json",
-      "domSha256": "424b0aa7d3fbd6334ede6a0b677caf03ef3b8f8338e3a852505e38240f1492f0"
+      "domSha256": "5d5abd04c67720d809c3525a83a6e4cb9f67e39ed37b4869de26088366812de1",
+      "trees": {
+        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
+        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
+        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+      }
     }
   ]
 }

@@ -11,7 +11,9 @@
           "cards": [],
           "unusable": [],
           "others": [],
-          "resume": null
+          "resume": null,
+          "notices": [],
+          "importRemoved": false
         }
       }
     }

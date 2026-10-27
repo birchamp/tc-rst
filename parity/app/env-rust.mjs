@@ -227,7 +227,12 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
   const { url, token } = address;
   const base = new URL(url);
   const origin = base.origin;
-  const call = (endpoint, body = {}) => apiCall(base, token, endpoint, body);
+  // Counted so a capture says it showed a scripted outcome from what happened (CHK-6).
+  let scriptCalls = 0;
+  const call = (endpoint, body = {}) => {
+    if (endpoint === 'test/script') scriptCalls += 1;
+    return apiCall(base, token, endpoint, body);
+  };
   try {
     await call('test/quiet', {});
   } catch (error) {
@@ -376,6 +381,8 @@ export async function startRustEnv({ scenario, tc4, ui, seed, door43, realSync =
       return scriptSync(repo, synced({ restored: 1 }));
     },
     refused: () => [...refused],
+    /** How many `test/script` calls the env has made. */
+    scriptCalls: () => scriptCalls,
     /** tc4 is still running: a journey can quit it or crash it on purpose. */
     alive: () => child.exitCode === null && child.signalCode === null,
     /** What `hello` says of the build, and the folder of the UI build the page loads. */
