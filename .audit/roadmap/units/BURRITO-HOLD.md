@@ -4,7 +4,7 @@ title: A book file the app cannot read never leaves metadata.json listing bytes 
 track: A
 lane: storage
 milestone: M1
-state: claimed
+state: building
 owner: storage lane (Claude Code e10d898d)
 branch: track-BURRITO-HOLD
 worktree: .worktrees/track-BURRITO-HOLD
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5-1 d (basis: one listing rule in materialize.rs, one crash test)
 merged: none
 updated: 2026-10-27
-next: Fix metadata_entries' rule for a write under way whose file cannot be read; test, plant, merge LOSS-2.
+next: Merge LOSS-2 once pushed, then --touched, three lenses (loss first), push, hand to the integration lane.
 blocked_by: none
 ---
 
@@ -42,27 +42,39 @@ acceptable. Paratext, Door43 and another tC4 trust `metadata.json`.
 
 ## Funnel card
 
+- **Ruling** (orchestrator, 2026-10-27, option B): the state is an interrupted write group until
+  the file reads (STORAGE I7). The holder is another program, so only a read decides which bytes
+  are on disk; no guess from the file's size (two versions can have the same size).
 - **Invariants**:
-  - INV-VALID-BURRITO (P5, STORAGE I7): `metadata.json` never lists md5 and size that are not in
-    the folder.
+  - INV-VALID-BURRITO (P5, STORAGE I7): no write lists md5 and size the folder did not already
+    claim; every commit and exchange file is valid; the folder heals at the first open or
+    checkpoint that reads the file.
 - **Wrong states**:
-  - A path in `Writing{old, new}` whose file cannot be read is listed as `old` after the rename
-    put `new` there.
+  - A path in `Writing{old, new}` whose file cannot be read is listed as `old`: after a kill
+    past `metadata.json` (§6.4 M5) the folder was valid, and the checkpoint made it invalid.
+  - A commit or exchange file built from the folder's stale list.
 - **Code**:
-  - Types: none expected.
-  - One entry point: `Writer::metadata_entries` in `crates/tc-store/src/materialize.rs`.
+  - Types: none.
+  - One entry point: `Writer::metadata_entries` in `crates/tc-store/src/materialize.rs`: an
+    undecided path keeps the entry `metadata.json` has for it now (`listed_in_metadata`).
   - Removed: the "listed as the bytes before the write" fallback.
-  - Left to checks, and why: none.
-- **Checks**:
-  - `groups::a_checkpoint_that_cannot_read_a_book_file_lists_only_bytes_on_disk` in
-    `crates/tc-store/tests/store/groups.rs`; kind: crash test; runs in: CI.
-  - Proof it can fail: fails with the old fallback planted back.
+  - Left to checks, and why: commits and exchange files already come from the projection
+    (`build_tree`, `tc_sync::exchange::export` takes HEAD after a checkpoint): no code, a test each.
+- **Checks** (`crates/tc-store/tests/store/groups.rs` unless named):
+  - `a_checkpoint_that_cannot_read_a_book_file_keeps_a_valid_folder_valid`: the fix.
+  - `a_checkpoint_while_a_book_file_is_undecided_commits_a_valid_burrito`: proof (1).
+  - `a_checkpoint_after_the_held_book_file_reads_again_heals_the_folder`,
+    `an_open_after_the_held_book_file_reads_again_heals_the_folder`: proof (2).
+  - `exchange::an_export_while_a_book_file_is_undecided_is_a_valid_burrito` in
+    `crates/tc-sync/tests/sync/exchange.rs`: proof (3); the sync push sends the same commits.
+  - Proof it can fail: each fails with its guard planted away (log).
 
 ## Steps
 
-### Step 1: Test and fix
+### Step 1: Tests and fix
 
-- Done when: the named test passes, fails with the old rule, and STORAGE says the rule.
+- Done when: the five tests pass, each fails with its guard planted away, STORAGE §1 I7, §5.10
+  M2 and §15 L153 say the rule.
 
 ### Step 2: Merge LOSS-2
 
@@ -74,7 +86,7 @@ acceptable. Paratext, Door43 and another tC4 trust `metadata.json`.
 
 ## Stop and ask when
 
-- No listing can be proved true while the file is unreadable: ask the orchestrator.
+- Proof (3) needs real work: tell the orchestrator in one line.
 
 ## References
 
@@ -84,3 +96,5 @@ acceptable. Paratext, Door43 and another tC4 trust `metadata.json`.
 
 - 2026-10-27 00:50 EDT | storage lane (Claude Code e10d898d) | created | none | from the orchestrator: a checkpoint while a book file is unreadable, after a kill past its rename, lists bytes not on disk; REL-1 waits for it | message from the orchestrator, 2026-10-26
 - 2026-10-27 00:50 EDT | storage lane (Claude Code e10d898d) | claim | none | claimed on track-BURRITO-HOLD from origin/claude/focused-ride-5uzj7p (30ce3573) | python3 -I .audit/tools/board.py
+- 2026-10-27 02:10 EDT | storage lane (Claude Code e10d898d) | ruling | none | orchestrator, option B: an interrupted write group until the file reads (I7, the holder is another program); no guess from the size; prove (1) commits valid, (2) the folder heals at the first open or checkpoint that reads the file, (3) nothing leaves the app built from the folder | message from the orchestrator, 2026-10-27
+- 2026-10-27 02:40 EDT | storage lane (Claude Code e10d898d) | step 1 | none | Found: after a kill past TIT.usfm's rename (§6.4 M4) the folder is invalid before any checkpoint, as I7 allows; worse, after a kill past metadata.json (M5) the folder is valid and a checkpoint that cannot read TIT made it invalid by listing the bytes before the write. Fix: an undecided path keeps the entry metadata.json has for it now (`listed_in_metadata`); not listing it instead left the seal's new pack unlisted. (3) needed no code: the exchange file and the push are HEAD's commit after a checkpoint, whose tree comes from the projection. Plants, each reverted: the old `old`-placement fallback fails keeps_a_valid_folder_valid (TIT listed 584, disk 585); build_tree taking the folder's metadata.json fails (1); reads that never decide a `Writing` path fail the open heal, and with the listing also taking metadata.json's entry for a readable file the checkpoint heal fails too (two reads heal it, both planted); the export without its checkpoint fails (3). STORAGE I7, §5.10 M2 and §15 L153 updated. tc-store: 488 passed | cargo nextest run -p tc-store; cargo nextest run -p tc-sync --test sync an_export_while
