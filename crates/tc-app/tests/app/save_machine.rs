@@ -122,6 +122,8 @@ struct World {
     /// Each clean `Ack`'s text and the field's value at that moment.
     clean_checks: Vec<(String, String)>,
     production: Option<ProjectField>,
+    /// The page was loaded again since the run began: its fields no longer know the stored text.
+    reloaded: bool,
 }
 
 /// The production mode reads its audit from the actual journal, independently of Acks.
@@ -234,6 +236,7 @@ impl World {
             last_typed: String::new(),
             clean_checks: Vec::new(),
             production: None,
+            reloaded: false,
         }
     }
 
@@ -334,6 +337,7 @@ impl World {
             last_typed: initial,
             clean_checks: Vec::new(),
             production: Some(verse),
+            reloaded: false,
         }
     }
 
@@ -728,6 +732,7 @@ impl World {
     async fn reload(&mut self) {
         let store = std::mem::take(&mut self.page.store);
         let old = std::mem::replace(&mut self.page, Page::new(&self.t.app, store));
+        self.reloaded = true;
         drop(old.inflight);
         for (k, entry) in buffer::entries(&self.page.store) {
             if entry.instance == self.page.m.instance() {
@@ -797,6 +802,7 @@ impl World {
         }
         self.t = TestApp::start_in(self.dir.path(), |_, _| {}).await;
         self.page = Page::new(&self.t.app, MemStore::new());
+        self.reloaded = true;
         self.offer().await;
     }
 
@@ -1214,8 +1220,8 @@ async fn play_world(mut w: World, steps: Vec<Step>) {
         // waits for explicit Retry; this sends the correction with a fresh identity, or,
         // when the store already holds it (an earlier save stored it and its reply was
         // lost), sends nothing and lets the field go as saved. A field restored after a
-        // reload no longer knows the stored text, so it may send it again; `check` then
-        // proves the store kept it once.
+        // reload or restart no longer knows the stored text, so it may send it again;
+        // `check` then proves the store kept it once.
         let key = w.key();
         assert_eq!(
             buffer::read(&w.page.store, &key).unwrap().text,
@@ -1231,7 +1237,7 @@ async fn play_world(mut w: World, steps: Vec<Step>) {
                         && !old_requests.contains_key(&sent.request)
             )
         });
-        if stored && !resent {
+        if stored && !(resent && w.reloaded) {
             assert!(
                 !commands.iter().any(|c| matches!(c, Command::Send { .. })),
                 "the stored correction is not sent again: {commands:?}"
