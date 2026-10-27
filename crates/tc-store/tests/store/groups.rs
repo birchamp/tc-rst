@@ -1127,3 +1127,113 @@ fn a_group_keeps_the_intent_of_a_path_it_could_not_read() {
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
 }
+
+/// A project in an interrupted group whose book file another program holds: `TIT.usfm` was
+/// renamed to the second save before the kill, `metadata.json` still lists the first, and the
+/// file cannot be read, so nothing can tell which bytes are there (I7). The handle has saved a
+/// third version of 1:1 and left Titus once.
+fn held_after_a_kill_past_the_rename() -> (Rig, std::path::PathBuf, ProjectHandle) {
+    let (rig, folder, handle, k) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.kill_before(k, false);
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed at the heads file");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    assert!(
+        !burrito_problems(&rig.fs, &folder).is_empty(),
+        "the kill left metadata.json behind the rename (§6.4 M4)"
+    );
+    // The kill and the program that holds the file left the folder invalid; the tests below
+    // check the folder themselves.
+    damaged_on_purpose(&rig);
+    rig.fs.set_unreadable(&usfm, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    save_verse(&handle, 1, 1, "third save").unwrap();
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    handle.wait_idle();
+    (rig, folder, handle)
+}
+
+/// BURRITO-HOLD: a kill after the group wrote `metadata.json` (§6.4 M5) leaves a valid folder
+/// whose ledger still says `Writing`; a checkpoint that cannot read the book file then must
+/// not list the bytes before the write in place of the ones on disk.
+#[test]
+fn a_checkpoint_that_cannot_read_a_book_file_keeps_a_valid_folder_valid() {
+    let (rig, folder, handle, _) = fail_after_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    rig.fs.kill_after_rename(&folder.join("metadata.json"));
+    let _ = handle.leave(Leave::Book(TIT)).wait();
+    assert!(rig.fs.is_dead(), "killed after metadata.json");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    assert_valid_burrito(&rig.fs, &folder);
+    rig.fs.set_unreadable(&usfm, true);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    save_verse(&handle, 1, 1, "third save").unwrap();
+    handle
+        .checkpoint(tc_store::CheckpointReason::Periodic)
+        .wait()
+        .unwrap();
+    handle.wait_idle();
+    assert_valid_burrito(&rig.fs, &folder);
+    rig.fs.set_unreadable(&usfm, false);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// BURRITO-HOLD (1): a commit made while a book file's bytes are undecided is a valid Burrito
+/// that holds the project's newest text, not the folder's (§9.4).
+#[test]
+fn a_checkpoint_while_a_book_file_is_undecided_commits_a_valid_burrito() {
+    let (rig, folder, handle) = held_after_a_kill_past_the_rename();
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::BeforeExport)
+        .wait();
+    assert!(report.unwrap().commit.is_some(), "the checkpoint commits");
+    let repo = repo_of(&rig.fs, &folder);
+    let head = commits_of(&repo)[0];
+    assert_eq!(commit_problems(&repo, head), Vec::<String>::new());
+    let tit = commit_files(&repo, head)["ingredients/TIT.usfm"].clone();
+    assert!(String::from_utf8_lossy(&tit).contains("third save"));
+    rig.fs
+        .set_unreadable(&folder.join("ingredients/TIT.usfm"), false);
+    handle.close().unwrap();
+}
+
+/// BURRITO-HOLD (2): the first checkpoint after the file can be read again makes the folder
+/// a valid Burrito.
+#[test]
+fn a_checkpoint_after_the_held_book_file_reads_again_heals_the_folder() {
+    let (rig, folder, handle) = held_after_a_kill_past_the_rename();
+    rig.fs
+        .set_unreadable(&folder.join("ingredients/TIT.usfm"), false);
+    let report = handle
+        .checkpoint(tc_store::CheckpointReason::Periodic)
+        .wait();
+    assert!(report.unwrap().commit.is_some(), "the checkpoint commits");
+    handle.wait_idle();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert_eq!(words_of(&handle, &verse(1, 1)), "third save");
+    handle.close().unwrap();
+}
+
+/// BURRITO-HOLD (2): so does the first open after it.
+#[test]
+fn an_open_after_the_held_book_file_reads_again_heals_the_folder() {
+    let (rig, folder, handle) = held_after_a_kill_past_the_rename();
+    let usfm = folder.join("ingredients/TIT.usfm");
+    let fs = rig.fs.crash(false);
+    drop(handle);
+    let rig = rig_as(fs, APP, "host-1");
+    rig.fs.set_unreadable(&usfm, false);
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
+    assert_valid_burrito(&rig.fs, &folder);
+    assert!(String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("third save"));
+    handle.close().unwrap();
+}

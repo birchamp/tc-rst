@@ -1919,6 +1919,19 @@ impl Writer {
         ))
     }
 
+    /// The md5 and size `metadata.json` in the folder lists for `path`.
+    fn listed_in_metadata(&self, path: &str) -> Option<(Md5, u64)> {
+        let Disk::Bytes(bytes) = self.read_disk(METADATA) else {
+            return None;
+        };
+        let doc: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+        let entry = doc.get("ingredients")?.get(path)?;
+        Some((
+            Md5::parse(entry.pointer("/checksum/md5")?.as_str()?)?,
+            entry.get("size")?.as_u64()?,
+        ))
+    }
+
     /// The ingredients [`Writer::build_metadata`] lists, and whether every text file listed
     /// is in NFC.
     fn metadata_entries(
@@ -2005,11 +2018,12 @@ impl Writer {
                     },
                     Some(e) => match e.listed().and_then(|(m, s)| Md5::parse(m).map(|m| (m, s))) {
                         Some((md5, size)) => (md5, size, e.nfc),
-                        // A write under way (a stopped group): the file is read; one that
-                        // cannot be read now is listed as the bytes before the write until it
-                        // can be.
-                        None => match (self.read_disk(&path), &e.state) {
-                            (Disk::Bytes(bytes), _) => (
+                        // A write under way (a stopped group): the file is read. One that
+                        // cannot be read may hold the bytes before the write or after it, so
+                        // it keeps the entry `metadata.json` has for it now: the list makes no
+                        // claim the folder did not already make, until a read decides (I7).
+                        None => match self.read_disk(&path) {
+                            Disk::Bytes(bytes) => (
                                 self.hash_md5(&bytes),
                                 bytes.len() as u64,
                                 derived
@@ -2017,13 +2031,11 @@ impl Writer {
                                     .filter(|f| is_text(f))
                                     .map(|_| is_nfc(&String::from_utf8_lossy(&bytes))),
                             ),
-                            (Disk::Unreadable, State::Writing { old: Some(old), .. }) => {
-                                match Md5::parse(&old.md5) {
-                                    Some(md5) => (md5, old.size, e.nfc),
-                                    None => continue,
-                                }
-                            }
-                            _ => continue,
+                            Disk::Unreadable => match self.listed_in_metadata(&path) {
+                                Some((md5, size)) => (md5, size, e.nfc),
+                                None => continue,
+                            },
+                            Disk::Missing => continue,
                         },
                     },
                     None => match self.read_disk(&path) {
