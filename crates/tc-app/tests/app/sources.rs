@@ -276,7 +276,7 @@ async fn the_first_step_lists_tc4s_packages_with_the_projects_checking_language(
 
 /// tC4 #833.5: tC4's registry says v89 under English while v91 is installed and pinned.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn a_package_card_names_the_installed_releases_else_tc4s() {
+async fn inv_source_card_names_installed_releases_else_tc4s() {
     let (_dir, t) = start_scenario("en-pins", None).await;
     let at = open_sample(&t.app).await;
     let view: SourcesView = ok(&t.app, &Sources { at }).await;
@@ -285,11 +285,15 @@ async fn a_package_card_names_the_installed_releases_else_tc4s() {
         (s.tn.clone(), s.tw.clone(), s.ta.clone())
     };
     let v91 = || "v91".to_owned();
-    assert_eq!(seen(0), (v91(), v91(), v91()), "English: what is installed");
+    assert_eq!(
+        seen(0),
+        (v91(), v91(), v91()),
+        "INV-SOURCE-CARD-NAMES-INSTALLED: English, what is installed"
+    );
     assert_eq!(
         seen(1),
         ("v66".to_owned(), "v37".to_owned(), "v4".to_owned()),
-        "Spanish, not installed: the release tC4's registry names"
+        "INV-SOURCE-CARD-NAMES-INSTALLED: Spanish, not installed, names tC4's registry release"
     );
 }
 

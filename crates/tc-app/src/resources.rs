@@ -219,11 +219,8 @@ impl Handle<Sources> for App {
         let pins = project_pins(&session.read())?;
         let kind = self.project_kind(&req.at)?;
         let downloaded = lock(&self.inner.downloaded).clone();
-        let current = pins
-            .as_ref()
-            .and_then(|p| p.set(Rung::Primary))
-            .and_then(|set| set.gateway.named())
-            .map(named);
+        let primary = pins.as_ref().and_then(|p| p.set(Rung::Primary));
+        let current = primary.and_then(|set| set.gateway.named()).map(named);
         let installed = self.installed_pins().await;
         let checkable = match &installed {
             Ok(installed) => FromInstalls::Listed(
@@ -250,7 +247,7 @@ impl Handle<Sources> for App {
                     let key = g.key().to_string();
                     let installed = downloaded.iter().filter(|(k, _)| *k == key).count();
                     let release = |slot, seen: &str| {
-                        gateways::installed_release(pins_here, g, slot)
+                        gateways::installed_release(pins_here, g, slot, primary)
                             .unwrap_or(seen)
                             .to_owned()
                     };

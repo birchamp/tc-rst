@@ -215,7 +215,8 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
 - A failed check for updates says one plain sentence by cause; tC4 shows the browser's
   "Failed to fetch" (#833.1).
 - Get source texts names under each package the notes, words and academy releases installed
-  on this computer, and tC4's registry release for one not installed; tC4 always names its
+  on this computer (for the project's package, the installed release it pins), and tC4's
+  registry release for one not installed; tC4 always names its
   registry's, so English said v89 while v91 was installed and pinned (#833.5).
 - Dropbox's own settings folder (`~/.dropbox`) never marks a project as synced, so having
   Dropbox installed on Linux or macOS no longer makes every project read-only.
