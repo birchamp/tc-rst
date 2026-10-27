@@ -15,7 +15,7 @@ no_loss: true
 size: 0.25 d (basis: SAVE-WAIT, a change of the same size)
 merged: none
 updated: 2026-10-26
-next: The integration lane takes it into the next batch.
+next: Reviews and --touched done; ready for a merge batch run by the integration lane. Branch fix-kept-event
 blocked_by: none
 ---
 
@@ -74,3 +74,7 @@ only after a reload. That hides kept work, against the no-loss rule.
 
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | created | none | from the orchestrator's message: the CI timeout of run 40438997652; the app, not the test, drops the event; REL-1 waits for it | crates/tc-app/src/session.rs
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | step 1 | none | the pump's first lists are read in `opened`; the test fails 3/3 without the fix and passes with it; SAVE-WAIT's two waits play no part (another test in the same binary; the failure was this test's own 60 s limit) | crates/tc-app/tests/app/sessions.rs
+- 2026-10-26 | kept-event session (Claude Code 2e51a251) | verify | 801e7a0e | loss lens (subagent, read-only): no blocker, no major. 1 Code: the baseline is read in `opened` after `subscribe`, before every reply that carries the lists (open_screen, open_sessions via hello), so a keep lands in the baseline or in a queued event. 2 Checks: the test fails 3/3 without the fix. 3 Reach: a watcher or focus look keeping lost work as the pump starts. 4 Siblings: `previous` moved too; `checks().begin` keeps its meaning (a commit before the read is in it, one after is noted). 5 No loss: this lens. 6 Prose: one comment, a reason. One older, unreachable point (Opened published before the slot opens) goes to minors | .audit/minors.tsv
+- 2026-10-26 | kept-event session (Claude Code 2e51a251) | verify | 801e7a0e | races-and-protocol lens (subagent, read-only): approve. The repeat of a keep between the baseline and the reply is harmless (the page replaces its lists, tc-ui state.rs:135); a close racing the open no longer has the pump read a closed handle; the test is deterministic on a current-thread runtime with one task per tick; no other spawned task keeps a late baseline. One older point (publish_outside unlocked against the pump) goes to minors | .audit/minors.tsv
+- 2026-10-26 | kept-event session (Claude Code 2e51a251) | verify | 801e7a0e | browser-and-parity lens (subagent, read-only): no blocker. The pages keep state (memos over the lists), so a repeated OutsideEdits shows nothing twice; APP-DESIGN difference (g) already says kept work reaches the pages without a reload; no journey covers this timing, the tc-app test does | crates/tc-ui/src/app/web/state.rs
+- 2026-10-26 | kept-event session (Claude Code 2e51a251) | note | 801e7a0e | scripts/gates.sh --touched passed (1,042 tests); after the fix, 3,640 runs of the sessions file under tc-heavy (8 at once, 7 minutes) failed none | scripts/gates.sh --touched
