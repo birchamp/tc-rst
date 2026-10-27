@@ -493,6 +493,26 @@ browserTest('a_stuck_click_asks_after_the_limit_and_stay_keeps_it', async () => 
   });
 });
 
+browserTest('a_click_that_saves_while_home_asks_closes_the_question_and_goes_home', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    const hold = await holdThePlacement(page);
+    try {
+      await page.getByTestId('project-switch').click();
+      await question(page).waitFor({ timeout: 6_000 });
+      hold.release();
+      await home(page).waitFor({ timeout: 10_000 }).catch(() => {
+        throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: a click that saves while asked is not lost, so Home goes on');
+      });
+      assert.equal(await question(page).count(), 0);
+      await openAlign(page);
+      await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
+    } finally {
+      hold.release();
+    }
+  });
+});
+
 browserTest('stay_keeps_the_click_on_the_page', async () => {
   await withApp(async ({ page, allow }) => {
     // The cut connection: each send of the click fails, about four times a second.

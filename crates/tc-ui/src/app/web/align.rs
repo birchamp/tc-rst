@@ -576,6 +576,10 @@ impl Actions {
 
     fn align_edits_changed(&self) {
         self.s().a.edit_error.try_set(edit_failure());
+        // A click that saves while Home asks about it was not lost after all: Home goes on.
+        if !edits_pending() {
+            self.answer_align_leave(true);
+        }
         self.runtime().saves().server_states_changed();
         let waiting = EDIT_WAITERS.with(|w| std::mem::take(&mut *w.borrow_mut()));
         for resolve in waiting {
