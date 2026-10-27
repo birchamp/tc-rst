@@ -27,6 +27,7 @@
 // Each entry names the git trees of `UI_SOURCE` it was taken at, as they will be once the
 // working files are committed: the gate (captures_match_the_current_ui_source) fails every
 // entry whose trees are not HEAD's, so a UI change and its recapture land in one commit.
+// A run refuses to start while tc4 or the UI build is older than a file of those folders.
 // Writes into `--out`: screens/<name>.png, dom/<name>.json and captures.json, whose entries are
 // merged by name, screens in the order of the screen list and then cases in the order of
 // cases.mjs, so a partial run updates its entries in place and keeps every other.
@@ -61,7 +62,7 @@ export const UI_SOURCE = ['crates/tc-ui/src', 'crates/tc-ui/assets', 'crates/tc-
 /** The git tree each of `UI_SOURCE` will have once the working files are committed, so a UI
  * change and its recapture land in one commit. A private index leaves the real one alone. */
 export function uiTrees(repo = REPO) {
-  const index = path.join(repo, 'target', 'capture-index');
+  const index = path.join(repo, 'target', `capture-index-${process.pid}`);
   fs.mkdirSync(path.dirname(index), { recursive: true });
   const git = (...args) => execFileSync('git', args, { cwd: repo, env: { ...process.env, GIT_INDEX_FILE: index }, encoding: 'utf8' }).trim();
   try {
@@ -71,6 +72,27 @@ export function uiTrees(repo = REPO) {
   } finally {
     fs.rmSync(index, { force: true });
   }
+}
+
+/** The newest modification time of a file under `dir`. */
+function newestFile(dir) {
+  let newest = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (entry.isFile()) newest = Math.max(newest, fs.statSync(path.join(entry.parentPath, entry.name)).mtimeMs);
+  }
+  return newest;
+}
+
+/** Refuses a run whose tc4 or UI build is older than a file of `UI_SOURCE` it is built from:
+ * its captures would name the working files' trees but show the build's older screens.
+ * build-app.sh writes its whole folder afresh, so its index.html dates the build. */
+export function assertBuildsFresh({ tc4, ui }, repo = REPO) {
+  const stale = [];
+  const api = newestFile(path.join(repo, 'crates/tc-api/src'));
+  if (fs.statSync(tc4).mtimeMs < api) stale.push(`${tc4} is older than crates/tc-api/src: cargo build -p tc4 --features test-hooks,fixture-backend`);
+  const source = Math.max(...UI_SOURCE.map((folder) => newestFile(path.join(repo, folder))));
+  if (fs.statSync(path.join(ui, 'index.html')).mtimeMs < source) stale.push(`${ui} is older than ${UI_SOURCE.join(', ')}: crates/tc-ui/build-app.sh`);
+  if (stale.length) throw new Error(`a build is older than the source its captures would name; rebuild first:\n  ${stale.join('\n  ')}`);
 }
 
 /** Playwright from the baseline's own install: parity/app has no node_modules. */
@@ -237,6 +259,7 @@ async function main() {
     : SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const masks = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'masks.json'), 'utf8')).masks;
 
+  assertBuildsFresh({ tc4, ui });
   const trees = uiTrees();
   const capturesFile = path.join(out, 'captures.json');
   const previous = fs.existsSync(capturesFile) ? JSON.parse(fs.readFileSync(capturesFile, 'utf8')) : null;
