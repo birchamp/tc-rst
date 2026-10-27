@@ -4,7 +4,7 @@ title: The save-machine tests fail with a message instead of hanging
 track: A
 lane: checks
 milestone: M5
-state: building
+state: verifying
 owner: save-wait session (Claude Code 749c177d)
 branch: track-SAVE-WAIT
 worktree: .worktrees/track-SAVE-WAIT
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
 merged: none
 updated: 2026-10-27
-next: the loaded loops on the hook fix, the lenses on it, --touched, then the integration lane.
+next: scripts/gates.sh --touched, then the integration lane takes it into a batch.
 blocked_by: none
 ---
 
@@ -97,3 +97,8 @@ build), and a product save never waits at it. The app needs no change; a person 
 - 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | races-and-protocol lens (subagent, read-only): no blocker, no major. finish_dropped cannot deadlock: a call queued behind a held save makes holding() > 0, a retry waiting on the reply cache has its first attempt released by the same loop, an ended app's die() releases all; the end-of-settle release is safe for every caller; the watch test is deterministic (gated on reached > 0, the live handle keeps the project open). Minors: no deterministic test for finish_dropped (the loaded loop covers it), the test's fixed 60 s, the sibling list | .audit/minors.tsv
 - 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | browser-and-parity lens (subagent, read-only): no finding. No product code, page, words, keys or flows change (crates/tc-ui, tc-api, tc-app/src untouched); test-hooks is opt-in in every crate and release_has_no_test_hooks checks the release binary; no journey uses the harness; no APP-DESIGN difference needed | crates/tc4/tests/release.rs
 - 2026-10-27 03:05 EDT | save-wait session (Claude Code 749c177d) | fix | none | the loaded loop after the first fix: "hung: a call the page dropped did not end in a minute" in 30 of 331 runs and one more silent hang; gdb showed the actor held while holding() said 0. tc-store Hooks: a release frees the threads waiting at that moment even when a hold follows at once (a release count each waiter compares). Unit test a_release_frees_the_waiting_thread_even_when_a_hold_follows_at_once fails 3/3 without it, passes with it. Shrunk seeds kept (each has Release, Hold) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | verify | 268ff40c | loss lens again (subagent, read-only), on the hook fix: no blocker, no major. The only change is that a thread waiting at a release leaves even when a hold follows before it wakes; a test that relied on the old way would have been a race; of 75 hold and release sites none holds right after a release; tc-app holding() stays right (a freed waiter never adds to reached). Minor: on the old code the unit test fails most runs, not all (3/3 here) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | verify | 268ff40c | races-and-protocol lens again (subagent, read-only): no blocker, no major. Several waiters, hold-release-hold-release and wait_reached are right; none of 97 sites relies on the old way (carried.rs:805, tc-app hooks.rs:250 and :482 looked at closely); tc-app's own Holds has no such bug (notify_one keeps a permit); the unit test passes deterministically (wait_reached returns only once the waiter is in changed.wait) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | browser-and-parity lens stands: the hook fix is test-hooks code only, no page, word, key or flow changes | git show 268ff40c --stat
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | loaded loops on the fixed build (6 copies on 4 cores, 20 min): production_reload 241 runs and c3_reload 60 runs, no failure, no hang; before the hook fix 31 of 331 production_reload runs failed or hung | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop4/runs.txt
+
