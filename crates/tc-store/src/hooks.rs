@@ -57,7 +57,7 @@ mod imp {
     /// The holds of one store.
     #[derive(Debug, Default)]
     pub struct Hooks {
-        held: Mutex<BTreeMap<Point, (bool, u64)>>,
+        held: Mutex<BTreeMap<Point, Held>>,
         failing: Mutex<BTreeMap<Point, Failure>>,
         /// The loose objects and bytes past which a repack is due; `None`: §9.8's.
         repack: Mutex<Option<(u64, u64)>>,
@@ -71,6 +71,16 @@ mod imp {
         /// What a test does between two batches of a repack's removals of old objects.
         prune_batch: Mutex<Option<PruneBatchHook>>,
         changed: Condvar,
+    }
+
+    #[derive(Debug, Default)]
+    struct Held {
+        on: bool,
+        /// How many times a thread reached the point while it was held.
+        reached: u64,
+        /// How many releases there were: a thread lets go at the first one after it came, even
+        /// when the point is held again before it runs.
+        releases: u64,
     }
 
     /// Looks at the project folder and names what makes it an invalid burrito.
@@ -251,13 +261,14 @@ mod imp {
         /// From now on, the store's threads wait at `point` until it is released.
         pub fn hold(&self, point: Point) {
             let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-            held.entry(point).or_insert((false, 0)).0 = true;
+            held.entry(point).or_default().on = true;
         }
 
         pub fn release(&self, point: Point) {
             let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(entry) = held.get_mut(&point) {
-                entry.0 = false;
+                entry.on = false;
+                entry.releases += 1;
             }
             self.changed.notify_all();
         }
@@ -268,13 +279,13 @@ mod imp {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .get(&point)
-                .map_or(0, |e| e.1)
+                .map_or(0, |e| e.reached)
         }
 
         /// Waits until a thread has reached `point` at least `n` times.
         pub fn wait_reached(&self, point: Point, n: u64) {
             let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
-            while held.get(&point).map_or(0, |e| e.1) < n {
+            while held.get(&point).map_or(0, |e| e.reached) < n {
                 held = self.changed.wait(held).unwrap_or_else(|e| e.into_inner());
             }
         }
@@ -284,14 +295,47 @@ mod imp {
             let Some(entry) = held.get_mut(&point) else {
                 return;
             };
-            if !entry.0 {
+            if !entry.on {
                 return;
             }
-            entry.1 += 1;
+            entry.reached += 1;
+            let came_after = entry.releases;
             self.changed.notify_all();
-            while held.get(&point).is_some_and(|e| e.0) {
+            while held
+                .get(&point)
+                .is_some_and(|e| e.on && e.releases == came_after)
+            {
                 held = self.changed.wait(held).unwrap_or_else(|e| e.into_inner());
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{Hooks, Point};
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        /// SAVE-WAIT: a hold armed again before the released thread runs must not keep it. It
+        /// did: the thread saw the point held once more and waited on, uncounted, so a test
+        /// that releases what `reached` shows never saw it again and hung.
+        #[test]
+        fn a_release_frees_the_waiting_thread_even_when_a_hold_follows_at_once() {
+            let hooks = Arc::new(Hooks::default());
+            hooks.hold(Point::BeforeDurablePending);
+            let (done, ended) = std::sync::mpsc::channel();
+            let waiter = Arc::clone(&hooks);
+            std::thread::spawn(move || {
+                waiter.wait(Point::BeforeDurablePending);
+                let _ = done.send(());
+            });
+            hooks.wait_reached(Point::BeforeDurablePending, 1);
+            hooks.release(Point::BeforeDurablePending);
+            hooks.hold(Point::BeforeDurablePending);
+            ended
+                .recv_timeout(Duration::from_secs(60))
+                .expect("hung: the released thread still waits at the hold armed after it");
+            assert_eq!(hooks.reached(Point::BeforeDurablePending), 1);
         }
     }
 }
