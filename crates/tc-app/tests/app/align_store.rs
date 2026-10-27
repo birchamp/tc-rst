@@ -671,6 +671,7 @@ async fn an_nfd_typed_verse_aligned_in_the_same_session_is_valid_after_reopen() 
 async fn translate_save_over_one_dios_link(
     first: &'static str,
     then: &'static str,
+    by_section: bool,
 ) -> tc_api::write::Ack {
     use tc_api::editor::SaveVerse;
     let rig = Rig::new().await;
@@ -708,7 +709,36 @@ async fn translate_save_over_one_dios_link(
     assert_eq!(view.placed, 1, "{:?}", view.cards);
     assert_eq!(flush(app, &at, 242).await, AlignSave::Saved);
     assert!(has_link(&stored(&session), "Θεοῦ", "Dios"));
-    let ack: tc_api::write::Ack = save(243, then).await.unwrap();
+    let ack: tc_api::write::Ack = if by_section {
+        let view: tc_api::editor::ChaptersView = post(
+            app,
+            &tc_api::editor::Chapters {
+                at: at.clone(),
+                book: BookId::Titus,
+            },
+        )
+        .await
+        .unwrap();
+        let one = view.chapters[0]
+            .verses
+            .iter()
+            .find(|v| v.key.as_str() == "1")
+            .unwrap();
+        post(
+            app,
+            &tc_api::editor::SaveSection {
+                at: at.clone(),
+                request: request(243),
+                book: BookId::Titus,
+                displayed: vec![one.words.token.clone()],
+                text: format!("1 {then}"),
+            },
+        )
+        .await
+        .unwrap()
+    } else {
+        save(243, then).await.unwrap()
+    };
     assert!(
         !has_link(&stored(&session), "Θεοῦ", "Dios"),
         "the text cannot say where the linked Dios went"
@@ -739,13 +769,20 @@ fn assert_names_one_dios(ack: &tc_api::write::Ack) {
 /// the person. The issue's own case: `Dios y Dios y y Dios`, saved as `y y Dios y`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_translate_save_names_the_link_a_tie_sends_back_to_the_bank() {
-    let ack = translate_save_over_one_dios_link("Dios y Dios y y Dios", "y y Dios y").await;
+    let ack = translate_save_over_one_dios_link("Dios y Dios y y Dios", "y y Dios y", false).await;
     assert_names_one_dios(&ack);
 }
 
 /// tC4 #820: `Dios Dios` saved as `Dios Pablo`; which Dios stayed is ambiguous.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_translate_save_names_the_link_an_ambiguous_replacement_sends_back() {
-    let ack = translate_save_over_one_dios_link("Dios Dios", "Dios Pablo").await;
+    let ack = translate_save_over_one_dios_link("Dios Dios", "Dios Pablo", false).await;
+    assert_names_one_dios(&ack);
+}
+
+/// The same through the section card's save (`editor/saveSection`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_section_save_names_the_link_it_sends_back_to_the_bank() {
+    let ack = translate_save_over_one_dios_link("Dios y Dios y y Dios", "y y Dios y", true).await;
     assert_names_one_dios(&ack);
 }

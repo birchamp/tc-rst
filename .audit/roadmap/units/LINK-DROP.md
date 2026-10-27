@@ -15,7 +15,7 @@ no_loss: true
 size: 1 d (basis: FIX-R step 2, the Align half of the same list)
 merged: none
 updated: 2026-10-27
-next: Step 4: the three lenses, loss first.
+next: Merge main, then scripts/gates.sh --touched; then ready for a batch.
 blocked_by: none
 ---
 
@@ -51,8 +51,8 @@ alignment they made and does not know to redo it.
 - **Code**:
   - tc-api: the verse and section save replies carry the dropped links per verse.
   - tc-app: reads `StoreReply::dropped_links` on every Translate save path.
-  - tc-ui: Translate shows the list with Align's words until the translator dismisses it or
-    leaves the chapter.
+  - tc-ui: Translate shows the list of the open project with Align's words, each with its
+    verse, until the translator dismisses it; another project's list is not shown there.
 - **Checks**:
   - tc-app test: the issue's case (`Dios y Dios y y Dios`, first Dios linked, saved as
     `y y Dios y`) returns the dropped link in the reply. Fails on main.
@@ -89,8 +89,15 @@ protocol, browser and parity).
 
 ## Log
 
-- 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found, this one first | docs/evidence/tc4-issues-2026-10-27/open.md
-- 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed at creation | none
+- 2026-10-27 09:07 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found, this one first | docs/evidence/tc4-issues-2026-10-27/open.md
+- 2026-10-27 09:07 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed at creation | none
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | gate tests a_translate_save_names_the_link_a_tie_sends_back_to_the_bank (#825) and a_translate_save_names_the_link_an_ambiguous_replacement_sends_back (#820) in tc-app tests/app/align_store.rs; on the old wiring the reply is `dropped: []` while the link is gone ("left: [] right: [\"Dios\"]") | cargo nextest run -p tc-app --test app a_translate_save_names
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | tc-api `Ack.dropped` (per verse: book, chapter, verse, Align's DroppedLinkView); tc-app's backend reply keeps tc-store's dropped_links and the verse and section acks carry them; both tests pass | cargo nextest run -p tc-app --test app a_translate_save_names
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | step 3 | none | Translate shows the links under the chapter bar in Align's words with the verse (`translate-dropped`), kept until Dismiss; the page's saves collect them from every acked reply, also one the field no longer waits for. Journey a_translate_save_names_the_link_it_sends_back_to_the_bank passes (no notice exists on main) | parity/app/journeys/translate.test.mjs
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | verify | b3e39421 | loss lens (read-only subagent): 1 Code: the list is copied onto two acks by hand; no shared type forces it. 2 Checks: verse tests fail on revert; the section path had no test. 3 Reach: verse, section, crash before the reply, project switch. 4 Siblings: session/keepDraft also drops the list. 5 No loss: not met for keepDraft and for a crash between write and reply. 6 Prose: the card's "leaves the chapter" was untrue. Findings: F1 major keepDraft, F2 major crash gap, F3 minor notice crosses projects, F4 minor no section test | workflow wf_4e7c5d86-f9d
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | verify | b3e39421 | races-and-protocol lens (read-only subagent): blocker, tc-api golden files lack the new `dropped` key (11 endpoints); major, the page-wide list shows project A's links on project B's Translate; major, section_ack reverted passes the whole tc-app suite; minors: the golden Ack shows no DroppedLinks, the late-reply collection has no test. The reply cache keeps the Ack bytes, so a retry still names the links | workflow wf_4e7c5d86-f9d
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | verify | b3e39421 | browser-and-parity lens (read-only subagent): verse and section saves show the notice in Chromium; role=status; Tab reaches Dismiss and Enter dismisses; Arabic page stays rtl (align.droppedLinks was already untranslated, as before). tC4 d310bf3 says nothing after a save (state.jsx:1164-1176). Findings: major keepDraft (as F1); minors: PLAN and APP-DESIGN not updated, the card's "leaves the chapter" | workflow wf_4e7c5d86-f9d
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | blocker: golden files regenerated, and the golden Ack now carries one DroppedLinks so the wire shape shows in review | crates/tc-api/tests/golden/endpoints/editor/saveVerse.json
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | major (project crossing): each collected link keeps the open it was saved in; Translate lists only the open's own and Dismiss clears only those. The journey passes | crates/tc-ui/src/views/translate.rs dropped_links
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | major (section path): a_section_save_names_the_link_it_sends_back_to_the_bank; with section_ack's list emptied it fails ("left: []") | crates/tc-app/tests/app/align_store.rs
+- 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | note | none | keepDraft (F1) is not reachable: no screen calls session/keepDraft (`grep -rn keepDraft crates/tc-ui shell` finds none), so it is a minor; the crash gap (F2) is the owner's declared limit for the preview (orchestrator, 2026-10-27, under rulings/2026-10-22-acceptable-loss.md), declared in docs/PLAN.md and docs/APP-DESIGN.md, with card LINK-MARK after 4.1.0 | .audit/roadmap/units/LINK-MARK.md

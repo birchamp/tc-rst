@@ -65,7 +65,31 @@
           }
         }
       ],
-      "diskWarning": null
+      "diskWarning": null,
+      "dropped": [
+        {
+          "book": "TIT",
+          "chapter": 1,
+          "verse": 1,
+          "links": [
+            {
+              "card": 2,
+              "top": [
+                {
+                  "word": "Θεοῦ",
+                  "occurrence": 1,
+                  "occurrences": 1
+                }
+              ],
+              "word": {
+                "word": "Dios",
+                "occurrence": 1,
+                "occurrences": 2
+              }
+            }
+          ]
+        }
+      ]
     }
   },
   "error": {

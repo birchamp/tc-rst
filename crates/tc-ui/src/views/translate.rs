@@ -448,7 +448,7 @@ fn chapter_view(
             .unwrap_or_default();
         view! { <HelpsPanel chapter=chapter focus_verses=focus_verses helps=helps pane=pane comments=comments /> }
     };
-    let dropped = dropped_links(runtime.saves().dropped());
+    let dropped = dropped_links(runtime.saves().dropped(), open.at.clone());
     view! {
         <main style=main.to_style()>
             <div style=bar.to_style()>
@@ -474,11 +474,16 @@ fn chapter_view(
 
 /// The links a save sent back to the word bank, in Align's words, with the verse each was in,
 /// until the person dismisses them: a link never goes back silently (tC4 #825, owner answer
-/// Q30 (a)).
-fn dropped_links(dropped: ArcRwSignal<Vec<tc_api::write::DroppedLinks>>) -> impl IntoView {
+/// Q30 (a)). Only the links of the open shown are listed; another project's stay its own.
+fn dropped_links(
+    dropped: ArcRwSignal<Vec<(Scope, tc_api::write::DroppedLinks)>>,
+    at: Scope,
+) -> impl IntoView {
     move || {
         let words = dropped.with(|d| {
             d.iter()
+                .filter(|(scope, _)| *scope == at)
+                .map(|(_, v)| v)
                 .flat_map(|v| {
                     v.links.iter().map(move |l| {
                         format!(
@@ -494,8 +499,9 @@ fn dropped_links(dropped: ArcRwSignal<Vec<tc_api::write::DroppedLinks>>) -> impl
                 .join(", ")
         });
         (!words.is_empty()).then(|| {
-            let dropped = dropped.clone();
-            let dismiss = Callback::new(move |_| dropped.set(Vec::new()));
+            let (dropped, at) = (dropped.clone(), at.clone());
+            let dismiss =
+                Callback::new(move |_| dropped.update(|d| d.retain(|(scope, _)| *scope != at)));
             view! {
                 <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "10px 22px 0", "flex": "none" } attrs=Attrs::from([("role", "status"), ("data-testid", "translate-dropped")])>
                     {t(keys::align::DROPPED_LINKS, &[("words", &words)])}" "

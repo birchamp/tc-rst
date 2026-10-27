@@ -160,9 +160,9 @@ struct Inner {
     indicator: ArcRwSignal<Indicator>,
     /// Counts the machine's runs, so a view can follow what it reads with `notice` or `state`.
     changes: ArcRwSignal<u64>,
-    /// Alignment links this page's saves sent back to the word bank, until the person
-    /// dismisses them (tC4 #825).
-    dropped: ArcRwSignal<Vec<DroppedLinks>>,
+    /// Alignment links this page's saves sent back to the word bank, each with the open it was
+    /// saved in, until the person dismisses them (tC4 #825).
+    dropped: ArcRwSignal<Vec<(Scope, DroppedLinks)>>,
     can_close: Cell<Option<bool>>,
     hooks: RefCell<Vec<(GateHookId, GateHook)>>,
     next_hook: Cell<u64>,
@@ -457,8 +457,9 @@ impl Saves {
         self.0.changes.clone()
     }
 
-    /// The links the saves sent back to the word bank and nobody has dismissed yet.
-    pub fn dropped(&self) -> ArcRwSignal<Vec<DroppedLinks>> {
+    /// The links the saves sent back to the word bank and nobody has dismissed yet, with the
+    /// open each was saved in.
+    pub fn dropped(&self) -> ArcRwSignal<Vec<(Scope, DroppedLinks)>> {
         self.0.dropped.clone()
     }
 
@@ -1133,12 +1134,14 @@ impl Saves {
             // The store sent the links back whether or not the field still waits for this
             // reply, so they are named either way.
             if let Answered::Acked(ack) = &answered
+                && let Some(scope) = &sent.scope
                 && !ack.dropped.is_empty()
             {
+                let scope = scope.clone();
                 saves
                     .0
                     .dropped
-                    .update(|d| d.extend(ack.dropped.iter().cloned()));
+                    .update(|d| d.extend(ack.dropped.iter().map(|v| (scope.clone(), v.clone()))));
             }
             let acked = matches!(&answered, Answered::Acked(_));
             let commands = saves.machine(|m| m.reply(&key, sent.request, answered, js::now_ms()));
