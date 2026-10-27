@@ -4,18 +4,18 @@ title: First release candidate (4.1.0): the cut scope green, the owner's reviews
 track: A
 lane: integration
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: integration lane (Claude Code 3d07d5f8)
+branch: track-REL-1
+worktree: .worktrees/track-REL-1
 depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD, SAVE-WAIT]
 needs_owner: []
 proves: []
 no_loss: false
 size: 1 d
 merged: none
-updated: 2026-10-26
-next: Claim this card when its dependencies merge.
+updated: 2026-10-27
+next: step 1
 blocked_by: none
 ---
 
@@ -55,3 +55,4 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-26 19:58 EDT | E1d lane (Claude Code 07ffe14c) | ruling | none | the owner, on E1d's follow-up: Home asks Stay or Leave without it once an aligner click is lost for sure; REL-1 waits for ALIGN-LEAVE (orchestrator's message) | rulings/2026-10-26-ALIGN-LEAVE.md
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | ruling | none | depends gains FIX-KEPT-EVENT, on the orchestrator's word: a copy kept just after an open was not told until a reload | message from the orchestrator, 2026-10-26
 - 2026-10-26 23:31 EDT | storage lane (Claude Code LOSS-2) | note | none | depends gains LOSS-2 (two store losses the model test excused), on the orchestrator's word: "REL-1 waits for it" | message from the orchestrator, 2026-10-26
+- 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | Claimed on branch track-REL-1 from main b9d42bb4 (batch 36b), the orchestrator's go | python3 -I .audit/tools/board.py
