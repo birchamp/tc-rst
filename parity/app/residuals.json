@@ -26,6 +26,12 @@
       "until": null
     },
     {
+      "id": "feedback-attachment-redacts-the-home-folder",
+      "why": "tC4's Feedback attachment is its report as JSON, paths and all, so the first launch's report sends the projects folder under the person's home folder, and an error's reason can send any path. The rebuild's attachment names the home folder `~` and the account name `<user>` where it is a whole path segment (`tc_app::feedback::redact`, tests `the_attachment_carries_no_home_folder_and_no_account_name` and `redact_takes_out_a_home_folder_on_each_system`), so neither leaves the computer with a report (4.1.0-preview tester). The reports kept on the computer stay whole. No baseline attachment holds a path.",
+      "cites": "AGENTS.md \"Matching tC4\"; FEEDBACK-PATHS",
+      "until": null
+    },
+    {
       "id": "poem-verse-drafted",
       "why": "A book tile's drafted percentage counts a verse as drafted when its words, trimmed, are neither empty nor ___ (tc_app::drafted, tC4 #572's span rule). tC4 reads a verse's body only up to its first paragraph marker, so a poem verse whose words are on \\q lines is undrafted there and drafted here (test a_poem_verse_with_words_counts_as_drafted). No baseline verse is such a verse.",
       "cites": "AGENTS.md \"Matching tC4\"; B2 D3",

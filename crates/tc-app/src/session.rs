@@ -1027,6 +1027,23 @@ impl SessionRegistry {
             .collect()
     }
 
+    /// Every folder whose leave checkpoint or close is running.
+    pub fn leaving(&self) -> Vec<ProjectRef> {
+        lock(&self.inner.slots)
+            .iter()
+            .filter(|(_, slot)| {
+                matches!(
+                    slot.phase,
+                    Phase::Open {
+                        leaving: Some(_),
+                        ..
+                    } | Phase::Closing(_)
+                )
+            })
+            .map(|(folder, _)| folder.clone())
+            .collect()
+    }
+
     /// Every folder with an open, a session or a close, with its session once open, screen
     /// and side users alike (`test/validate`).
     #[cfg(feature = "test-hooks")]

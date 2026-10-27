@@ -5,7 +5,7 @@ use serde_json::json;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::ids::{LocaleId, ReportId, WallMs};
 use tc_api::prefs::SetLocale;
-use tc_app::feedback::{attachment_text, iso_utc_millis, platform, version_line};
+use tc_app::feedback::{attachment_text, iso_utc_millis, platform, redact, version_line};
 use tc_app::reports::{ReportLog, ReportOp, ReportOutcome, facts};
 
 use super::common::{TestApp, build, post, rid};
@@ -191,4 +191,53 @@ async fn the_attachment_is_english_in_every_app_language() {
     let text = compose(&t, None).await;
     assert!(text.starts_with("translationCore "), "{text}");
     assert!(text.ends_with("\nno Report\n"), "{text}");
+}
+
+/// The home folder and the account name never leave the computer (4.1.0-preview tester):
+/// the first launch's report names the projects folder under the home folder, and a failure's
+/// reason or facts can hold any path. A declared difference from tC4, which sends them whole.
+#[tokio::test]
+async fn the_attachment_carries_no_home_folder_and_no_account_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let t = TestApp::start_in(dir.path(), |_, _| {}).await;
+    let home = dir.path().join("home");
+    let home = home.to_str().unwrap();
+    let first = compose(&t, None).await;
+    assert!(!first.contains(home), "{first}");
+    assert!(first.contains("~/translationCore4/projects"), "{first}");
+    t.app.reports().add(
+        ReportOp::Sync,
+        ReportOutcome::Failed {
+            reason: format!("{home}/x is held by another program"),
+        },
+        facts(json!({ "folder": format!("{home}/AppData") })),
+        WallMs(1),
+        WallMs(2),
+    );
+    let text = compose(&t, None).await;
+    assert!(!text.contains(home), "{text}");
+    assert!(text.contains("~/x is held by another program"), "{text}");
+}
+
+#[test]
+fn redact_takes_out_a_home_folder_on_each_system() {
+    let mac = std::path::Path::new("/Users/ana");
+    assert_eq!(
+        redact(
+            "/Users/ana/Documents and /Volumes/USB/ana/x and /Users/anabel",
+            Some(mac)
+        ),
+        "~/Documents and /Volumes/USB/<user>/x and /Users/anabel"
+    );
+    let windows = std::path::Path::new(r"C:\Users\Ana");
+    assert_eq!(
+        redact(
+            r#"c:\users\ANA\AppData "C:\\Users\\Ana\\x" D:\Ana\y C:/Users/Ana/z"#,
+            Some(windows)
+        ),
+        r#"~\AppData "~\\x" D:\<user>\y ~/z"#
+    );
+    let linux = std::path::Path::new("/home/ana/");
+    assert_eq!(redact("/home/ana", Some(linux)), "~");
+    assert_eq!(redact("/home/ana", None), "/home/ana");
 }

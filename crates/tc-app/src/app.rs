@@ -192,6 +192,8 @@ pub struct App {
 
 pub(crate) struct Inner {
     pub(crate) config: AppConfig,
+    /// The person's home folder, which a Feedback attachment never carries (`feedback::redact`).
+    pub(crate) home_folder: Option<std::path::PathBuf>,
     pub(crate) projects: ProjectsRoot,
     pub(crate) instance: ServerInstance,
     pub(crate) clock: Arc<dyn Clock>,
@@ -493,6 +495,7 @@ impl App {
         )
         .map_err(|e| e.to_string());
         let inner = Inner {
+            home_folder: crate::config::home_dir(&host).ok(),
             config,
             projects,
             instance,

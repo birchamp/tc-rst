@@ -351,6 +351,65 @@ async fn going_home_returns_before_the_leave_checkpoint_ends() {
     assert_eq!(f.store.closes(&folder("kr_ulb")), 1);
 }
 
+/// Home never shows a project's counts from before its leave wrote the derived files: read
+/// during the leave, a card showed a drafted Genesis at 0% as known (4.1.0-preview tester).
+/// The list shows them unknown ("—") at once; the card read the leave's end asks for waits.
+#[tokio::test]
+async fn home_shows_no_counts_of_a_project_while_its_leave_runs() {
+    let f = started(vec![("sample_burrito", sample_bible())]).await;
+    let known = |view: &tc_api::home::HomeView| {
+        let tc_api::shown::Known::Known(books) = &view.cards[0].books else {
+            return false;
+        };
+        books
+            .iter()
+            .any(|tile| tile.drafted != tc_api::shown::Known::Unknown)
+    };
+    // A summary kept from before the open: the one a leave's peek would find again.
+    let mut warm = false;
+    for () in crate::store_world::for_a_minute() {
+        if known(&post(&f.t.app, &tc_api::home::List {}).await.unwrap()) {
+            warm = true;
+            break;
+        }
+    }
+    assert!(warm, "the summary was computed");
+    f.store.hold_checkpoint();
+    let at = f.open("sample_burrito").await;
+    f.sessions().leave_screen(&at).unwrap();
+    let list = tokio::time::timeout(
+        Duration::from_secs(60),
+        post(&f.t.app, &tc_api::home::List {}),
+    )
+    .await
+    .expect("hung: home/list waited for the leave")
+    .unwrap();
+    assert!(
+        !known(&list),
+        "no count while the leave runs: {:?}",
+        list.cards[0].books
+    );
+    let app = f.t.app.clone();
+    let card = tokio::spawn(async move {
+        post(
+            &app,
+            &tc_api::home::Card {
+                project: folder("sample_burrito"),
+            },
+        )
+        .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(!card.is_finished(), "home/card waits for the leave");
+    f.store.release_checkpoint();
+    let card = tokio::time::timeout(Duration::from_secs(60), card)
+        .await
+        .expect("hung: home/card after the leave")
+        .unwrap()
+        .unwrap();
+    assert_eq!(card.project, folder("sample_burrito"));
+}
+
 #[tokio::test]
 async fn an_open_during_the_leave_checkpoint_waits_for_it_and_gets_a_new_epoch() {
     let f = one_project().await;
