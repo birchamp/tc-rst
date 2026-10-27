@@ -267,26 +267,23 @@ pub fn Layer(
         }
     });
 
-    // A layer whose panel mounts after `open` turned true gets its first focus here: the effect
-    // below ran while there was no panel yet, so focus stayed behind the scrim.
+    // Set when `open` turned true before the panel mounted, so the first focus could not move
+    // into it; the panel's mount then gives it once, and focus never stays behind the scrim.
+    let late_focus = StoredValue::new(false);
     Effect::new(move |_| {
-        if !trap_focus || !open.get() {
-            return;
-        }
         let Some(p) = panel.get() else {
             return;
         };
-        let inside = document()
-            .active_element()
-            .is_some_and(|el| p.contains(Some(&el)));
-        if !inside {
-            match focusables(&p).into_iter().next() {
-                Some(el) => {
-                    let _ = el.focus();
-                }
-                None => {
-                    let _ = p.focus();
-                }
+        if !late_focus.get_value() || !open.get_untracked() {
+            return;
+        }
+        late_focus.set_value(false);
+        match focusables(&p).into_iter().next() {
+            Some(el) => {
+                let _ = el.focus();
+            }
+            None => {
+                let _ = p.focus();
             }
         }
     });
@@ -299,6 +296,7 @@ pub fn Layer(
         let returns = (restore_focus || trap_focus)
             .then(|| document().active_element())
             .flatten();
+        late_focus.set_value(trap_focus && panel.get_untracked().is_none());
         if trap_focus && let Some(p) = panel.get_untracked() {
             let first = focusables(&p).into_iter().next();
             match first {
