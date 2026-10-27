@@ -193,9 +193,7 @@ impl Project {
             .packs
             .iter()
             .filter(|(rel, info)| {
-                info.valid
-                    && !head.contains_key(*rel)
-                    && info.blob.is_none_or(|oid| !git.has(oid))
+                info.valid && !head.contains_key(*rel) && info.blob.is_none_or(|oid| !git.has(oid))
             })
             .map(|(rel, _)| rel.clone())
             .collect();
@@ -206,9 +204,12 @@ impl Project {
             let Some(info) = self.journal.packs.get_mut(&rel) else {
                 continue;
             };
-            // Only the bytes the open checked: a pack changed since is found by its stat.
+            // Only the bytes the open checked. Bytes changed since then within one mtime tick
+            // (2 s on FAT32) would pass the stat, so the next checkpoint reads them again.
             if fingerprint(&bytes) == info.fingerprint {
                 info.blob = git.write_blob(&bytes).ok();
+            } else {
+                info.seen = None;
             }
         }
         Ok(())
@@ -264,6 +265,11 @@ impl Project {
         let new_rel = format!("{PENDING}/{name}");
         let new_abs = self.folder.path(&new_rel);
         let number = self.source.add(&new_abs);
+        // The fold reads these values from the bytes written, as for a file the open read.
+        self.source.attach(
+            number,
+            std::sync::Arc::new(crate::load::Held(encoded.bytes.clone().into())),
+        );
         let loaded = load_pending(&new_rel, &encoded.bytes, self.id, number);
         self.journal.pending.insert(
             new_rel,
@@ -272,7 +278,6 @@ impl Project {
                 reconciles: None,
                 number: Some(number),
                 status: PendingStatus::Valid,
-                read: None,
             },
         );
         let delta = self.fold.add(loaded.inputs);

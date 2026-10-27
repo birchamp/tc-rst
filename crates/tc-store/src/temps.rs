@@ -240,7 +240,6 @@ pub(crate) fn settle_temps(
                 reconciles: None,
                 number: None,
                 status: PendingStatus::Valid,
-                read: None,
             },
         );
         fold.add(temp.entries.into_iter().map(FoldInput::from));

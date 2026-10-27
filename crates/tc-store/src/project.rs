@@ -58,9 +58,6 @@ pub(crate) struct PendingInfo {
     /// The loader's number, when the fold's values may lie in it (a file read at open).
     pub number: Option<u32>,
     pub status: tc_journal::pending::PendingStatus,
-    /// The bytes the open read, when the fold's values lie in the file: a change made to
-    /// it in place later cannot take a line the open verified (§5.11 K1 writes it again).
-    pub read: Option<std::sync::Arc<[u8]>>,
 }
 
 /// What the actor knows of the journal's files.
@@ -497,7 +494,6 @@ impl Project {
                 reconciles: reconciles.map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                 number: None,
                 status: tc_journal::pending::PendingStatus::Valid,
-                read: None,
             },
         );
         Ok(stored)

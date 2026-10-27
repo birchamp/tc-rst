@@ -777,137 +777,29 @@ fn a_pending_file_cut_short_at_a_line_is_sealed_from_memory() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
-/// A pending file the open read, deleted by another program before the seal: the fold reads
-/// its values through the handle the open kept, so the seal writes them into its pack, the
-/// person is told, and the save is there after the next open.
+/// A pending file a crash left: the next open seals it before it returns, so no later change
+/// to the file can take the save, however old it is (ruling 2026-10-22-acceptable-loss,
+/// LOSS-2), and a commit holds it.
 #[test]
-fn a_pending_file_read_at_the_open_and_deleted_is_sealed_from_the_open_handle() {
+fn a_pending_file_a_crash_left_is_sealed_at_the_open() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
     save_verse(&handle, 1, 1, "saved before a crash").unwrap();
     let fs = rig.fs.crash(false);
     drop(handle);
     let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
-    assert_eq!(
-        words(&handle, 1, 1).as_deref(),
-        Some("saved before a crash")
-    );
-    let pending = pending_files(&rig, &folder);
-    assert_eq!(pending.len(), 1, "{pending:?}");
-    rig.fs.delete(&pending[0]).unwrap();
-    let report = checkpoint(&handle);
-    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
-    let repo = repo_of(&rig.fs, &folder);
-    assert_eq!(
-        tree_differs_from_its_packs(
-            &repo,
-            commit,
-            project_of(&rig.fs, &folder),
-            tc_journal::fold::ProjectKind::Bible
-        ),
-        Vec::<String>::new()
-    );
-    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
-    handle.close().unwrap();
-    let handle = open(&rig, &folder);
-    assert_eq!(
-        words(&handle, 1, 1).as_deref(),
-        Some("saved before a crash")
-    );
-    handle.close().unwrap();
-    assert_commits_valid(&rig.fs, &folder);
-}
-
-/// A pending file the open read, replaced by another program with a copy cut short at a line:
-/// the open's handle still reads the lines the new file lost, so the seal writes them into its
-/// pack, and the fold reads their values on after the file goes.
-#[test]
-fn a_pending_file_read_at_the_open_and_replaced_cut_short_is_sealed_from_the_open_handle() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
-    let fs = rig.fs.crash(false);
-    drop(handle);
-    let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
-    let pending = pending_files(&rig, &folder).remove(0);
-    let bytes = rig.fs.peek(&pending).unwrap();
-    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
-    rig.fs.put_unseen(&pending, &bytes[..header], None);
-    let report = checkpoint(&handle);
-    let commit = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
-    let repo = repo_of(&rig.fs, &folder);
-    assert_eq!(
-        tree_differs_from_its_packs(
-            &repo,
-            commit,
-            project_of(&rig.fs, &folder),
-            tc_journal::fold::ProjectKind::Bible
-        ),
-        Vec::<String>::new()
-    );
-    assert!(rig.fs.peek(&pending).is_none(), "the sealed file goes");
-    assert_eq!(written_again(&handle).len(), 1, "{:?}", notices(&handle));
-    // The value is read again after the seal (a later save of another verse renders the book).
-    save_verse(&handle, 1, 2, "a later save").unwrap();
-    handle.leave(tc_store::Leave::Mode).wait().unwrap();
-    handle.wait_idle();
-    let usfm =
-        String::from_utf8(rig.fs.peek(&folder.join("ingredients/TIT.usfm")).unwrap()).unwrap();
-    assert!(usfm.contains("saved before a crash"), "{usfm}");
-    assert!(
-        notices(&handle)
-            .iter()
-            .all(|n| !matches!(n, Notice::MaterializeBlocked { .. })),
-        "{:?}",
-        notices(&handle)
-    );
-    handle.close().unwrap();
-    let handle = open(&rig, &folder);
-    assert_eq!(
-        words(&handle, 1, 1).as_deref(),
-        Some("saved before a crash")
-    );
-    handle.close().unwrap();
-    assert_commits_valid(&rig.fs, &folder);
-}
-
-/// A pending file the open read, cut short in place by another program before the seal: the
-/// lines it lost are in neither the file nor memory, so the seal leaves the file as it is, no
-/// commit shows the save, and the person is told.
-#[test]
-fn a_pending_file_read_at_the_open_and_cut_short_in_place_stops_the_commit() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "saved before a crash").unwrap();
-    let fs = rig.fs.crash(false);
-    drop(handle);
-    let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
-    let pending = pending_files(&rig, &folder).remove(0);
-    let bytes = rig.fs.peek(&pending).unwrap();
-    let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
-    rig.fs.cut_in_place(&pending, header);
+    assert_eq!(pending_files(&rig, &folder).len(), 1);
     let repo = repo_of(&rig.fs, &folder);
     let commits = commits_of(&repo).len();
-    let report = checkpoint(&handle);
-    assert_eq!(report.commit, None, "{report:?}");
-    assert_eq!(report.skipped, Some(CheckpointSkip::SealFailed));
-    assert_eq!(commits_of(&repo).len(), commits);
-    assert!(
-        notices(&handle).iter().any(
-            |n| matches!(n, Notice::FileUnreadable { path, .. } if pending.ends_with(&**path))
-        ),
-        "{:?}",
-        notices(&handle)
-    );
+    let handle = open(&rig, &folder);
     assert_eq!(
-        rig.fs.peek(&pending).map(|b| b.len()),
-        Some(header),
-        "the file is never removed"
+        pending_files(&rig, &folder),
+        Vec::<std::path::PathBuf>::new()
     );
-    drop(handle);
+    assert_eq!(commits_of(&repo).len(), commits + 1);
+    assert!(a_version_holds(&handle, 1, 1, "saved before a crash"));
+    handle.close().unwrap();
+    assert_commits_valid(&rig.fs, &folder);
 }
 
 /// §5.11 K4: a pending file another program removes after K1 read it and before K4 removes it.
@@ -1173,11 +1065,9 @@ fn verse_text_conflicts(handle: &ProjectHandle) -> usize {
         .count()
 }
 
-/// §6.2, §5.11 K1: a pending file the open read, cut short in place by another program, so that
-/// the save it held is in neither the file nor the fold's bytes. The seal leaves it unsealed and
-/// the close goes through; the next open finds the book file showing the save, which no journal
-/// file holds any more, and keeps a copy to bring back instead of writing the book over
-/// without it.
+/// §6.2: a pending file a crash left, cut short in place by another program before the next
+/// open, so that the save it held is in no journal file. The open finds the book file showing
+/// the save, and keeps a copy to bring back instead of writing the book over without it.
 #[test]
 fn a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_next_open() {
     let (rig, folder) = titus();
@@ -1188,20 +1078,12 @@ fn a_book_file_holding_a_save_its_pending_file_lost_in_place_is_recorded_at_the_
     let fs = rig.fs.crash(false);
     drop(handle);
     let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
     let usfm = folder.join("ingredients/TIT.usfm");
     assert!(String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("saved before a crash"));
     let pending = pending_files(&rig, &folder).remove(0);
     let bytes = rig.fs.peek(&pending).unwrap();
     let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
     rig.fs.cut_in_place(&pending, header);
-    let report = checkpoint(&handle);
-    assert_eq!(
-        report.skipped,
-        Some(CheckpointSkip::SealFailed),
-        "{report:?}"
-    );
-    handle.close().unwrap();
     let handle = open(&rig, &folder);
     assert_the_book_file_gave_the_save_back(&rig, &folder, &handle, "saved before a crash");
     // The verse had only the seed's text before, which a person's text replaces.
@@ -1275,18 +1157,10 @@ fn a_book_file_whose_heads_were_put_back_is_recorded_not_written_over() {
     let fs = rig.fs.crash(false);
     drop(handle);
     let rig = rig_as(fs, APP, "host-1");
-    let handle = open(&rig, &folder);
     let pending = pending_files(&rig, &folder).remove(0);
     let bytes = rig.fs.peek(&pending).unwrap();
     let header = bytes.iter().position(|b| *b == b'\n').unwrap() + 1;
     rig.fs.cut_in_place(&pending, header);
-    let report = checkpoint(&handle);
-    assert_eq!(
-        report.skipped,
-        Some(CheckpointSkip::SealFailed),
-        "{report:?}"
-    );
-    handle.close().unwrap();
     rig.fs.put_unseen(&heads, &older, None);
     let handle = open(&rig, &folder);
     assert_the_book_file_gave_the_save_back(&rig, &folder, &handle, "saved before a crash");

@@ -210,6 +210,8 @@ struct Save {
     fate: Fate,
     /// A file in the folder showed it when the last open read the journal.
     shown: bool,
+    /// [`Run::elapsed_ms`] when it was saved.
+    at_ms: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -327,6 +329,11 @@ impl DeniedAccess {
 )]
 pub struct Run {
     rig: Option<Rig>,
+    /// The running store's clock, which [`Step::Advance`] moves with the folder's.
+    clock: std::sync::Arc<tc_store::ManualClock>,
+    /// The time [`Step::Advance`] has moved, the clock the 2 minutes of the acceptable-loss
+    /// ruling are measured on.
+    elapsed_ms: i64,
     folder: PathBuf,
     handle: Option<ProjectHandle>,
     session: u32,
@@ -411,9 +418,11 @@ fn outside_notice(notice: &Notice) -> bool {
 impl Run {
     pub fn new() -> Self {
         let (fs, folder) = template();
-        let rig = Self::rig_on(fs.copy());
+        let (rig, clock) = Self::rig_on(fs.copy());
         let mut run = Self {
             rig: Some(rig),
+            clock,
+            elapsed_ms: 0,
             folder: folder.clone(),
             handle: None,
             session: 0,
@@ -499,10 +508,20 @@ impl Run {
 
     /// A store on `fs`. Outside edits the watcher misses leave `metadata.json` listing bytes the
     /// folder no longer holds until the app looks, so the rig does not check the burrito here.
-    fn rig_on(fs: FaultFs) -> Rig {
-        let rig = rig_as(fs, APP, "host-1");
+    fn rig_on(fs: FaultFs) -> (Rig, std::sync::Arc<tc_store::ManualClock>) {
+        let (config, clock) = config(&fs, APP, "host-1");
+        let store = tc_store::Store::start(config).unwrap();
+        store.wait_cleanup();
+        watch_burrito(&store, &fs);
+        let rig = Rig { fs, store };
         damaged_on_purpose(&rig);
-        rig
+        (rig, clock)
+    }
+
+    fn restart_on(&mut self, fs: FaultFs) {
+        let (rig, clock) = Self::rig_on(fs);
+        self.rig = Some(rig);
+        self.clock = clock;
     }
 
     /// The process died: the next one finds the files as a kill or a power cut leaves them.
@@ -520,7 +539,7 @@ impl Run {
             drop(handle);
         }
         self.rig = None;
-        self.rig = Some(Self::rig_on(fs));
+        self.restart_on(fs);
         // A power cut can take the app's last write back to an earlier one of its own: that
         // earlier write is what the app placed last, whatever another program also put.
         for rel in [USFM, META] {
@@ -827,6 +846,7 @@ impl Run {
                         session,
                         fate: Fate::Kept,
                         shown: false,
+                        at_ms: self.elapsed_ms,
                     }),
                     Err(e) => self.refused_save(&format!("the save of 1:{v}"), e)?,
                 }
@@ -878,6 +898,7 @@ impl Run {
                                 session,
                                 fate: Fate::Kept,
                                 shown: false,
+                                at_ms: self.elapsed_ms,
                             });
                         }
                     }
@@ -905,6 +926,7 @@ impl Run {
                         session,
                         fate: Fate::Kept,
                         shown: false,
+                        at_ms: self.elapsed_ms,
                     }),
                     Err(e) => self.refused_save("the save of the name", e)?,
                 }
@@ -954,7 +976,7 @@ impl Run {
                 // The process ends; the next one sees the files as they are, and the files
                 // other programs hold stay held.
                 let fs = self.fs().crash(false);
-                self.rig = Some(Self::rig_on(fs));
+                self.restart_on(fs);
                 self.relock();
                 self.log.push("closed".into());
                 return Ok(());
@@ -1432,6 +1454,7 @@ impl Run {
             .map(|s| open && self.in_history(s))
             .collect();
         let session = self.session;
+        let elapsed = self.elapsed_ms;
         for (i, save) in self.saves.iter_mut().enumerate() {
             save.shown &= shown[i];
             if save.fate == Fate::InMemory && !readable && save.session != session && !held_after[i]
@@ -1451,8 +1474,9 @@ impl Run {
             if open && (save.session == session || (readable && held[i])) {
                 // The running session holds it (it saved it, or read it at its open), and
                 // writes it again at its next seal (§5.11 K1); until then it may write over a
-                // file that shows it.
-                if journal_before[i] && !journal_after[i] {
+                // file that shows it. A kill may take it only while it is at most 2 minutes
+                // old (ruling 2026-10-22-acceptable-loss): an older save is sealed already.
+                if journal_before[i] && !journal_after[i] && elapsed - save.at_ms <= 120_000 {
                     save.fate = Fate::InMemory;
                 }
             } else if before[i] && !after[i] {
@@ -1992,6 +2016,12 @@ impl Run {
             Step::Focus => self.focus(),
             Step::Advance => {
                 self.fs().advance(Duration::from_secs(10));
+                self.elapsed_ms += 10_000;
+                self.clock.advance(10_000);
+                // The actor's timer fires in that time: a seal that is due runs now.
+                if let Some(handle) = &self.handle {
+                    handle.wait_idle();
+                }
                 Ok(())
             }
         };
@@ -3107,6 +3137,54 @@ fn a_superseded_save_read_at_open_and_changed_in_place() -> Vec<Step> {
     ]
 }
 
+/// Two and a half minutes of [`Step::Advance`].
+fn over_two_minutes() -> Vec<Step> {
+    vec![Step::Advance; 13]
+}
+
+/// A save a killed session left in a pending file, older than 2 minutes when a later session
+/// opens; a byte of the pending file changed in place, the book file put back as it was, and
+/// that session killed too. The open sealed it before anything else (ruling
+/// 2026-10-22-acceptable-loss: no save older than 2 minutes may be lost, LOSS-2).
+fn an_inherited_save_older_than_two_minutes() -> Vec<Step> {
+    let mut steps = vec![act(Act::Save(1)), crash()];
+    steps.extend(over_two_minutes());
+    steps.extend([
+        Step::Open,
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        crash(),
+    ]);
+    steps
+}
+
+fn an_own_save_older_than_two_minutes() -> Vec<Step> {
+    let mut steps = vec![act(Act::Save(1))];
+    steps.extend(over_two_minutes());
+    steps.extend([
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        crash(),
+    ]);
+    steps
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
         (
@@ -3116,6 +3194,14 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
         (
             "a_superseded_save_read_at_open_and_changed_in_place",
             a_superseded_save_read_at_open_and_changed_in_place(),
+        ),
+        (
+            "an_inherited_save_older_than_two_minutes",
+            an_inherited_save_older_than_two_minutes(),
+        ),
+        (
+            "an_own_save_older_than_two_minutes",
+            an_own_save_older_than_two_minutes(),
         ),
         (
             "a_flipped_pack_after_a_cut_pending_and_a_reverted_book",
@@ -3302,6 +3388,16 @@ fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
 #[test]
 fn a_flipped_pending_file_under_a_session_that_saves_again_is_kept() {
     assert_kept(&a_flipped_pending_file_under_a_session_that_saves_again());
+}
+
+#[test]
+fn an_inherited_save_older_than_two_minutes_is_sealed_at_the_open() {
+    assert_kept(&an_inherited_save_older_than_two_minutes());
+}
+
+#[test]
+fn an_own_save_older_than_two_minutes_is_sealed_by_then() {
+    assert_kept(&an_own_save_older_than_two_minutes());
 }
 
 #[test]
@@ -3498,7 +3594,8 @@ fn a_valid_outside_metadata_name_is_not_retired_as_converged_at_a_crash() {
         target: Target::Name,
         session: 0,
         fate: Fate::Kept,
-        shown: false
+        shown: false,
+        at_ms: 0,
     }));
     run.finish().unwrap();
 }

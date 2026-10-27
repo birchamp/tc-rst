@@ -737,6 +737,9 @@ fn open_inner(
     }
     let watch_writer = writer_tx.clone();
     let watch_actor = actor_tx.clone();
+    // Saves an earlier session left unsealed are sealed before the open returns: their only
+    // copy is a pending file, and their age is unknown (owner ruling 2026-10-22, 2 minutes).
+    let inherited = !read_only && !project.journal.pending.is_empty();
     let handle = crate::actor::spawn(
         project,
         gates.lock.take(),
@@ -761,6 +764,12 @@ fn open_inner(
     }
     if let Some(background) = background {
         handle.start_background(background);
+    }
+    if inherited {
+        // A seal that cannot finish now says so in Notices; the open goes on.
+        let _ = handle
+            .checkpoint(crate::handle::CheckpointReason::Other("open".into()))
+            .wait();
     }
     Ok(handle)
 }
@@ -1045,7 +1054,6 @@ fn journal_of(
                             .map(|r| (r.path.as_str().to_owned(), r.seen_md5)),
                         number: Some(read.number),
                         status: pending.status,
-                        read: facts.kept,
                     },
                 );
             }
@@ -1370,10 +1378,11 @@ impl Project {
             )?;
             let new_rel = format!("{PENDING}/{name}");
             let new_abs = self.folder.path(&new_rel);
-            let number = self
-                .source
-                .add_target(&new_abs)
-                .map_err(|e| StoreError::io("open the verified salvage", &new_abs, e))?;
+            // The fold reads these values from the bytes written, as for a file the open read.
+            let number = self.source.add_target_held(
+                &new_abs,
+                std::sync::Arc::new(crate::load::Held(encoded.bytes.clone().into())),
+            );
             if let Some(old) = self.journal.pending.get(rel).and_then(|p| p.number) {
                 let from = JournalFile {
                     rel: rel.to_owned(),
@@ -1405,7 +1414,6 @@ impl Project {
                     reconciles: None,
                     number: Some(number),
                     status: PendingStatus::Valid,
-                    read: None,
                 },
             );
         }

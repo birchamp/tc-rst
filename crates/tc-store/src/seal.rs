@@ -176,6 +176,8 @@ impl Project {
             Err(crate::atomic::WriteError::NotWritten(e)) => return Err(e),
         };
         let abs = self.folder.path(&rel);
+        // Taken before the read-back: a change after it moves the time, so it is read again.
+        let stat = self.vfs.metadata(&abs).ok().map(|m| (m.len, m.mtime_ns));
         let back = self
             .vfs
             .read(&abs)
@@ -225,12 +227,7 @@ impl Project {
                     Vec::new()
                 },
                 blob,
-                seen: self
-                    .vfs
-                    .metadata(&abs)
-                    .ok()
-                    .map(|m| (m.len, m.mtime_ns))
-                    .filter(|(len, _)| *len == back.len() as u64),
+                seen: stat.filter(|(len, _)| *len == back.len() as u64),
                 damaged: false,
             },
         );
@@ -355,7 +352,7 @@ impl Project {
             if !lost.is_empty() {
                 // The derived files that show a change the fold can no longer read are kept by
                 // the ledger, which asks the fold for every version they show (§6.2).
-                let Some(again) = self.lines_in_memory(&rel, &lost) else {
+                let Some(again) = self.lines_in_memory(&lost) else {
                     let reason = if bytes.is_none() {
                         "another program removed it"
                     } else {
@@ -413,23 +410,13 @@ impl Project {
         }
     }
 
-    /// The lines of `ids` from the fold's own bytes, or from the bytes the open read of `rel`,
-    /// each checked against its id; `None` when neither can give one of them.
-    fn lines_in_memory(&self, rel: &str, ids: &[ChangeId]) -> Option<Vec<Verified>> {
-        let read: Vec<Verified> = self
-            .journal
-            .pending
-            .get(rel)
-            .and_then(|p| p.read.as_deref())
-            .map(|bytes| read_pending(bytes, self.id).entries)
-            .unwrap_or_default();
+    /// The lines of `ids` from the fold's own bytes, each checked against its id; `None` when
+    /// the fold cannot give one of them (its value lay in the file that lost it).
+    fn lines_in_memory(&self, ids: &[ChangeId]) -> Option<Vec<Verified>> {
         ids.iter()
             .map(|id| {
-                self.fold
-                    .raw(id)
-                    .filter(|raw| ChangeId::of(raw) == *id)
-                    .map(|raw| parse_change(*id, raw))
-                    .or_else(|| read.iter().find(|line| line.id() == *id).cloned())
+                let raw = self.fold.raw(id)?;
+                (ChangeId::of(&raw) == *id).then(|| parse_change(*id, raw))
             })
             .collect()
     }
@@ -455,7 +442,7 @@ impl Project {
             }
             return;
         }
-        let Some(lines) = self.lines_in_memory(&rel, &unpacked) else {
+        let Some(lines) = self.lines_in_memory(&unpacked) else {
             self.leave_unsealed(run, &rel, reason);
             return;
         };

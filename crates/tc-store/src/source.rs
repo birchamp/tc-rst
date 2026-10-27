@@ -130,6 +130,11 @@ impl FileSource {
         Ok(self.add_with_exposure(path, Exposure::RelocationOnly, Some(handle)))
     }
 
+    /// [`Self::add_target`] for bytes just written and verified, read from memory.
+    pub fn add_target_held(&self, path: &Path, handle: Arc<dyn ReadHandle>) -> u32 {
+        self.add_with_exposure(path, Exposure::RelocationOnly, Some(handle))
+    }
+
     fn add_with_exposure(
         &self,
         path: &Path,
