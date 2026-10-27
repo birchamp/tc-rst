@@ -15,7 +15,7 @@ no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
 merged: none
 updated: 2026-10-27
-next: scripts/gates.sh --touched, then the integration lane takes it into a batch.
+next: The integration lane takes track-SAVE-WAIT into a batch.
 blocked_by: none
 ---
 
@@ -101,4 +101,4 @@ build), and a product save never waits at it. The app needs no change; a person 
 - 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | verify | 268ff40c | races-and-protocol lens again (subagent, read-only): no blocker, no major. Several waiters, hold-release-hold-release and wait_reached are right; none of 97 sites relies on the old way (carried.rs:805, tc-app hooks.rs:250 and :482 looked at closely); tc-app's own Holds has no such bug (notify_one keeps a permit); the unit test passes deterministically (wait_reached returns only once the waiter is in changed.wait) | crates/tc-store/src/hooks.rs
 - 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | browser-and-parity lens stands: the hook fix is test-hooks code only, no page, word, key or flow changes | git show 268ff40c --stat
 - 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | loaded loops on the fixed build (6 copies on 4 cores, 20 min): production_reload 241 runs and c3_reload 60 runs, no failure, no hang; before the hook fix 31 of 331 production_reload runs failed or hung | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop4/runs.txt
-
+- 2026-10-27 04:20 EDT | save-wait session (Claude Code 749c177d) | gate | 2cbfe3eb | scripts/gates.sh --touched passed with main merged: 5 crates (tc-store and its dependents), 1591 tests passed, 3 skipped, no timeout; ready for a batch | scripts/gates.sh --touched
