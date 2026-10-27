@@ -60,7 +60,8 @@ pub struct Gateway {
     /// The literal Bible's repository when it is not `<lang>_ult` or `<lang>_glt`.
     pub literal: Option<&'static str>,
     /// The releases of the owner's notes, words and academy that tC4 saw when it built the
-    /// list, which Get source texts shows under each package (`seen`).
+    /// list (`seen`). Get source texts shows them under a package only for what is not
+    /// installed (`installed_release`, tC4 #833.5).
     pub seen: Seen,
 }
 
@@ -474,6 +475,27 @@ pub fn language_set_from_installed(
     Some(set)
 }
 
+/// The release of a gateway's `slot` installed on this computer, when its pin names one: the
+/// project's own pin when `project` is this gateway's set and that pin is installed, since an
+/// update keeps the release it replaced; else the install a language set would pin
+/// (`preferred`).
+pub fn installed_release<'a>(
+    installed: &'a [ResourcePin],
+    gateway: &Gateway,
+    slot: SetSlot,
+    project: Option<&LanguageSet>,
+) -> Option<&'a str> {
+    let pinned = project
+        .filter(|set| of_set(set) == Some(gateway))
+        .and_then(|set| set.pin(slot))
+        .and_then(|pin| installed.iter().find(|i| i.same_identity(pin)));
+    let pin = match pinned {
+        Some(pin) => pin,
+        None => preferred(installed, &gateway.repo_for(slot)?)?,
+    };
+    Some(pin.version.as_ref()?.as_str())
+}
+
 /// The Bibles a gateway package supplies for the source panes, each when installed
 /// (tC4 `gatewayBiblesFromInstalled`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -654,6 +676,52 @@ mod tests {
             sha.to_string().repeat(40).parse().unwrap(),
         )
         .with_flavor(flavor)
+    }
+
+    #[test]
+    fn inv_source_card_names_installed_the_projects_release_first() {
+        let english = english();
+        let bundled = suite::english_helps()
+            .pin(SetSlot::TranslationNotes)
+            .unwrap()
+            .clone();
+        let update = pin(
+            "git.door43.org/unfoldingWord/en_tn",
+            'f',
+            "parascriptural/x-bcvnotes",
+        )
+        .with_version("v92".parse().unwrap());
+        let installed = vec![bundled.clone(), update.clone()];
+        let release =
+            |project| installed_release(&installed, english, SetSlot::TranslationNotes, project);
+        let bundled_release = bundled.version.as_ref().map(|v| v.as_str());
+        assert_eq!(
+            release(None),
+            bundled_release,
+            "INV-SOURCE-CARD-NAMES-INSTALLED: with no project pin, the install a set would pin"
+        );
+        let mut updated = suite::english_helps().clone();
+        updated.pins.insert(SetSlot::TranslationNotes, update);
+        assert_eq!(
+            release(Some(&updated)),
+            Some("v92"),
+            "INV-SOURCE-CARD-NAMES-INSTALLED: the project's updated pin, not the bundled release"
+        );
+        let mut missing = updated.clone();
+        missing.pins.insert(
+            SetSlot::TranslationNotes,
+            pin(
+                "git.door43.org/unfoldingWord/en_tn",
+                '9',
+                "parascriptural/x-bcvnotes",
+            )
+            .with_version("v93".parse().unwrap()),
+        );
+        assert_eq!(
+            release(Some(&missing)),
+            bundled_release,
+            "INV-SOURCE-CARD-NAMES-INSTALLED: never a pinned release this computer lacks"
+        );
     }
 
     #[test]
