@@ -755,7 +755,7 @@ fn assert_names_one_dios(ack: &tc_api::write::Ack) {
     assert_eq!(
         words,
         ["Dios"],
-        "the reply names the link it sent back: {ack:?}"
+        "INV-NO-SILENT-LINK-DROP: the reply names the link it sent back: {ack:?}"
     );
     let verse = &ack.dropped[0];
     assert_eq!(
