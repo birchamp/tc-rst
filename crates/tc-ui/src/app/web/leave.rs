@@ -39,6 +39,10 @@ impl Actions {
         if to == LeaveTo::Home && !self.settle_align_clicks().await {
             return false;
         }
+        // A restart during the wait already took the person Home, without the gate.
+        if to == LeaveTo::Home && self.s().project.with_untracked(Option::is_none) {
+            return false;
+        }
         if !self.runtime().saves().gate().await {
             return false;
         }

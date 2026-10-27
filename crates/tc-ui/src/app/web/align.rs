@@ -183,6 +183,8 @@ thread_local! {
     static REFRESHES: Latest = const { Latest::new() };
     /// A newer navigation wins while earlier requests wait for page edits to drain.
     static NAVIGATIONS: Latest = const { Latest::new() };
+    /// Only the newest press of Home waits and asks; an older one gives way.
+    static SETTLES: Latest = const { Latest::new() };
     /// The answer Home waits for while it asks Stay or Leave without it.
     static LEAVE_ANSWER: RefCell<Option<Function>> = const { RefCell::new(None) };
     /// The gate hook that asks the server to save the links, while the tool is open.
@@ -610,9 +612,13 @@ impl Actions {
     pub(super) async fn settle_align_clicks(&self) -> bool {
         // A send that fails at once (no connection) is sent again at most this often.
         const RETRY_EVERY_MS: f64 = 250.0;
+        let press = SETTLES.with(Latest::begin);
         let start = js::now_ms();
         let mut retried = f64::NEG_INFINITY;
         loop {
+            if !SETTLES.with(|l| l.is_current(press)) {
+                return false;
+            }
             let now = js::now_ms();
             let mut wake = crate::app::align::LEAVE_WAIT_MS - (now - start);
             match QUEUE.with(|q| q.borrow().on_leave(now - start)) {
@@ -644,7 +650,10 @@ impl Actions {
 
     async fn ask_leave_without_clicks(&self) -> bool {
         let answer = Promise::new(&mut |resolve, _| {
-            LEAVE_ANSWER.with(|a| *a.borrow_mut() = Some(resolve));
+            // An older question still open gives way: its wait ends as Stay.
+            if let Some(older) = LEAVE_ANSWER.with(|a| a.borrow_mut().replace(resolve)) {
+                let _ = older.call1(&JsValue::NULL, &JsValue::FALSE);
+            }
         });
         self.s().a.leave_ask.try_set(true);
         let leave = JsFuture::from(answer)

@@ -440,9 +440,31 @@ browserTest('a_click_that_saves_within_the_wait_leaves_with_no_question', async 
     const hold = await holdThePlacement(page);
     await page.getByTestId('project-switch').click();
     await new Promise((resolve) => setTimeout(resolve, 1_000));
+    assert.equal(await home(page).count(), 0, 'Home waits for the click');
     hold.release();
     await home(page).waitFor({ timeout: 10_000 }).catch(() => {});
     assert.equal(await asked(), false, 'INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: no question for a click that saved');
+    await home(page).waitFor();
+    await openAlign(page);
+    await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
+  });
+});
+
+browserTest('a_click_sent_again_after_a_cut_leaves_with_no_question', async () => {
+  await withApp(async ({ page, allow }) => {
+    allow(/Failed to load resource: net::ERR_FAILED/);
+    await openAlign(page);
+    const asked = await watchQuestion(page);
+    await chip(page, 'fe').click();
+    await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+    let cut = true;
+    await page.route('**/api/v1/align/edit', (route) => (cut ? route.abort('failed') : route.continue()));
+    await card(page, 'πίστιν').click();
+    await page.getByTestId('project-switch').click();
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    cut = false;
+    await home(page).waitFor({ timeout: 10_000 }).catch(() => {});
+    assert.equal(await asked(), false, 'INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: Home sends the click again and asks nothing');
     await home(page).waitFor();
     await openAlign(page);
     await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
