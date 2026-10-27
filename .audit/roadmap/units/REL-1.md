@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-27
-next: step 2, then step 3 on this branch (its push runs release.yml unsigned)
+next: step 3: the release run on this branch (unsigned); signing waits for the owner (H4, A4)
 blocked_by: none
 ---
 
@@ -71,3 +71,4 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | claim | none | Claimed on branch track-REL-1 from main b9d42bb4 (batch 36b), the orchestrator's go | python3 -I .audit/tools/board.py
 - 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | step 1 | b9d42bb4 | All 41 cards in depends are done on main b9d42bb4, except UI-3, which is parked because it was split into UI-3a and UI-3b, both done. The board reads 75 cards, 0 errors, 4 warnings (stale updated dates on T and X, and two more). Green on b9d42bb4: ci 40480182362 (test, test-app, parity-baseline, alignment-budget, lint-linux, lint-windows, lint-wasm), app-e2e 40480182382 (journeys) and shell 40480182361 (unit, builds, e2e-linux, e2e-windows, e2e-macos) | scripts/gates.sh --check-receipt b9d42bb4
 - 2026-10-27 05:47 EDT | integration lane (Claude Code 3d07d5f8) | note | none | release.yml has never passed: 30 failed runs and 1 cancelled. The late G3 runs and gate/batch-7 failed only at translations, which is expected off a tag while 264 keys are English (H10). Since run 40349886927, common also fails: notices.test.mjs runs cargo offline, and adler2 (a test-only crate the screen record added in 8412f07f) is never downloaded by the job's builds. Fixed: common runs cargo fetch --locked first. Locally the test passes after a fetch (3 of 3) | node --test scripts/release/notices.test.mjs
+- 2026-10-27 05:49 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | b9d42bb4 | P table written from the ledger, every row with its job and green run on b9d42bb4: P1, P2, P3, P4, P5 and P8 green, plus a security row. P7 is green for the screens it records, P9 for the kept scope, and P10's pins are green. Skipped: P6 waits for AQ1; the full P7 review waits for G2; the P10 freeze waits for V (H9); P9's cut import kinds by the owner's ruling. The owner list is in the evidence | docs/evidence/rel-1-2026-10-27.md
