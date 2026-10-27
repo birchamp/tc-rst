@@ -4,7 +4,7 @@ title: A book file the app cannot read never leaves metadata.json listing bytes 
 track: A
 lane: storage
 milestone: M1
-state: gating
+state: done
 owner: storage lane (Claude Code e10d898d)
 branch: track-BURRITO-HOLD
 worktree: .worktrees/track-BURRITO-HOLD
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P5]
 no_loss: true
 size: 0.5-1 d (basis: one listing rule in materialize.rs, one crash test)
-merged: none
+merged: cc6e5b8c
 updated: 2026-10-27
-next: Pushed; the integration lane takes it into a batch with LOSS-2 (this branch holds LOSS-2 at 5e3da206).
+next: none
 blocked_by: none
 ---
 
@@ -103,3 +103,4 @@ acceptable. Paratext, Door43 and another tC4 trust `metadata.json`.
 - 2026-10-27 03:30 EDT | storage lane (Claude Code e10d898d) | verify | eee0a0fe | browser and parity lens (independent agent): no blocker, no major; nothing a translator sees changes (no notice or tc-app path reads the ingredient list), no tC4 difference to declare, no journey needed; its 2 minors (STORAGE did not say what happens with no entry; a card id in I7) fixed in the docs | .audit/roadmap/evidence/2026-10-27/BURRITO-HOLD-lens-parity.md
 - 2026-10-27 05:10 EDT | storage lane (Claude Code e10d898d) | step 2 | ab827b0e | merged track-LOSS-2 at 5e3da206 (on main fb960700); conflicts only in the depends lists of DONE, REL-1 and ROADMAP's REL-1 row (both cards kept); groups:: 24 passed, the tc-sync export test passed | cargo nextest run -p tc-store --test store groups::
 - 2026-10-27 05:40 EDT | storage lane (Claude Code e10d898d) | gate | none | scripts/gates.sh --touched on the merged tree: 5 crates, 0 journey files, 1587 tests passed (7 slow), exit 0; clippy, clippy-release-bins and clippy-release-app pass after two needless clones in the export test were dropped; Windows clippy left to track CI | scripts/gates.sh --touched
+- 2026-10-27 01:16 EDT | integration lane (Claude Code 3d07d5f8) | merge | cc6e5b8c | merged into main in batch 33; exchange.rs keeps batch 32's tests and adds an_export_while_a_book_file_is_undecided_is_a_valid_burrito; gated by scripts/gates.sh --wait-ci batch-33 | scripts/gates.sh --wait-ci batch-33
