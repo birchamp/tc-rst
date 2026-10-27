@@ -4,18 +4,18 @@ title: The save-machine tests fail with a message instead of hanging
 track: A
 lane: checks
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
-depends: [REL-1]
+state: claimed
+owner: save-wait session (Claude Code 749c177d)
+branch: track-SAVE-WAIT
+worktree: .worktrees/track-SAVE-WAIT
+depends: []
 needs_owner: []
 proves: []
-no_loss: false
+no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
 merged: none
-updated: 2026-10-26
-next: Claim this card after the release, then do step 1.
+updated: 2026-10-27
+next: Find why production_reload_anywhere ran past 300 s on gate/batch-30 (ci 40449554417), then step 1.
 blocked_by: none
 ---
 
@@ -66,3 +66,4 @@ the thread, not the wait.
 ## Log
 
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | created | none | from the orchestrator's message: the two unbounded waits found while looking for the 18:31 hang; after the release, since no translator can reach either | side-session-notes 2026-10-26-tc-app-hang-1831.md
+- 2026-10-27 01:10 EDT | save-wait session (Claude Code 749c177d) | claim | none | a release card now: REL-1 waits for it, and it is no_loss, since save-path tests keep timing out in CI (production_reload_anywhere at 300 s on gate/batch-30, ci 40449554417; before it c3_reload and FIX-KEPT-EVENT's test); its REL-1 dependency is turned round | gh run view 40449554417 --log
