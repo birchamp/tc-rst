@@ -4,7 +4,7 @@ title: Poem indents are two characters wide, and Tab indents in the Verse editor
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-POEM-TAB
 worktree: .worktrees/track-POEM-TAB
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 0.5 d (basis: REF1b)
-merged: none
+merged: a939ef1b
 updated: 2026-10-27
-next: Ready for a batch except the screen captures: the batch recaptures its final tree with parity/app/capture-rust.mjs (tc-ui/src changed; LINK-DROP changes it too), then cargo test -p tc-ui --test screen_record passes; push track-POEM-TAB once for the integration lane.
+next: none
 blocked_by: none
 ---
 
@@ -73,3 +73,4 @@ Today a level is 8 characters wide, so poem lines start a third of the way acros
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | verify | 777f981f | browser and parity lens (reviewer who did not write the code, subagent a06ba4f5, Playwright on this build): 1 Code: one indent core, one Tab entry point for both cards; 2 Checks: unit test and journey deterministic, translate + section journeys 39 of 39 pass; 3 Reach: all reachable; 4 Siblings: the two poem fields changed, the OBS, check and comment fields hold no poetry; 5 No loss: a level draws 24.78 px, two characters of the field's font; first line keeps no tab and the focus; Save and Cancel by pointer after Tabs, and Tab then Escape at once, keep or put back the right text; 6 Prose: tC4's verse card has no key handler (Tab blurs and saves, Escape nothing, tab of 8), every difference is in the APP-DESIGN §6.10 row; Escape saving wants a line to the owner. No blocker or major; minors: focus after Escape (minors.tsv), undo after a Tab (already logged) | scratchpad probe poem.test.mjs (not in git): "39 tests, 39 pass"; .audit/minors.tsv
 - 2026-10-27 10:40 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-POEM-TAB on the merge with main 50d43b19 | scripts/gates.sh --touched
 - 2026-10-27 11:16 EDT | tc4-issues session (Claude Code dc817a96) | gate | 88f367d3 | failed on one step only: scripts/gates.sh --touched (7 crates, 2 journey files) ran 2009 Rust tests, 2008 passed, 1 failed: tc-ui::screen_record captures_match_the_current_ui_source (INV-CAPTURES-FRESH, 123 captures taken at tc-ui/src 05fb233a, now ec567a1c), which any tc-ui/src change trips until the screens are recaptured; journeys "app-e2e: 39 tests, 0 skipped", 39 pass. Not recaptured here: LINK-DROP in the same batch also changes tc-ui/src, so one recapture on the batch's tree serves both | target/gates-touched.log (not in git); scripts/gates.sh --touched
+- 2026-10-27 11:49 EDT | integration lane (Claude Code 3d07d5f8) | merge | a939ef1b | merged into main in batch 45 with LINK-DROP and POEM-TAB together, every screen recaptured on the batch tree; gated by scripts/gates.sh --wait-ci batch-45 | scripts/gates.sh --wait-ci batch-45
