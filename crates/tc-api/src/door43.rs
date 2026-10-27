@@ -324,14 +324,20 @@ pub fn open_folder<'a>(
     } else {
         base
     };
-    (1..)
-        .map(|n| match n {
+    // A listing is finite, so some suffix is free.
+    let mut n = 1u64;
+    loop {
+        let name = match n {
             1 => base.clone(),
             n => format!("{base}-{n}"),
-        })
-        .filter_map(|name| ProjectName::parse(&name).ok())
-        .find(|name| !name.in_use(listing.iter().copied()))
-        .unwrap_or_else(|| unreachable!("a listing is finite, so some suffix is free"))
+        };
+        if let Ok(name) = ProjectName::parse(&name)
+            && !name.in_use(listing.iter().copied())
+        {
+            return name;
+        }
+        n += 1;
+    }
 }
 
 #[cfg(feature = "proptest")]

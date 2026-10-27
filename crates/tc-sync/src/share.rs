@@ -21,7 +21,10 @@ pub enum ShareError {
 
 /// Makes `name` under `owner`, connects `project` to it on `main`, calls `pushing`, and syncs.
 /// The sync's report says whether the push was confirmed.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the share needs the project, the client, the session, the owner, the name and the progress hooks, each different"
+)]
 pub async fn share(
     project: &ProjectHandle,
     client: &Door43Client,
