@@ -4,7 +4,7 @@ title: Fix two store losses the model test wrongly excused
 track: A
 lane: storage
 milestone: M1
-state: building
+state: gating
 owner: storage lane (Claude Code LOSS-2)
 branch: track-LOSS-2
 worktree: /home/bot/tc-rst/.worktrees/track-LOSS-2
@@ -14,8 +14,8 @@ proves: [P1]
 no_loss: true
 size: 1-2 d (basis: two named model cases, three store paths named by the review)
 merged: none
-updated: 2026-10-26
-next: Run --touched and the three lenses (loss first), then push once and hand to the integration lane.
+updated: 2026-10-27
+next: Pushed; the integration lane takes it into a batch. BURRITO-HOLD (checks lane) builds on this branch.
 blocked_by: none
 ---
 
@@ -98,3 +98,10 @@ the app still has a good copy (a stored blob, or the book file that shows the te
 - 2026-10-27 00:20 EDT | storage lane (Claude Code LOSS-2) | verify | d846ba12 | races lens (independent agent): no blocker; the seal's `seen` came from a stat after the read-back; minors logged | review of 25035dfe..d846ba12
 - 2026-10-27 00:20 EDT | storage lane (Claude Code LOSS-2) | verify | d846ba12 | browser and parity lens (independent agent): nothing a translator sees changes (no new notice or wording); STORAGE §5.11 matches; one line rewrapped | review of 25035dfe..d846ba12
 - 2026-10-27 00:40 EDT | storage lane (Claude Code LOSS-2) | fix | cb8a47a4 | both majors and the stat fixed; the orchestrator relayed the owner's ruling that the model's InMemory excuse may cover no save older than 2 minutes. So: an open that finds pending files checkpoints before it returns (STORAGE §6.1 O15), the actor checkpoints once a save waited 2 minutes (§5.13), and the fold reads pending values from the verified bytes (in-memory handle; replaces the kept-bytes field). Model: `Fate::InMemory` only for saves at most 2 minutes old; new cases `an_inherited_save_older_than_two_minutes`, `an_own_save_older_than_two_minutes` fail without each fix. Checkpoint tests whose premise was an unsealed pending file read at open were restaged before the open, and two that only covered it were removed | cargo test -p tc-store --test store -- model:: checkpoint::
+- 2026-10-27 01:10 EDT | storage lane (Claude Code LOSS-2) | verify | cb8a47a4 | loss and races re-review (independent agent): majors fixed: the open waited for a whole checkpoint, and files no seal can take kept triggering seals; minors: clock set back, the wording of the 2-minute commit, pack and commit volume | review of d846ba12..cb8a47a4
+- 2026-10-27 02:30 EDT | storage lane (Claude Code LOSS-2) | fix | 9fd96438 | the open seals what it inherited after O9, inside a write group O10 closes (no commit at open); `Journal::has_unsealed` counts only sealable files; tests that staged pending files before an open restaged in the session under test or checked on a copy (consolidation harness, crash, review, tc4, placement, salvage probes) | cargo nextest run -p tc-store
+- 2026-10-27 03:00 EDT | storage lane (Claude Code LOSS-2) | note | none | found on main: a checkpoint while a book file another program holds is unreadable, after a kill past its rename, leaves metadata.json listing bytes not on disk (the folder is already invalid after the open). The orchestrator split it into card BURRITO-HOLD (checks lane, option a: valid commit, the folder heals, nothing leaves the app from it). LOSS-2 skips the open's seal while O9 could not read a derived file (STORAGE §6.1 O15) | message from the orchestrator, 2026-10-27
+- 2026-10-27 03:20 EDT | storage lane (Claude Code LOSS-2) | note | none | packs stay bounded under the 2-minute seal: `tc_journal::consolidate::consolidation_groups` (crates/tc-journal/src/consolidate.rs:32), run by the seal's K6 (`Project::consolidate`, crates/tc-store/src/seal.rs), merges every earlier month into one pack per 64 MiB and the current month's packs under 1 MiB once there are more than 32. Commits are not merged, so the 2-minute seal commits nothing (`Actor::seal_now`): its packs wait as K3 blobs for the next ordinary checkpoint | crates/tc-journal/src/consolidate.rs
+- 2026-10-27 03:40 EDT | storage lane (Claude Code LOSS-2) | verify | 9fd96438 | final review (independent agent): no loss; major fixed: a seal error at the open turned the session read-only (test `a_seal_that_fails_at_the_open_keeps_the_project_writable` fails without the fix); minors fixed or logged | review of cb8a47a4..9fd96438
+- 2026-10-27 05:10 EDT | storage lane (Claude Code LOSS-2) | fix | 33ad3595 | the open's write group never closed (the flag was taken by the wrong condition), which kept the store's own I7 probes off for the session; p5 found it in the gate | scripts/gates.sh --touched
+- 2026-10-27 05:30 EDT | storage lane (Claude Code LOSS-2) | gate | 33ad3595 | scripts/gates.sh --touched passed: 5 crates, 1577 tests, every step | scripts/gates.sh --touched
