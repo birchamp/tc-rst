@@ -59,3 +59,16 @@ Same bug: 5 (#825, #829, #832.2, #833.5, #822). Fixed in rebuild: 11 (#840, #836
 
 - A right-to-left tC3 project imports as left to right (`create_details`, as #832.2).
 - #836's remainder: note and word card titles take the set's direction, not their own.
+
+## Held for after 4.1.0 (orchestrator, 2026-10-27)
+
+The other sweep findings went to cards: LINK-DROP (#825, #820), TC3-LANG (#832.2), SRC-VER
+(#833.5), POEM-TAB (#829) and VRS-GUESS (#822, ruling H13). These wait:
+
+- #836, note and word card titles: under a right-to-left gateway set an English title takes the
+  set's direction, so its end punctuation shows at the wrong end. Bodies already read by their own
+  text (`dir="auto"`). Fix: `dir="auto"` on the titles too, with a journey case.
+- #833.2, the Save dialog title for exports other than PDF: they save through `<a download>`, and
+  the shell's `will-download` sets no dialog title. Check the real title on a desktop (xvfb showed
+  no dialog), then set it in `shell/main.cjs` if it shows the URL.
+- LINK-MARK (card): the stored "links to review" mark, so LINK-DROP's notice survives a crash.
