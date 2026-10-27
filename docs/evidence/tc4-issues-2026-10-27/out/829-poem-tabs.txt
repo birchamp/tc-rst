@@ -1,0 +1,70 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:37135/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105211446/sample/projects, Door43: http://127.0.0.1:9)
+# Verse editor value: "a Tito,\\n\\t\\tmi verdadero hijo en la fe común, una línea larga que se parte en dos o más renglones en la tarjeta\\n\\ten la fe común"
+# Verse editor computed tab-size: 8
+# After Tab+XYZ: editor open: 0 focused: BODY  value: null
+# Subtest: 829_verse_editor_tab_size_and_tab_key
+not ok 1 - 829_verse_editor_tab_size_and_tab_key
+  ---
+  duration_ms: 7165.981911
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: 'Tab indents the line in the Verse editor'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/829-poem-tabs.test.mjs:49:12
+    async withApp (file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:132:20)
+    async file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/829-poem-tabs.test.mjs:29:3
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:38575/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1696753-1793105218599/sample/projects, Door43: http://127.0.0.1:9)
+# Section editor value: "4 a Tito,\\n\\t\\tmi verdadero hijo en la fe común, una línea larga que se parte en dos o más renglones en la tarjeta\\n\\ten la fe común\\n5 Por esta causa te dejé en Creta, para que corrigieras lo deficiente y establecieras ancianos en cada ciudad, como te mandé."
+# Section editor computed tab-size: 8
+# Section editor after Tab: focused: Section 4–5 value: "4 a Tito,\\n\\t\\tmi verdadero hijo en la fe común, una línea larga que se parte en dos o más renglones en la tarjeta\\n\\t\\ten la fe común\\n5 Por esta causa te dejé en Creta, para que corrigieras lo deficiente y establecieras ancianos en cada ciudad, como te mandé."
+# Subtest: 829_section_editor_tab_size_and_tab_key
+not ok 2 - 829_section_editor_tab_size_and_tab_key
+  ---
+  duration_ms: 6841.808776
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: |-
+    one indent level is two characters wide
+    
+    '8' !== '2ch'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '2ch'
+  actual: '8'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/829-poem-tabs.test.mjs:70:12
+    async withApp (file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:132:20)
+    async file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/829-poem-tabs.test.mjs:54:3
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 23765.907696

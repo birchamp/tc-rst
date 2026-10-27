@@ -1,0 +1,42 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:42885/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1739005-1793105694953/en-pins/projects, Door43: http://127.0.0.1:9)
+# Subtest: a_note_marks_its_quote_in_the_greek_tab
+ok 1 - a_note_marks_its_quote_in_the_greek_tab
+  ---
+  duration_ms: 7278.308564
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17373.071328
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43193/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1743290-1793105724927/sample/projects, Door43: http://127.0.0.1:9)
+# Subtest: the_greek_row_marks_the_quote_of_the_check
+ok 1 - the_greek_row_marks_the_quote_of_the_check
+  ---
+  duration_ms: 7176.914038
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17268.348343
