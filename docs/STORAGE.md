@@ -2175,9 +2175,10 @@ K1  L = every verified change line of every pending file, deduplicated by id, so
     the file, cut it short at a line boundary, which still verifies, cut it inside a line or
     changed a byte of a line, so that the line no longer verifies, or put a file of a newer
     format or of another project at its name) is taken from the fold's own bytes, checked
-    against its id: in memory for a file this session wrote, or read through the handle the
-    open kept. Its line goes into the pack, and the person is told (`PendingWrittenAgain`, the
-    file and how many changes). The lines of a file that still verify are taken from the file,
+    against its id: in memory for a file this session wrote, or, for a file the open read or a
+    salvage wrote, the bytes it verified, which it keeps (a pending file is small and sealed
+    within minutes), since a handle reads a change made in place too. Its line goes into the
+    pack, and the person is told (`PendingWrittenAgain`, the file and how many changes). The lines of a file that still verify are taken from the file,
     as salvage takes them (§4.4). Such a file is removed by K4 like any other (a removed one has
     nothing left to remove); one that no longer verifies is moved to `.tc/quarantine/` with its
     bytes (`QuarantinedPending`), as the open moves a damaged pending file; one of a newer
@@ -2227,7 +2228,10 @@ Q4  atomic_remove each replaced pack (directory fsync once).
 ### 5.13 Checkpoint: seal, materialize, commit
 
 A checkpoint runs on leaving Translate or the project (tC4 J8), before a sync, an export or a USB
-export, after a USB import, at app exit, and every 30 minutes while there are pending batches.
+export, after a USB import, at app exit, every
+30 minutes while there are pending batches, and once a save has waited 2 minutes unsealed by the
+store's clock (the actor checks after every command and on its timer): until a seal its only
+copy is a pending file, and the owner's ruling allows losing at most the last 2 minutes.
 Only the seal and the move of the branch stand in the actor's queue; the files, the tree and the
 commit object are the writer's work from a snapshot, so saves go on meanwhile (R21, I9).
 
@@ -2508,6 +2512,16 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
     file opened is scanned (§14), so those 334 opens are paid in the background after each
     open, in competition with the saves: that is the price of reading what O9 spared, and
     the reason the check is the only place a stat that lies is found.
+O15 A writable open that found pending files (saves a session that ended without a seal left)
+    seals them (§5.11) after O9, so O10 lists their packs (O9 classifies the files against the
+    packs they were written from) and K3 stores each as a blob;
+    the next checkpoint commits them. Their only copy was a pending file another program could
+    damage, and their age is unknown, so none may wait for the next seal (owner ruling
+    2026-10-22-acceptable-loss: no save older than 2 minutes may be lost). One exception: when
+    O9 could not read a derived file (another program holds it), a group a kill left half done
+    cannot be finished, so the open does not seal and the 2-minute seal (§5.13) takes them. A
+    seal that fails at the open keeps its pending files and says why in Notices; the open goes
+    on writable.
 ```
 
 Open refuses only for: another process holds the lock (`LockHeld`, which names the holder),

@@ -831,8 +831,13 @@ impl SessionRegistry {
             checks: Default::default(),
             align: Default::default(),
         });
-        // Subscribed before the slot is open, so no step of the store is missed.
+        // Subscribed before the slot is open, so no step of the store is missed. The pump's
+        // first snapshot and lists are read here, before any reply carries them: read when the
+        // pump first runs, a keep or a new conflict in between would match them, and the pages
+        // would not hear of it until a reload.
         let events = handle.subscribe();
+        let previous = session.read();
+        let outside = session.handle.outside_edits();
         self.inner.bus.publish(Event::Session {
             at: session.scope.clone(),
             event: SessionEvent::Opened,
@@ -851,9 +856,13 @@ impl SessionRegistry {
                 None => false,
             }
         };
-        self.inner
-            .runtime
-            .spawn(pump(self.inner.bus.clone(), session.clone(), events));
+        self.inner.runtime.spawn(pump(
+            self.inner.bus.clone(),
+            session.clone(),
+            events,
+            previous,
+            outside,
+        ));
         if close_now {
             self.maybe_close(folder, slot_id);
         }
@@ -1205,9 +1214,9 @@ async fn pump(
     bus: EventBus,
     session: Arc<ProjectSession>,
     mut events: mpsc::UnboundedReceiver<StoreEvent>,
+    mut previous: CountingSnapshot,
+    mut outside: tc_api::session::OutsideEdits,
 ) {
-    let mut previous = session.read();
-    let mut outside = session.handle.outside_edits();
     session.checks().begin(previous.seq());
     while let Some(event) = events.recv().await {
         let event = match event {

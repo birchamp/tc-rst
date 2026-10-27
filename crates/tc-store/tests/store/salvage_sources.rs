@@ -852,6 +852,8 @@ mod quarantine_last_look_probe {
         if matches!(change, OutsideCopyChange::Replace) {
             assert_eq!(rig.fs.peek(&changed_copy).as_deref(), Some(REPLACEMENT));
         }
+        // The open sealed the salvage its O7 wrote; its materialization lists the pack.
+        handle.wait_idle();
         assert_valid_burrito(&rig.fs, &folder);
         wrapped.deny_new_copies.store(false, Ordering::SeqCst);
         handle.close().unwrap();

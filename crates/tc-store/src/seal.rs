@@ -176,6 +176,8 @@ impl Project {
             Err(crate::atomic::WriteError::NotWritten(e)) => return Err(e),
         };
         let abs = self.folder.path(&rel);
+        // Taken before the read-back: a change after it moves the time, so it is read again.
+        let stat = self.vfs.metadata(&abs).ok().map(|m| (m.len, m.mtime_ns));
         let back = self
             .vfs
             .read(&abs)
@@ -225,7 +227,7 @@ impl Project {
                     Vec::new()
                 },
                 blob,
-                seen: None,
+                seen: stat.filter(|(len, _)| *len == back.len() as u64),
                 damaged: false,
             },
         );
@@ -263,6 +265,7 @@ impl Project {
             abs: self.folder.path(rel),
             kind,
             size: bytes.len() as u64,
+            mtime_ns: None,
         };
         let targets: Vec<(JournalFile, u32, &[u8])> = to
             .iter()
@@ -273,6 +276,7 @@ impl Project {
                         abs: self.folder.path(&w.rel),
                         kind: JournalKind::Pack,
                         size: w.bytes.len() as u64,
+                        mtime_ns: None,
                     },
                     w.number,
                     w.bytes.as_slice(),

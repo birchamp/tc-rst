@@ -210,6 +210,8 @@ struct Save {
     fate: Fate,
     /// A file in the folder showed it when the last open read the journal.
     shown: bool,
+    /// [`Run::elapsed_ms`] when it was saved.
+    at_ms: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -327,6 +329,11 @@ impl DeniedAccess {
 )]
 pub struct Run {
     rig: Option<Rig>,
+    /// The running store's clock, which [`Step::Advance`] moves with the folder's.
+    clock: std::sync::Arc<tc_store::ManualClock>,
+    /// The time [`Step::Advance`] has moved, the clock the 2 minutes of the acceptable-loss
+    /// ruling are measured on.
+    elapsed_ms: i64,
     folder: PathBuf,
     handle: Option<ProjectHandle>,
     session: u32,
@@ -411,9 +418,11 @@ fn outside_notice(notice: &Notice) -> bool {
 impl Run {
     pub fn new() -> Self {
         let (fs, folder) = template();
-        let rig = Self::rig_on(fs.copy());
+        let (rig, clock) = Self::rig_on(fs.copy());
         let mut run = Self {
             rig: Some(rig),
+            clock,
+            elapsed_ms: 0,
             folder: folder.clone(),
             handle: None,
             session: 0,
@@ -499,10 +508,20 @@ impl Run {
 
     /// A store on `fs`. Outside edits the watcher misses leave `metadata.json` listing bytes the
     /// folder no longer holds until the app looks, so the rig does not check the burrito here.
-    fn rig_on(fs: FaultFs) -> Rig {
-        let rig = rig_as(fs, APP, "host-1");
+    fn rig_on(fs: FaultFs) -> (Rig, std::sync::Arc<tc_store::ManualClock>) {
+        let (config, clock) = config(&fs, APP, "host-1");
+        let store = tc_store::Store::start(config).unwrap();
+        store.wait_cleanup();
+        watch_burrito(&store, &fs);
+        let rig = Rig { fs, store };
         damaged_on_purpose(&rig);
-        rig
+        (rig, clock)
+    }
+
+    fn restart_on(&mut self, fs: FaultFs) {
+        let (rig, clock) = Self::rig_on(fs);
+        self.rig = Some(rig);
+        self.clock = clock;
     }
 
     /// The process died: the next one finds the files as a kill or a power cut leaves them.
@@ -520,7 +539,7 @@ impl Run {
             drop(handle);
         }
         self.rig = None;
-        self.rig = Some(Self::rig_on(fs));
+        self.restart_on(fs);
         // A power cut can take the app's last write back to an earlier one of its own: that
         // earlier write is what the app placed last, whatever another program also put.
         for rel in [USFM, META] {
@@ -827,6 +846,7 @@ impl Run {
                         session,
                         fate: Fate::Kept,
                         shown: false,
+                        at_ms: self.elapsed_ms,
                     }),
                     Err(e) => self.refused_save(&format!("the save of 1:{v}"), e)?,
                 }
@@ -878,6 +898,7 @@ impl Run {
                                 session,
                                 fate: Fate::Kept,
                                 shown: false,
+                                at_ms: self.elapsed_ms,
                             });
                         }
                     }
@@ -905,6 +926,7 @@ impl Run {
                         session,
                         fate: Fate::Kept,
                         shown: false,
+                        at_ms: self.elapsed_ms,
                     }),
                     Err(e) => self.refused_save("the save of the name", e)?,
                 }
@@ -954,7 +976,7 @@ impl Run {
                 // The process ends; the next one sees the files as they are, and the files
                 // other programs hold stay held.
                 let fs = self.fs().crash(false);
-                self.rig = Some(Self::rig_on(fs));
+                self.restart_on(fs);
                 self.relock();
                 self.log.push("closed".into());
                 return Ok(());
@@ -1295,11 +1317,9 @@ impl Run {
         let fs = self.fs();
         let path = self.path(&rel);
         self.outside = true;
-        let before = self.copies();
-        fs.put_unseen(&path, &bytes, None);
-        // A byte changed in place takes the bytes from a session that read the file at its
-        // open, as a cut in place does: it holds only the saves it made itself.
-        self.lost_copies(before, false);
+        // In place: the handles the running session opened read the new byte too, so it
+        // holds the line only if it kept the bytes its open verified (§5.11 K1, §4.4).
+        self.by_another_program(|| fs.change_in_place(&path, &bytes));
         self.log.push(format!("changed byte {i} of {rel}"));
         if self.handle.is_some() {
             self.check(false)
@@ -1434,6 +1454,7 @@ impl Run {
             .map(|s| open && self.in_history(s))
             .collect();
         let session = self.session;
+        let elapsed = self.elapsed_ms;
         for (i, save) in self.saves.iter_mut().enumerate() {
             save.shown &= shown[i];
             if save.fate == Fate::InMemory && !readable && save.session != session && !held_after[i]
@@ -1453,8 +1474,9 @@ impl Run {
             if open && (save.session == session || (readable && held[i])) {
                 // The running session holds it (it saved it, or read it at its open), and
                 // writes it again at its next seal (§5.11 K1); until then it may write over a
-                // file that shows it.
-                if journal_before[i] && !journal_after[i] {
+                // file that shows it. A kill may take it only while it is at most 2 minutes
+                // old (ruling 2026-10-22-acceptable-loss): an older save is sealed already.
+                if journal_before[i] && !journal_after[i] && elapsed - save.at_ms <= 120_000 {
                     save.fate = Fate::InMemory;
                 }
             } else if before[i] && !after[i] {
@@ -1994,6 +2016,12 @@ impl Run {
             Step::Focus => self.focus(),
             Step::Advance => {
                 self.fs().advance(Duration::from_secs(10));
+                self.elapsed_ms += 10_000;
+                self.clock.advance(10_000);
+                // The actor's timer fires in that time: a seal that is due runs now.
+                if let Some(handle) = &self.handle {
+                    handle.wait_idle();
+                }
                 Ok(())
             }
         };
@@ -2990,12 +3018,10 @@ fn metadata_unreadable_but_replaceable() -> Vec<Step> {
 }
 
 /// Found by proptest on 2026-10-26 (the G5 lane's gate on main 29faa1ef): a save sealed into
-/// a pack that no commit holds yet (the process died between the seal and the commit), its
-/// pending file deleted and the book file reverted by other programs, then one byte of the
-/// pack changed in place while a later session that only read it runs. The only copy is
-/// damaged, so the save is gone (§4.4 salvages verified lines, and the line is not one); the
-/// oracle took the reading session for a holder of the bytes, as it does not for a cut in
-/// place.
+/// a pack no commit holds yet, its pending file deleted and the book file reverted by other
+/// programs, then one byte of the pack changed in place (same size) while a later session
+/// that only read it runs. The seal stored the pack as a blob (§5.11 K3) and the manifest
+/// kept it, so the next open writes the pack back from it (§4.4, LOSS-2).
 fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
     let kill = |at| {
         Some(Kill {
@@ -3049,8 +3075,134 @@ fn a_flipped_pack_after_a_cut_pending_and_a_reverted_book() -> Vec<Step> {
     ]
 }
 
+/// Found by proptest on 2026-10-26 (gate/batch-24): a save in a pending file, its session
+/// killed, then one byte of that save's line changed in place and the next session saves
+/// again and is killed. The book file still showed the save when the damage was found, so
+/// the open keeps it in a copy with *Bring it back* (§6.2 N4). The 2d912e4a oracle missed it
+/// because its flip replaced the file, which the open's handle still read whole (LOSS-2).
+fn a_flipped_pending_file_under_a_session_that_saves_again() -> Vec<Step> {
+    let usfm = Holdable::File(File::Usfm);
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Name),
+        act(Act::Leave),
+        Step::Lock {
+            what: usfm,
+            on: true,
+        },
+        Step::Open,
+        act(Act::Save(1)),
+        Step::Lock {
+            what: usfm,
+            on: false,
+        },
+        killed(Act::Save(1), 30),
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 136,
+            at: 0,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        killed(Act::Close, 0),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+    ]
+}
+
+/// A save another save of the same verse replaced, so only History shows it, in a pending
+/// file a later session read at its open; another program changes a byte of its line in
+/// place, and the session closes. The handle the open kept reads the damage too: the seal
+/// writes the line again from the bytes the open verified (§5.11 K1, LOSS-2).
+fn a_superseded_save_read_at_open_and_changed_in_place() -> Vec<Step> {
+    vec![
+        act(Act::Save(1)),
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        act(Act::Close),
+    ]
+}
+
+/// Two and a half minutes of [`Step::Advance`].
+fn over_two_minutes() -> Vec<Step> {
+    vec![Step::Advance; 13]
+}
+
+/// A save a killed session left in a pending file, older than 2 minutes when a later session
+/// opens; a byte of the pending file changed in place, the book file put back as it was, and
+/// that session killed too. The open sealed it before anything else (ruling
+/// 2026-10-22-acceptable-loss: no save older than 2 minutes may be lost, LOSS-2).
+fn an_inherited_save_older_than_two_minutes() -> Vec<Step> {
+    let mut steps = vec![act(Act::Save(1)), crash()];
+    steps.extend(over_two_minutes());
+    steps.extend([
+        Step::Open,
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        crash(),
+    ]);
+    steps
+}
+
+fn an_own_save_older_than_two_minutes() -> Vec<Step> {
+    let mut steps = vec![act(Act::Save(1))];
+    steps.extend(over_two_minutes());
+    steps.extend([
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Flip {
+            journal: Journal::Pending,
+            which: 0,
+            at: 0,
+        },
+        crash(),
+    ]);
+    steps
+}
+
 fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
     vec![
+        (
+            "a_flipped_pending_file_under_a_session_that_saves_again",
+            a_flipped_pending_file_under_a_session_that_saves_again(),
+        ),
+        (
+            "a_superseded_save_read_at_open_and_changed_in_place",
+            a_superseded_save_read_at_open_and_changed_in_place(),
+        ),
+        (
+            "an_inherited_save_older_than_two_minutes",
+            an_inherited_save_older_than_two_minutes(),
+        ),
+        (
+            "an_own_save_older_than_two_minutes",
+            an_own_save_older_than_two_minutes(),
+        ),
         (
             "a_flipped_pack_after_a_cut_pending_and_a_reverted_book",
             a_flipped_pack_after_a_cut_pending_and_a_reverted_book(),
@@ -3224,8 +3376,35 @@ fn oracle_independence_false_adoption() {
 
 fn assert_kept(steps: &[Step]) {
     if let Err(lost) = Run::run(steps) {
-        panic!("{lost}");
+        panic!("INV-NO-EXCUSED-LOSS: {lost}");
     }
+}
+
+#[test]
+fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
+    if let Err(lost) = Run::run(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book()) {
+        panic!("INV-PACK-RESTORE: {lost}");
+    }
+}
+
+#[test]
+fn a_flipped_pending_file_under_a_session_that_saves_again_is_kept() {
+    assert_kept(&a_flipped_pending_file_under_a_session_that_saves_again());
+}
+
+#[test]
+fn an_inherited_save_older_than_two_minutes_is_sealed_at_the_open() {
+    assert_kept(&an_inherited_save_older_than_two_minutes());
+}
+
+#[test]
+fn an_own_save_older_than_two_minutes_is_sealed_by_then() {
+    assert_kept(&an_own_save_older_than_two_minutes());
+}
+
+#[test]
+fn a_superseded_save_changed_in_place_is_written_again_from_the_opens_bytes() {
+    assert_kept(&a_superseded_save_read_at_open_and_changed_in_place());
 }
 
 #[test]
@@ -3417,7 +3596,8 @@ fn a_valid_outside_metadata_name_is_not_retired_as_converged_at_a_crash() {
         target: Target::Name,
         session: 0,
         fate: Fate::Kept,
-        shown: false
+        shown: false,
+        at_ms: 0,
     }));
     run.finish().unwrap();
 }

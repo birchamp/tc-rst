@@ -126,6 +126,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | P | Scale: re-apply on post-S2 main; tooling first, speed-ups after S3's core | S2 | 2-3 d |
 | X | Door43 sync and USB exchange (`tc-sync`). Steps 1-3 run beside S3; intake waits for S3's core | S2, DOM-1, T | 4-6 d |
 | LOSS-1 | Write the loss tests STORAGE §15 promises that no card wrote | CHK-3 | 2 d |
+| LOSS-2 | Fix two store losses the model test wrongly excused |  | 1-2 d |
 | PUSH-1 | A large push goes to Door43 as a chain of commits, so a poor link can finish it | LOSS-1, E1a | 2-3 d |
 | I | Import (`tc-import`). The pure core can start after DOM-2; the store write after S3's core; the team move after X | S2, DOM-2 | 4-7 d |
 | V | Old projects keep working; the owner freezes format 1.0 | X, I, T, S3, owner H9 | 1.5-3 d |
@@ -146,6 +147,7 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | E1c | One name for a project: open from Door43 asks none (H14, #837) | E1b | 0.5 d |
 | E1d | E1a's two unwritten tests | E1a | 0.5 d |
 | ALIGN-LEAVE | Home asks before it leaves an aligner click behind | E1d | 0.5 d |
+| FIX-KEPT-EVENT | Lost work kept just after a project opens reaches the pages without a reload | none | 0.25 d |
 | E2 | USB exchange | X, D2, C7b, UI-2, UI-3a | 4-4.5 sessions |
 | F1 | Import | I, UI-2, UI-3a | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
@@ -177,7 +179,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, BURRITO-HOLD | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, BURRITO-HOLD | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path

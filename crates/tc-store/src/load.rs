@@ -33,6 +33,9 @@ pub struct JournalFile {
     pub abs: PathBuf,
     pub kind: JournalKind,
     pub size: u64,
+    /// The modification time the listing saw, so a pack read at open is not read again
+    /// while its size and time stand (§4.4); `None` for a file the app has just written.
+    pub mtime_ns: Option<i64>,
 }
 
 /// What reading one file gave.
@@ -61,8 +64,9 @@ pub struct FileFacts {
 /// on Windows, a sharing violation) is still listed, with size 0: the load opens it, fails
 /// the same way, and reports it as unreadable (`FileUnreadable`, §4.4, §6.1), so one file
 /// that cannot be statted never fails the listing, and the open (L65).
-fn size_of(vfs: &dyn Vfs, abs: &std::path::Path) -> u64 {
-    vfs.metadata(abs).map_or(0, |m| m.len)
+fn size_of(vfs: &dyn Vfs, abs: &std::path::Path) -> (u64, Option<i64>) {
+    vfs.metadata(abs)
+        .map_or((0, None), |m| (m.len, Some(m.mtime_ns)))
 }
 
 /// Lists the packs and pending files of `folder`, temporary files left out (O2 handled
@@ -87,12 +91,13 @@ pub fn list(vfs: &dyn Vfs, folder: &Folder) -> io::Result<Vec<JournalFile>> {
             match entry.kind {
                 EntryKind::Dir => stack.push((abs, child)),
                 EntryKind::File => {
-                    let size = size_of(vfs, &abs);
+                    let (size, mtime_ns) = size_of(vfs, &abs);
                     out.push(JournalFile {
                         rel: child,
                         abs,
                         kind: JournalKind::Pack,
                         size,
+                        mtime_ns,
                     });
                 }
                 EntryKind::Other => {}
@@ -108,12 +113,13 @@ pub fn list(vfs: &dyn Vfs, folder: &Folder) -> io::Result<Vec<JournalFile>> {
                     continue;
                 }
                 let abs = pending.join(&entry.name);
-                let size = size_of(vfs, &abs);
+                let (size, mtime_ns) = size_of(vfs, &abs);
                 out.push(JournalFile {
                     rel: format!("{PENDING}/{name}"),
                     abs,
                     kind: JournalKind::Pending,
                     size,
+                    mtime_ns,
                 });
             }
         }
@@ -137,18 +143,33 @@ fn load_one(
 ) -> io::Result<(FileFacts, Vec<FoldInput>, Arc<dyn ReadHandle>)> {
     let handle: Arc<dyn ReadHandle> = Arc::from(vfs.open(&file.abs)?);
     let size = handle.len();
+    // A pending file is small and sealed within minutes: it is read whole, and the fold reads
+    // its values from these bytes, so a change made to the file in place later (which a
+    // handle would read too) cannot take a line the open verified (§5.11 K1).
+    let kept: Option<Arc<[u8]>> = match file.kind {
+        JournalKind::Pending => {
+            let mut bytes = vec![0u8; size as usize];
+            handle.read_at(&mut bytes, 0)?;
+            Some(bytes.into())
+        }
+        JournalKind::Pack => None,
+    };
     let candidate = index
         .and_then(|i| i.section_at(&file.rel))
         .filter(|s| s.key().size == size);
     if let Some(section) = candidate {
         buffer.resize(CHUNK, 0);
         let mut fingerprint = Fingerprinter::new();
-        let mut at = 0u64;
-        while at < size {
-            let n = CHUNK.min((size - at) as usize);
-            handle.read_at(&mut buffer[..n], at)?;
-            fingerprint.update(&buffer[..n]);
-            at += n as u64;
+        if let Some(bytes) = &kept {
+            fingerprint.update(bytes);
+        } else {
+            let mut at = 0u64;
+            while at < size {
+                let n = CHUNK.min((size - at) as usize);
+                handle.read_at(&mut buffer[..n], at)?;
+                fingerprint.update(&buffer[..n]);
+                at += n as u64;
+            }
         }
         let key = FileKey {
             path: file.rel.clone().into(),
@@ -168,12 +189,18 @@ fn load_one(
                     changes,
                 },
                 loaded.inputs,
-                handle,
+                values_handle(handle, kept),
             ));
         }
     }
-    let mut bytes = vec![0u8; size as usize];
-    handle.read_at(&mut bytes, 0)?;
+    let bytes: Arc<[u8]> = match &kept {
+        Some(bytes) => bytes.clone(),
+        None => {
+            let mut bytes = vec![0u8; size as usize];
+            handle.read_at(&mut bytes, 0)?;
+            bytes.into()
+        }
+    };
     let loaded = match file.kind {
         JournalKind::Pack => load_pack(&file.rel, &bytes, project, number),
         JournalKind::Pending => load_pending(&file.rel, &bytes, project, number),
@@ -188,8 +215,35 @@ fn load_one(
             changes,
         },
         loaded.inputs,
-        handle,
+        values_handle(handle, kept),
     ))
+}
+
+/// The handle the fold reads a file's values through: the bytes kept, for a pending file.
+fn values_handle(handle: Arc<dyn ReadHandle>, kept: Option<Arc<[u8]>>) -> Arc<dyn ReadHandle> {
+    match kept {
+        Some(bytes) => Arc::new(Held(bytes)),
+        None => handle,
+    }
+}
+
+/// Bytes read and verified once, read again from memory.
+pub(crate) struct Held(pub Arc<[u8]>);
+
+impl ReadHandle for Held {
+    fn len(&self) -> u64 {
+        self.0.len() as u64
+    }
+
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
+        let start = usize::try_from(offset).map_err(|_| io::ErrorKind::UnexpectedEof)?;
+        let bytes = start
+            .checked_add(buf.len())
+            .and_then(|end| self.0.get(start..end))
+            .ok_or(io::ErrorKind::UnexpectedEof)?;
+        buf.copy_from_slice(bytes);
+        Ok(())
+    }
 }
 
 /// The open's rules need the change ids of pending files and of packs that replace others

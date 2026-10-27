@@ -582,6 +582,7 @@ impl Writer {
     /// file is left as it is, and the path stays dirty, so the next materialization reads it
     /// again (M1) and decides it there.
     fn unreadable_derived(&mut self, rel: &str, file: &DerivedFile) {
+        self.derived_unread = true;
         self.dirty.files.insert(file.clone());
         self.notice(
             Notice::FileUnreadable {
