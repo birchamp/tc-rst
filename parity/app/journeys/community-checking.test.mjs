@@ -136,7 +136,7 @@ browserTest('cc_the_export_menu_lists_the_exports_and_runs_none_until_one_is_cho
     assert.deepEqual(await items.allTextContents(), ['USFM, aligned', 'USFM, plain', 'Scripture Burrito (.zip)'], 'a browser has no PDF item');
     const off = [];
     for (const item of await items.all()) if (await item.isDisabled()) off.push(await item.textContent());
-    assert.deepEqual(off, ['Scripture Burrito (.zip)'], 'D2 runs the USFM exports; the Burrito zip waits for E2');
+    assert.deepEqual(off, [], 'D2 runs the USFM exports and E2 the Burrito zip');
     await page.keyboard.press('Escape');
     assert.deepEqual(requests.api(mark), [], 'no export runs');
   });
