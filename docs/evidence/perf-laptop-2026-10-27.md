@@ -205,3 +205,43 @@ From the counters `storebench materialize` printed for the last run of each case
 - A suggestion's time grows with the model (52 ms at 3,994 aligned verses, 232 ms at 7,958); that
   is the code's work, not this machine's, so it can be profiled on any machine. The laptop
   figures above are its reference.
+
+## Part 4: the UI rows in the installed app, on a Psalms project
+
+- Projects: two translationCore 3 Psalms projects from the owner, imported through the app's TC3
+  importer with "Use installed versions": `ar_avd` (2,461 verses, all aligned, 353 check
+  decisions in the file) and `en_ult` (2,461 verses, 1,997 aligned). Measured on `ar_avd`.
+- Same installed build as Part 3 (unsigned 4.1.0-preview, 05d7a661). The app was driven through
+  the Chrome DevTools Protocol (`--remote-debugging-port`): clicks in the page, and keys and wheel
+  events as trusted input (`Input.dispatchKeyEvent`, `Input.dispatchMouseEvent`). Each time is
+  from the click or key to the change in the page, then the next frame. Scripts:
+  `C:\tc4-g0\perf-tools\ui-*.mjs`. The display runs at 60 Hz (61.3 fps measured).
+
+| Row | Budget | Figure | Result |
+|---|---|---|---|
+| Import a tC3 project (Psalms, 2,461 verses) | 2 min, with progress | 3.9 s; the progress shows at 1.03 s | met; the progress came later than rule 4's 300 ms |
+| Open a book (project open): Home to the first passage | 150 ms; verses in 50 ms | median 1,266 ms, p95 1,470 ms (10 runs); it opens on Understand, which loads the passage with its helps | **missed** |
+| Move to another chapter (Translate) | 16 ms | median 34 ms, range 25 to 58 ms, Psalms 2 to 21 (DOM ready 21 to 48 ms); Psalm 119 145 ms; leaving 119 124 ms | **missed** |
+| Typing in a verse, input to paint | 16 ms | event timing of keydown: median 24 ms, p95 32 ms, max 40 ms, 89 of 100 over 16 ms; a bare textarea added to the same page, no app code: median 24 ms, p95 32 ms, max 48 ms, 83 of 100 over 16 ms | the app adds nothing measurable; no textarea meets 16 ms input-to-paint at 60 Hz here. The row needs a definition (owner) |
+| Save a section until "Saved" | 25 ms | median 16.5 ms, p95 28.5 ms (15 saves of one keystroke); the first save after 100 keystrokes 134 ms | at the edge |
+| Open the Check screen (Translation Words, 7,683 items) | 250 ms first; 20 ms from the cache | 126 ms first; then median 125 ms, p95 140 ms (7) | first **met**; from the cache **missed** (no speed-up seen) |
+| Change filter or sort in the rail | 16 ms | page settled in 2 to 11 ms (To do, All, Invalid, By verse, By word; 30 changes) | met |
+| Record a decision | 25 ms until "Saved" | the header never shows "Saving" for a decision; the button shows the new state in median 90.5 ms, range 87 to 107 ms (12) | **missed** on the visible response |
+| Long lists: the check rail (virtualized, 69 to 101 elements for 7,683 items) | 16 ms a frame | wheel 200 px a tick: frames median 16.7 ms, p95 19.0, max 21.3; 1,000 px a tick: p95 22, p99 33, 90 of 237 frames over 20 ms | met at normal speed; frames drop on fast flings |
+| Long lists: Psalm 119 in Translate (not virtualized: 2,331 elements; helps pane 4,519) | virtualized; 16 ms a frame | frames median 16.7 ms, p95 18.3, max 20.9 (centre); helps p95 18.2, max 30.3 | frame time met; "virtualized" not met |
+| Open the aligner on the longest verse (17:14, 44 ULT words) | 30 ms | 220 to 245 ms to the word bank, 236 to 260 ms painted (5 runs); 10-word verses the same 221 to 238 ms | **missed**; the time does not grow with the verse, so it is a fixed cost |
+| Memory: `tc4` plus every Electronite process, Psalms open, a minute after the last action | 1 GiB (whole Bible) | 473 MiB (three readings): tc4 151 MiB, Electronite 226 + 67 + 25 + 4 MiB | met for Psalms; the whole-Bible case is not measured |
+
+### Leads that are not speed (for the owner and the lanes)
+
+- **The resolved count lags a decision.** On one Translation Words item: Mark valid, then To do,
+  left "1 of 7683 resolved" and "To do · 7682" while the item showed To do; Invalid, then To do,
+  brought it to 0. The tool list then still said "1 of 7683 resolved". The counts and the item
+  disagreed for at least 1.5 s after each click.
+- **The import marks most alignments invalid.** After importing `ar_avd` with the installed
+  original-language versions, Align shows 0 of 2,461 verses aligned: Invalid 2,192, To do 269.
+  Verse 1:1, which was not edited, says "The draft changed since this alignment was made" and sent
+  two words back to the word bank (16 of 18 placed). The alignments are kept, not lost, but the
+  translator is told their draft changed when it did not. The import review had said all 2,461
+  verses were aligned.
+- **An Arabic project is shown LTR.** Home's card for `ar_avd` says "LTR".

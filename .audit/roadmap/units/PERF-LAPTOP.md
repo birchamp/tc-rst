@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: S2's store measurements on the owner's Linux machine, 2026-10-18)
 merged: none
 updated: 2026-10-27
-next: Step 1 is partly done (docs/evidence/perf-laptop-2026-10-27.md): the rows that need a Psalms project in the installed app, the cold open after a reboot, memory growth, USB export, sync, tC4 import and the signed start-up rows remain. Step 2 cards are written; run board.py --check (no Python on the laptop).
+next: Step 1 is done except the cold open after a reboot, memory growth with history, USB export, sync, and the start-up rows on the signed installer (they wait for it; the unsigned figures stand). Step 2 has 10 cards. A verify line (someone other than the measurer) is still due.
 blocked_by: none
 ---
 
@@ -101,3 +101,5 @@ here is named and has a card, before it reaches more translators.
 - 2026-10-27 08:11 EDT | integration lane (Claude Code 3d07d5f8) | create | none | Card created by owner ruling H17 (measure, don't block), as the orchestrator asked. REL-1 does not depend on it | .audit/roadmap/rulings/2026-10-27-H17.md
 - 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | Store rows, release timing tests, app benches and the installed unsigned 4.1.0-preview launch rows measured; see "Not yet measured" for what is left | docs/evidence/perf-laptop-2026-10-27.md
 - 2026-10-27 | reference-laptop session (Claude Code) | step 2 | none | Cards written for the five missed rows: PERF-CHECKPOINT, PERF-MATERIALIZE-BOOK, PERF-CLOSE, PERF-LEXICON-LOAD, PERF-SUGGEST; open-rows table in PERFORMANCE.md names them. board.py --check not run here (no Python) | docs/PERFORMANCE.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | UI rows measured in the installed app on the owner's tC3 Psalms projects (Part 4): open a book, chapter move, decision, aligner open and the cached Check open miss; typing needs a definition (a bare textarea measures the same); three non-speed leads recorded | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 2 | none | Five more cards: PERF-OPEN-BOOK, PERF-CHAPTER, PERF-DECISION, PERF-ALIGNER-OPEN, PERF-CHECK-CACHE; in ROADMAP.md M5 and DONE's depends | .audit/roadmap/ROADMAP.md
