@@ -14,11 +14,12 @@ fail-fast = false
 filter = 'binary_id(tc-api::roundtrip)'
 slow-timeout = { period = "60s", terminate-after = 20 }
 
-# A crash at every write of a scenario project: 190 to 277 s locally when measured; 675 s alone
-# and past 600 s in a gate on 2026-10-26 with other sessions' builds loading the machine.
+# A crash at every write of a scenario project: 190 to 277 s locally when measured; 675 s by
+# itself and past 900 s in a gate at four threads on 2026-10-26, with other sessions' builds
+# loading the machine (load 7 to 11).
 [[profile.default.overrides]]
 filter = 'binary_id(tc-app::app) & test(=app::store_scenario::a_crash_while_a_scenario_project_is_written_leaves_no_half_project)'
-slow-timeout = { period = "60s", terminate-after = 15 }
+slow-timeout = { period = "60s", terminate-after = 30 }
 
 # tc-server's never_blocked reads how late a timer wakes, which other tests running at once spoil:
 # libtest ran its binary alone and its two tests one at a time (a static lock that cannot reach
