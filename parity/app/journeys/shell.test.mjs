@@ -132,8 +132,10 @@ browserTest('the_language_switch_keeps_typed_text: a preview, Cancel and Apply l
 
 browserTest('boot_adds_no_request: one hello, the nine catalogs, the stream and Home\'s reads', async () => {
   await withApp(async ({ page, env }) => {
-    const requests = recordRequests(page);
+    // Recorded from the blank page on: the Home withApp loaded may still be finishing its
+    // cards' second reads, and those are not this boot's (seen on CI, 2026-10-26).
     await page.goto('about:blank');
+    const requests = recordRequests(page);
     await page.goto(`${env.origin}/#t=${env.token}`);
     await page.getByTestId('account-menu').waitFor();
     await page.waitForFunction(() => window.__tcIdle === true);
