@@ -834,9 +834,9 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/source-texts.png",
-      "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
+      "sha256": "a2b44fbf28001d0de33d13d41835d4c1d42b547a0bc4d2bae3360e0c746f6085",
       "dom": "dom/source-texts.json",
-      "domSha256": "436e032a51425c78366ebef4039f06ffe5b529597f22c43e2234baef6b0e4a6f",
+      "domSha256": "2174a60d60c6557c454cde9ead64d77c73236b270ef77fe6930a2e42a5327c24",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
@@ -2257,7 +2257,7 @@
       "png": "screens/upgrade-set.png",
       "sha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
       "dom": "dom/upgrade-set.json",
-      "domSha256": "ff2ff471215dc79d9e50e42cd929d96c5e1a5b2bfb2b93205346ac91c2ed12bd",
+      "domSha256": "bc5bb35cfa871a185027e8df79dc236deee557803dc1c77ba2f1042a9fdabcb4",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
@@ -2285,7 +2285,7 @@
       "png": "screens/upgrade-set-harmless.png",
       "sha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
       "dom": "dom/upgrade-set-harmless.json",
-      "domSha256": "7de270c8ac04f20cab6d3d0744c59330fd8a171a57415051702cdf72ecf1b0fd",
+      "domSha256": "1066fc15ab152f568494343674cb2bc7203fd4d61b9d2213514006682490fe66",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
@@ -2313,7 +2313,7 @@
       "png": "screens/upgrade-set-blocked.png",
       "sha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
       "dom": "dom/upgrade-set-blocked.json",
-      "domSha256": "d8cd9c50a2e3d5b0aa1853fc0a915c5f9e10faf9d1f98503396c1e2205bc57dc",
+      "domSha256": "019164649577cdb9dd36361c73cfeee66b2c7c763ae0169db9d1bff1eb4f2315",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
@@ -2341,7 +2341,7 @@
       "png": "screens/upgrade-set-error.png",
       "sha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
       "dom": "dom/upgrade-set-error.json",
-      "domSha256": "2d2400984de8f66852b34801c50535f735acfb9707fbed5ddd512a0069772753",
+      "domSha256": "66b556ee6fc3950508720aa8adf177660ee7cf3ed9c1e2537c020b1672e41768",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
@@ -2369,7 +2369,7 @@
       "png": "screens/upgrade-text.png",
       "sha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
       "dom": "dom/upgrade-text.json",
-      "domSha256": "aa626136db9df37b41fe119a11e917540f2696e3737dd49a1ae2c60514062b87",
+      "domSha256": "fcad5d0ee6aadfec866732a953ea61c1d3c0dc26a466316721ecc58bae705b01",
       "trees": {
         "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
         "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",

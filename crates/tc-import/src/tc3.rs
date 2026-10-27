@@ -41,6 +41,10 @@ pub struct Tc3Import {
     pub language: String,
     /// `<language>_<resource>`, lower case: the name tC4 offers.
     pub name: String,
+    /// The manifest's `target_language.name`; `None` when it names none (tC4 #832).
+    pub language_name: Option<String>,
+    /// The manifest's `target_language.direction`; `None` when it is neither `ltr` nor `rtl`.
+    pub direction: Option<Direction>,
     /// Each license the projects name, in order; `""` is a project with none. One entry is
     /// the license; several are a question for the person.
     pub licenses: Vec<String>,
@@ -50,6 +54,13 @@ pub struct Tc3Import {
     pub books: Vec<Tc3Book>,
     /// The resource versions the projects name, for the app to look up.
     pub versions: Vec<VersionRequest>,
+}
+
+/// The direction a tC3 manifest says the target language reads in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    Ltr,
+    Rtl,
 }
 
 /// One book of the import.
@@ -708,6 +719,17 @@ pub fn read(files: &[SourceFile]) -> Result<Tc3Import, ImportRefusal> {
             .to_lowercase()
         })
         .unwrap_or_default();
+    let language_name = first
+        .and_then(|m| text_at(m, &["target_language", "name"]))
+        .map(|n| n.trim().to_owned())
+        .filter(|n| !n.is_empty());
+    let direction = first
+        .and_then(|m| text_at(m, &["target_language", "direction"]))
+        .and_then(|d| match d.trim().to_ascii_lowercase().as_str() {
+            "ltr" => Some(Direction::Ltr),
+            "rtl" => Some(Direction::Rtl),
+            _ => None,
+        });
     let tool_text = |key: &str| {
         projects.iter().find_map(|p| {
             text_at(&p.manifest, &[key, "translationNotes"])
@@ -721,6 +743,8 @@ pub fn read(files: &[SourceFile]) -> Result<Tc3Import, ImportRefusal> {
     Ok(Tc3Import {
         language: languages.into_iter().next().unwrap_or_default(),
         name,
+        language_name,
+        direction,
         licenses,
         contributors,
         gateway,

@@ -1,0 +1,19 @@
+$ tc-heavy cargo test -p tc-app --test app -- <5 names>
+test app::align::store::an_imported_project_shows_its_metadata_language_name_in_settings ... ok
+test app::align::store::a_direction_changed_in_settings_shows_on_home_and_in_every_tool_after_restart ... ok
+test app::import::import_accepts_x_codes_and_refuses_unusable_codes_before_import ... ok
+test app::upgrades::an_offline_update_check_shows_one_plain_sentence ... ok
+test app::port_contract::an_open_asks_no_name_and_keeps_the_teams_name ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 794 filtered out; finished in 2.41s
+
+$ tc-heavy cargo test -p tc-ui --test app --test i18n_runtime -- two_cards_of_one_name_each_say_where_they_live an_import_refusal_shows_a_sentence_not_a_code
+     Running tests/app.rs (target/debug/deps/app-539ad1de5aba7a5a)
+test app::home::two_cards_of_one_name_each_say_where_they_live ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 469 filtered out; finished in 0.00s
+     Running tests/i18n_runtime.rs (target/debug/deps/i18n_runtime-b2b7af83331bcbdd)
+test an_import_refusal_shows_a_sentence_not_a_code ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+$ tc-heavy cargo test -p tc-sync --test sync -- a_tc4_team_repository_is_blocked_and_nothing_changes
+test door43::a_tc4_team_repository_is_blocked_and_nothing_changes ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 46 filtered out; finished in 0.92s

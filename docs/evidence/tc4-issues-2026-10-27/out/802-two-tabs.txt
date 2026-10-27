@@ -1,0 +1,22 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43439/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1745682-1793105781866/sample/projects, Door43: http://127.0.0.1:9)
+# {"marker":{"conflict":"06f228c1aa0abbfe528a0fef730363d07ae913fa16cc6aae98060a9eb4ce4194","versions":2},"value":"Por esta causa te dejé en Creta, para que corrigieras lo deficiente y establecieras ancianos en cada ciudad, como te mandé. (A)","usfmHasB":false,"bErrors":[]}
+# Subtest: two_tabs_on_one_project_never_lose_a_verse
+ok 1 - two_tabs_on_one_project_never_lose_a_verse
+  ---
+  duration_ms: 9553.375046
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18922.800673

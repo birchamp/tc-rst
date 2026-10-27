@@ -1037,19 +1037,20 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
-        "rustSha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
-        "mismatched": 0,
-        "outsideMasks": 0,
+        "rustSha256": "a2b44fbf28001d0de33d13d41835d4c1d42b547a0bc4d2bae3360e0c746f6085",
+        "mismatched": 322,
+        "outsideMasks": 322,
         "masks": [],
-        "diff": null
+        "diff": "diffs/source-texts.png"
       },
       "dom": {
         "tc4Sha256": "c745d67bcc916864c7207bcb57110d2805e482b466cc36e02943753a2b1a30eb",
-        "rustSha256": "436e032a51425c78366ebef4039f06ffe5b529597f22c43e2234baef6b0e4a6f",
+        "rustSha256": "2174a60d60c6557c454cde9ead64d77c73236b270ef77fe6930a2e42a5327c24",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 160: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 360: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 361: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]
@@ -2588,11 +2589,12 @@
       },
       "dom": {
         "tc4Sha256": "e2f481114b999067fd334c68446879439de181f14ece5bcc234133207bc96d6e",
-        "rustSha256": "ff2ff471215dc79d9e50e42cd929d96c5e1a5b2bfb2b93205346ac91c2ed12bd",
+        "rustSha256": "bc5bb35cfa871a185027e8df79dc236deee557803dc1c77ba2f1042a9fdabcb4",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 183: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]
@@ -2616,11 +2618,12 @@
       },
       "dom": {
         "tc4Sha256": "b84f6a3a10a81cf3709bfd958b35e6592623778c3b313c94f1de01b3f6f1f1a2",
-        "rustSha256": "7de270c8ac04f20cab6d3d0744c59330fd8a171a57415051702cdf72ecf1b0fd",
+        "rustSha256": "1066fc15ab152f568494343674cb2bc7203fd4d61b9d2213514006682490fe66",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 181: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 381: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 382: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]
@@ -2644,11 +2647,12 @@
       },
       "dom": {
         "tc4Sha256": "bd079705154e98d59b44279972e0476242a9708b907c073adb46ba099b69ad27",
-        "rustSha256": "d8cd9c50a2e3d5b0aa1853fc0a915c5f9e10faf9d1f98503396c1e2205bc57dc",
+        "rustSha256": "019164649577cdb9dd36361c73cfeee66b2c7c763ae0169db9d1bff1eb4f2315",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 183: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 383: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 384: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]
@@ -2672,11 +2676,12 @@
       },
       "dom": {
         "tc4Sha256": "ee281a93ce73975c64dba2fdda7e81fb2dde0bf50ea1f9fbfdaaab2c8bd231d0",
-        "rustSha256": "2d2400984de8f66852b34801c50535f735acfb9707fbed5ddd512a0069772753",
+        "rustSha256": "66b556ee6fc3950508720aa8adf177660ee7cf3ed9c1e2537c020b1672e41768",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 186: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 386: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 387: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]
@@ -2700,11 +2705,12 @@
       },
       "dom": {
         "tc4Sha256": "249ebb5c2355c76c9c69bf5545c3fa79fd11be1fa808a6aae0728b9cb530ca63",
-        "rustSha256": "aa626136db9df37b41fe119a11e917540f2696e3737dd49a1ae2c60514062b87",
+        "rustSha256": "fcad5d0ee6aadfec866732a953ea61c1d3c0dc26a466316721ecc58bae705b01",
         "scope": null,
         "same": false,
         "declared": [],
         "firstDiffs": [
+          "line 171: tC4                             \"unfoldingWord · notes v89 · words v89 · academy v89\" | rust                             \"unfoldingWord · notes v91 · words v91 · academy v91\"",
           "line 371: tC4                             <span dir=\"rtl\"> | rust                             <span dir=\"ltr\">",
           "line 372: tC4                               \"اردو\" | rust                               \"उर्दू\""
         ]

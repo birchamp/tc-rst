@@ -1,0 +1,48 @@
+$ tc-heavy node --test docs/evidence/tc4-issues-2026-10-27/repro/832-tc3-rtl-badge.test.mjs
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:45755/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1722142-1793105363163/sample/projects, Door43: http://127.0.0.1:9)
+# CARD BEFORE: "TT\\nTita tC3\\nLTR\\nIMPORTED\\ncfm · 1 book · 1 in progress · Only on this computer\\nShare on Door43\\nSave or receive work by USB\\nSettings\\nTitus\\n100%\\n+\\nAdd a book"
+# SETTINGS LANGUAGE NAME: "cfm"
+# SETTINGS.JSON textDirection: rtl
+# METADATA languages[0]: {"name":{"en":"cfm"},"scriptDirection":"rtl","tag":"cfm"}
+# CARD AFTER RELOAD: "TT\\nTita tC3\\nRTL\\ncfm · 1 book · 1 in progress · Only on this computer\\nShare on Door43\\nSave or receive work by USB\\nSettings\\nTitus\\n100%\\n+\\nAdd a book"
+# Subtest: 832: a tC3-imported project set to right to left shows RTL on Home after a reload, and Settings shows its language name
+not ok 1 - 832: a tC3-imported project set to right to left shows RTL on Home after a reload, and Settings shows its language name
+  ---
+  duration_ms: 11278.266273
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: |-
+    Settings shows the metadata language name
+    + actual - expected
+    
+    + 'cfm'
+    - 'Chin, Falam'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Chin, Falam'
+  actual: 'cfm'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/832-tc3-rtl-badge.test.mjs:63:12
+    async withApp (file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:132:20)
+    async file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/832-tc3-rtl-badge.test.mjs:17:3
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21406.683622
+exit 1

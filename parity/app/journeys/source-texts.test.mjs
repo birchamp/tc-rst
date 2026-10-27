@@ -116,6 +116,27 @@ browserTest('Get source texts reads a package only after the internet question, 
   }, { door43: true });
 });
 
+// tC4 #833.5: tC4's registry names v89 under English while this computer has v91 installed.
+browserTest('a package card names the notes, words and academy releases installed here', async () => {
+  await withApp(async ({ page, env }) => {
+    await settings(page).click();
+    await page.getByTestId('settings-manage-sources').click();
+    const modal = page.getByTestId('sources-modal');
+    await modal.waitFor();
+    const choose = page.getByText(en['sources.chooseGateway']);
+    if (!(await choose.count())) await page.getByRole('button', { name: en['sources.changeLanguage'] }).click();
+    await choose.waitFor();
+    const release = (repo) => {
+      const dir = path.join(env.appData, 'resources', 'dcs', 'unfoldingword', repo);
+      const versions = fs.readdirSync(dir).map((sha) => JSON.parse(fs.readFileSync(path.join(dir, sha, 'receipt.json'), 'utf8')).pin.version);
+      assert.equal(versions.length, 1, `${repo}: one release installed`);
+      return versions[0];
+    };
+    const line = en['sources.suiteSeen'].replace('{tn}', release('en_tn')).replace('{tw}', release('en_tw')).replace('{ta}', release('en_ta'));
+    await until('the English card names the installed releases', () => modal.getByText(`unfoldingWord · ${line}`, { exact: true }).count(), 15_000);
+  });
+});
+
 // es-419_gl publishes no resources on this fake: its package says so and offers no download.
 browserTest('a package with nothing for the book says so and offers no download', async () => {
   await withApp(async ({ page }) => {

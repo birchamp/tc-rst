@@ -1,0 +1,43 @@
+$ tc-heavy node --test docs/evidence/tc4-issues-2026-10-27/repro/833-5-source-texts-versions.test.mjs
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43835/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1724991-1793105453187/sample/projects, Door43: http://127.0.0.1:9)
+# ENGLISH CARD: "English\\n\\nunfoldingWord · notes v89 · words v89 · academy v89\\n\\nEnglish"
+# INSTALLED: {"en_tn":["v91"],"en_tw":["v91"],"en_ta":["v91"]}
+# NEW-PROJECT PINS (tc-resources suite.rs): "v91", "v9", "v13", "v3", "v10"
+# Subtest: 833.5: the English package card names the releases that are installed
+not ok 1 - 833.5: the English package card names the releases that are installed
+  ---
+  duration_ms: 6706.470577
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: "the card's notes release v89 is one this computer has or pins"
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/833-5-source-texts-versions.test.mjs:39:12
+    runNextTicks (node:internal/process/task_queues:64:5)
+    process.processImmediate (node:internal/timers:452:9)
+    process.callbackTrampoline (node:internal/async_hooks:130:17)
+    async withApp (file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:132:20)
+    async file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/833-5-source-texts-versions.test.mjs:17:3
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16797.255686
+exit 1
