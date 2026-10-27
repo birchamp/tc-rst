@@ -4,10 +4,10 @@ title: Poem indents are two characters wide, and Tab indents in the Verse editor
 track: A
 lane: app
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
+state: claimed
+owner: tc4-issues session (Claude Code dc817a96)
+branch: track-POEM-TAB
+worktree: .worktrees/track-POEM-TAB
 depends: []
 needs_owner: []
 proves: []
@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: REF1b)
 merged: none
 updated: 2026-10-27
-next: Claim this card, then do step 1 (a gate test that fails on main).
+next: Step 1: journey cases in parity/app/journeys/translate.test.mjs that fail on main.
 blocked_by: none
 ---
 
@@ -64,3 +64,4 @@ Today a level is 8 characters wide, so poem lines start a third of the way acros
 ## Log
 
 - 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | created | none | from the orchestrator: fix the 4.1.0 blockers the tC4 issue sweep found | docs/evidence/tc4-issues-2026-10-27/open.md
+- 2026-10-27 09:10 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed in its worktree on track-POEM-TAB | .worktrees/track-POEM-TAB
