@@ -33,6 +33,19 @@ said yes.
 
 It is the first build translators can install.
 
+## Funnel card
+
+- **Invariants**:
+  - INV-NO-UNTRANSLATED-STRING-SHIPS: a release tag builds nothing while an interface key is
+    still English (`crates/tc-api/tests/refusals.rs`, release.yml `translations`; H10).
+  - INV-A-RELEASE-HAS-NO-TEST-HOOKS: the shipped `tc4` and page carry no test flag, route or
+    text (`crates/tc4/tests/release.rs`, release.yml `build`).
+- **Wrong states**: a release built from a commit with no gate receipt; a tag pushed without the
+  owner's yes; a Windows installer published unsigned.
+- **Checks**: release.yml's translations, build and smoke jobs on each H3 platform; the P table of
+  step 2.
+- **Human**: the owner's yes before a tag (step 4), H4's signing, H10's translations.
+
 ## Steps
 
 1. Check that every card in `depends` is done on main and the board shows 0 errors.
