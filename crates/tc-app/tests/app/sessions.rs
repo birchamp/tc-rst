@@ -890,7 +890,11 @@ async fn lost_work_kept_at_a_look() {
         matches!(e, SessionEvent::OutsideEdits(_))
     })
     .await;
-    assert_eq!(events.last(), Some(&SessionEvent::OutsideEdits(lost)));
+    assert_eq!(
+        events.last(),
+        Some(&SessionEvent::OutsideEdits(lost)),
+        "INV-KEPT-TOLD: lost work kept at a look reaches the pages without a reload"
+    );
     // The same lists again: no event, so the next one the pages hear is the mode's.
     f.store.emit(&written);
     f.store

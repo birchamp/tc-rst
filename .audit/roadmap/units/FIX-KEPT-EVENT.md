@@ -4,7 +4,7 @@ title: Lost work kept just after a project opens reaches the pages without a rel
 track: A
 lane: app
 milestone: M5
-state: verifying
+state: done
 owner: kept-event session (Claude Code 2e51a251)
 branch: fix-kept-event
 worktree: /home/bot/tc-rst/.worktrees/fix-kept-event
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 0.25 d (basis: SAVE-WAIT, a change of the same size)
-merged: none
+merged: ab1e2ca9
 updated: 2026-10-26
-next: Reviews and --touched done; ready for a merge batch run by the integration lane. Branch fix-kept-event
+next: none
 blocked_by: none
 ---
 
@@ -78,3 +78,4 @@ only after a reload. That hides kept work, against the no-loss rule.
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | verify | 801e7a0e | races-and-protocol lens (subagent, read-only): approve. The repeat of a keep between the baseline and the reply is harmless (the page replaces its lists, tc-ui state.rs:135); a close racing the open no longer has the pump read a closed handle; the test is deterministic on a current-thread runtime with one task per tick; no other spawned task keeps a late baseline. One older point (publish_outside unlocked against the pump) goes to minors | .audit/minors.tsv
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | verify | 801e7a0e | browser-and-parity lens (subagent, read-only): no blocker. The pages keep state (memos over the lists), so a repeated OutsideEdits shows nothing twice; APP-DESIGN difference (g) already says kept work reaches the pages without a reload; no journey covers this timing, the tc-app test does | crates/tc-ui/src/app/web/state.rs
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | note | 801e7a0e | scripts/gates.sh --touched passed (1,042 tests); after the fix, 3,640 runs of the sessions file under tc-heavy (8 at once, 7 minutes) failed none | scripts/gates.sh --touched
+- 2026-10-26 23:55 EDT | integration lane (Claude Code 3d07d5f8) | merge | ab1e2ca9 | merged into main in batch 29, gated by scripts/gates.sh --wait-ci batch-29 | scripts/gates.sh --wait-ci batch-29
