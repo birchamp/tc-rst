@@ -511,15 +511,10 @@ fn read_received(
             let read = tc_store::read_received_pack(name, bytes, id);
             all_valid &= read.valid;
             for change in read.changes {
-                // A device's profile and its resource pins are bookkeeping, not work (owner
-                // ruling 2026-10-26): they join the project but the count leaves them out.
-                // Work is counted once per batch: one save.
+                // Bookkeeping joins the project but is never counted; work is counted once
+                // per batch, one save (`crate::is_bookkeeping`).
                 let body = change.body();
-                let batch = (!matches!(
-                    body.record,
-                    tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
-                ))
-                .then_some(body.batch.id);
+                let batch = (!crate::is_bookkeeping(&body.record)).then_some(body.batch.id);
                 changes.push((body.device, change.id(), batch));
                 inputs.push(tc_journal::fold::FoldInput::from(change));
             }

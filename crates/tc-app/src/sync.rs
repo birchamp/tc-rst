@@ -13,6 +13,7 @@ use tc_api::door43::{LastSyncView, SyncProject};
 use tc_api::ids::{JobId, ProjectRef};
 use tc_api::jobs::{JobKind, Phase, SyncPhase, SyncResultView};
 use tc_api::shown::PersonLabel;
+use tc_journal::change::ChangeBody;
 use tc_journal::fold::{ConflictCounts, ConflictKind};
 use tc_journal::{ChangeId, DeviceId};
 use tc_resources::{ProjectPins, ResourcePin};
@@ -72,9 +73,17 @@ pub fn synced_view(
 ) -> SyncResultView {
     let tally = ConflictTally::of(snapshot.conflict_counts());
     let labels = snapshot.person_labels(me);
-    let senders: BTreeMap<DeviceId, PersonLabel> = received
+    // Bookkeeping (a device's profile, resource pins) is never counted, and work counts once
+    // per batch, one save: a verse and the alignment its edit reflowed are one (owner ruling
+    // 2026-10-26). The replaced rows below keep every change. A sender is named only for
+    // counted work.
+    let work: Vec<ChangeBody> = received
         .iter()
         .filter_map(|id| snapshot.body(id))
+        .filter(|body| !tc_sync::is_bookkeeping(&body.record))
+        .collect();
+    let senders: BTreeMap<DeviceId, PersonLabel> = work
+        .iter()
         .filter_map(|body| {
             let label = labels.get(&body.device)?;
             Some((body.device, crate::wire::scope::person_label(label)))
@@ -87,23 +96,13 @@ pub fn synced_view(
         }
     }
     let (replaced, records) = replaced(snapshot, received, &labels);
-    // A device's profile and its resource pins are bookkeeping, not a teammate's work (owner
-    // ruling 2026-10-26): the count leaves them out, the replaced rows keep them. Work counts
-    // once per batch, one save: a verse and the alignment its edit reflowed are one.
-    let work = received
+    let saves = work
         .iter()
-        .filter_map(|id| snapshot.body(id))
-        .filter(|body| {
-            !matches!(
-                body.record,
-                tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
-            )
-        })
         .map(|body| (body.device, body.batch.id))
         .collect::<std::collections::BTreeSet<_>>()
         .len();
     SyncResultView {
-        received: u32::try_from(work).unwrap_or(u32::MAX),
+        received: u32::try_from(saves).unwrap_or(u32::MAX),
         from,
         // tC4's "{n} conflicts kept the newest version", one per record that held two
         // versions (tC4 sync.mjs): under H5, each such record a newer version settled.

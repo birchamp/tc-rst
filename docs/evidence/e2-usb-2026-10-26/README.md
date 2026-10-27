@@ -34,4 +34,4 @@ Titus 1:1 and saves a file back; A receives B's file.
 
 Ruling (owner, 2026-10-26): "I agree with your recommendations": one USB menu beside Share on Door43; pin bookkeeping left out of the count; "Teammate 1" stays.
 
-Correction (2026-10-26, after the ruling): the second change in picture 13 was the alignment B's verse edit reflowed, not pin bookkeeping. The count now leaves bookkeeping out and counts one per save (a batch), so one verse shows 1 change.
+Correction (2026-10-26, after the ruling): the second change in picture 13 was the alignment B's verse edit reflowed, not pin bookkeeping. The count now leaves bookkeeping out and counts one per save (a batch), so one verse shows 1 change; the pictures were retaken on 2026-10-27 with the menu and the fixed count.

@@ -114,8 +114,8 @@ browserTest('E2: a file saved for a teammate opens on their computer, comes back
     await goHome(a);
     const kept = await a.env.call('door43/lastSync', { project: BIBLE });
     assert.ok(kept.view, 'the receive is the last sync');
-    // B's verse alone: the pins B's open wrote are bookkeeping, not counted (owner ruling
-    // 2026-10-26).
+    // B's one save: the verse and the alignment its edit reflowed are one batch, counted
+    // once; bookkeeping (B's resource pins) is never counted (owner ruling 2026-10-26).
     assert.equal(kept.view.received, 1, JSON.stringify(kept.view));
     assert.equal(kept.view.verseConflicts, 0, JSON.stringify(kept.view));
 

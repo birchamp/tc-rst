@@ -214,16 +214,12 @@ impl Run<'_> {
         for pack in packs {
             for change in tc_store::read_received_pack(&pack.path, &pack.bytes, project).changes {
                 if snapshot.fold().change(&change.id()).is_none() {
-                    // A device's profile (its Door43 username, Q7) is bookkeeping a sync
-                    // writes, and the resource pins an open's upgrade writes are bookkeeping
-                    // too (owner ruling 2026-10-26): neither is work a translator made, so
-                    // the toast never counts them. Work is counted once per batch: one save.
+                    // Bookkeeping is never counted, and work is counted once per batch: one
+                    // save (`crate::is_bookkeeping`).
                     let body = change.body();
-                    let work = !matches!(
-                        body.record,
-                        tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
-                    );
-                    if work && self.received_batches.insert((body.device, body.batch.id)) {
+                    if !crate::is_bookkeeping(&body.record)
+                        && self.received_batches.insert((body.device, body.batch.id))
+                    {
                         *self.received_from.entry(body.device).or_insert(0) += 1;
                     }
                     self.received_ids.push(change.id());
@@ -638,16 +634,11 @@ fn restored_changes(
         .filter_map(|(path, oid)| {
             let blob = repo.find_blob(*oid).ok()?;
             let read = tc_store::read_received_pack(path, blob.content(), project);
-            // A device's profile and resource pins are bookkeeping, as in `count_received`.
+            // Bookkeeping is not work sent again, as in `count_received`.
             let work = read
                 .changes
                 .iter()
-                .filter(|c| {
-                    !matches!(
-                        c.body().record,
-                        tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
-                    )
-                })
+                .filter(|c| !crate::is_bookkeeping(&c.body().record))
                 .count();
             Some(work as u32)
         })
