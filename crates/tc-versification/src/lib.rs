@@ -28,7 +28,7 @@ mod table;
 mod versification;
 
 pub use book::{BookCode, InvalidBookCode};
-pub use fit::{BookShape, best_fits, distance};
+pub use fit::{BookShape, SchemeGuess, TIE_ORDER, best_fits, distance, guess};
 pub use reference::{
     MAX_SPAN_VERSES, MapOutcome, RefPart, RowReference, SchemeReference, Unplaceable, map_reference,
 };

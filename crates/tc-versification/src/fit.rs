@@ -46,6 +46,67 @@ pub fn best_fits(books: &[BookShape]) -> Vec<StandardScheme> {
         .collect()
 }
 
+/// The default a tC3 import offers (H13 and its addendum). The translator can change it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchemeGuess {
+    /// One scheme holds the content exactly.
+    Fits(StandardScheme),
+    /// `eng` holds the content exactly, and so do others: the content did not decide.
+    Undecided,
+    /// Several schemes hold the content exactly, `eng` not among them: `scheme` is the first of
+    /// [`TIE_ORDER`] among `tied`.
+    Tied {
+        scheme: StandardScheme,
+        tied: Vec<StandardScheme>,
+    },
+    /// No scheme holds the content exactly: `scheme` is the nearest.
+    Nearest(StandardScheme),
+}
+
+/// The order a tie without `eng` is settled in.
+pub const TIE_ORDER: [StandardScheme; 5] = [
+    StandardScheme::Org,
+    StandardScheme::Lxx,
+    StandardScheme::Vul,
+    StandardScheme::Rso,
+    StandardScheme::Rsc,
+];
+
+impl SchemeGuess {
+    /// The scheme the review page shows as the default.
+    pub fn scheme(&self) -> StandardScheme {
+        match self {
+            Self::Fits(scheme) | Self::Nearest(scheme) | Self::Tied { scheme, .. } => *scheme,
+            Self::Undecided => StandardScheme::Eng,
+        }
+    }
+}
+
+/// The default for `books`: [`best_fits`], with a tie settled as H13's addendum says.
+pub fn guess(books: &[BookShape]) -> SchemeGuess {
+    let best = best_fits(books);
+    let settled = if best.contains(&StandardScheme::Eng) {
+        StandardScheme::Eng
+    } else {
+        TIE_ORDER
+            .into_iter()
+            .find(|s| best.contains(s))
+            .unwrap_or(StandardScheme::DEFAULT)
+    };
+    let exact = best
+        .first()
+        .is_some_and(|&scheme| distance(books, scheme) == 0);
+    match (exact, best.len()) {
+        (false, _) => SchemeGuess::Nearest(settled),
+        (true, 1) => SchemeGuess::Fits(settled),
+        (true, _) if settled == StandardScheme::Eng => SchemeGuess::Undecided,
+        (true, _) => SchemeGuess::Tied {
+            scheme: settled,
+            tied: best,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,6 +177,45 @@ mod tests {
         assert_eq!(distance(&books, Org), 5 + 16);
         assert_eq!(distance(&books, Eng), 6);
         assert_eq!(best_fits(&books), vec![Eng, Rsc, Rso, Vul]);
+    }
+
+    #[test]
+    fn the_default_settles_a_tie_as_the_addendum_says() {
+        assert_eq!(
+            guess(&[shape("MAL", &[14, 17, 24])]),
+            SchemeGuess::Tied {
+                scheme: Org,
+                tied: vec![Lxx, Org]
+            }
+        );
+        assert_eq!(
+            guess(&[shape("MAL", &[14, 17, 18, 6])]),
+            SchemeGuess::Undecided
+        );
+        assert_eq!(guess(&[shape("3JN", &[15])]), SchemeGuess::Undecided);
+        assert_eq!(guess(&[]).scheme(), Eng);
+        assert_eq!(
+            guess(&[shape("MAL", &[14, 17, 24, 2, 3])]),
+            SchemeGuess::Nearest(Org)
+        );
+        assert_eq!(
+            guess(&[shape("MAL", &[14, 17, 18, 7])]),
+            SchemeGuess::Nearest(Eng)
+        );
+    }
+
+    #[test]
+    fn a_scheme_alone_in_its_counts_is_the_default() {
+        for scheme in StandardScheme::ALL {
+            let v = scheme.scheme().versification();
+            let only = v.books().find_map(|book| {
+                let counts = v.verse_counts(book)?;
+                let one = shape(book.as_str(), counts);
+                (best_fits(std::slice::from_ref(&one)) == vec![scheme]).then_some(one)
+            });
+            let one = only.unwrap_or_else(|| panic!("no book fits {scheme:?} alone"));
+            assert_eq!(guess(&[one]), SchemeGuess::Fits(scheme));
+        }
     }
 
     proptest! {

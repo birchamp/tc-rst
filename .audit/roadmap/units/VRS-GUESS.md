@@ -4,7 +4,7 @@ title: A tC3 import offers the versification its verse counts fit, and the trans
 track: A
 lane: app
 milestone: M5
-state: blocked
+state: building
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-VRS-GUESS
 worktree: .worktrees/track-VRS-GUESS
@@ -15,8 +15,8 @@ no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
 merged: none
 updated: 2026-10-27
-next: When the owner rules on a tie that leaves eng out, put the rule in tc-app's guess (step 2), then unblock.
-blocked_by: owner question on H13 - a tie between schemes that leaves eng out (org and lxx share every count of 22 books, Malachi and Joel among them)
+next: Step 2: carry the guess and the chosen scheme through tc-api and tc-app (crates/tc-app/src/import.rs found, run, carry_over).
+blocked_by: none
 ---
 
 # VRS-GUESS: A tC3 import offers the versification its verse counts fit
@@ -95,3 +95,5 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 11:00 EDT | tc4-issues session (Claude Code dc817a96) | claim | none | claimed in .worktrees/track-VRS-GUESS on track-VRS-GUESS | python3 -I .audit/tools/board.py
 - 2026-10-27 12:10 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | best_fits and distance in tc-versification: a scheme's distance is the verses between each held chapter's last verse and the scheme's, the nearest win, more than one is a tie | cargo test -p tc-versification --lib fit
 - 2026-10-27 12:15 EDT | tc4-issues session (Claude Code dc817a96) | block | none | H13 says a tie gives eng, but an org-shaped Malachi or Joel ties org with lxx (same counts in 22 books), so the literal rule keeps #822's eng for exactly the books it is meant to fix; the ruling gives no rule for a tie that leaves eng out | fit::tests::malachi_in_three_chapters_fits_the_hebrew_numbering
+- 2026-10-27 13:00 EDT | tc4-issues session (Claude Code dc817a96) | unblock | none | the H13 addendum settles a tie without eng (org, lxx, vul, rso, rsc) and content no scheme holds (the nearest, said so) | rulings/2026-10-27-H13.md
+- 2026-10-27 13:20 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | guess and SchemeGuess (Fits, Undecided, Tied, Nearest) settle the default as the addendum says | cargo test -p tc-versification --lib fit
