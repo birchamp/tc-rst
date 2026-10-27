@@ -214,6 +214,7 @@ impl ImportPort for ScriptedImportPort {
         _app: App,
         _files: Vec<SourceFile>,
         _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
+        _frame: tc_versification::StandardScheme,
     ) -> BoxFuture<Result<tc_api::import::CarryOver, ApiError>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let outcome = next(&self.carry_overs);
@@ -229,6 +230,7 @@ impl ImportPort for ScriptedImportPort {
         _details: ImportDetails,
         _found: Vec<(VersionSlot, tc_resources::ResourcePin)>,
         _license: String,
+        _scheme: tc_versification::StandardScheme,
         _folder: ProjectRef,
         ctx: JobCtx,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {

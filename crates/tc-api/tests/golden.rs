@@ -3369,6 +3369,7 @@ impl Example for ImportReviewRequest {
             files: import_files(),
             details: Some(import_details()),
             use_installed: Some(VersionsView::example().found),
+            versification: Some("org".into()),
         }
     }
 }
@@ -3396,6 +3397,15 @@ impl Example for ImportReview {
                     VersionSlot::TranslationNotes,
                     VersionSlot::OriginalNewTestament,
                 ],
+                versification: tc_api::import::SchemeGuess {
+                    scheme: "org".into(),
+                    fit: tc_api::import::SchemeFit::Tied {
+                        schemes: vec!["lxx".into(), "org".into()],
+                    },
+                    names: ["eng", "lxx", "org", "rsc", "rso", "vul"]
+                        .map(String::from)
+                        .to_vec(),
+                },
             },
             details: import_details(),
             folder: Some(ProjectRef::parse("tita_tc3").unwrap()),
@@ -3441,6 +3451,7 @@ impl Example for ImportRun {
             details: import_details(),
             found: VersionsView::example().found,
             license: "CC BY-SA 4.0".into(),
+            versification: "org".into(),
         }
     }
 }

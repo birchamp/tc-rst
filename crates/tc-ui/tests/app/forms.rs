@@ -473,6 +473,15 @@ mod import {
                     VersionSlot::TranslationNotes,
                     VersionSlot::OriginalNewTestament,
                 ],
+                versification: tc_api::import::SchemeGuess {
+                    scheme: "org".into(),
+                    fit: tc_api::import::SchemeFit::Tied {
+                        schemes: vec!["lxx".into(), "org".into()],
+                    },
+                    names: ["eng", "lxx", "org", "rsc", "rso", "vul"]
+                        .map(String::from)
+                        .to_vec(),
+                },
             },
             details: found,
             folder: None,
@@ -800,6 +809,25 @@ mod import {
         installed(&mut form);
         form.type_name("Tita".into(), rid(5));
         assert_eq!(form.press_run(NONE).unwrap().request, rid(5));
+    }
+
+    /// H13: the review's guess is the default, Import sends the one chosen, and a count of
+    /// what the installed versions do, made in the other versification, is asked again.
+    #[test]
+    fn import_sends_the_versification_the_review_page_shows() {
+        let mut form = reviewed(None);
+        assert_eq!(form.versification, "org");
+        let asked = form.use_installed(rid(70)).unwrap();
+        assert_eq!(asked.versification.as_deref(), Some("org"));
+        form.carry_counted(rid(70), Some(COUNTED));
+        form.pick_versification("eng".into(), rid(6));
+        assert_eq!(form.versions, VersionLookup::NotLookedUp, "counted again");
+        assert_eq!(form.press_run(NONE), None, "Import waits for the count");
+        let asked = form.use_installed(rid(71)).unwrap();
+        assert_eq!(asked.versification.as_deref(), Some("eng"));
+        form.carry_counted(rid(71), Some(COUNTED));
+        let run = form.press_run(NONE).unwrap();
+        assert_eq!((run.versification.as_str(), run.request), ("eng", rid(6)));
     }
 
     /// tC4 `NOT_LOOKED_UP` and `importUseInstalled`: not looked up, every slot the files name

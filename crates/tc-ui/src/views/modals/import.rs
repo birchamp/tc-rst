@@ -759,6 +759,55 @@ fn license_pick(
     })
 }
 
+/// The versification the project gets (H13): the books' verse counts give the default, the
+/// note says how, and the person can choose another.
+fn versification_pick(
+    actions: &Actions,
+    im: &Signal<Option<ImportForm>>,
+    guess: &tc_api::import::SchemeGuess,
+) -> impl IntoView + use<> {
+    use keys::importer::review as k;
+    use tc_api::import::SchemeFit;
+    let scheme = guess.scheme.as_str();
+    let note = match &guess.fit {
+        SchemeFit::Exact => t(k::SCHEME_EXACT, &[("scheme", &scheme)]),
+        SchemeFit::Undecided => t(k::SCHEME_UNDECIDED, &[("scheme", &scheme)]),
+        SchemeFit::Tied { schemes } => t(
+            k::SCHEME_TIED,
+            &[("schemes", &schemes.join(", ")), ("scheme", &scheme)],
+        ),
+        SchemeFit::Nearest => t(k::SCHEME_NEAREST, &[("scheme", &scheme)]),
+    };
+    let fit = match guess.fit {
+        SchemeFit::Exact => "exact",
+        SchemeFit::Undecided => "undecided",
+        SchemeFit::Tied { .. } => "tied",
+        SchemeFit::Nearest => "nearest",
+    };
+    let options: Vec<SelectOption> = guess
+        .names
+        .iter()
+        .map(|name| SelectOption::from(name.as_str()))
+        .collect();
+    let value = read(im, |im| Some(im.versification.clone()), None);
+    let actions = actions.clone();
+    let on_change = Callback::new(move |name: String| actions.import_pick_versification(name));
+    view! {
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+            <Select
+                label=move || t(keys::wizard::VERSIFICATION, &[])
+                value=value
+                on_change=on_change
+                options=options
+                attrs=Attrs::from([("data-testid", "import-versification")])
+            />
+            <Text role=TextRole::Caption tone=TextTone::Muted attrs=Attrs::from([("data-testid", "import-versification-note"), ("data-fit", fit)])>
+                {note}
+            </Text>
+        </div>
+    }
+}
+
 fn found(
     actions: &Actions,
     im: &Signal<Option<ImportForm>>,
@@ -904,6 +953,7 @@ fn found(
         )
     };
     let pick = license_pick(actions, im, &review.found.licenses);
+    let versification = versification_pick(actions, im, &review.found.versification);
     view! {
         <div data-testid="import-review" style="display: flex; flex-direction: column; gap: 16px;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,1fr)); gap: 24px; align-items: start;">
@@ -960,6 +1010,7 @@ fn found(
                                     on_change=on_code
                                 />
                             </Field>
+                            {versification}
                         </div>
                     </Surface>
                 </div>

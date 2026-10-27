@@ -1617,6 +1617,11 @@ mod import_ports {
                 VersionSlot::TranslationNotes,
                 VersionSlot::OriginalNewTestament,
             ],
+            versification: tc_api::import::SchemeGuess {
+                scheme: "eng".into(),
+                fit: tc_api::import::SchemeFit::Undecided,
+                names: vec!["eng".into()],
+            },
         }
     }
 
@@ -1824,6 +1829,7 @@ mod import_ports {
                             files: vec![w.zip.clone()],
                             details: Some(in_use.clone()),
                             use_installed: None,
+                            versification: None,
                         },
                     )
                     .await

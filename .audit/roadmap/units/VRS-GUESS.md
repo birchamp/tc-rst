@@ -15,7 +15,7 @@ no_loss: true
 size: 1-2 d (basis: F1's tC3 review page; a pure fit function plus one review-page field)
 merged: none
 updated: 2026-10-27
-next: Step 2: carry the guess and the chosen scheme through tc-api and tc-app (crates/tc-app/src/import.rs found, run, carry_over).
+next: Step 3: run the import journey (parity/app/journeys/import.test.mjs) on target/debug/tc4 and target/tc-ui-app.
 blocked_by: none
 ---
 
@@ -97,3 +97,5 @@ source verse sits beside the draft, for the life of the project.
 - 2026-10-27 12:15 EDT | tc4-issues session (Claude Code dc817a96) | block | none | H13 says a tie gives eng, but an org-shaped Malachi or Joel ties org with lxx (same counts in 22 books), so the literal rule keeps #822's eng for exactly the books it is meant to fix; the ruling gives no rule for a tie that leaves eng out | fit::tests::malachi_in_three_chapters_fits_the_hebrew_numbering
 - 2026-10-27 13:00 EDT | tc4-issues session (Claude Code dc817a96) | unblock | none | the H13 addendum settles a tie without eng (org, lxx, vul, rso, rsc) and content no scheme holds (the nearest, said so) | rulings/2026-10-27-H13.md
 - 2026-10-27 13:20 EDT | tc4-issues session (Claude Code dc817a96) | step 1 | none | guess and SchemeGuess (Fits, Undecided, Tied, Nearest) settle the default as the addendum says | cargo test -p tc-versification --lib fit
+- 2026-10-27 15:40 EDT | tc4-issues session (Claude Code dc817a96) | step 2 | none | ImportFound carries the guess (SchemeGuess: scheme, fit, names); Run carries the chosen versification, written to ingredients/vrs.json and the first project.vrs.set; Review's count and the run's carry-over place decisions in the chosen scheme; a name that is not a standard versification is a BadRequest. Fails with main's StandardScheme::DEFAULT line: "assertion `left == right` failed: INV-IMPORT-SCHEME-SHOWN: the project gets the scheme the review page showed" (import_scheme.rs:119), 3 of 4 failed; passes after | cargo test -p tc-app --features test-hooks --test app -- import_scheme
+- 2026-10-27 15:45 EDT | tc4-issues session (Claude Code dc817a96) | note | none | step 3's code is in this commit: the review page's Versification select (tC4's wizard.versification label) and its note, four rebuild keys pending in nine languages, ImportForm.pick_versification asks the carry-over count again; tc-ui form test passes; journey not yet run | cargo test -p tc-ui --test app -- import

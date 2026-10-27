@@ -120,6 +120,7 @@ impl Actions {
                 files,
                 details: None,
                 use_installed: None,
+                versification: None,
             };
             match this.runtime().api().call(&asked).await {
                 Ok(review) => this.patch_im(|im| im.reviewed(review, js::random_request_id())),
@@ -240,6 +241,11 @@ impl Actions {
     /// The license picker of the review step.
     pub fn import_pick_license(&self, license: Option<String>) {
         self.patch_im(|im| im.pick_license(license, js::random_request_id()));
+    }
+
+    /// The versification picker of the review step.
+    pub fn import_pick_versification(&self, name: String) {
+        self.patch_im(|im| im.pick_versification(name, js::random_request_id()));
     }
 
     /// "Import as a new Bible" and "Try the import again" (tC4 `importRun`): one job that
