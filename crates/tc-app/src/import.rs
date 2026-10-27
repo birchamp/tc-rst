@@ -85,7 +85,7 @@ fn create_details(details: &ImportDetails) -> Details {
 fn imported_details(details: &ImportDetails, import: &Tc3Import) -> Details {
     use tc_import::tc3::Direction as Read;
     let mut form = create_details(details);
-    if form.code != import.language.trim() {
+    if !form.code.eq_ignore_ascii_case(import.language.trim()) {
         return form;
     }
     if let Some(name) = &import.language_name {
