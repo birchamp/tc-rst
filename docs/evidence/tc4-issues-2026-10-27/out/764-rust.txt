@@ -1,0 +1,15 @@
+   Compiling thiserror-impl v2.0.21
+   Compiling proptest-derive v0.9.0
+   Compiling regex v1.13.1
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-core)
+   Compiling tc-api v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.12s
+     Running unittests src/lib.rs (target/debug/deps/tc_ui-2cdb98c505d584a6)
+
+running 1 test
+test app::check::tests::check_progress_bar_is_visible_after_one_resolved_item ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 67 filtered out; finished in 0.00s
+
