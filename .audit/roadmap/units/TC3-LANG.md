@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: FIX-R step 1's Settings reader)
 merged: none
 updated: 2026-10-27
-next: scripts/gates.sh --touched is running on the branch with main merged in; then it waits for a batch.
+next: Ready for a batch: steps 1-3 done, three verify lines, gates.sh --touched passed on 77826672 (main b17d258a merged in) except board.py --check, whose two errors are REL-1's card on its own branch track-REL-1 (VRS-GUESS has no card; its ROADMAP row lags); waits for the integration lane to take it into a batch.
 blocked_by: none
 ---
 
@@ -73,3 +73,4 @@ Today the name is replaced by the code ("cfm" for "Chin, Falam") in metadata.jso
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | verify | b890cab5 | browser and parity lens (independent subagent): no blocker; 1 major (prose: the declared difference was missing from docs/APP-DESIGN.md F1: fixed), 1 minor (letter case: fixed). Journey 832-tc3-rtl-badge on b890cab5 in Chromium passed: Settings language name "Chin, Falam", metadata name.en "Chin, Falam", card LTR before (the fixture says ltr) and RTL after a reload. tC4 d310bf3 src/data/import/tc3.ts:41,261,299-300 and shell.ts:182,186-192 read only target_language.id. §8: 1 Code: good; 2 Checks: four cases, failed on main; 3 Reach: all reachable; 4 Siblings: none new; 5 No loss: create unchanged, Burrito validated; 6 Prose: declared difference added, no owner question | subagent af51b9b7d16d3447c report; node --test docs/evidence/tc4-issues-2026-10-27/repro/832-tc3-rtl-badge.test.mjs
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | the lenses' fixes: the review-step code is compared without regard to letter case (gate test case "CFM"), and docs/APP-DESIGN.md F1 declares the difference from tC4 4.0 with its reason; the save-through-Settings minor is logged | cargo test -p tc-app --test app import::
 - 2026-10-27 09:56 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-TC3-LANG, main 17c9fb18 merged in | scripts/gates.sh --touched
+- 2026-10-27 10:34 EDT | tc4-issues session (Claude Code dc817a96) | gate | 77826672 | scripts/gates.sh --touched with main b17d258a merged in: claims, coverage and touched checks 10/10, tc-api endpoints and golden 13/13, tc-app, tc-import and dependents 1049 passed (9 slow, 1 skipped), doc tests ok, 0 journey files picked; its first line board.py --check fails only on REL-1 (read from branch track-REL-1: depends on VRS-GUESS, which has no card, and its ROADMAP row lags its card), so the rest ran by hand with that line skipped | scripts/gates.sh --touched claude/focused-ride-5uzj7p
