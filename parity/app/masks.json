@@ -76,47 +76,47 @@
     {
       "id": "q2-obs-card",
       "ruling": "Q2",
-      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\". The longer label also moves the element: it is 148 px wide and 15 px lower in the Rust page, so the rectangle covers both.",
+      "why": "The rebuild syncs OBS projects, so the shared OBS card reads \"Sync with Door43\" where tC4 reads \"Upload changes\". The longer label also moves the element: it is 148 px wide and 15 px lower in the Rust page, so the rectangle covers both. Since E2 the card also carries \"Receive work from a file\", which puts the Rust element at x 658, y 277 (147 by 31): the rectangle covers tC4's place and that one.",
       "target": {
         "testid": "share-card-<OBS>"
       },
       "rust": null,
       "rects": {
         "shared-home": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         },
         "sync-internet-consent": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         },
         "sync-failed": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         },
         "sync-ok": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         },
         "sync-ok-teammates": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         },
         "sync-ok-restored": {
-          "x": 856,
+          "x": 658,
           "y": 236,
-          "width": 148,
-          "height": 46
+          "width": 346,
+          "height": 72
         }
       },
       "meaning": {
@@ -196,6 +196,24 @@
           "y": 192,
           "width": 472,
           "height": 21
+        }
+      },
+      "meaning": null
+    },
+    {
+      "id": "conflict-mine-date",
+      "ruling": "build",
+      "why": "The date of the version saved on this computer is when the capture run saved it, so it is the run's clock in each capture (tC4's gallery shows its own capture's). The version on top is Mine in the rebuild and Teammate 2 in tC4, both dated at the same place.",
+      "target": {
+        "testid": "conflict-date"
+      },
+      "rust": null,
+      "rects": {
+        "conflict-review-mine": {
+          "x": 320,
+          "y": 290,
+          "width": 190,
+          "height": 22
         }
       },
       "meaning": null

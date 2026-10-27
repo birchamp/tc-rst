@@ -212,7 +212,17 @@ pub struct Capture {
     pub sha256: String,
     pub dom: String,
     pub dom_sha256: String,
+    /// The git tree of each folder in `UI_SOURCE` that the shot was taken from.
+    pub trees: Option<BTreeMap<String, String>>,
 }
+
+/// The folders whose files make what a capture shows (INV-CAPTURES-FRESH).
+pub const UI_SOURCE: [&str; 4] = [
+    "crates/tc-ui/src",
+    "crates/tc-ui/assets",
+    "crates/tc-ui/app",
+    "crates/tc-api/src",
+];
 
 impl Capture {
     pub fn claims(&self, layer: Layer) -> bool {

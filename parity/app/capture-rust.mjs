@@ -9,8 +9,8 @@
 //
 // Needs `tc4` built with `--features test-hooks,fixture-backend` (each scenario's projects are
 // written with `--scenario` into the run's projects folder and opened through the store, the
-// default since unit C1a; `memory` starts it with `--backend memory`, and `memory+scripted`
-// marks a screen whose Door43 job ends as `test/script` set it, on the store since B10) and
+// default since unit C1a; `memory` starts it with `--backend memory`; a shot during which the
+// env called `test/script` is labelled `memory+scripted` whatever `--backend` says) and
 // the UI folder of crates/tc-ui/build-app.sh.
 // `--unit` names the unit of docs/APP-DESIGN.md §10 that captures (the gate checks it has
 // landed); `--layers` the layers the capture claims (`dom` alone is a DOM-first capture of a
@@ -24,11 +24,15 @@
 // loopback to sign in to (A8); with `--real-sync` its syncs and opens from Door43 go to it for
 // real, and the Door43 steps act on it (E1a), instead of ending as `test/script` set them.
 //
+// Each entry names the git trees of `UI_SOURCE` it was taken at, as they will be once the
+// working files are committed: the gate (captures_match_the_current_ui_source) fails every
+// entry whose trees are not HEAD's, so a UI change and its recapture land in one commit.
 // Writes into `--out`: screens/<name>.png, dom/<name>.json and captures.json, whose entries are
 // merged by name, screens in the order of the screen list and then cases in the order of
 // cases.mjs, so a partial run updates its entries in place and keeps every other.
 // Then: UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record, and review the report.
 // Exit code 1 when a screen failed or a request to another origin was refused.
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -50,6 +54,24 @@ const argValue = (name) => {
   return at > 0 ? process.argv[at + 1] : undefined;
 };
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+
+/** The folders whose files make what a capture shows; the gate's `UI_SOURCE`. */
+export const UI_SOURCE = ['crates/tc-ui/src', 'crates/tc-ui/assets', 'crates/tc-ui/app', 'crates/tc-api/src'];
+
+/** The git tree each of `UI_SOURCE` will have once the working files are committed, so a UI
+ * change and its recapture land in one commit. A private index leaves the real one alone. */
+export function uiTrees(repo = REPO) {
+  const index = path.join(repo, 'target', 'capture-index');
+  fs.mkdirSync(path.dirname(index), { recursive: true });
+  const git = (...args) => execFileSync('git', args, { cwd: repo, env: { ...process.env, GIT_INDEX_FILE: index }, encoding: 'utf8' }).trim();
+  try {
+    git('read-tree', 'HEAD');
+    git('add', '-A', '--', ...UI_SOURCE);
+    return Object.fromEntries(UI_SOURCE.map((folder) => [folder, git('write-tree', `--prefix=${folder}/`)]));
+  } finally {
+    fs.rmSync(index, { force: true });
+  }
+}
 
 /** Playwright from the baseline's own install: parity/app has no node_modules. */
 export function loadPlaywright() {
@@ -109,7 +131,7 @@ export function caseRoute(c, state) {
   return null;
 }
 
-async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync }) {
+async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync, trees }) {
   const door43 = door43Fake ? await startDoor43Fake(door43Fake) : undefined;
   let env;
   try {
@@ -131,6 +153,7 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
     for (const screen of screens) {
       pageErrors.length = 0;
       const refusedBefore = new Set(env.refused());
+      const scriptsBefore = env.scriptCalls();
       process.stdout.write(`  ${screen.name} ... `);
       const file = path.join(out, 'screens', `${screen.name}.png`);
       // A route takes the environment too (a state's route, or one that needs the fake Door43).
@@ -155,7 +178,9 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
         scenario,
         locale: screen.locale ?? 'en',
         by: unit,
-        backend,
+        // A shot that set an outcome through `test/script` showed a scripted one, whatever
+        // `--backend` said.
+        backend: env.scriptCalls() > scriptsBefore ? 'memory+scripted' : (backend === 'memory' ? 'memory' : 'store'),
         layers,
         error,
         pageErrors: [...pageErrors],
@@ -167,6 +192,7 @@ async function captureScenario(browser, scenario, screens, { tc4, ui, out, unit,
         sha256: sha256(fs.readFileSync(file)),
         dom: `dom/${screen.name}.json`,
         domSha256: sha256(fs.readFileSync(domFile)),
+        trees,
       });
     }
     await context.close();
@@ -211,6 +237,7 @@ async function main() {
     : SCREEN_LIST.filter((s) => !only || only.includes(s.name));
   const masks = JSON.parse(fs.readFileSync(path.join(REPO, 'parity', 'app', 'masks.json'), 'utf8')).masks;
 
+  const trees = uiTrees();
   const capturesFile = path.join(out, 'captures.json');
   const previous = fs.existsSync(capturesFile) ? JSON.parse(fs.readFileSync(capturesFile, 'utf8')) : null;
   const { chromium } = loadPlaywright();
@@ -233,7 +260,7 @@ async function main() {
   try {
     for (const scenario of [...new Set(selected.map((s) => s.scenario))]) {
       console.log(`scenario ${scenario}`);
-      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync });
+      const run = await captureScenario(browser, scenario, selected.filter((s) => s.scenario === scenario), { tc4, ui, out, unit, layers, backend, masks, door43Fake, realSync, trees });
       captured.push(...run.entries);
       projects[scenario] = run.projects;
       build = run.build;
