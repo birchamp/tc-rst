@@ -71,7 +71,6 @@ impl Project {
             }
             match info.seen {
                 Some(seen) if seen == now => {}
-                None if meta.len == info.size => self.mark_seen(&rel, now),
                 _ => match self.vfs.read(&abs) {
                     Ok(bytes)
                         if fingerprint(&bytes) == info.fingerprint
@@ -174,6 +173,45 @@ impl Project {
                 None => {}
             }
         }
+        if at_open && let Some(head) = &head_packs {
+            self.store_unheld_packs(git, head)?;
+        }
+        Ok(())
+    }
+
+    /// Stores each valid pack no blob holds yet, as the open reads it (§4.4 "the blob stored
+    /// when the pack was first read"), so a change in place later this session, or in a
+    /// later one, can be restored. A pack sealed by a session that died before its manifest
+    /// was written, or copied into the folder, has no other copy.
+    fn store_unheld_packs(
+        &mut self,
+        git: &Git,
+        head: &BTreeMap<String, GitOid>,
+    ) -> Result<(), StoreError> {
+        let unheld: Vec<String> = self
+            .journal
+            .packs
+            .iter()
+            .filter(|(rel, info)| {
+                info.valid && !head.contains_key(*rel) && info.blob.is_none_or(|oid| !git.has(oid))
+            })
+            .map(|(rel, _)| rel.clone())
+            .collect();
+        for rel in unheld {
+            let Ok(bytes) = self.vfs.read(&self.folder.path(&rel)) else {
+                continue;
+            };
+            let Some(info) = self.journal.packs.get_mut(&rel) else {
+                continue;
+            };
+            // Only the bytes the open checked. Bytes changed since then within one mtime tick
+            // (2 s on FAT32) would pass the stat, so the next checkpoint reads them again.
+            if fingerprint(&bytes) == info.fingerprint {
+                info.blob = git.write_blob(&bytes).ok();
+            } else {
+                info.seen = None;
+            }
+        }
         Ok(())
     }
 
@@ -227,6 +265,11 @@ impl Project {
         let new_rel = format!("{PENDING}/{name}");
         let new_abs = self.folder.path(&new_rel);
         let number = self.source.add(&new_abs);
+        // The fold reads these values from the bytes written, as for a file the open read.
+        self.source.attach(
+            number,
+            std::sync::Arc::new(crate::load::Held(encoded.bytes.clone().into())),
+        );
         let loaded = load_pending(&new_rel, &encoded.bytes, self.id, number);
         self.journal.pending.insert(
             new_rel,

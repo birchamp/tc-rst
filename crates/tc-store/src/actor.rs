@@ -31,6 +31,10 @@ use tc_journal::pack::PackStatus;
 pub(crate) const MATERIALIZE_AFTER: Duration = Duration::from_secs(3);
 /// A checkpoint runs this often while batches wait to be sealed (§5.13).
 pub(crate) const CHECKPOINT_EVERY: Duration = Duration::from_secs(30 * 60);
+/// No save waits longer than this for a seal: until then its only copy is a pending file,
+/// which another program can damage, and a crash then takes it (owner ruling 2026-10-22: at
+/// most the last 2 minutes of work may be lost).
+pub(crate) const SEAL_WITHIN_MS: i64 = 2 * 60 * 1000;
 
 struct Actor {
     project: Project,
@@ -40,6 +44,8 @@ struct Actor {
     /// When the next materialization is due.
     due: Option<Instant>,
     last_checkpoint: Instant,
+    /// The store clock's time (ms) when a pending save was first seen unsealed.
+    unsealed_since: Option<i64>,
     /// Held while `.tc/index.bin` is written, by the background job or at close.
     index_lock: Arc<Mutex<()>>,
     /// The writer's thread, joined at close.
@@ -79,6 +85,7 @@ pub(crate) fn spawn(
         lock,
         due: dirty.then(|| Instant::now() + MATERIALIZE_AFTER),
         last_checkpoint: Instant::now(),
+        unsealed_since: None,
         index_lock: index_lock.clone(),
         writer_thread,
         deferred: std::collections::VecDeque::new(),
@@ -112,8 +119,14 @@ impl Actor {
                     reply.resolve(result);
                     return;
                 }
-                Ok(msg) => self.handle(msg),
-                Err(RecvTimeoutError::Timeout) => self.on_timer(),
+                Ok(msg) => {
+                    self.handle(msg);
+                    self.seal_when_due();
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    self.on_timer();
+                    self.seal_when_due();
+                }
                 Err(RecvTimeoutError::Disconnected) => {
                     let _ = self.close();
                     return;
@@ -132,6 +145,10 @@ impl Actor {
     fn wait(&self) -> Duration {
         let now = Instant::now();
         let mut wait = CHECKPOINT_EVERY.saturating_sub(self.last_checkpoint.elapsed());
+        if let Some(since) = self.unsealed_since {
+            let left = SEAL_WITHIN_MS - (self.project.clock.now().0 - since);
+            wait = wait.min(Duration::from_millis(u64::try_from(left).unwrap_or(0)));
+        }
         if let Some(due) = self.due {
             wait = wait.min(due.saturating_duration_since(now));
         }
@@ -224,6 +241,49 @@ impl Actor {
                 let result = self.close();
                 reply.resolve(result);
             }
+        }
+    }
+
+    /// Seals once a pending save has waited [`SEAL_WITHIN_MS`].
+    fn seal_when_due(&mut self) {
+        if !self.project.journal.has_unsealed() || self.read_only().is_some() {
+            self.unsealed_since = None;
+            return;
+        }
+        let now = self.project.clock.now().0;
+        // A clock set back starts the wait again rather than never ending it.
+        let since = self.unsealed_since.filter(|s| *s <= now).unwrap_or(now);
+        self.unsealed_since = Some(since);
+        if now - since >= SEAL_WITHIN_MS {
+            self.unsealed_since = None;
+            self.seal_now();
+        }
+    }
+
+    /// A seal that commits nothing: its packs are stored as blobs (K3) until the next
+    /// checkpoint commits them, so typing makes no commit every 2 minutes. A write group from
+    /// the seal's first pack to the job that lists it (I7).
+    fn seal_now(&mut self) {
+        if self.read_only().is_some() || !matches!(self.second_writer(), Ok(false)) {
+            return;
+        }
+        self.project.shared.open_group();
+        let sealed = self
+            .project
+            .restore_expected_packs(false)
+            .and_then(|()| self.seal_serving());
+        // As for a periodic checkpoint nobody waits for: the seal tells what it could not take
+        // in Notices, and the next seal or checkpoint tries again. The files are written
+        // anyway, so a pack it renamed is listed (I7).
+        drop(sealed);
+        let job = self.project.materialize_job(Origin::Sealed, None, None);
+        let sent = self
+            .project
+            .writer
+            .as_ref()
+            .is_some_and(|writer| writer.send(Job::Materialize(Box::new(job))).is_ok());
+        if !sent {
+            self.project.shared.close_group();
         }
     }
 
@@ -526,6 +586,12 @@ impl Actor {
                 continue;
             };
             let number = self.project.source.add(&file.abs);
+            if file.kind == JournalKind::Pending {
+                // As at the open: the fold reads a pending file's values from the bytes read.
+                self.project
+                    .source
+                    .attach(number, Arc::new(crate::load::Held(bytes.clone().into())));
+            }
             let loaded = match file.kind {
                 JournalKind::Pack => load_pack(&file.rel, &bytes, self.project.id, number),
                 JournalKind::Pending => load_pending(&file.rel, &bytes, self.project.id, number),
@@ -547,7 +613,10 @@ impl Actor {
                             replaces: pack.header.map(|h| h.replaces).unwrap_or_default(),
                             ids: Vec::new(),
                             blob: None,
-                            seen: None,
+                            seen: file
+                                .mtime_ns
+                                .filter(|_| file.size == loaded.key.size)
+                                .map(|t| (loaded.key.size, t)),
                             damaged: matches!(pack.status, PackStatus::Damaged(_)),
                         },
                     );

@@ -8,7 +8,7 @@ state: todo
 owner: none
 branch: none
 worktree: none
-depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, SAVE-WAIT]
+depends: [C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d, ALIGN-LEAVE, FIX-KEPT-EVENT, LOSS-2, SAVE-WAIT]
 needs_owner: []
 proves: []
 no_loss: false
@@ -54,3 +54,4 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-26 19:05 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | depends gains E1c (one project name, owner ruling H14) and E1d (E1a's two unwritten tests), on the orchestrator's word | messages from the orchestrator, 2026-10-26
 - 2026-10-26 19:58 EDT | E1d lane (Claude Code 07ffe14c) | ruling | none | the owner, on E1d's follow-up: Home asks Stay or Leave without it once an aligner click is lost for sure; REL-1 waits for ALIGN-LEAVE (orchestrator's message) | rulings/2026-10-26-ALIGN-LEAVE.md
 - 2026-10-26 | kept-event session (Claude Code 2e51a251) | ruling | none | depends gains FIX-KEPT-EVENT, on the orchestrator's word: a copy kept just after an open was not told until a reload | message from the orchestrator, 2026-10-26
+- 2026-10-26 23:31 EDT | storage lane (Claude Code LOSS-2) | note | none | depends gains LOSS-2 (two store losses the model test excused), on the orchestrator's word: "REL-1 waits for it" | message from the orchestrator, 2026-10-26

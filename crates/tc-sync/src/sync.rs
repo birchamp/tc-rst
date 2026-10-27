@@ -137,6 +137,7 @@ pub async fn sync(
             .map(|c| c.id)
             .collect(),
         received_from: Default::default(),
+        received_batches: Default::default(),
         received_ids: Vec::new(),
     };
     let (mut state, mut actions) = next(&SyncState::Idle, &SyncEvent::Start);
@@ -179,9 +180,12 @@ struct Run<'a> {
     merged: Option<Result<CheckpointReport, String>>,
     report: SyncReport,
     conflicts_before: std::collections::BTreeSet<tc_journal::fold::ConflictId>,
-    /// New changes in the received packs, by the device that made them.
+    /// A teammate's saves in the received packs, by the device that made them: one per batch
+    /// of new changes that is work (a verse and the alignment its edit reflowed are one save).
     received_from: std::collections::BTreeMap<tc_journal::DeviceId, u32>,
-    /// Their ids.
+    /// The batches counted in `received_from`.
+    received_batches: std::collections::BTreeSet<(tc_journal::DeviceId, tc_journal::BatchId)>,
+    /// The ids of every new change, bookkeeping included (the Received sheet's rows).
     received_ids: Vec<tc_journal::ChangeId>,
 }
 
@@ -214,13 +218,13 @@ impl Run<'_> {
         for pack in packs {
             for change in tc_store::read_received_pack(&pack.path, &pack.bytes, project).changes {
                 if snapshot.fold().change(&change.id()).is_none() {
-                    // A device's profile (its Door43 username, Q7) is bookkeeping a sync
-                    // writes, not work a translator made: the toast never counts it.
-                    if !matches!(
-                        change.body().record,
-                        tc_journal::Record::DeviceProfile { .. }
-                    ) {
-                        *self.received_from.entry(change.body().device).or_insert(0) += 1;
+                    // Bookkeeping is never counted, and work is counted once per batch: one
+                    // save (`crate::is_bookkeeping`).
+                    let body = change.body();
+                    if !crate::is_bookkeeping(&body.record)
+                        && self.received_batches.insert((body.device, body.batch.id))
+                    {
+                        *self.received_from.entry(body.device).or_insert(0) += 1;
                     }
                     self.received_ids.push(change.id());
                 }
@@ -841,11 +845,11 @@ fn restored_changes(
         .filter_map(|(path, oid)| {
             let blob = repo.find_blob(*oid).ok()?;
             let read = tc_store::read_received_pack(path, blob.content(), project);
-            // A device's profile is bookkeeping, as in `count_received`.
+            // Bookkeeping is not work sent again, as in `count_received`.
             let work = read
                 .changes
                 .iter()
-                .filter(|c| !matches!(c.body().record, tc_journal::Record::DeviceProfile { .. }))
+                .filter(|c| !crate::is_bookkeeping(&c.body().record))
                 .count();
             Some(work as u32)
         })

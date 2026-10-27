@@ -988,15 +988,21 @@ fn a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy(
     let later = "a later save the book file does not show yet";
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
-    let earlier: BTreeSet<String> = pending_files(&rig.fs, &folder).into_iter().collect();
+    let earlier: BTreeSet<String> = packs(&rig.fs, &folder).into_iter().collect();
     save_verse(&handle, 1, 1, saved).unwrap();
-    let journal: Vec<String> = pending_files(&rig.fs, &folder)
+    handle.leave(Leave::Mode).wait().unwrap();
+    handle.wait_idle();
+    // In a pack: the fold reads a pack's values from the file, and a pending file's from the
+    // bytes the open read (§5.11 K1), which another program cannot take.
+    handle
+        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
+        .wait()
+        .unwrap();
+    let journal: Vec<String> = packs(&rig.fs, &folder)
         .into_iter()
         .filter(|rel| !earlier.contains(rel))
         .collect();
     assert_eq!(journal.len(), 1, "{journal:?}");
-    handle.leave(Leave::Mode).wait().unwrap();
-    handle.wait_idle();
     let book = folder.join(BOOK);
     let placed = rig.fs.peek(&book).unwrap();
     assert!(shows(&placed, saved));
@@ -1016,7 +1022,7 @@ fn a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy(
     assert_ne!(
         words(&handle, 1, 1).as_deref(),
         Some(saved),
-        "the save's value must be unreadable after the open read its file"
+        "the save's value must be unreadable after the open read its pack"
     );
     let after_open = rig.fs.peek(&book).unwrap();
     assert!(

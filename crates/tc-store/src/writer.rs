@@ -59,6 +59,9 @@ pub(crate) enum Origin {
     Leave,
     /// A checkpoint: a seal ran first.
     Checkpoint,
+    /// A seal that commits nothing ran first (a save waited 2 minutes, §5.13): the job lists
+    /// its packs and ends its write group.
+    Sealed,
 }
 
 /// What the actor sends the writer.
@@ -236,6 +239,10 @@ pub(crate) struct Writer {
     pub values_told: Option<u32>,
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
+    /// The open sealed (§6.1 O15): its write group ends with the open's materialization.
+    pub sealed_at_open: bool,
+    /// O9 could not read a derived file (another program holds it).
+    pub derived_unread: bool,
     /// The writer's own handle on the project's repository: blobs, trees and commit objects.
     pub git: Option<crate::git::Git>,
     /// This computer's device, for the trailers of a commit.
@@ -357,7 +364,10 @@ impl Writer {
         }
         let result = self.materialize_now();
         self.opening = false;
-        if checkpoint.is_some() {
+        if checkpoint.is_some()
+            || origin == Origin::Sealed
+            || (origin == Origin::Open && std::mem::take(&mut self.sealed_at_open))
+        {
             // The seal's packs are listed now, or the job failed and the next open repairs it.
             self.shared.close_group();
         }
@@ -836,6 +846,8 @@ mod tests {
             reasons: BTreeMap::new(),
             values_told: None,
             opening: false,
+            sealed_at_open: false,
+            derived_unread: false,
             git: None,
             device: DeviceId::local([9; 15]),
             recover: None,

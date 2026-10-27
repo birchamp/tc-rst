@@ -32,8 +32,8 @@ use crate::app::web::{Actions, AppCtx, AppState, use_app, use_runtime};
 use crate::attrs::Attrs;
 use crate::css::Css;
 use crate::ds::{
-    Badge, BadgeSize, BadgeTone, BookTile, Button, ButtonVariant, Callout, CalloutTone, Card,
-    Overline, Size, Toast, ToastTone,
+    Badge, BadgeSize, BadgeTone, BookTile, Button, ButtonVariant, Callout, CalloutTone, Card, Menu,
+    MenuItem, Overline, Size, Toast, ToastTone,
 };
 use crate::i18n::{keys, refusal_text, t};
 use crate::views::sync_result::SyncResult;
@@ -502,57 +502,54 @@ fn share_action(
     }
 }
 
-/// Save work for a teammate (only where the shell picks folders) and Receive work from a file
-/// (E2; rebuild-only screens, STORAGE §10).
-fn exchange_buttons(
+/// "Save or receive work by USB": one menu beside Share on Door43, so the card's row stays as
+/// tC4's (owner ruling 2026-10-26, E2 packet question 1). "Save work for a teammate" is listed
+/// only where the shell can pick a folder.
+fn exchange_menu(
     actions: &Actions,
     card: Signal<Option<HomeCard>>,
     project: &ProjectRef,
 ) -> impl IntoView + use<> {
-    let save = {
+    let mut items = Vec::new();
+    if actions.can_save_for_teammate() {
         let actions = actions.clone();
-        actions.can_save_for_teammate().then(|| {
-            let press = {
-                let actions = actions.clone();
-                Callback::new(move |_: web_sys::MouseEvent| {
-                    if let Some(card) = card.get_untracked() {
-                        actions.open_save_for_teammate(&card);
-                    }
-                })
-            };
-            view! {
-                <Button
-                    variant=ButtonVariant::Secondary
-                    size=Size::Sm
-                    attrs=Attrs::new().with("data-testid", format!("save-for-teammate-{project}"))
-                    title=Signal::derive(|| Some(t(keys::home::SAVE_FOR_TEAMMATE, &[])))
-                    on_click=press
-                >
-                    {move || t(keys::home::SAVE_FOR_TEAMMATE, &[])}
-                </Button>
-            }
-        })
-    };
-    let receive = {
-        let actions = actions.clone();
-        Callback::new(move |_: web_sys::MouseEvent| {
-            if let Some(card) = card.get_untracked() {
-                actions.open_receive_work(&card);
-            }
-        })
-    };
-    view! {
-        {save}
-        <Button
-            variant=ButtonVariant::Secondary
-            size=Size::Sm
-            attrs=Attrs::new().with("data-testid", format!("receive-work-{project}"))
-            title=Signal::derive(|| Some(t(keys::home::RECEIVE_WORK, &[])))
-            on_click=receive
-        >
-            {move || t(keys::home::RECEIVE_WORK, &[])}
-        </Button>
+        items.push(MenuItem {
+            label: t(keys::home::SAVE_FOR_TEAMMATE, &[]),
+            on_click: Some(Callback::new(move |()| {
+                if let Some(card) = card.get_untracked() {
+                    actions.open_save_for_teammate(&card);
+                }
+            })),
+            ..MenuItem::default()
+        });
     }
+    {
+        let actions = actions.clone();
+        items.push(MenuItem {
+            label: t(keys::home::RECEIVE_WORK, &[]),
+            on_click: Some(Callback::new(move |()| {
+                if let Some(card) = card.get_untracked() {
+                    actions.open_receive_work(&card);
+                }
+            })),
+            ..MenuItem::default()
+        });
+    }
+    let testid = format!("usb-menu-{project}");
+    let trigger: crate::ds::Slot = Box::new(move || {
+        view! {
+            <Button
+                variant=ButtonVariant::Secondary
+                size=Size::Sm
+                attrs=Attrs::new().with("data-testid", testid.clone())
+                title=Signal::derive(|| Some(t(keys::home::USB_MENU, &[])))
+            >
+                {move || t(keys::home::USB_MENU, &[])}
+            </Button>
+        }
+        .into_any()
+    });
+    view! { <Menu trigger=trigger items=items /> }
 }
 
 fn settings_button(actions: &Actions, card: Signal<Option<HomeCard>>) -> impl IntoView + use<> {
@@ -787,7 +784,7 @@ fn header(
                 </span>
             </div>
             {share_action(s, actions, card, project)}
-            {exchange_buttons(actions, card, project)}
+            {exchange_menu(actions, card, project)}
             {settings_button(actions, card)}
         </div>
     }

@@ -17,3 +17,14 @@ pub use join::{JoinError, join};
 pub use share::{ShareError, share};
 pub use sync::{Backoff, OtherToolCommit, Pause, SyncReport, sync};
 pub use username::{UsernameError, record_username};
+
+/// A change that is bookkeeping, not a translator's work: a device's profile (its Door43
+/// username, Q7) and the resource pins an open's upgrade writes (owner ruling 2026-10-26). It
+/// joins the project and the Received sheet's rows, but the count of received work leaves it
+/// out.
+pub fn is_bookkeeping(record: &tc_journal::Record) -> bool {
+    matches!(
+        record,
+        tc_journal::Record::DeviceProfile { .. } | tc_journal::Record::Pins { .. }
+    )
+}
