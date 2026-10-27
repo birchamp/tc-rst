@@ -1,0 +1,42 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:42275/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1760965-1793106151031/sample/projects, Door43: http://127.0.0.1:9)
+# before: links ["Θεοῦ=Dios\#1"] invalid false
+# saveVerse reply: {"type":"ok","value":{"view":3,"stored":"written","tokens":[{"record":"{\\"verse\\":{\\"book\\":\\"TIT\\",\\"chapter\\":1,\\"verse\\":1}}","token":"st1.eyJoZWFkcyI6WyJlNzEwYWI2NWViOGJiYTNjOTFjYTc3OGVjYmM3OGYyMGFiZDY5ZmFiNjQzZWEzN2ZmYmU1YTVkMTcxMjczY2QxIl0sImtleSI6eyJ2ZXJzZSI6eyJib29rIjoiVElUIiwiY2hhcHRlciI6MSwidmVyc2UiOjF9fSwia2luZCI6ImVkaXQifdFEDQ2cfUg1PMjLCMZWng4"},{"record":"{\\"alignment\\":{\\"book\\":\\"TIT\\",\\"chapter\\":1,\\"verse\\":1}}","token":"st1.eyJoZWFkcyI6WyJlNzAzOGZkZTI5OTIyMGQ1YTIyNzc0MWIzYTc2ZjhlMGIxYTljNjAwMmU0MGYzY2Q0NjNjOGQ0NzdhNjJkZjZjIl0sImtleSI6eyJhbGlnbm1lbnQiOnsiYm9vayI6IlRJVCIsImNoYXB0ZXIiOjEsInZlcnNlIjoxfX0sImtpbmQiOiJlZGl0In19Uh8_ycg3OfOZ2Zmwuu3j"}],"newConflicts":[],"saved":[{"record":"{\\"verse\\":{\\"book\\":\\"TIT\\",\\"chapter\\":1,\\"verse\\":1}}","text":"y y Dios y"}],"rows":[],"diskWarning":null}}
+# Translate screen mentions a link / the bank / alignment after the save: false
+# Align next open: placed on cards 0 | align-dropped shown 0 | align-stale shown 0
+# align/index 1:1 row: {"items":[{"place":{"chapter":1,"verse":1,"last":1},"text":"y y Dios y","status":{"state":"todo","placed":0,"total":4}},{"place":{"chapter":1,"verse":2,"last":2},"text":"con la esperanza de la vida eterna, la cual Dios, que no miente, prometió desde antes del principio de los siglos,","status":{"state":"todo","placed":0,"total":0}},{"place":{"chapter":1,"verse":3,"last":3},"text":"y a su debido tiempo manifestó su palabra por medio de la predicación que me fue encomendada por mandato de Dios nuestro Salvador,","status":{"state":"todo","placed":0,"total":0}},{"place":{"chapter":1,"verse":4,"las
+# after: links [] invalid false keys alignments,wordBank,invalid,targetVerseMd5,sourceVersion,done,source
+# Subtest: 825_tie_drops_a_link_after_a_translate_save
+not ok 1 - 825_tie_drops_a_link_after_a_translate_save
+  ---
+  duration_ms: 12337.725579
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: 'a dropped link is kept, flagged, or named to the translator'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/825-tie-drop.test.mjs:92:12
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async withApp (file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/parity/app/journeys/kit.mjs:132:20)
+    async file:///home/bot/tc-rst/.claude/worktrees/tc4-issues/docs/evidence/tc4-issues-2026-10-27/repro/825-tie-drop.test.mjs:38:3
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22454.788153

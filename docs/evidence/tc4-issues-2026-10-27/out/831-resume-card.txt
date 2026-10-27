@@ -1,0 +1,25 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:35931/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1753535-1793105966047/en-pins/projects, Door43: http://127.0.0.1:9)
+# Resume after saving 1:1: "Equipo Ejemplo — Tito y Jonás · Titus 1Last edited verse 1 — “Pablo, siervo de Dios y apóstol de Jesucristo, según la fe de los escogidos de Dios y el conocimiento de la verdad que va con la piedad, editado”Resume →"
+# Resume after Cancel on 1:6: "Equipo Ejemplo — Tito y Jonás · Titus 1Last edited verse 1 — “Pablo, siervo de Dios y apóstol de Jesucristo, según la fe de los escogidos de Dios y el conocimiento de la verdad que va con la piedad, editado”Resume →"
+# Check tool open, first quote: "“Paul”"
+# Resume after opening Translation Words: "Equipo Ejemplo — Tito y Jonás · Titus 1Last edited verse 1 — “Pablo, siervo de Dios y apóstol de Jesucristo, según la fe de los escogidos de Dios y el conocimiento de la verdad que va con la piedad, editado”Resume →"
+# Subtest: 831_resume_card_after_cancel_and_check_tool
+ok 1 - 831_resume_card_after_cancel_and_check_tool
+  ---
+  duration_ms: 11461.125926
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21588.937834
