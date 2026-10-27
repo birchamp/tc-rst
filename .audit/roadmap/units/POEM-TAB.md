@@ -36,7 +36,7 @@ Today a level is 8 characters wide, so poem lines start a third of the way acros
 
 ## Funnel card
 
-- **Invariants**: none new.
+- **Invariants**: none new. INV-EVERY-POEM-LINE-STAYS (a line indented in the verse card saves at that level and opens again so) and INV-NEVER-HIDE-UNSAVED-TEXT (Tab no longer takes the keyboard out of the card, so what is typed next reaches the verse); `tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it`.
 - **Code**: tc-ui: `tab-size: 2ch` on both textareas; the Verse editor reuses the Section editor's Tab handler. The saved bytes do not change.
 - **Checks**: Journey: both editors compute `tab-size` 2ch; Tab in the Verse editor indents and keeps the focus, and the typed text is saved at the new level.
   - Proof it can fail: the test fails on main 003aa087.
