@@ -21,7 +21,7 @@
       }
     },
     "build": {
-      "ui": "9d52aaa8a0a4b7c1",
+      "ui": "9d62ceefb82867bb",
       "commit": "dev",
       "api": 1
     }
@@ -873,8 +873,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "b2da55963044e46cc4972b4a6642e71466c06ccaff4a236eb244eef7b8790cdb",
-        "rustSha256": "12fde643091256e099c9d44da8283a03b335b3f428e990180f40078cfe1ff916",
-        "mismatched": 163753,
+        "rustSha256": "3c285f497cf3d44de555efe960b9f1d66d369b5818312f03ac4c38f011a0ac80",
+        "mismatched": 163781,
         "outsideMasks": 162971,
         "masks": [
           "about-build"
@@ -883,7 +883,7 @@
       },
       "dom": {
         "tc4Sha256": "80b7ad317a0ae45f3238b840f24a76a531434dc2a562290f98e4919bb02f4c46",
-        "rustSha256": "101da00a029710f19abbc662c9299a412f1eff1fa7469cae2590af01689e0041",
+        "rustSha256": "eb72cf89aeaf8a222a811666e88bba0dd1bb6028e29fc38aade92d4b4dd5ce8d",
         "scope": null,
         "same": false,
         "declared": [],
@@ -914,8 +914,8 @@
       "backend": "store",
       "pixels": {
         "tc4Sha256": "cfa575472a5fc74836982797f83cf0290814eb060b2cde7c880041cd1ef02bba",
-        "rustSha256": "843109b093f6b007c497e7b91cef9c317a3b51dfeacf6d57ce8db5cad3bc46d0",
-        "mismatched": 94999,
+        "rustSha256": "425871f24e2dd567270eb39308de45b62bc290a7d8416ec9803708584558dc50",
+        "mismatched": 95051,
         "outsideMasks": 93852,
         "masks": [
           "feedback-attachment"
@@ -924,7 +924,7 @@
       },
       "dom": {
         "tc4Sha256": "27ec524b738cfdf0eb746b3b6cd5cdb37457982f6b6fa1ec05c8dcb13d3f9a95",
-        "rustSha256": "2c4e49524631b2116b4c71878f485ff8a55b3e9897b3226841cddc9495628b75",
+        "rustSha256": "7cd5a927478f1854e20924f57b5a2ce10e26d1eea20c240a596d0088abd0c5b7",
         "scope": null,
         "same": false,
         "declared": [],

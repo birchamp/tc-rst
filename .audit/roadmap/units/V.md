@@ -15,8 +15,8 @@ proves: [P10]
 no_loss: true
 size: 1.5-3 d (estimate; nothing comparable has been built)
 merged: none
-updated: 2026-10-24
-next: Parked until after the first release (rulings/2026-10-24-H3-H4-H7-fast-release.md).
+updated: 2026-10-27
+next: Parked until REL-1 is done; then V is next, with the 1.0-draft capsule set (rulings/2026-10-27-H9.md).
 blocked_by: none
 ---
 
@@ -346,3 +346,4 @@ Plus the `format-older-reader` job, and the capsule tests on the Windows VM gate
 - 2026-10-21 | roadmap | created | none | from the 2026-10-21 assessment | .audit/roadmap/evidence/2026-10-21/storage-remaining.md
 - 2026-10-21 | roadmap | note | none | updated to the owner's rulings of 2026-10-21 and docs/STORAGE-DELTA-2026-10-21.md | .audit/roadmap/rulings/
 - 2026-10-24 | roadmap | re-planned | none | owner ruling: finish in days | .audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md
+- 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | note | none | Owner ruling H9 (2026-10-27): 4.1.0 ships as a testers-only preview before the freeze. When V resumes, it names this preview's capsule set 1.0-draft, and its older-reader job keeps every project 4.1.0-preview wrote opening in 1.0. V is the next card after REL-1 | .audit/roadmap/rulings/2026-10-27-H9.md

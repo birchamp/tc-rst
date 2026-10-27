@@ -7,7 +7,7 @@ H3, H4, H10 and H16). The pipeline is `.github/workflows/release.yml`; its scrip
 ## What a release is
 
 - **Version:** semver, from `[workspace.package] version` in `Cargo.toml`. The first public
-  release is 4.1.0, tag `v4.1.0` (H16 part 1). A patch fixes, a minor adds, a major breaks an older
+  release is 4.1.0 (H16 part 1). Before it, `4.1.0-preview` (tag `v4.1.0-preview`) goes to named testers only: About says "preview", and format 1.0 is not frozen yet (H9, `rulings/2026-10-27-H9.md`). A patch fixes, a minor adds, a major breaks an older
   project or sync peer.
 - **Names (H16 part 3):** the app shows itself as **translationCore**; it is installed as
   **translationCore 4** (install folder, Start menu, Applications). The download page is
@@ -40,7 +40,7 @@ test checks it.
 ## Cutting a release
 
 1. On the default branch, when the release is ready, the owner (or someone the owner names)
-   pushes the tag: `git tag v4.1.0 && git push origin v4.1.0`. Nobody else pushes release tags.
+   pushes the tag: `git tag v4.1.0-preview && git push origin v4.1.0-preview`. Nobody else pushes release tags.
 2. The tag runs `release`. It builds nothing for a tag while any interface string is untranslated
    (job `translations`, `cargo test --release -p tc-api --test refusals`; rulings/2026-10-22-H10.md).
 3. Each platform is built, installed on a fresh runner of its own system and smoke-tested there.
@@ -84,7 +84,7 @@ their signature. Any other run builds unsigned and its file names say `-unsigned
 signature in PowerShell:
 
 ```powershell
-Get-AuthenticodeSignature .\translationCore4-4.1.0-windows-x64.exe | Format-List Status,SignerCertificate,TimeStamperCertificate
+Get-AuthenticodeSignature .\translationCore4-4.1.0-preview-windows-x64.exe | Format-List Status,SignerCertificate,TimeStamperCertificate
 ```
 
 ## Secrets

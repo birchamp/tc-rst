@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d
 merged: none
 updated: 2026-10-27
-next: blocked on the owner: signing set-up (H4, A4), 319 untranslated keys in nine languages (H10), format 1.0 or a preview release (H9), H17, the P7 review (G2), then step 4 (the owner reviews the installers)
+next: blocked on the owner: signing set-up (H4, A4), 319 untranslated keys in nine languages (H10), then step 4 (the owner reviews the installed app, which also stands in for the P7 review)
 blocked_by: none
 ---
 
@@ -74,3 +74,7 @@ The owner's yes is recorded, and the release tag points at a commit
 - 2026-10-27 05:49 EDT | integration lane (Claude Code 3d07d5f8) | step 2 | b9d42bb4 | P table written from the ledger, every row with its job and green run on b9d42bb4: P1, P2, P3, P4, P5 and P8 green, plus a security row. P7 is green for the screens it records, P9 for the kept scope, and P10's pins are green. Skipped: P6 waits for AQ1; the full P7 review waits for G2; the P10 freeze waits for V (H9); P9's cut import kinds by the owner's ruling. The owner list is in the evidence | docs/evidence/rel-1-2026-10-27.md
 - 2026-10-27 06:16 EDT | integration lane (Claude Code 3d07d5f8) | step 3 | 05d7a661 | Release run 40483548452 on this branch: common is green with the fetch fix. Build and smoke are green on windows-x64, linux-x64 and macos-arm64; each installer was installed and smoke-tested on a fresh runner of its own system. The Windows installer is unsigned, as on any branch run. translations fails by design: 319 keys are English in each of ar, es-419, fr, hi, id, pt-BR, ru, uk and vi. Signing waits for the owner's A4 set-up | gh run view 40483548452
 - 2026-10-27 06:17 EDT | integration lane (Claude Code 3d07d5f8) | merge | f7993eb6 | release.yml's fetch fix and steps 1 to 3 merged into main in batch 37 (the orchestrator's go); the card stays open for the owner's items and step 4 | scripts/gates.sh --wait-ci batch-37
+- 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | H9: 4.1.0 is a testers-only preview. The version is 4.1.0-preview, About shows it, and the capsule set will be named 1.0-draft. V comes next | .audit/roadmap/rulings/2026-10-27-H9.md
+- 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | H17: measure, don't block. Budgets are measured on the reference laptop and recorded in docs/evidence/, and each slow row becomes a card. The AGENTS.md sentence is drafted in the ruling | .audit/roadmap/rulings/2026-10-27-H17.md
+- 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | ruling | none | P7: the owner's review of the installed app in step 4 stands in for G2 in 4.1.0 | .audit/roadmap/rulings/2026-10-27-p7-review.md
+- 2026-10-27 07:45 EDT | integration lane (Claude Code 3d07d5f8) | note | none | The version is now 4.1.0-preview. About and Feedback were recaptured with B7, rebuilt first. They show "4.1.0-preview (dev)"; no report row changed its verdict, and screen_record passes 49 of 49 | UPDATE_REPORT=1 cargo test --locked -p tc-ui --test screen_record
