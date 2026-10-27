@@ -384,7 +384,7 @@ impl App {
             })?;
         let handle = lease.session().handle().clone();
         let report = handle.door43_sync(client, Some(session.clone())).await;
-        let (ended, received_by, recreated, restored) = match report {
+        let (ended, received_by, received_ids, recreated, restored) = match report {
             Some(report) => (
                 match report.ended {
                     tc_sync::machine::Ended::Synced { .. } => Ok(()),
@@ -393,12 +393,14 @@ impl App {
                     }
                 },
                 report.received_by,
+                report.received_ids,
                 report.recreated,
                 report.restored,
             ),
             None => (
                 Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
                 BTreeMap::new(),
+                Vec::new(),
                 false,
                 0,
             ),
@@ -408,7 +410,9 @@ impl App {
             let me = session.handle().facts().device;
             let snapshot = session.read();
             let resources = &self.inner.resources;
-            let mut view = synced_view(&snapshot, me, &[], restored, &|pin| resources.has_dcs(pin));
+            let mut view = synced_view(&snapshot, me, &received_ids, restored, &|pin| {
+                resources.has_dcs(pin)
+            });
             view.recreated = recreated;
             // Unit X counts what came in, by the person who made it (§9.7 `received`).
             view.received = received_by.values().sum();
