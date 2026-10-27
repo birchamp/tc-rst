@@ -505,3 +505,30 @@ async fn a_held_open_runs_until_it_is_released() {
         JobState::Done(JobOutcome::Opened(_))
     ));
 }
+
+/// Home lists the project opened most recently first (owner, 2026-10-26: "project order should
+/// be MRU").
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn opening_a_project_moves_its_card_to_the_top() {
+    use tc_api::home::List;
+    let (_dir, t) = start("sample").await;
+    let order = |home: tc_api::home::HomeView| -> Vec<_> {
+        home.cards.into_iter().map(|card| card.project).collect()
+    };
+    let seed = order(ok(&t.app, &List {}).await);
+    let last = seed.last().unwrap().clone();
+    assert!(seed.len() > 1 && seed[0] != last, "{seed:?}");
+    // Later than every seed project's dateCreated.
+    t.clock.set(4_000_000_000_000);
+    let job = ok(
+        &t.app,
+        &Open {
+            request: rid(44),
+            project: last.clone(),
+            unit: None,
+        },
+    )
+    .await;
+    ended(&t.app, job).await;
+    assert_eq!(order(ok(&t.app, &List {}).await)[0], last);
+}
