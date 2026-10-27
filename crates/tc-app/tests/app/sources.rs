@@ -14,7 +14,7 @@ use tc_api::jobs::{Cancel, JobOutcome, JobState};
 use tc_api::net::Set;
 use tc_api::refusal::{OpenRefusal, Refusal};
 use tc_api::resources::{
-    Catalog, Download, FromInstalls, GatewayRef, PackageRole, Sources, SourcesView,
+    Catalog, Download, Downloaded, FromInstalls, GatewayRef, PackageRole, Sources, SourcesView,
 };
 use tc_api::session::{Open, OpenUnit};
 use tc_api::settings::{SettingsView, ViewFromHome};
@@ -395,7 +395,7 @@ async fn a_download_installs_the_latest_release_and_counts_the_package() {
     let job = ok(&t.app, &download(at.clone())).await;
     assert_eq!(
         ended(&t.app, job).await,
-        JobState::Done(JobOutcome::Finished)
+        JobState::Done(JobOutcome::Downloaded(Downloaded::Fetched))
     );
     assert_eq!(installs_of(&t.app_data, OTHER_OWNER), 1);
     let view = ok(&t.app, &Sources { at: at.clone() }).await;
@@ -417,7 +417,7 @@ async fn a_download_installs_the_latest_release_and_counts_the_package() {
     .await;
     assert_eq!(
         ended(&t.app, again).await,
-        JobState::Done(JobOutcome::Finished)
+        JobState::Done(JobOutcome::Downloaded(Downloaded::AlreadyHere))
     );
     assert_eq!(fake.requests().len(), before);
 }

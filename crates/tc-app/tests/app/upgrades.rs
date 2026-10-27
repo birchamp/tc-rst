@@ -1152,7 +1152,9 @@ async fn install_spanish_suite(w: &World) {
     .await;
     assert_eq!(
         ended(&w.t.app, job).await,
-        JobState::Done(JobOutcome::Finished)
+        JobState::Done(JobOutcome::Downloaded(
+            tc_api::resources::Downloaded::Fetched
+        ))
     );
 }
 
@@ -2083,9 +2085,11 @@ async fn download(w: &World, gateway: tc_api::resources::GatewayRef, repos: &[&s
         },
     )
     .await;
-    assert_eq!(
-        ended(&w.t.app, job).await,
-        JobState::Done(JobOutcome::Finished)
+    // A repository may already be here: what it brought is the sets' change, not the fetch.
+    let end = ended(&w.t.app, job).await;
+    assert!(
+        matches!(end, JobState::Done(JobOutcome::Downloaded(_))),
+        "{end:?}"
     );
 }
 
