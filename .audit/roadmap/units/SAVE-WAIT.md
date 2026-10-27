@@ -45,7 +45,8 @@ the thread, not the wait.
 ## Funnel card
 
 - **Invariants**:
-  - A save-machine test that waits longer than its limit fails and names the wait.
+  - INV-WAITS-CATCH-HANGS: a save-machine test that waits longer than its limit fails and names
+    the wait, including the store watch's wait when the test ends; no hold outlives a run's settle.
 - **Wrong states**:
   - `World::deliver` (save_machine.rs, about line 680): after a minute's poll, `flight.handle.await`
     waits with no limit when the store neither finished nor reached a hold.
