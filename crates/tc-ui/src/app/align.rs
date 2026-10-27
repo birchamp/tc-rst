@@ -295,6 +295,26 @@ pub struct SentEdit {
     pub run: tc_api::ids::ServerInstance,
 }
 
+/// How long Home waits for a click to save before it asks. A click's round trip, painted, is
+/// p50 31 ms and p95 42 ms in a debug build (`align_click_round_trip_p95`, 2026-10-26; the
+/// release budget is 30 ms), and a retry after a failed send is two round trips (`Hello`, then
+/// the edit), sent every 250 ms. So 3 s is about 70 slow clicks: a click still unsaved then is
+/// stuck, not slow, and the person is not kept waiting long.
+pub const LEAVE_WAIT_MS: f64 = 3_000.0;
+
+/// What Home does with unsaved clicks (see [`EditQueue::on_leave`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeaveWait {
+    /// Every click is saved: go on to save the links.
+    Leave,
+    /// A click is on its way: wait for its answer.
+    Wait,
+    /// A click's send failed on the way: send it again and wait.
+    Retry,
+    /// A click is lost for sure: ask Stay or Leave without it.
+    Ask,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditFailure {
     Retryable(String),
@@ -392,6 +412,24 @@ impl EditQueue {
         }
         self.flight = Flight::Idle;
         self.next()
+    }
+
+    /// What Home does with the clicks not yet saved, `waited_ms` after it was pressed (owner
+    /// ruling ALIGN-LEAVE): the person is asked only once a click is lost for sure.
+    pub fn on_leave(&self, waited_ms: f64) -> LeaveWait {
+        match &self.flight {
+            _ if self.is_idle() => LeaveWait::Leave,
+            Flight::Failed {
+                reason: EditFailure::Refused(_),
+                ..
+            } => LeaveWait::Ask,
+            _ if waited_ms >= LEAVE_WAIT_MS => LeaveWait::Ask,
+            Flight::Failed {
+                reason: EditFailure::Retryable(_),
+                ..
+            } => LeaveWait::Retry,
+            _ => LeaveWait::Wait,
+        }
     }
 
     /// Used only after the surrounding project/view was explicitly reset. Error replies
@@ -751,6 +789,25 @@ mod tests {
         assert_eq!(queue.pending(), vec![click(1)]);
         assert_eq!(queue.replied(), None);
         assert!(queue.is_idle());
+    }
+
+    #[test]
+    fn home_asks_only_once_a_click_is_lost_for_sure() {
+        let mut queue = EditQueue::default();
+        assert_eq!(queue.on_leave(LEAVE_WAIT_MS), LeaveWait::Leave);
+        let first = queue.push(click(0)).unwrap();
+        queue.sent(sent(first, 1));
+        assert_eq!(queue.on_leave(0.0), LeaveWait::Wait, "on its way");
+        queue.failed(EditFailure::Retryable("reply lost".into()));
+        assert_eq!(queue.on_leave(10.0), LeaveWait::Retry);
+        assert_eq!(
+            queue.on_leave(LEAVE_WAIT_MS),
+            LeaveWait::Ask,
+            "stuck past the limit"
+        );
+        queue.retry();
+        queue.failed(EditFailure::Refused("the aligner changed".into()));
+        assert_eq!(queue.on_leave(0.0), LeaveWait::Ask, "refused for good");
     }
 
     #[test]

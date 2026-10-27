@@ -36,6 +36,17 @@ impl Actions {
     /// Drains every field, then takes the checkpoint of `to`; answers whether the caller may
     /// switch. A standing failure keeps the person where they are (FR-32).
     pub(crate) async fn leave(&self, to: LeaveTo) -> bool {
+        if to == LeaveTo::Home {
+            let open = || self.s().project.with_untracked(Option::is_some);
+            let was_open = open();
+            if !self.settle_align_clicks().await {
+                return false;
+            }
+            // A restart during the wait already took the person Home, without the gate.
+            if was_open && !open() {
+                return false;
+            }
+        }
         if !self.runtime().saves().gate().await {
             return false;
         }

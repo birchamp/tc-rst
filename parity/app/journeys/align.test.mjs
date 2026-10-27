@@ -407,6 +407,159 @@ browserTest('a_refused_verse_switch_keeps_the_open_verse_shown', async () => {
   });
 });
 
+/** Home with a click not yet saved (owner ruling ALIGN-LEAVE, 2026-10-26): it waits while the
+ * click is on its way and asks Stay or Leave without it only once the click is lost for sure.
+ * `asked` records whether the question ever showed. */
+async function watchQuestion(page) {
+  await page.evaluate(() => {
+    window.__asked = false;
+    new MutationObserver(() => {
+      if (document.querySelector('[role="alertdialog"]')) window.__asked = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  return () => page.evaluate(() => window.__asked);
+}
+
+const question = (page) => page.getByRole('alertdialog');
+const home = (page) => page.getByTestId(`project-${BIBLE}`);
+
+/** The first word is chosen, and the click that places it is held on its way. */
+async function holdThePlacement(page) {
+  await chip(page, 'fe').click();
+  await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+  const hold = await holdNextEdit(page);
+  await card(page, 'πίστιν').click();
+  await hold.entered;
+  return hold;
+}
+
+browserTest('a_click_that_saves_within_the_wait_leaves_with_no_question', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    const asked = await watchQuestion(page);
+    const hold = await holdThePlacement(page);
+    await page.getByTestId('project-switch').click();
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    assert.equal(await home(page).count(), 0, 'Home waits for the click');
+    hold.release();
+    await home(page).waitFor({ timeout: 10_000 }).catch(() => {});
+    assert.equal(await asked(), false, 'INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: no question for a click that saved');
+    await home(page).waitFor();
+    await openAlign(page);
+    await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
+  });
+});
+
+browserTest('a_click_sent_again_after_a_cut_leaves_with_no_question', async () => {
+  await withApp(async ({ page, allow }) => {
+    allow(/Failed to load resource: net::ERR_FAILED/);
+    await openAlign(page);
+    const asked = await watchQuestion(page);
+    await chip(page, 'fe').click();
+    await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+    let cut = true;
+    await page.route('**/api/v1/align/edit', (route) => (cut ? route.abort('failed') : route.continue()));
+    await card(page, 'πίστιν').click();
+    await page.getByTestId('project-switch').click();
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    cut = false;
+    await home(page).waitFor({ timeout: 10_000 }).catch(() => {});
+    assert.equal(await asked(), false, 'INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: Home sends the click again and asks nothing');
+    await home(page).waitFor();
+    await openAlign(page);
+    await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
+  });
+});
+
+browserTest('a_click_refused_for_good_asks_and_leave_without_it_goes_home', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    await chip(page, 'fe').click();
+    await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+    await page.route('**/api/v1/align/edit', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"err","value":{"type":"staleSession"}}' }));
+    await card(page, 'πίστιν').click();
+    await page.getByTestId('align-edit-error').waitFor();
+    await page.getByTestId('project-switch').click();
+    await question(page).waitFor({ timeout: 2_000 }).catch(() => {
+      throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: a click refused for good asks at once');
+    });
+    assert.equal(await home(page).count(), 0, 'Home waits for the answer');
+    await question(page).getByRole('button', { name: 'Leave without it' }).click();
+    await home(page).waitFor();
+  });
+});
+
+browserTest('a_stuck_click_asks_after_the_limit_and_stay_keeps_it', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    const hold = await holdThePlacement(page);
+    try {
+      const started = Date.now();
+      await page.getByTestId('project-switch').click();
+      await question(page).waitFor({ timeout: 6_000 }).catch(() => {
+        throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: a click stuck past the limit asks');
+      });
+      const waited = Date.now() - started;
+      assert.ok(waited >= 2_900, `Home waited the limit first (${waited} ms)`);
+      await until('focus moves into the question, on Stay', () => page.evaluate(() => document.activeElement?.closest('[role="alertdialog"]') != null
+        && document.activeElement.textContent.trim() === 'Stay'));
+      await question(page).getByRole('button', { name: 'Stay' }).click();
+      await question(page).waitFor({ state: 'detached' });
+      assert.equal(await home(page).count(), 0, 'Stay keeps the person in the aligner');
+      hold.release();
+      await until('the kept click saves', async () => (await placed(page)) === '7 of 27 words placed');
+      await until('saved', async () => (await saveState(page)) === 'saved');
+    } finally {
+      hold.release();
+    }
+  });
+});
+
+browserTest('a_click_that_saves_while_home_asks_closes_the_question_and_goes_home', async () => {
+  await withApp(async ({ page }) => {
+    await openAlign(page);
+    const hold = await holdThePlacement(page);
+    try {
+      await page.getByTestId('project-switch').click();
+      await question(page).waitFor({ timeout: 6_000 });
+      hold.release();
+      await home(page).waitFor({ timeout: 10_000 }).catch(() => {
+        throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: a click that saves while asked is not lost, so Home goes on');
+      });
+      assert.equal(await question(page).count(), 0);
+      await openAlign(page);
+      await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
+    } finally {
+      hold.release();
+    }
+  });
+});
+
+browserTest('stay_keeps_the_click_on_the_page', async () => {
+  await withApp(async ({ page, allow }) => {
+    // The cut connection: each send of the click fails, about four times a second.
+    allow(/Failed to load resource: net::ERR_FAILED/);
+    await openAlign(page);
+    await chip(page, 'fe').click();
+    await until('fe chosen', async () => (await chip(page, 'fe').getAttribute('data-armed')) === '1');
+    let cut = true;
+    await page.route('**/api/v1/align/edit', (route) => (cut ? route.abort('failed') : route.continue()));
+    await card(page, 'πίστιν').click();
+    await page.getByTestId('project-switch').click();
+    await question(page).waitFor({ timeout: 6_000 });
+    await page.keyboard.press('Escape');
+    await question(page).waitFor({ state: 'detached' });
+    assert.equal(await home(page).count(), 0, 'Escape is Stay');
+    cut = false;
+    try {
+      await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click({ timeout: 5_000 });
+      await until('the click Stay kept saves on Retry', async () => (await placed(page)) === '7 of 27 words placed');
+    } catch {
+      throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: Stay keeps the click, so Retry saves it');
+    }
+  });
+});
+
 /** tC4 #807: after a sync, Home waited forever on a span save queued behind a refused
  * alignment save. The rebuild has no such queue, and the aligner has no text field: leaving
  * Translate for it saved every field. The gate asks the server to save the links; a refusal no
