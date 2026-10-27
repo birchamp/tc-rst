@@ -15,7 +15,7 @@ no_loss: false
 size: 1 d (basis: S2's store measurements on the owner's Linux machine, 2026-10-18)
 merged: none
 updated: 2026-10-27
-next: Claim this card on the reference laptop ("Part 3 complete" session) when it is back online, then do step 1.
+next: Step 1 is partly done (docs/evidence/perf-laptop-2026-10-27.md): the rows that need a Psalms project in the installed app, the cold open after a reboot, memory growth, USB export, sync, tC4 import and the signed start-up rows remain. Step 2 cards are written; run board.py --check (no Python on the laptop).
 blocked_by: none
 ---
 
@@ -99,3 +99,5 @@ here is named and has a card, before it reaches more translators.
 ## Log
 
 - 2026-10-27 08:11 EDT | integration lane (Claude Code 3d07d5f8) | create | none | Card created by owner ruling H17 (measure, don't block), as the orchestrator asked. REL-1 does not depend on it | .audit/roadmap/rulings/2026-10-27-H17.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 1 (part) | none | Store rows, release timing tests, app benches and the installed unsigned 4.1.0-preview launch rows measured; see "Not yet measured" for what is left | docs/evidence/perf-laptop-2026-10-27.md
+- 2026-10-27 | reference-laptop session (Claude Code) | step 2 | none | Cards written for the five missed rows: PERF-CHECKPOINT, PERF-MATERIALIZE-BOOK, PERF-CLOSE, PERF-LEXICON-LOAD, PERF-SUGGEST; open-rows table in PERFORMANCE.md names them. board.py --check not run here (no Python) | docs/PERFORMANCE.md
