@@ -76,6 +76,16 @@ pub(crate) struct Journal {
 }
 
 impl Journal {
+    /// A pending file holds saves a seal can take: one of a newer format or of another
+    /// project, or one another program holds, waits for no seal (§5.11 K1).
+    pub fn has_unsealed(&self) -> bool {
+        self.pending.iter().any(|(rel, p)| {
+            p.status == tc_journal::pending::PendingStatus::Valid
+                && !p.ids.is_empty()
+                && !self.unreadable.contains(rel)
+        })
+    }
+
     /// While an expected pack is missing or a journal file unreadable, nothing derived is
     /// removed (§5.10 M0).
     pub fn complete(&self) -> bool {

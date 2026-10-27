@@ -246,15 +246,18 @@ impl Actor {
 
     /// Seals once a pending save has waited [`SEAL_WITHIN_MS`].
     fn seal_when_due(&mut self) {
-        if self.project.journal.pending.is_empty() || self.read_only().is_some() {
+        if !self.project.journal.has_unsealed() || self.read_only().is_some() {
             self.unsealed_since = None;
             return;
         }
         let now = self.project.clock.now().0;
-        let since = *self.unsealed_since.get_or_insert(now);
+        // A clock set back starts the wait again rather than never ending it.
+        let since = self.unsealed_since.filter(|s| *s <= now).unwrap_or(now);
+        self.unsealed_since = Some(since);
         if now - since >= SEAL_WITHIN_MS {
             self.unsealed_since = None;
-            self.checkpoint(CheckpointReason::Periodic, Vec::new(), None);
+            let reason = CheckpointReason::Other("2 minutes after a save".into());
+            self.checkpoint(reason, Vec::new(), None);
         }
     }
 

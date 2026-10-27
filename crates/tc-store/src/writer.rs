@@ -236,6 +236,8 @@ pub(crate) struct Writer {
     pub values_told: Option<u32>,
     /// The open's first job runs: a long one shows progress.
     pub opening: bool,
+    /// The open sealed (§6.1 O15): its write group ends with the open's materialization.
+    pub sealed_at_open: bool,
     /// The writer's own handle on the project's repository: blobs, trees and commit objects.
     pub git: Option<crate::git::Git>,
     /// This computer's device, for the trailers of a commit.
@@ -357,7 +359,9 @@ impl Writer {
         }
         let result = self.materialize_now();
         self.opening = false;
-        if checkpoint.is_some() {
+        if checkpoint.is_some()
+            || (origin == Origin::Open && std::mem::take(&mut self.sealed_at_open))
+        {
             // The seal's packs are listed now, or the job failed and the next open repairs it.
             self.shared.close_group();
         }
@@ -836,6 +840,7 @@ mod tests {
             reasons: BTreeMap::new(),
             values_told: None,
             opening: false,
+            sealed_at_open: false,
             git: None,
             device: DeviceId::local([9; 15]),
             recover: None,

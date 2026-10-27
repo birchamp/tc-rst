@@ -644,6 +644,7 @@ fn open_inner(
         reasons: BTreeMap::new(),
         values_told: None,
         opening: false,
+        sealed_at_open: false,
         git,
         device,
         recover: broken_git,
@@ -737,9 +738,6 @@ fn open_inner(
     }
     let watch_writer = writer_tx.clone();
     let watch_actor = actor_tx.clone();
-    // Saves an earlier session left unsealed are sealed before the open returns: their only
-    // copy is a pending file, and their age is unknown (owner ruling 2026-10-22, 2 minutes).
-    let inherited = !read_only && !project.journal.pending.is_empty();
     let handle = crate::actor::spawn(
         project,
         gates.lock.take(),
@@ -764,12 +762,6 @@ fn open_inner(
     }
     if let Some(background) = background {
         handle.start_background(background);
-    }
-    if inherited {
-        // A seal that cannot finish now says so in Notices; the open goes on.
-        let _ = handle
-            .checkpoint(crate::handle::CheckpointReason::Other("open".into()))
-            .wait();
     }
     Ok(handle)
 }
@@ -812,6 +804,17 @@ fn repair_and_classify(
     if manifest_lost {
         // The `kept` entries the lost manifest held (delta §2.3): their copies are told again.
         writer.relist_unnamed_copies()?;
+    }
+    // O15: saves an earlier session left unsealed are sealed now, after O9 classified the
+    // files against the packs they were written from, so O10 lists the new packs. Their only
+    // copy is a pending file and their age is unknown (ruling 2026-10-22: at most the last 2
+    // minutes may be lost). K3 stores each pack as a blob; the next checkpoint commits them.
+    if project.journal.has_unsealed() {
+        project.shared.open_group();
+        writer.sealed_at_open = true;
+        let mut run = project.seal_start()?;
+        while project.seal_step(&mut run)? {}
+        writer.packs = project.pack_facts();
     }
     tracker.phase(Phase::Writing, 1, 0);
     if writer.manifest_changed {

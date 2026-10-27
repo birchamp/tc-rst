@@ -2225,7 +2225,7 @@ Q4  atomic_remove each replaced pack (directory fsync once).
 ### 5.13 Checkpoint: seal, materialize, commit
 
 A checkpoint runs on leaving Translate or the project (tC4 J8), before a sync, an export or a USB
-export, after a USB import, at app exit, at an open that found pending files (§6.1 O15), every
+export, after a USB import, at app exit, every
 30 minutes while there are pending batches, and once a save has waited 2 minutes unsealed by the
 store's clock (the actor checks after every command and on its timer): until a seal its only
 copy is a pending file, and the owner's ruling allows losing at most the last 2 minutes.
@@ -2510,9 +2510,11 @@ O14 The storage check, in the background (PERFORMANCE.md rule 4): read every pat
     open, in competition with the saves: that is the price of reading what O9 spared, and
     the reason the check is the only place a stat that lies is found.
 O15 A writable open that found pending files (saves a session that ended without a seal left)
-    runs a checkpoint (§5.13) before it returns: their only copy is a pending file another
-    program could damage, and their age is unknown, so none may wait for the next seal
-    (owner ruling 2026-10-22-acceptable-loss: no save older than 2 minutes may be lost).
+    seals them (§5.11) after O9, so O10 lists their packs (O9 classifies the files against the
+    packs they were written from) and K3 stores each as a blob;
+    the next checkpoint commits them. Their only copy was a pending file another program could
+    damage, and their age is unknown, so none may wait for the next seal (owner ruling
+    2026-10-22-acceptable-loss: no save older than 2 minutes may be lost).
 ```
 
 Open refuses only for: another process holds the lock (`LockHeld`, which names the holder),

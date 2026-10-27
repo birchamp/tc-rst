@@ -779,7 +779,7 @@ fn a_pending_file_cut_short_at_a_line_is_sealed_from_memory() {
 
 /// A pending file a crash left: the next open seals it before it returns, so no later change
 /// to the file can take the save, however old it is (ruling 2026-10-22-acceptable-loss,
-/// LOSS-2), and a commit holds it.
+/// LOSS-2), and the next checkpoint commits it.
 #[test]
 fn a_pending_file_a_crash_left_is_sealed_at_the_open() {
     let (rig, folder) = titus();
@@ -796,8 +796,9 @@ fn a_pending_file_a_crash_left_is_sealed_at_the_open() {
         pending_files(&rig, &folder),
         Vec::<std::path::PathBuf>::new()
     );
-    assert_eq!(commits_of(&repo).len(), commits + 1);
     assert!(a_version_holds(&handle, 1, 1, "saved before a crash"));
+    assert!(checkpoint(&handle).commit.is_some());
+    assert_eq!(commits_of(&repo).len(), commits + 1);
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }
