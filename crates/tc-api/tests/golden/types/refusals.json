@@ -966,6 +966,18 @@
     "wire": {
       "type": "share",
       "value": {
+        "type": "alreadyShared"
+      }
+    },
+    "code": "share.already-shared",
+    "key": "refusal.share.already-shared",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "share",
+      "value": {
         "type": "offline"
       }
     },
@@ -1021,7 +1033,24 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "nameExists"
+      "value": {
+        "type": "alreadyHere",
+        "value": {
+          "project": "es-419_tit_equipo"
+        }
+      }
+    },
+    "code": "open-door43.already-here",
+    "key": "refusal.open-door43.already-here",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "openDoor43",
+      "value": {
+        "type": "nameExists"
+      }
     },
     "code": "open-door43.name-exists",
     "key": "refusal.open-door43.name-exists",
@@ -1031,7 +1060,9 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "noJournal"
+      "value": {
+        "type": "noJournal"
+      }
     },
     "code": "open-door43.no-journal",
     "key": "refusal.open-door43.no-journal",
@@ -1041,7 +1072,9 @@
   {
     "wire": {
       "type": "openDoor43",
-      "value": "removed"
+      "value": {
+        "type": "removed"
+      }
     },
     "code": "open-door43.removed",
     "key": "refusal.open-door43.removed",
@@ -1272,6 +1305,64 @@
     "code": null,
     "key": "exchange.error.verifyFailed",
     "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "otherProject",
+        "value": {
+          "name": "Tito"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.otherProject",
+    "vars": {
+      "name": "Tito"
+    },
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "notTranslationCore"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.notTranslationCore",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "nameExists"
+      }
+    },
+    "code": null,
+    "key": "exchange.error.nameExists",
+    "vars": {},
+    "detail": null
+  },
+  {
+    "wire": {
+      "type": "exchange",
+      "value": {
+        "type": "partlyReceived",
+        "value": {
+          "reason": "disk full"
+        }
+      }
+    },
+    "code": null,
+    "key": "exchange.error.partlyReceived",
+    "vars": {
+      "reason": "disk full"
+    },
     "detail": null
   },
   {

@@ -1875,14 +1875,15 @@ use super::seed::bundle_build;
 fn bundle_of_notes() -> &'static Path {
     static BUNDLE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     BUNDLE.get_or_init(|| {
-        let out = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("c8-bundle-notes");
-        let _ = std::fs::remove_dir_all(&out);
         let from = repo_root().join("bundle/en");
-        let built =
-            bundle_build::build_bundle(&from, &out, &|pin| pin.repo.name().as_str() == "en_tn")
-                .unwrap_or_else(|e| panic!("the bundle could not be built: {e}"));
-        assert_eq!(built.installed.len(), 1, "{built:?}");
-        out
+        bundle_build::build_once_per_run(
+            &std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")),
+            "c8-bundle-notes",
+            &from,
+            &|pin| pin.repo.name().as_str() == "en_tn",
+            1,
+        )
+        .unwrap_or_else(|e| panic!("the bundle could not be built: {e}"))
     })
 }
 

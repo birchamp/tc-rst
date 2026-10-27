@@ -49,7 +49,10 @@ use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Created, Details, Obs, ReviewUsfm, UsfmAdded,
     UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
-use tc_api::door43::{OpenDoor43, ProjectName, RepoSource, SyncProject};
+use tc_api::door43::{
+    OpenDoor43, ProjectName, RepoName, RepoSource, ShareOnDoor43, ShareOwner, SharedRepo,
+    SyncProject,
+};
 use tc_api::editor::{
     AddComment, Book, BookView, ChapterText, Chapters, ChaptersView, CommentView,
     DiscardDraft as EditorDiscardDraft, Draft as EditorDraft, DraftField as EditorDraftField,
@@ -61,6 +64,10 @@ use tc_api::event::{
     Aspect, ChangeCause, ChangeParts, ChangeScope, ChapterRef, CheckpointOutcome, Event,
     EventFrame, RecordChange, SessionEvent, SessionMode, StartupProgress, StartupState,
 };
+use tc_api::exchange::{
+    ExchangeFile, Export, ExportedView, HandEditOutcome, HandEdited, Identify, IdentifyView,
+    Receive, ReceiveNew, ReceivedView,
+};
 use tc_api::export;
 use tc_api::feedback::{Compose, FeedbackDraft};
 use tc_api::helps::{
@@ -70,7 +77,8 @@ use tc_api::helps::{
 use tc_api::home::{
     BookTileView, Card, Door43Card, HomeCard, HomeView, LanguageSuggestion, Languages,
     LanguagesView, LastEditView, List, ProjectKind, RecentStory, RepoPlace, ResumePlace,
-    StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications, VersificationsView,
+    StartNotice, StoriesView, StoryTileView, UnusableCard, UnusableReason, Versifications,
+    VersificationsView,
 };
 use tc_api::ids::{
     AlignerId, ChangeRef, CheckSessionId, ConflictRef, DownloadId, Epoch, JobId, LocaleId,
@@ -112,13 +120,13 @@ use tc_api::settings::{
 };
 use tc_api::shown::{Computer, ConflictMarker, Direction, Known, PersonLabel, Shown, Who};
 use tc_api::story;
+use tc_api::test::{ConnectDoor43, InvalidProject, Validate, ValidateView};
 use tc_api::test::{
     Crash, CrashPoint, Echo, EchoView, EchoWord, FieldDraft, FieldLog, FieldLogView, FieldStore,
     Hold, HoldPoint, Keychain, KeychainHolds, KeychainMode, KeychainView, LastEdit, Quiet,
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
-use tc_api::test::{InvalidProject, Validate, ValidateView};
 use tc_api::upload::{UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored, TokenUpdate,
@@ -557,7 +565,6 @@ impl Example for OpenDoor43 {
         OpenDoor43 {
             request: request(20),
             repo: RepoSource::new("facilitator-zq", "es-419_tit_equipo").unwrap(),
-            name: ProjectName::parse("es-419_tit_equipo").unwrap(),
         }
     }
 }
@@ -600,6 +607,7 @@ impl Example for tc_api::door43::LastSyncView {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 0,
+                recreated: false,
                 replaced: vec![
                     setting(
                         ReplacedKind::Setting,
@@ -624,6 +632,93 @@ impl Example for SyncProject {
         SyncProject {
             request: request(21),
             project: ProjectRef::parse("sample_burrito").unwrap(),
+        }
+    }
+}
+
+impl Example for ShareOnDoor43 {
+    fn example() -> Self {
+        ShareOnDoor43 {
+            request: request(22),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: ShareOwner::Organization(RepoName::parse("es-419_gl").unwrap()),
+            name: RepoName::parse("es-419_tit_equipo").unwrap(),
+        }
+    }
+}
+
+impl Example for Identify {
+    fn example() -> Self {
+        Identify {
+            file: ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
+        }
+    }
+}
+
+impl Example for IdentifyView {
+    fn example() -> Self {
+        IdentifyView {
+            name: "Tito".into(),
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+        }
+    }
+}
+
+impl Example for Export {
+    fn example() -> Self {
+        Export {
+            request: request(22),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            destination: "/media/stick".into(),
+        }
+    }
+}
+
+impl Example for ExportedView {
+    fn example() -> Self {
+        ExportedView {
+            path: "/media/stick/tit-2026-10-25-ana.zip".into(),
+        }
+    }
+}
+
+impl Example for Receive {
+    fn example() -> Self {
+        Receive {
+            request: request(23),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            file: ExchangeFile::Upload(
+                tc_api::ids::UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+            ),
+        }
+    }
+}
+
+impl Example for ReceiveNew {
+    fn example() -> Self {
+        ReceiveNew {
+            request: request(24),
+            file: ExchangeFile::Path("/media/stick/tit-2026-10-25-maria.zip".into()),
+            name: ProjectName::parse("tito_de_maria").unwrap(),
+        }
+    }
+}
+
+impl Example for ReceivedView {
+    fn example() -> Self {
+        ReceivedView {
+            received: 3,
+            from: vec![PersonLabel {
+                who: Who::Username("maria".into()),
+                computer: None,
+            }],
+            kept_newest: 1,
+            verse_conflicts: 1,
+            alignments: 0,
+            hand_edited: vec![HandEdited {
+                path: "ingredients/TIT.usfm".into(),
+                outcome: HandEditOutcome::NotTakenIn,
+            }],
         }
     }
 }
@@ -1643,6 +1738,7 @@ impl Example for HomeView {
                 tool: None,
                 snippet: "Pablo, siervo de Dios".into(),
             }),
+            notices: vec![StartNotice::OpenDoor43Removed],
             import_removed: true,
         }
     }
@@ -3150,6 +3246,18 @@ fn review_entries() -> Vec<ReviewEntries> {
     ]
 }
 
+impl Example for ConnectDoor43 {
+    fn example() -> Self {
+        ConnectDoor43 {
+            request: request(23),
+            project: ProjectRef::parse("sample_burrito").unwrap(),
+            owner: "facilitator-zq".into(),
+            name: "sample_burrito".into(),
+            branch: "master".into(),
+        }
+    }
+}
+
 impl Example for Script {
     fn example() -> Self {
         Script {
@@ -3823,6 +3931,7 @@ fn events() -> Vec<Event> {
                 alignments: 0,
                 restored: 0,
                 missing_pins: 5,
+                recreated: false,
                 replaced: vec![tc_api::jobs::ReplacedView {
                     by: PersonLabel {
                         who: Who::Teammate(1),
@@ -3841,6 +3950,27 @@ fn events() -> Vec<Event> {
                     count: 1,
                     was: None,
                 }],
+            })),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(13),
+            kind: JobKind::ExchangeExport,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Exported(ExportedView::example())),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(14),
+            kind: JobKind::ExchangeReceive,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Received(ReceivedView::example())),
+        }),
+        Event::Job(JobView {
+            id: JobId::new(15),
+            kind: JobKind::Share,
+            project: Some(ProjectRef::parse("sample_burrito").unwrap()),
+            state: JobState::Done(JobOutcome::Shared(SharedRepo {
+                repo: RepoSource::new("es-419_gl", "es-419_tit_equipo").unwrap(),
+                url: WebUrl::parse("https://git.door43.org/es-419_gl/es-419_tit_equipo").unwrap(),
             })),
         }),
         Event::Job(JobView {

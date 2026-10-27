@@ -171,6 +171,7 @@ pub fn sync() -> Vec<SyncFailure> {
 pub fn share() -> Vec<ShareRefusal> {
     vec![
         ShareRefusal::NameExists,
+        ShareRefusal::AlreadyShared,
         ShareRefusal::Offline,
         ShareRefusal::AuthFailed,
         ShareRefusal::CreateRejected {
@@ -184,6 +185,9 @@ pub fn share() -> Vec<ShareRefusal> {
 
 pub fn open_door43() -> Vec<OpenDoor43Refusal> {
     vec![
+        OpenDoor43Refusal::AlreadyHere {
+            project: tc_api::ids::ProjectRef::parse("es-419_tit_equipo").unwrap(),
+        },
         OpenDoor43Refusal::NameExists,
         OpenDoor43Refusal::NoJournal,
         OpenDoor43Refusal::Removed,
@@ -235,6 +239,14 @@ pub fn exchange() -> Vec<ExchangeRefusal> {
         ExchangeRefusal::Damaged,
         ExchangeRefusal::NewerFormat { format: 2 },
         ExchangeRefusal::VerifyFailed,
+        ExchangeRefusal::OtherProject {
+            name: "Tito".into(),
+        },
+        ExchangeRefusal::NotTranslationCore,
+        ExchangeRefusal::NameExists,
+        ExchangeRefusal::PartlyReceived {
+            reason: "disk full".into(),
+        },
         ExchangeRefusal::NotWritten {
             reason: s("the drive is full"),
         },

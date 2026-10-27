@@ -162,6 +162,8 @@ pub struct FaultRule {
     pub path_prefix: String,
     /// How many matching requests get the fault; `None` is every one.
     pub times: Option<usize>,
+    /// How many matching requests pass untouched before the fault applies.
+    pub skip: usize,
     pub fault: Fault,
 }
 
@@ -171,7 +173,16 @@ impl FaultRule {
             method: Some(method.to_owned()),
             path_prefix: path_prefix.to_owned(),
             times: Some(1),
+            skip: 0,
             fault,
+        }
+    }
+
+    /// The fault for the `n`th matching request only, counted from 1.
+    pub fn nth(method: &str, path_prefix: &str, n: usize, fault: Fault) -> Self {
+        Self {
+            skip: n.saturating_sub(1),
+            ..Self::once(method, path_prefix, fault)
         }
     }
 
@@ -180,6 +191,7 @@ impl FaultRule {
             method: Some(method.to_owned()),
             path_prefix: path_prefix.to_owned(),
             times: None,
+            skip: 0,
             fault,
         }
     }
@@ -331,6 +343,8 @@ pub(crate) struct State {
     next_id: u64,
     clock: i64,
     pub metadata_cache: HashMap<String, Option<serde_json::Value>>,
+    /// `(owner, login)`: `login` may push to `owner`'s repositories as a collaborator.
+    pub collaborators: Vec<(String, String)>,
 }
 
 /// 2026-01-01T00:00:00Z. Seeded commits are an hour apart from here, so their shas are
@@ -349,6 +363,7 @@ impl State {
             next_id: 1,
             clock: CLOCK_START,
             metadata_cache: HashMap::new(),
+            collaborators: Vec::new(),
         }
     }
 
@@ -404,6 +419,10 @@ impl State {
     /// Whether `login` may push to or create in `owner`.
     pub fn can_write(&self, login: &str, owner: &str) -> bool {
         login.eq_ignore_ascii_case(owner)
+            || self
+                .collaborators
+                .iter()
+                .any(|(o, l)| o.eq_ignore_ascii_case(owner) && l.eq_ignore_ascii_case(login))
             || self.org(owner).is_some_and(|o| {
                 o.org
                     .members
@@ -490,6 +509,10 @@ impl Shared {
             if !matches {
                 return true;
             }
+            if rule.skip > 0 {
+                rule.skip -= 1;
+                return true;
+            }
             taken.push(rule.fault.clone());
             match &mut rule.times {
                 Some(times) => {
@@ -564,6 +587,33 @@ impl FakeDoor43 {
             user,
             tokens: Vec::new(),
         });
+    }
+
+    /// `login` joins the organization `org`, able to create and push there; when `org` is a
+    /// user, `login` may push to that user's repositories as a collaborator. `false` when there
+    /// is no such account.
+    pub fn add_member(&self, org: &str, login: &str) -> bool {
+        let mut state = self.shared.state();
+        if state
+            .users
+            .iter()
+            .any(|u| u.user.login.eq_ignore_ascii_case(org))
+        {
+            state.collaborators.push((org.to_owned(), login.to_owned()));
+            return true;
+        }
+        let Some(rec) = state
+            .orgs
+            .iter_mut()
+            .find(|o| o.org.name.eq_ignore_ascii_case(org))
+        else {
+            return false;
+        };
+        rec.org.members.push(OrgMember {
+            login: login.to_owned(),
+            can_create_repository: true,
+        });
+        true
     }
 
     pub fn add_org(&self, org: FakeOrg) {
@@ -731,6 +781,40 @@ impl FakeDoor43 {
     /// The bare repository on disk.
     pub fn git_dir(&self, owner: &str, name: &str) -> PathBuf {
         self.shared.git.repo_dir(owner, name)
+    }
+
+    /// Removes a repository and its history, so the same name can be created again empty.
+    pub fn remove_repo(&self, owner: &str, name: &str) -> Result<(), FakeError> {
+        self.shared.state().repos.retain(|r| {
+            !(r.owner.eq_ignore_ascii_case(owner) && r.name.eq_ignore_ascii_case(name))
+        });
+        let dir = self.git_dir(owner, name);
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+        }
+        Ok(())
+    }
+
+    /// Points `branch` at `sha`, as when someone replaces it with an older copy (E1a: "Door43
+    /// lost a teammate's change").
+    pub async fn set_branch(
+        &self,
+        owner: &str,
+        name: &str,
+        branch: &str,
+        sha: &str,
+    ) -> Result<(), FakeError> {
+        let dir = self.git_dir(owner, name);
+        self.shared
+            .git
+            .run(
+                Some(&dir),
+                &["update-ref", &format!("refs/heads/{branch}"), sha],
+                None,
+                &[],
+            )
+            .await
+            .map(|_| ())
     }
 
     /// The commit `rev` (a tag, branch or sha) names in a repository.

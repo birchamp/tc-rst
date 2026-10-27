@@ -26,6 +26,7 @@ pub mod client;
 pub mod confirm;
 pub mod effects;
 pub mod events;
+pub mod exchange;
 pub mod feedback;
 pub mod fix;
 pub mod forms;

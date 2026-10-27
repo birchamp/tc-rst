@@ -42,8 +42,9 @@ fn a_development_build_signs_in_to_qa_door43() {
     tc4.quit();
 }
 
-/// The product has no keychain until unit E1a, so its sign-in step has no "Stay signed in"
-/// (tC4 #496); a test build with its hooks keeps sign-ins in a test keychain.
+/// A test build never touches the computer's credential store (ruling H11): run plain, it has
+/// no keychain, so its sign-in step has no "Stay signed in" (tC4 #496); with its hooks it
+/// keeps sign-ins in a test keychain.
 #[test]
 fn a_test_build_with_hooks_has_a_working_test_keychain_and_a_plain_run_has_none() {
     let (mut tc4, _app_data, _ui) = start(&["--test-hooks"]);

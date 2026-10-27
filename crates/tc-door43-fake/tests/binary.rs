@@ -279,6 +279,40 @@ fn the_parity_account_is_the_baselines_fake_user() {
     );
 }
 
+/// E1a step 5: the control port takes `breakOff`, and a git reply it names stops part way,
+/// as a dropped connection does (R13).
+#[tokio::test]
+async fn a_break_off_fault_cuts_a_git_reply() {
+    let run = start();
+    let path = "/Equipo-Ejemplo/es-419_project_1.git/info/refs";
+    let url = format!("{}{path}?service=git-upload-pack", run.url);
+    let whole = http()
+        .get(&url)
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    assert!(!whole.is_empty(), "the advertisement has bytes");
+    control_post(
+        &run,
+        "/faults",
+        json!({"method": "GET", "path": path, "times": 1,
+               "fault": {"type": "breakOff", "after": 0}}),
+    )
+    .await;
+    let cut = match http().get(&url).send().await {
+        Ok(response) => response.bytes().await.map(|b| b.len()).unwrap_or(0),
+        Err(_) => 0,
+    };
+    assert!(
+        cut < whole.len(),
+        "the reply stopped part way: {cut} of {}",
+        whole.len()
+    );
+}
+
 /// The releases of `owner`'s repositories, as the catalog search lists them: `name@tag` for
 /// each published release.
 async fn catalog(url: &str, owner: &str) -> Vec<String> {

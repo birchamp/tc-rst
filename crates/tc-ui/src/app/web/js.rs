@@ -43,6 +43,23 @@ pub(super) fn session_remove(key: &str) {
     }
 }
 
+/// `navigator.clipboard.writeText(text)`: true once the clipboard holds it.
+pub(super) async fn copy_text(text: &str) -> bool {
+    let write = || -> Result<js_sys::Promise, JsValue> {
+        let navigator = js_sys::Reflect::get(&window()?.into(), &JsValue::from_str("navigator"))?;
+        let clipboard = js_sys::Reflect::get(&navigator, &JsValue::from_str("clipboard"))?;
+        let write_text: js_sys::Function =
+            js_sys::Reflect::get(&clipboard, &JsValue::from_str("writeText"))?.dyn_into()?;
+        Ok(write_text
+            .call1(&clipboard, &JsValue::from_str(text))?
+            .into())
+    };
+    match write() {
+        Ok(promise) => JsFuture::from(promise).await.is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// `performance.mark(name)`, which the measurements and the smoke read.
 pub(super) fn mark(name: &str) {
     if let Some(performance) = window().ok().and_then(|window| window.performance()) {

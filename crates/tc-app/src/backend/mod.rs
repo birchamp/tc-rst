@@ -948,7 +948,11 @@ pub struct Door43Remote {
 impl Door43Remote {
     /// `https://<host>/<owner>/<repo>`, with or without `.git`.
     pub fn parse_url(url: &str) -> Option<Self> {
-        let rest = url.strip_prefix("https://")?;
+        // http too: the app writes this from its own `--door43`, a plain-http server on loopback
+        // in tests (the fake Door43) and on a development machine.
+        let rest = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))?;
         let rest = rest.strip_suffix(".git").unwrap_or(rest);
         match rest.split('/').collect::<Vec<_>>().as_slice() {
             [host, owner, repo] if !host.is_empty() && !owner.is_empty() && !repo.is_empty() => {
@@ -1104,6 +1108,12 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// be opened as one. No lock, no fold.
     fn list(&self) -> Result<Listing, StoreError>;
 
+    /// Whether this launch's start removed the part copy of an open from Door43 that did not
+    /// finish. Blocking: it waits for the start's cleanup.
+    fn removed_an_open_at_start(&self) -> bool {
+        false
+    }
+
     /// What `folder`'s Home card shows besides its summary: `metadata.json`, the Door43 remote
     /// and the summary's stamp. No lock, no fold. Blocking. `NotAProject` when the folder went
     /// away since it was listed.
@@ -1142,12 +1152,39 @@ pub trait ProjectStore: Send + Sync + 'static {
     /// the projects folder: the copy offer of a read-only project (STORAGE §5.0, R7). Blocking.
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure>;
 
+    /// The open from Door43 (E1a, unit X's `tc_sync::join`): `repo` fetched and placed as the
+    /// project `name`; its folder. `None` from a store that keeps no git repository.
+    fn door43_join(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+        repo: tc_door43::RepoRef,
+        name: String,
+    ) -> BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+        let _ = (client, session, repo, name);
+        Box::pin(async { None })
+    }
+
     /// Creates a project in the projects folder: built in a staging folder and renamed into
     /// place without replacing anything (R2), so a crash leaves the whole project or none.
     /// Blocking. Only the store on disk creates projects.
     fn create(&self, new: NewProjectSpec) -> Result<(), CreateFailure> {
         let _ = new;
         Err(CreateFailure::Unavailable)
+    }
+
+    /// A project this computer lacks, built from an exchange file (STORAGE §10.2, E2 step 4b):
+    /// the file's entries into a staging folder, placed whole or not at all. Blocking. Only
+    /// the store on disk creates projects.
+    fn receive_new(
+        &self,
+        file: &std::path::Path,
+        name: &str,
+    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+        let _ = (file, name);
+        Err(tc_sync::exchange::ExchangeError::NotCommitted(
+            "this store cannot create projects".to_owned(),
+        ))
     }
 
     /// Creates a project from an import, as [`ProjectStore::create`] does, with `cause` on
@@ -1304,6 +1341,45 @@ pub trait ProjectHandle: Send + Sync {
     /// before this returns. Whether the file holds the change.
     fn discard_draft(&self, id: u64) -> bool;
 
+    /// One sync of this project with its Door43 repository (E1a, unit X's `tc_sync::sync`).
+    /// `None` from a backend that keeps no git repository (the memory backend).
+    /// Points this project's repository at Door43's `repo` on `server` (unit X's
+    /// `tc_sync::connect`): what share and the tests' connected projects set.
+    fn door43_connect(
+        self: Arc<Self>,
+        server: tc_door43::ServerUrl,
+        repo: tc_door43::RepoRef,
+        branch: String,
+    ) -> BoxFuture<Option<Result<(), tc_sync::ConnectError>>> {
+        let _ = (server, repo, branch);
+        Box::pin(async { None })
+    }
+
+    fn door43_sync(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+    ) -> BoxFuture<Option<tc_sync::SyncReport>> {
+        let _ = (client, session);
+        Box::pin(async { None })
+    }
+
+    /// The first share of this project (unit X's `tc_sync::share`): the repository `name` under
+    /// `owner`, then `pushing`, then the sync that pushes. `None` from a backend that keeps no
+    /// git repository.
+    fn door43_share(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: tc_door43::Session,
+        owner: tc_door43::NewRepoOwner,
+        name: tc_door43::NewRepoName,
+        pushing: Box<dyn FnOnce() + Send>,
+    ) -> BoxFuture<Option<Result<(tc_door43::CreatedRepo, tc_sync::SyncReport), tc_sync::ShareError>>>
+    {
+        let _ = (client, session, owner, name, pushing);
+        Box::pin(async { None })
+    }
+
     /// Cancel only the current draft matching this editor's exact text, base and time.
     /// A newer entry and offered drafts stay; true means the resulting list is durable.
     fn discard_current_draft(
@@ -1334,4 +1410,10 @@ pub trait ProjectHandle: Send + Sync {
 
     /// Closes the project and lets go of its lock.
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>>;
+
+    /// tc-store's own handle, for the USB exchange (E2), which runs tc-sync's export and
+    /// receive on it. `None` for a backend that is not tc-store: the exchange is unavailable.
+    fn store_handle(&self) -> Option<Arc<tc_store::ProjectHandle>> {
+        None
+    }
 }

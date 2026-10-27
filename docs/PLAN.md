@@ -253,10 +253,16 @@ And these (unit B10):
   alignment and counts it among the conflicts that kept the newest version, so a teammate's
   alignment can disappear unannounced (#791). Since #806 (D108, in rc.2) tC4 names each such
   verse in its own row ("{book} {ref}: {name}'s alignment replaced yours."), but still keeps
-  only the newest alignment; the rebuild keeps both.
+  only the newest alignment; the rebuild keeps both. Owner ruling H5 (2026-10-24) changes this:
+  the newest alignment wins, the older stays in History, and the Received sheet says what was
+  replaced (unit C7b); until C7b lands the toast still counts such a verse.
 - A section draft not yet saved survives a reload, and its card opens again with the typed
   text when Translate shows its chapter, ready for Save or Cancel. tC4 4.0 keeps the draft only
   in the open card, so a reload or crash loses it (FIX-HIDE2).
+- When Door43 no longer has a project's branch (its owner deleted it), the next sync puts this
+  computer's copy back and says so: "The project was missing from Door43, so tC4 put your copy
+  back. Ask your teammates to sync." tC4 4.0 pushes the branch again and says nothing (owner
+  ruling of 2026-10-24; evidence/2026-10-21/gap-tc4-straggler-sync-safety.md state 3b).
 - A sync that stops for a reason no sentence names says so in one fixed sentence. Door43's
   words and the reason, which can name a file on the translator's computer, stay in the
   problem report. tC4 4.0 shows "The sync stopped: {reason}" (#724, Q36).

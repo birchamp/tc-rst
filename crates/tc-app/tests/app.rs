@@ -33,6 +33,7 @@ mod app {
     mod drafted;
     mod drafts;
     mod events;
+    mod exchange;
     mod export;
     mod feedback;
     mod field_store;

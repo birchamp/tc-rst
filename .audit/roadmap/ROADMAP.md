@@ -143,6 +143,8 @@ structures exist and the remaining units' cards point at them; S3's core slices 
 | D2 | Exports | S2, UI-1 | 4 sessions |
 | E1a | Sync | X, C7a, D1, UI-2, UI-3a | 5-6 sessions |
 | E1b | Share and open from Door43 | E1a | 3-4 sessions |
+| E1c | One name for a project: open from Door43 asks none (H14, #837) | E1b | 0.5 d |
+| E1d | E1a's two unwritten tests | E1a | 0.5 d |
 | E2 | USB exchange | X, D2, C7b, UI-2, UI-3a | 4-4.5 sessions |
 | F1 | Import | I, UI-2, UI-3a | 5-7 sessions |
 | AQ1 | Aquifer helps in the app (P6) | INT-4, UI-1, owner H6 (Q34) | 3-5 sessions |
@@ -174,7 +176,7 @@ needed on this PC, and INT-7's contract still applies.
 | ID | Item | Depends on | Size |
 |---|---|---|---|
 | G2 | Budgets, the whole-Bible performance runs, Arabic captures of all 62 screens, the P7 review | P, G5, C7b, D1, D2, E1a, E1b, E2, F1, AQ1, REF1 | 10-15 commits |
-| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1 | 1 d |
+| REL-1 | First release candidate (4.1.0): the cut scope green, the owner's reviews recorded | C7a, C7b, CHK-1, CHK-2, CHK-3, CHK-6, D1, D2, DOM-1, DOM-2, E1a, E1b, E2, F1, FIX-J, FIX-R, G1, G3, G4, G5, I, INT-6, REF1, S2, SWEEP, T, UI-1, UI-2, UI-3, X, REF1b, REF1c, HIST-1, LOSS-1, E1c, E1d | 1 d |
 | DONE | Release candidate: P1 to P10 green in CI, the owner's reviews recorded | every other card | 1-2 d |
 
 ## The critical path

@@ -15,6 +15,7 @@ mod app {
     mod client;
     mod draft_machine;
     mod effects;
+    mod exchange;
     mod feedback;
     mod fix;
     mod forms;

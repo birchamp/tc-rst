@@ -703,6 +703,9 @@ impl Message for SyncFailure {
 )]
 pub enum ShareRefusal {
     NameExists,
+    /// The project is already connected to a Door43 repository: a second share would move it
+    /// to another one (a second tab's dialog, or a resend after a lost reply).
+    AlreadyShared,
     Offline,
     AuthFailed,
     CreateRejected {
@@ -719,6 +722,7 @@ impl Message for ShareRefusal {
     fn code(&self) -> Option<&'static str> {
         Some(match self {
             Self::NameExists => "share.name-exists",
+            Self::AlreadyShared => "share.already-shared",
             Self::Offline => "share.offline",
             Self::AuthFailed => "share.auth-failed",
             Self::CreateRejected { .. } => "share.create-rejected",
@@ -728,6 +732,7 @@ impl Message for ShareRefusal {
     fn key(&self) -> &'static str {
         match self {
             Self::NameExists => "shareDialog.error.name-exists",
+            Self::AlreadyShared => "refusal.share.already-shared",
             Self::Offline => "shareDialog.error.offline",
             Self::AuthFailed => "shareDialog.error.auth-failed",
             Self::CreateRejected { .. } => "shareDialog.error.create-rejected",
@@ -737,18 +742,30 @@ impl Message for ShareRefusal {
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::PushFailed { reason } => vec![("reason", reason.clone())],
-            Self::NameExists | Self::Offline | Self::AuthFailed | Self::CreateRejected { .. } => {
-                Vec::new()
-            }
+            Self::NameExists
+            | Self::AlreadyShared
+            | Self::Offline
+            | Self::AuthFailed
+            | Self::CreateRejected { .. } => Vec::new(),
         }
     }
 }
 
 /// Open a project from Door43 (unit E1b).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
-#[serde(rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum OpenDoor43Refusal {
+    /// The project of that repository is on this computer as `project` (ruling H14): there is
+    /// never a second copy, and the dialog offers to open this one. Nothing was sent.
+    AlreadyHere {
+        project: crate::ids::ProjectRef,
+    },
     NameExists,
     NoJournal,
     /// An open that did not finish before the app closed; its part copy was removed at the
@@ -759,6 +776,7 @@ pub enum OpenDoor43Refusal {
 impl Message for OpenDoor43Refusal {
     fn code(&self) -> Option<&'static str> {
         Some(match self {
+            Self::AlreadyHere { .. } => "open-door43.already-here",
             Self::NameExists => "open-door43.name-exists",
             Self::NoJournal => "open-door43.no-journal",
             Self::Removed => "open-door43.removed",
@@ -766,6 +784,7 @@ impl Message for OpenDoor43Refusal {
     }
     fn key(&self) -> &'static str {
         match self {
+            Self::AlreadyHere { .. } => "refusal.open-door43.already-here",
             Self::NameExists => "refusal.open-door43.name-exists",
             Self::NoJournal => "refusal.open-door43.no-journal",
             Self::Removed => "refusal.open-door43.removed",
@@ -941,6 +960,20 @@ pub enum ExchangeRefusal {
     },
     /// The written file did not read back from the drive; it was deleted (E5).
     VerifyFailed,
+    /// The file holds another project (R2): "This file is for {name}."
+    OtherProject {
+        name: String,
+    },
+    /// The file holds no translationCore project at all (R2's fourth case): nothing to
+    /// receive, and Import is the way in for other files.
+    NotTranslationCore,
+    /// A new project's name is in use on this computer; nothing was written.
+    NameExists,
+    /// The intake failed after some of the file's packs were folded: what was received
+    /// stays in the project (PLAN Q8), so the person is never told nothing changed.
+    PartlyReceived {
+        reason: String,
+    },
     NotWritten {
         reason: String,
     },
@@ -958,6 +991,10 @@ impl Message for ExchangeRefusal {
             Self::Damaged => "exchange.error.damaged",
             Self::NewerFormat { .. } => "exchange.error.newerFormat",
             Self::VerifyFailed => "exchange.error.verifyFailed",
+            Self::OtherProject { .. } => "exchange.error.otherProject",
+            Self::NotTranslationCore => "exchange.error.notTranslationCore",
+            Self::NameExists => "exchange.error.nameExists",
+            Self::PartlyReceived { .. } => "exchange.error.partlyReceived",
             Self::NotWritten { .. } => "exchange.error.notWritten",
             Self::Unreadable { .. } => "exchange.error.unreadable",
         }
@@ -965,10 +1002,13 @@ impl Message for ExchangeRefusal {
     fn vars(&self) -> Vec<(&'static str, String)> {
         match self {
             Self::NewerFormat { format } => vec![("format", format.to_string())],
-            Self::NotWritten { reason } | Self::Unreadable { reason } => {
-                vec![("reason", reason.clone())]
+            Self::OtherProject { name } => vec![("name", name.clone())],
+            Self::NotWritten { reason }
+            | Self::Unreadable { reason }
+            | Self::PartlyReceived { reason } => vec![("reason", reason.clone())],
+            Self::Damaged | Self::VerifyFailed | Self::NotTranslationCore | Self::NameExists => {
+                Vec::new()
             }
-            Self::Damaged | Self::VerifyFailed => Vec::new(),
         }
     }
 }

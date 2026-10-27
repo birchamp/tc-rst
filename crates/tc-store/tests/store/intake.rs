@@ -402,6 +402,193 @@ fn crash_usb_receive_takes_whole_batches_and_the_rest_on_retry() {
     assert!(points > 5, "{points}");
 }
 
+/// A received pack as two packs of the same sealer, the first holding `first` of its lines: a
+/// seal writes an action larger than a pack that way (§4.6), so neither half is whole alone.
+fn split(pack: &ReceivedPack, project: tc_journal::ProjectId, first: usize) -> Vec<ReceivedPack> {
+    use tc_journal::pack::{PackSpec, encode_pack, read_pack};
+    let read = read_pack(&pack.path, &pack.bytes, project);
+    let header = read.header.expect("a valid pack");
+    let spec = PackSpec {
+        project,
+        sealer: header.sealer,
+        sealed: header.sealed,
+    };
+    let (a, b) = read.entries.split_at(first);
+    [a, b]
+        .into_iter()
+        .map(|lines| {
+            let encoded = encode_pack(&spec, lines, &[]).unwrap();
+            let oid = git2::Oid::hash_object(git2::ObjectType::Blob, &encoded.bytes).unwrap();
+            ReceivedPack {
+                path: encoded.path.to_string(),
+                blob: tc_journal::GitOid::from_bytes(oid.as_bytes().try_into().unwrap()),
+                bytes: encoded.bytes,
+            }
+        })
+        .collect()
+}
+
+/// §9.5: a commit whose new blobs pass the bound is a chain. Juan's new book arrives as two
+/// packs; the commit that takes it in has a link before it that adds the half that changes
+/// nothing yet, with the derived files of the commit before, so each link is a valid burrito
+/// whose derived files are the fold of its own packs, and a push can send one link at a time.
+#[test]
+fn a_large_commit_is_a_chain_of_valid_commits() {
+    use tc_journal::command::{Command, SeedSource};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul, as Ana has it").unwrap();
+    let before = checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let b = open(&rig_b, &folder);
+    b.submit(Command::AddBook {
+        book: tc_journal::BookId::Philemon,
+        scope: tc_journal::record::Scope::Whole,
+        seed: SeedSource {
+            usfm: "\\id PHM\n\\usfm 3.0\n\\h PHM\n\\mt PHM\n\\c 1\n\\p\n\\v 1 One.\n\\v 2 Two.\n\\v 3 Three.\n"
+                .into(),
+        },
+    })
+    .wait()
+    .unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (_, packs) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    assert_eq!(packs.len(), 1, "Juan's book is one pack");
+    let packs = split(&packs[0], project_of(&rig_a.fs, &folder), 2);
+
+    rig_a.store.hooks().chain_after(1);
+    let a = open(&rig_a, &folder);
+    let report = a
+        .receive_packs("Juan".into(), packs.clone())
+        .wait()
+        .unwrap();
+    let tip = git2::Oid::from_bytes(report.commit.expect("a commit").as_bytes()).unwrap();
+    let parents: Vec<git2::Oid> = repo_a.find_commit(tip).unwrap().parent_ids().collect();
+    assert_eq!(parents.len(), 1);
+    let link = parents[0];
+    assert_ne!(link, before, "the commit is a chain");
+    let link_parents: Vec<git2::Oid> = repo_a.find_commit(link).unwrap().parent_ids().collect();
+    assert_eq!(link_parents, [before]);
+
+    let held = commit_files(&repo_a, link);
+    let in_link: Vec<&ReceivedPack> = packs
+        .iter()
+        .filter(|p| held.contains_key(&p.path))
+        .collect();
+    assert_eq!(in_link.len(), 1, "the link adds one of the two packs");
+    let derived = |files: &std::collections::BTreeMap<String, Vec<u8>>| {
+        files
+            .iter()
+            .filter(|(path, _)| {
+                !path.starts_with("ingredients/tc/changes/") && path.as_str() != "metadata.json"
+            })
+            .map(|(path, bytes)| (path.clone(), bytes.clone()))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    assert_eq!(derived(&held), derived(&commit_files(&repo_a, before)));
+    let project = project_of(&rig_a.fs, &folder);
+    for commit in [link, tip] {
+        assert_eq!(
+            tree_differs_from_its_packs(
+                &repo_a,
+                commit,
+                project,
+                tc_journal::fold::ProjectKind::Bible
+            ),
+            Vec::<String>::new(),
+            "{commit}"
+        );
+    }
+    let tipped = commit_files(&repo_a, tip);
+    assert!(packs.iter().all(|p| tipped.contains_key(&p.path)));
+    assert!(
+        tipped.contains_key("ingredients/PHM.usfm"),
+        "{:?}",
+        tipped.keys()
+    );
+    a.close().unwrap();
+    assert_commits_valid(&rig_a.fs, &folder);
+    assert_valid_burrito(&rig_a.fs, &folder);
+}
+
+/// §9.5 for a merge (S7): the links grow from Door43's commit, so each is a fast-forward of
+/// it, and the merge's second parent is the last link. Each is a valid burrito whose derived
+/// files are the fold of its own packs, and the teammate's verse on Door43 is kept.
+#[test]
+fn a_large_merge_is_a_chain_grown_from_door43s_commit() {
+    use tc_journal::command::{Command, SeedSource};
+    let (rig_a, folder) = titus();
+    let a = open(&rig_a, &folder);
+    save_verse(&a, 1, 1, "Paul, as Ana has it").unwrap();
+    checkpoint(&a);
+    a.close().unwrap();
+    let rig_b = rig_as(rig_a.fs.copy(), APP, "host-2");
+    let rig_c = rig_as(rig_a.fs.copy(), APP, "host-3");
+    let b = open(&rig_b, &folder);
+    b.submit(Command::AddBook {
+        book: tc_journal::BookId::Philemon,
+        scope: tc_journal::record::Scope::Whole,
+        seed: SeedSource {
+            usfm: "\\id PHM\n\\usfm 3.0\n\\h PHM\n\\mt PHM\n\\c 1\n\\p\n\\v 1 One.\n\\v 2 Two.\n\\v 3 Three.\n"
+                .into(),
+        },
+    })
+    .wait()
+    .unwrap();
+    checkpoint(&b);
+    b.close().unwrap();
+    let c = open(&rig_c, &folder);
+    save_verse(&c, 1, 2, "in hope, as Lia has it").unwrap();
+    checkpoint(&c);
+    c.close().unwrap();
+
+    let repo_a = repo_of(&rig_a.fs, &folder);
+    let (_, juans) = fetch(&repo_a, &git_dir_of(&rig_b.fs, &folder));
+    let juans = split(&juans[0], project_of(&rig_a.fs, &folder), 2);
+    let a = open(&rig_a, &folder);
+    a.receive_packs("Juan".into(), juans.clone())
+        .wait()
+        .unwrap();
+    let ours = repo_a.head().unwrap().target().unwrap();
+    let (theirs, packs) = fetch(&repo_a, &git_dir_of(&rig_c.fs, &folder));
+    rig_a.store.hooks().chain_after(1);
+    let remote = tc_journal::GitOid::from_bytes(theirs.as_bytes().try_into().unwrap());
+    let report = a.sync_merge(remote, packs).wait().unwrap();
+    let merge = git2::Oid::from_bytes(report.commit.expect("a merge commit").as_bytes()).unwrap();
+    let parents: Vec<git2::Oid> = repo_a.find_commit(merge).unwrap().parent_ids().collect();
+    assert_eq!(parents.len(), 2);
+    assert_eq!(parents[0], ours);
+    let link = parents[1];
+    assert_ne!(link, theirs, "the merge is a chain");
+    let link_parents: Vec<git2::Oid> = repo_a.find_commit(link).unwrap().parent_ids().collect();
+    assert_eq!(
+        link_parents,
+        [theirs],
+        "the link is a fast-forward of Door43's commit"
+    );
+    let project = project_of(&rig_a.fs, &folder);
+    for commit in [link, merge] {
+        assert_eq!(
+            tree_differs_from_its_packs(
+                &repo_a,
+                commit,
+                project,
+                tc_journal::fold::ProjectKind::Bible
+            ),
+            Vec::<String>::new(),
+            "{commit}"
+        );
+    }
+    assert_eq!(words(&a, 1, 2).as_deref(), Some("in hope, as Lia has it"));
+    assert_eq!(words(&a, 1, 1).as_deref(), Some("Paul, as Ana has it"));
+    a.close().unwrap();
+    assert_commits_valid(&rig_a.fs, &folder);
+    assert_valid_burrito(&rig_a.fs, &folder);
+}
+
 /// The storage lane's attack on *Bring it back*: Ana's save S reaches the book file while only
 /// a pending file holds it, and Juan's change T of the same verse, made over the same text,
 /// arrives by an exchange file. The receive is killed at each write point; at a point after

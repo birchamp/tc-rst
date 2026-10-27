@@ -9,17 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{IdError, ProjectRef, RequestId};
 
-/// `door43/open`: get a full copy of the repository and add it as the project `name`. The name
-/// is checked against the projects on this computer first, without letter case, and a name in
-/// use is refused (`open-door43.name-exists`) before anything is sent. The job ends with
-/// `JobOutcome::Created` naming the new project.
+/// `door43/open`: get a full copy of the repository and add it as a project. It asks for no
+/// name (ruling H14): the project keeps the name it has on Door43, and its folder on this
+/// computer is [`open_folder`]'s. The job ends with `JobOutcome::Created` naming the new
+/// project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OpenDoor43 {
     pub request: RequestId,
     pub repo: RepoSource,
-    pub name: ProjectName,
 }
 
 /// `door43/sync`: one sync of a shared project with its Door43 repository, the press of its
@@ -32,6 +31,90 @@ pub struct OpenDoor43 {
 pub struct SyncProject {
     pub request: RequestId,
     pub project: ProjectRef,
+}
+
+/// `door43/share`: a first share of `project` (tC4 `shareRun`, #362): its checkpoint, a new
+/// repository `name` under `owner`, and a push of the project's `main` without force. A name
+/// that exists under that owner is refused (`share.name-exists`) before anything is pushed.
+/// The job ends with `JobOutcome::Shared`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShareOnDoor43 {
+    pub request: RequestId,
+    pub project: ProjectRef,
+    pub owner: ShareOwner,
+    pub name: RepoName,
+}
+
+/// Where a share creates its repository (D84 point 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ShareOwner {
+    /// The signed-in person's own account.
+    Mine,
+    Organization(RepoName),
+}
+
+/// What a share made: the repository, and its page on Door43, which the done step shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase")]
+pub struct SharedRepo {
+    pub repo: RepoSource,
+    pub url: crate::account::WebUrl,
+}
+
+/// A repository or account name Door43 accepts (tC4's `nameOk`): letters, digits, dots,
+/// dashes and underscores, starting and ending with a letter or a digit.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct RepoName(String);
+
+impl RepoName {
+    /// The typed name, without the spaces around it.
+    pub fn parse(text: &str) -> Result<Self, IdError> {
+        let name = text.trim();
+        let bytes = name.as_bytes();
+        let ends_ok = matches!((bytes.first(), bytes.last()),
+            (Some(first), Some(last)) if first.is_ascii_alphanumeric() && last.is_ascii_alphanumeric());
+        if !ends_ok
+            || name.len() > MAX_PART
+            || !bytes
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        {
+            return Err(IdError {
+                what: "Door43 name",
+                reason: "letters, digits, dots, dashes and underscores, starting and ending with a letter or a digit",
+            });
+        }
+        Ok(Self(name.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RepoName {
+    type Error = IdError;
+    fn try_from(text: String) -> Result<Self, IdError> {
+        Self::parse(&text)
+    }
+}
+
+impl From<RepoName> for String {
+    fn from(name: RepoName) -> Self {
+        name.0
+    }
 }
 
 /// `door43/lastSync`: the project's last sync result on this computer since the app started,
@@ -227,12 +310,36 @@ pub fn default_project_name(repo: &str) -> String {
     out.trim_matches('-').to_owned()
 }
 
+/// The folder an open of `repo` gets (ruling H14): the repository's name as a folder name, with
+/// `-2`, `-3`… when a folder of `listing` has it, without letter case.
+pub fn open_folder<'a>(
+    repo: &RepoSource,
+    listing: impl IntoIterator<Item = &'a str>,
+) -> ProjectName {
+    let listing: Vec<&str> = listing.into_iter().collect();
+    let base = default_project_name(repo.name());
+    // A repository named only of dots suggests nothing.
+    let base = if base.is_empty() {
+        "project".to_owned()
+    } else {
+        base
+    };
+    (1..)
+        .map(|n| match n {
+            1 => base.clone(),
+            n => format!("{base}-{n}"),
+        })
+        .filter_map(|name| ProjectName::parse(&name).ok())
+        .find(|name| !name.in_use(listing.iter().copied()))
+        .unwrap_or_else(|| unreachable!("a listing is finite, so some suffix is free"))
+}
+
 #[cfg(feature = "proptest")]
 mod arbitrary {
     use proptest::arbitrary::Arbitrary;
     use proptest::strategy::{BoxedStrategy, Strategy};
 
-    use super::{ProjectName, RepoSource};
+    use super::{ProjectName, RepoName, RepoSource};
 
     #[expect(clippy::unreachable, reason = "the patterns are literals that compile")]
     fn pattern(re: &str) -> impl Strategy<Value = String> {
@@ -250,6 +357,16 @@ mod arbitrary {
                 .prop_filter_map("a valid source", |(owner, name)| {
                     RepoSource::new(&owner, &name).ok()
                 })
+                .boxed()
+        }
+    }
+
+    impl Arbitrary for RepoName {
+        type Parameters = ();
+        type Strategy = BoxedStrategy<Self>;
+        fn arbitrary_with((): ()) -> Self::Strategy {
+            pattern("[A-Za-z0-9]([A-Za-z0-9_.-]{0,10}[A-Za-z0-9])?")
+                .prop_map(RepoName)
                 .boxed()
         }
     }

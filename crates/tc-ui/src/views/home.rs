@@ -13,10 +13,11 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 use tc_api::home::{
-    Card as CardRead, Door43Card, HomeCard, HomeView, LastEditView, List, ProjectKind,
+    Card as CardRead, Door43Card, HomeCard, HomeView, LastEditView, List, ProjectKind, StartNotice,
     StoryTileView, UnusableCard,
 };
 use tc_api::ids::ProjectRef;
+use tc_api::refusal::OpenDoor43Refusal;
 use tc_api::shown::{Direction, Known};
 use wasm_bindgen::JsValue;
 
@@ -34,7 +35,7 @@ use crate::ds::{
     Badge, BadgeSize, BadgeTone, BookTile, Button, ButtonVariant, Callout, CalloutTone, Card,
     Overline, Size, Toast, ToastTone,
 };
-use crate::i18n::{keys, t};
+use crate::i18n::{keys, refusal_text, t};
 use crate::views::sync_result::SyncResult;
 
 fn dir_str(dir: Direction) -> &'static str {
@@ -77,6 +78,13 @@ pub fn Home() -> impl IntoView {
         Callback::new(move |_: web_sys::MouseEvent| actions.open_add_project())
     };
     let ready = Memo::new(move |_| list.with(|l| l.value().cloned()));
+    provide_context(SharedNames(Memo::new(move |_| {
+        ready.with(|view| {
+            view.as_ref()
+                .map(|v| crate::app::home::shared_names(&v.cards))
+                .unwrap_or_default()
+        })
+    })));
     let resume = {
         let actions = actions.clone();
         move || {
@@ -209,6 +217,31 @@ fn banners(
             })
         }
     };
+    let removed = {
+        let (closed, style) = (s.start_notice_closed.clone(), banner_style.clone());
+        move || {
+            let shown = list.with(|l| {
+                l.value()
+                    .is_some_and(|v| v.notices.contains(&StartNotice::OpenDoor43Removed))
+            });
+            (shown && !closed.get()).then(|| {
+                let closed = closed.clone();
+                view! {
+                    <Callout tone=CalloutTone::Warn style=style.clone() attrs=Attrs::from([("role", "status"), ("data-testid", "home-open-removed")])>
+                        {move || refusal_text(&OpenDoor43Refusal::Removed)}" "
+                        <Button
+                            size=Size::Sm
+                            variant=ButtonVariant::Outline
+                            attrs=Attrs::from([("data-testid", "home-open-removed-close")])
+                            on_click=Callback::new(move |_| closed.set(true))
+                        >
+                            {move || t(keys::common::CLOSE, &[])}
+                        </Button>
+                    </Callout>
+                }
+            })
+        }
+    };
     let open = {
         let (error, actions, style) = (s.book_error.clone(), actions.clone(), banner_style);
         move || {
@@ -242,17 +275,17 @@ fn banners(
         }
     };
     // The server says it in one listing only (once per launch), so the notice is held here.
-    let removed = s.import_removed.clone();
+    let import_held = s.import_removed.clone();
     Effect::new({
-        let removed = removed.clone();
+        let import_held = import_held.clone();
         move |_| {
             if list.with(|l| l.value().is_some_and(|v| v.import_removed)) {
-                removed.set(true);
+                import_held.set(true);
             }
         }
     });
     let import_removed = move || {
-        removed.get().then(|| {
+        import_held.get().then(|| {
             view! {
                 <Callout tone=CalloutTone::Warn style=crate::css! { "margin": "0 0 16px" } attrs=Attrs::from([("role", "status"), ("data-testid", "home-import-removed")])>
                     {move || t(keys::home::IMPORT_REMOVED, &[])}
@@ -260,7 +293,7 @@ fn banners(
             }
         })
     };
-    view! { {commit} {open} {import_removed} }
+    view! { {commit} {removed} {open} {import_removed} }
 }
 
 /// "Ask for help" on a banner (tC4 #378).
@@ -469,6 +502,59 @@ fn share_action(
     }
 }
 
+/// Save work for a teammate (only where the shell picks folders) and Receive work from a file
+/// (E2; rebuild-only screens, STORAGE §10).
+fn exchange_buttons(
+    actions: &Actions,
+    card: Signal<Option<HomeCard>>,
+    project: &ProjectRef,
+) -> impl IntoView + use<> {
+    let save = {
+        let actions = actions.clone();
+        actions.can_save_for_teammate().then(|| {
+            let press = {
+                let actions = actions.clone();
+                Callback::new(move |_: web_sys::MouseEvent| {
+                    if let Some(card) = card.get_untracked() {
+                        actions.open_save_for_teammate(&card);
+                    }
+                })
+            };
+            view! {
+                <Button
+                    variant=ButtonVariant::Secondary
+                    size=Size::Sm
+                    attrs=Attrs::new().with("data-testid", format!("save-for-teammate-{project}"))
+                    title=Signal::derive(|| Some(t(keys::home::SAVE_FOR_TEAMMATE, &[])))
+                    on_click=press
+                >
+                    {move || t(keys::home::SAVE_FOR_TEAMMATE, &[])}
+                </Button>
+            }
+        })
+    };
+    let receive = {
+        let actions = actions.clone();
+        Callback::new(move |_: web_sys::MouseEvent| {
+            if let Some(card) = card.get_untracked() {
+                actions.open_receive_work(&card);
+            }
+        })
+    };
+    view! {
+        {save}
+        <Button
+            variant=ButtonVariant::Secondary
+            size=Size::Sm
+            attrs=Attrs::new().with("data-testid", format!("receive-work-{project}"))
+            title=Signal::derive(|| Some(t(keys::home::RECEIVE_WORK, &[])))
+            on_click=receive
+        >
+            {move || t(keys::home::RECEIVE_WORK, &[])}
+        </Button>
+    }
+}
+
 fn settings_button(actions: &Actions, card: Signal<Option<HomeCard>>) -> impl IntoView + use<> {
     let actions = actions.clone();
     view! {
@@ -622,7 +708,12 @@ fn card_signal(project: &ProjectRef, listed: Signal<Option<HomeCard>>) -> Signal
     memo.into()
 }
 
-/// The card's header: initials, name and badges, the line, Share and Settings.
+/// The names more than one Home card holds.
+#[derive(Clone, Copy)]
+struct SharedNames(Memo<Vec<String>>);
+
+/// The card's header: initials, name and badges, where it lives when another card has its name,
+/// the line, Share and Settings.
 fn header(
     s: &AppState,
     actions: &Actions,
@@ -664,6 +755,18 @@ fn header(
         }
     });
     let chip = (!stories).then(|| conflicts_chip(actions, card, project));
+    let shared = use_context::<SharedNames>();
+    let where_id = format!("card-where-{project}");
+    let where_line = move || {
+        let SharedNames(names) = shared?;
+        let line = names.with(|names| {
+            card.with(|c| {
+                c.as_ref()
+                    .and_then(|c| crate::app::home::where_line(c, names))
+            })
+        })?;
+        Some(view! { <span data-testid=where_id.clone() style=META_STYLE>{line}</span> })
+    };
     view! {
         <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 18px;">
             {initials(name)}
@@ -676,6 +779,7 @@ fn header(
                     {shared_badge(card, project)}
                     {chip}
                 </div>
+                {where_line}
                 <span style=META_STYLE>
                     <span data-testid=if stories { "obs-progress" } else { "project-summary" }>{line}</span>
                     {share_meta(card, project)}
@@ -683,6 +787,7 @@ fn header(
                 </span>
             </div>
             {share_action(s, actions, card, project)}
+            {exchange_buttons(actions, card, project)}
             {settings_button(actions, card)}
         </div>
     }

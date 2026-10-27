@@ -90,6 +90,12 @@ const PHASE_0: &[&str] = &[
     "resources/fixState",
     // B10: the sync of a shared project, and the scripted outcomes of the open and the sync.
     "door43/sync",
+    "door43/share",
+    // E2: USB exchange: the file's project, save work for a teammate, receive work from a file.
+    "exchange/identify",
+    "exchange/export",
+    "exchange/receive",
+    "exchange/receiveNew",
     // HIST-1: the last sync result, readable after its toast.
     "door43/lastSync",
     // B6: the aligner's rail, its session and its save.
@@ -152,6 +158,7 @@ const PHASE_0: &[&str] = &[
     "test/reset",
     "test/lastEdit",
     "test/script",
+    "test/connectDoor43",
     "test/validate",
 ];
 
@@ -229,6 +236,7 @@ fn the_list_and_the_impls_agree() {
                 | "account/orgs"
                 | "door43/open"
                 | "door43/sync"
+                | "door43/share"
                 | "resources/catalog"
                 | "resources/download"
                 | "resources/checkUpdates"

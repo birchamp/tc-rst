@@ -506,7 +506,7 @@ pub async fn try_start(
         files: tc_app::FilesChoice::Given(parts.files.clone()),
         store: tc_app::StoreChoice::Given(parts.store.clone()),
         sync: Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default()),
-        exchange: Arc::new(tc_app::ports::UnavailableExchange),
+        exchange: Arc::new(tc_app::ports::scripted::ScriptedExchangePort::default()),
         import: Arc::new(tc_app::ports::UnavailableImport),
         ender: parts.ender.clone(),
         test_keychain: Some(parts.keychain.clone()),

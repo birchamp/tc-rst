@@ -859,6 +859,9 @@ impl Census {
 
 /// Runs a property over `cases` generated values, then checks the census of the states the
 /// values reached.
+/// The seed every census run draws from (32 bytes for ChaCha).
+const CENSUS_SEED: [u8; 32] = *b"tc-journal census, fixed 2026-10";
+
 pub fn run_with_census<S: Strategy>(
     cases: u32,
     strategy: S,
@@ -871,7 +874,14 @@ pub fn run_with_census<S: Strategy>(
         failure_persistence: None,
         ..ProptestConfig::default()
     };
-    let mut runner = proptest::test_runner::TestRunner::new(config);
+    // A fixed seed: the census is a coverage floor over the cases, and a fresh seed each run
+    // could draw 64 scripts that never place a decision and fail a gate at random. The
+    // scripts are the same every run, so the floor holds the same way every run.
+    let rng = proptest::test_runner::TestRng::from_seed(
+        proptest::test_runner::RngAlgorithm::ChaCha,
+        &CENSUS_SEED,
+    );
+    let mut runner = proptest::test_runner::TestRunner::new_with_rng(config, rng);
     if let Err(error) = runner.run(&strategy, |value| test(value, &census)) {
         panic!("{error}");
     }

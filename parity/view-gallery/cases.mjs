@@ -392,6 +392,32 @@ const opening = (stage, done = 0, total = 0) => ({ opening: { repoPath: BIBLE, s
 /** The share dialog's run (state.jsx shareRun): progress with the steps reported so far. */
 const shareProgress = (steps) => (s) => ({ sh: { ...s.sh, step: 'progress', busy: true, steps, error: null } });
 
+/** The Rust app's share run from the check step (E1b): `door43/share` answered with a job, and
+ * `jobs/get` answering each of `states` in turn, staying on the last; the shot waits for
+ * `ready`. The fake Door43 cannot hold a share at a step, and the job's frames never come for
+ * a job the server did not start, so the follower reads these answers. */
+const shareRun = (states, ready) => async (app, env) => {
+  await stateNamed('share-check').route(app, env);
+  const job = 9001;
+  await app.page.route('**/api/v1/door43/share', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'ok', value: job }) }));
+  let at = 0;
+  await app.page.route('**/api/v1/jobs/get', async (route) => {
+    const state = states[Math.min(at, states.length - 1)];
+    at += 1;
+    const value = { id: job, kind: 'share', project: env.projectId(BIBLE), state };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ type: 'ok', value }) });
+  });
+  await app.page.getByTestId('share-submit').click();
+  await app.page.locator(ready).waitFor();
+};
+const sharePhase = (phase) => ({ type: 'running', value: { phase: { type: 'share', value: phase }, done: 0, total: null, item: null } });
+/** tC4's done case shows the address on git.door43.org under the signed-in user. */
+const SHARED = {
+  type: 'done',
+  value: { type: 'shared', value: { repo: 'facilitator-zq/sample_burrito', url: 'https://git.door43.org/facilitator-zq/sample_burrito' } },
+};
+
 /** The feedback dialog after a send that ended with `result` (state.jsx sendFeedback). */
 const feedbackResult = (result) => (s) => ({ fb: { ...s.fb, sending: false, result } });
 
@@ -530,12 +556,16 @@ export const CASES = [
 
   // ---- share ---------------------------------------------------------------------------------
   { name: 'share-progress-preparing', group: 'share', state: 'share-check', patch: shareProgress([]), steps: [{ do: 'blur' }],
+    rust: shareRun([sharePhase('preparing')], '[data-testid="share-progress"]'), held: true,
     why: 'Share on Door43 running, before its first step (state.jsx shareRun). The mock cannot create a repository or take a push.' },
   { name: 'share-progress-create', group: 'share', state: 'share-check', patch: shareProgress(['create']), steps: [{ do: 'blur' }],
+    rust: shareRun([sharePhase('create')], '[data-testid="share-progress"][data-steps="create"]'), held: true,
     why: 'The share creating the repository on Door43.' },
   { name: 'share-progress-push', group: 'share', state: 'share-check', patch: shareProgress(['create', 'push']), steps: [{ do: 'blur' }],
+    rust: shareRun([sharePhase('create'), sharePhase('push')], '[data-testid="share-progress"][data-steps="create,push"]'), held: true,
     why: 'The share pushing the project.' },
   { name: 'share-done', group: 'share', state: 'share-check',
+    rust: shareRun([sharePhase('create'), sharePhase('push'), SHARED], '[data-testid="share-done"]'),
     patch: (s, { kit }) => {
       const repository = `${s.door43User}/${s.sh.name}`;
       const report = kit.okReport('share', AT, AT, { repository, url: `https://git.door43.org/${repository}`, created: true });

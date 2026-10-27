@@ -683,6 +683,12 @@ impl ProjectStore for StoreBackend {
 
     /// Both projects folders: the chosen one, and the local one beside it when copies were made
     /// there (Q-30).
+    fn removed_an_open_at_start(&self) -> bool {
+        self.removed_at_start()
+            .iter()
+            .any(|removed| removed.kind == Some(tc_store::StagingKind::Join))
+    }
+
     fn list(&self) -> Result<Listing, StoreError> {
         let mut listing = self.list_here()?;
         let beside = lock(&self.beside).clone();
@@ -756,6 +762,16 @@ impl ProjectStore for StoreBackend {
     /// The copy goes into the projects folder, or into the local projects folder where the
     /// projects folder itself is what made the project read-only (Q-30): a copy beside it would
     /// be read-only too. It is refused only where this computer has no folder that is safe.
+    fn door43_join(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+        repo: tc_door43::RepoRef,
+        name: String,
+    ) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+        join_on(self, |backend| &backend.store, client, session, repo, name)
+    }
+
     fn copy(&self, folder: &ProjectRef, name: &ProjectRef) -> Result<(), CopyFailure> {
         let from = match self.beside_of(folder) {
             Some(beside) => beside.listed(folder),
@@ -797,6 +813,14 @@ impl ProjectStore for StoreBackend {
         cause: tc_journal::Cause,
     ) -> Result<(), super::CreateFailure> {
         create_failure(self.store.create_imported(&new_project(new), cause))
+    }
+
+    fn receive_new(
+        &self,
+        file: &std::path::Path,
+        name: &str,
+    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+        tc_sync::exchange::receive_new(&self.store, file, name).map(|_| ())
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
@@ -1224,8 +1248,9 @@ struct Closed {
 
 /// One open project through tc-store.
 struct StoreHandle {
-    /// `None` once `close` took it.
-    inner: RwLock<Option<tc_store::ProjectHandle>>,
+    /// `None` once `close` took it. An `Arc`, so the USB exchange (E2) can run tc-sync's
+    /// export and receive on the handle while the session stays open.
+    inner: RwLock<Option<Arc<tc_store::ProjectHandle>>>,
     closed: OnceLock<Closed>,
     /// Hands each submitted command's reply to the relay, in the order the actor takes the
     /// commands; `None` once closed.
@@ -1261,7 +1286,7 @@ impl StoreHandle {
             return Err("a thread could not be started".to_owned());
         }
         Ok(Arc::new(Self {
-            inner: RwLock::new(Some(handle)),
+            inner: RwLock::new(Some(Arc::new(handle))),
             closed: OnceLock::new(),
             relay: Mutex::new(Some(jobs)),
             origins,
@@ -1269,7 +1294,7 @@ impl StoreHandle {
         }))
     }
 
-    fn inner(&self) -> std::sync::RwLockReadGuard<'_, Option<tc_store::ProjectHandle>> {
+    fn inner(&self) -> std::sync::RwLockReadGuard<'_, Option<Arc<tc_store::ProjectHandle>>> {
         self.inner.read().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -1582,6 +1607,86 @@ impl ProjectHandle for StoreHandle {
         rx
     }
 
+    fn door43_connect(
+        self: Arc<Self>,
+        server: tc_door43::ServerUrl,
+        repo: tc_door43::RepoRef,
+        branch: String,
+    ) -> BoxFuture<Option<Result<(), tc_sync::ConnectError>>> {
+        let runtime = tokio::runtime::Handle::current();
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            Some(runtime.block_on(tc_sync::connect(handle, &server, &repo, &branch)))
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
+    fn door43_sync(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: Option<tc_door43::Session>,
+    ) -> BoxFuture<Option<tc_sync::SyncReport>> {
+        let runtime = tokio::runtime::Handle::current();
+        // The sync borrows the open project for its whole run: it runs on a blocking thread
+        // under the read lock, so the project cannot close under it.
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            let backoff = tc_sync::Backoff::default();
+            let mut report =
+                runtime.block_on(tc_sync::sync(handle, &client, session.as_ref(), &backoff));
+            // Signing in is the consent to the name notice (D98, Q7): the first confirmed sync
+            // writes the username, and one more sync sends it, so teammates see the name now
+            // rather than one sync later.
+            if matches!(report.ended, tc_sync::machine::Ended::Synced { .. })
+                && let Some(session) = &session
+                && let Ok(true) = runtime.block_on(tc_sync::record_username(handle, session))
+            {
+                let next =
+                    runtime.block_on(tc_sync::sync(handle, &client, Some(session), &backoff));
+                for (person, n) in next.received_by {
+                    *report.received_by.entry(person).or_default() += n;
+                }
+                report.recreated |= next.recreated;
+                report.restored += next.restored;
+                // A failed second sync takes nothing back from the first; the name goes out
+                // with the next sync instead.
+            }
+            Some(report)
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
+    fn door43_share(
+        self: Arc<Self>,
+        client: tc_door43::Door43Client,
+        session: tc_door43::Session,
+        owner: tc_door43::NewRepoOwner,
+        name: tc_door43::NewRepoName,
+        pushing: Box<dyn FnOnce() + Send>,
+    ) -> BoxFuture<Option<Result<(tc_door43::CreatedRepo, tc_sync::SyncReport), tc_sync::ShareError>>>
+    {
+        let runtime = tokio::runtime::Handle::current();
+        // As the sync: the share holds the open project under the read lock for its whole run.
+        let work = tokio::task::spawn_blocking(move || {
+            let inner = self.inner();
+            let handle = inner.as_ref()?;
+            let backoff = tc_sync::Backoff::default();
+            Some(runtime.block_on(tc_sync::share(
+                handle,
+                &client,
+                &session,
+                &owner,
+                &name,
+                tc_door43::Visibility::Public,
+                &backoff,
+                pushing,
+            )))
+        });
+        Box::pin(async move { work.await.ok().flatten() })
+    }
+
     fn checkpoint(&self, reason: CheckpointReason) -> BoxFuture<CheckpointOutcome> {
         let Some(pending) = self.inner().as_ref().map(|handle| {
             handle.checkpoint(match reason {
@@ -1642,7 +1747,7 @@ impl ProjectHandle for StoreHandle {
     }
 
     fn focus(&self) -> BoxFuture<Result<(), StoreError>> {
-        let pending = self.inner().as_ref().map(tc_store::ProjectHandle::focus);
+        let pending = self.inner().as_ref().map(|handle| handle.focus());
         Box::pin(async move { store_result(pending)?.await.map(drop).map_err(other) })
     }
 
@@ -1721,28 +1826,60 @@ impl ProjectHandle for StoreHandle {
         }
     }
 
+    fn store_handle(&self) -> Option<Arc<tc_store::ProjectHandle>> {
+        self.inner().clone()
+    }
+
     fn close(self: Arc<Self>) -> BoxFuture<Result<(), StoreError>> {
-        let taken = {
-            let mut inner = self.inner.write().unwrap_or_else(PoisonError::into_inner);
-            let taken = inner.take();
-            if let Some(handle) = &taken {
-                let _ = self.closed.set(Closed {
-                    snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
-                    facts: facts(&handle.facts()),
-                    counters: handle.counters(),
-                });
-            }
-            taken
+        // The write lock waits for a sync that holds the read lock; waiting on a runtime worker
+        // could leave that sync no worker to drive its network calls (one-CPU machines).
+        let take = move || {
+            let taken = self
+                .inner
+                .write()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            // A second close finds nothing to take.
+            let Some(handle) = taken else {
+                return Ok(None);
+            };
+            // An exchange holds the handle only while its job runs, and the job holds the
+            // session: by the time the session closes, nothing else has it. Should one still,
+            // the handle goes back, so the exchange reads a live project, not a closed one.
+            let handle = match Arc::try_unwrap(handle) {
+                Ok(handle) => handle,
+                Err(shared) => {
+                    *self.inner.write().unwrap_or_else(PoisonError::into_inner) = Some(shared);
+                    return Err(StoreError::Other(
+                        "the project is still in use by an exchange".into(),
+                    ));
+                }
+            };
+            let _ = self.closed.set(Closed {
+                snapshot: Snapshot::new(StoreSnapshot(handle.snapshot())),
+                facts: facts(&handle.facts()),
+                counters: handle.counters(),
+            });
+            // The relay waits for the replies already queued: the actor answers every command
+            // queued before its close.
+            lock(&self.relay).take();
+            Ok(Some(close_off_thread(handle)))
         };
-        let Some(handle) = taken else {
-            // A second close.
-            return Box::pin(async { Ok(()) });
+        // Outside a runtime (the store's own unit tests) no sync can be running: take it here.
+        let work = match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => Ok(runtime.spawn_blocking(take)),
+            Err(_) => Err(take()),
         };
-        // The relay waits for the replies already queued: the actor answers every command
-        // queued before its close.
-        lock(&self.relay).take();
-        let closed = close_off_thread(handle);
         Box::pin(async move {
+            let taken = match work {
+                Ok(work) => work
+                    .await
+                    .map_err(|_| store_error("the close stopped without an outcome"))?,
+                Err(taken) => taken,
+            };
+            let Some(closed) = taken? else {
+                return Ok(());
+            };
             closed
                 .await
                 .unwrap_or_else(|_| Err(store_error("the close stopped without an outcome")))
@@ -1757,7 +1894,8 @@ impl Drop for StoreHandle {
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner)
             .take();
-        if let Some(handle) = taken {
+        // A clone an exchange still holds closes the project when it drops instead.
+        if let Some(Ok(handle)) = taken.map(Arc::try_unwrap) {
             // tc-store's own drop stops the actor and waits for it; what was saved is in
             // pending files, and the next open seals it. Off this thread, which may be a
             // tokio worker.
@@ -1765,6 +1903,29 @@ impl Drop for StoreHandle {
             drop(rx);
         }
     }
+}
+
+/// `tc_sync::join` on `owner`'s tc-store, on a blocking thread: the store is borrowed for the
+/// whole fetch and placement.
+pub(crate) fn join_on<S: Send + Sync + 'static>(
+    owner: Arc<S>,
+    store: fn(&S) -> &tc_store::Store,
+    client: tc_door43::Door43Client,
+    session: Option<tc_door43::Session>,
+    repo: tc_door43::RepoRef,
+    name: String,
+) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+    let runtime = tokio::runtime::Handle::current();
+    let work = tokio::task::spawn_blocking(move || {
+        runtime.block_on(tc_sync::join(
+            store(&owner),
+            &client,
+            session.as_ref(),
+            &repo,
+            &name,
+        ))
+    });
+    Box::pin(async move { work.await.ok() })
 }
 
 #[cfg(test)]

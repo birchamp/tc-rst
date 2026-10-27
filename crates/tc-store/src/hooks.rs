@@ -61,6 +61,8 @@ mod imp {
         failing: Mutex<BTreeMap<Point, Failure>>,
         /// The loose objects and bytes past which a repack is due; `None`: §9.8's.
         repack: Mutex<Option<(u64, u64)>>,
+        /// The new bytes past which a commit is a chain; `None`: §9.5's.
+        chain: Mutex<Option<u64>>,
         /// How a test looks at the folder as a Scripture Burrito, and what it found.
         burrito_probe: Mutex<Option<BurritoProbe>>,
         burrito_problems: Mutex<Vec<String>>,
@@ -205,6 +207,19 @@ mod imp {
                 .unwrap_or((crate::repack::REPACK_OBJECTS, crate::repack::REPACK_BYTES))
         }
 
+        /// A commit whose new blobs pass `bytes` is a chain of commits, and a push sends one
+        /// link per `bytes` (§9.5 says 16 MiB).
+        pub fn chain_after(&self, bytes: u64) {
+            *self.chain.lock().unwrap_or_else(|e| e.into_inner()) = Some(bytes);
+        }
+
+        pub(crate) fn chain_threshold(&self) -> u64 {
+            self.chain
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or(crate::checkpoint::CHAIN_BYTES)
+        }
+
         /// From now on, `point` fails with `failure` until [`Hooks::heal`].
         pub fn fail(&self, point: Point, failure: Failure) {
             self.failing
@@ -308,6 +323,10 @@ mod imp {
 
         pub(crate) fn repack_threshold(&self) -> (u64, u64) {
             (crate::repack::REPACK_OBJECTS, crate::repack::REPACK_BYTES)
+        }
+
+        pub(crate) fn chain_threshold(&self) -> u64 {
+            crate::checkpoint::CHAIN_BYTES
         }
 
         pub(crate) fn wait(&self, _point: Point) {}

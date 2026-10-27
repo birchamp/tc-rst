@@ -169,6 +169,13 @@ impl Actions {
         self.open(project, Some(unit), None, After::Nothing);
     }
 
+    /// "Open it" on the project an open from Door43 found here (ruling H14): the dialog closes
+    /// and the project opens at the place remembered for it.
+    pub fn open_door43_yours(&self, project: ProjectRef) {
+        self.close_modal();
+        self.open(project, None, None, After::Nothing);
+    }
+
     /// The Resume card (tC4's `ResumeCard`): the project opens at the record's book and
     /// chapter, in its mode.
     pub fn resume(&self, resume: &LastEditView) {
