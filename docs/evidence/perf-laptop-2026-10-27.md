@@ -274,3 +274,7 @@ From the counters `storebench materialize` printed for the last run of each case
   check reads them, or that something else makes the page appear. It needs the card's step 1.
 - Warm figures are in Parts 1 and 3. The cold-open rows of the store are met by the 10 s restart
   budget; the app's cold launch is the open item.
+
+## Where this stopped
+
+On 2026-10-27 the owner called these measurements good for now and will wait for user reports. Not measured, by that decision: memory growth with history, USB export, daily sync, import of a tC4 project, and the start-up rows on the signed installer (the unsigned figures in Parts 3 and 5 stand until then). Every missed row that was measured has a card.
