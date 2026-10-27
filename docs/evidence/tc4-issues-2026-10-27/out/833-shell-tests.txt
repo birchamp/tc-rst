@@ -1,0 +1,10 @@
+$ tc-heavy node --test --test-name-pattern export_save_dialog_has_a_readable_title shell/test/bridge.test.cjs
+ok 1 - export_save_dialog_has_a_readable_title
+# pass 1
+# fail 0
+# skipped 0
+$ xvfb-run -a tc-heavy node --test --test-name-pattern a_text_field_right_click_offers_cut_copy_paste shell/e2e/window.test.cjs
+ok 1 - a_text_field_right_click_offers_cut_copy_paste
+# pass 1
+# fail 0
+# skipped 0

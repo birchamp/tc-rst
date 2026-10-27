@@ -1,0 +1,15 @@
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-core)
+   Compiling tc-helps v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/tc4-issues/crates/tc-helps)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 06s
+     Running tests/highlight.rs (target/debug/deps/highlight-fd95cd1a111c2a3a)
+
+running 2 tests
+test a_quote_the_verse_lacks_marks_nothing_in_the_original_pane ... ok
+test the_original_pane_marks_the_quote_at_its_occurrence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+

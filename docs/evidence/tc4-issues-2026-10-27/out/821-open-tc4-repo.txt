@@ -1,0 +1,8 @@
+$ tc-heavy cargo test -p tc-sync --test sync -- repro_821 --nocapture
+CASE 1 (titus-821-tc4): join -> Err(Blocked(Tc4TeamRepository)); projects before [] after []
+CASE 2 (titus-821-novrs): join -> Ok("/home/bot/.cache/tmp/.tmp4YIF6l/projects-juan2/Titus"); projects before [] after ["Titus"]
+CASE 2: opened; 1:1 = Some("Paul"); vrs.json on disk now: true
+CASE 2: saved 1:2 = Some("Juan was here")
+CASE 2: burrito problems after the open: []
+test door43::repro_821_open_from_door43_of_a_tc4_repo_and_of_one_without_vrs ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 1.50s
