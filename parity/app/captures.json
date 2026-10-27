@@ -9,7 +9,7 @@
     }
   },
   "build": {
-    "ui": "e148cfb97a8c7b35",
+    "ui": "9d52aaa8a0a4b7c1",
     "commit": "dev",
     "api": 1
   },
@@ -50,14 +50,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home.png",
-      "sha256": "ed1a415f419ed8060712702978f091e185924fc9caa926bebb369983db393d69",
+      "sha256": "5b7af6bbb51839e519d73d6fad2f328813fb1c01230528e40d006c4083658cc1",
       "dom": "dom/home.json",
-      "domSha256": "4b2c3527f109d0fcb50d21f55b7e3324653892f27c1a8b597b17bb02227867ca",
+      "domSha256": "594a50597b4aeb82317b711038425978820babb704af856ebc9de8564f25c425",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -81,12 +81,12 @@
       "png": "screens/understand-tit1.png",
       "sha256": "4b0909eb72838734562c4b54c3fd259bc738f6c19a3ec4541bd68ea89974ac5e",
       "dom": "dom/understand-tit1.json",
-      "domSha256": "ebd528a426251cd582ccd6ba5f2458f7141ba2db7aa92df74c0dcfacbf308fdc",
+      "domSha256": "d1589b74bfb102e599a3c11f2b68910140388c4aea025b49f9bdc8f9501c26f2",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -110,12 +110,12 @@
       "png": "screens/translate-tit1.png",
       "sha256": "9d8ce65b9444201fc13a573cda5b29b24bf5da9854d90a823559370762c2d545",
       "dom": "dom/translate-tit1.json",
-      "domSha256": "37fcdbfa53c7db31a52d9e2d8d6c958d4ed06b18165ccae74665b71906fcd1c1",
+      "domSha256": "ef7fe8646eae143eec29aff38db3a5824ab514de70749f7748a7e7ee37fc0a92",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -139,12 +139,12 @@
       "png": "screens/check-picker.png",
       "sha256": "d3cf8e15f05c4a594a26cc568da140760e00b158a3c01aedca0d6667f533a180",
       "dom": "dom/check-picker.json",
-      "domSha256": "e16f40b77c224194cad521f008c562ab10664d77a5b8b3ffa3e6446501969a10",
+      "domSha256": "edc46dc400e97300beb4bae61129102f346f2acca55c997b847d0273cb06f961",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -168,12 +168,12 @@
       "png": "screens/check-tn-session.png",
       "sha256": "15a5bcf1a74d7720a3f0a1bd687942047299720da351ca77b8ce16aa69ba8872",
       "dom": "dom/check-tn-session.json",
-      "domSha256": "8b76350549eb188d00fb973c98987e1718b95861c2333c4ccd89e346ad3bfc92",
+      "domSha256": "ea5f12451b59c66608adc17c151c1f20d18cd93cf0b9cc038db6d698b56119ec",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -197,12 +197,12 @@
       "png": "screens/align-workspace.png",
       "sha256": "848f83d5167ea883637d8b4947ead6196fecf309443bedd08845f1c6aa043545",
       "dom": "dom/align-workspace.json",
-      "domSha256": "f777d8a53efc99af4fa649c4d66b6e448359795f0cfceb6a9eb7ac5c5e3db6f0",
+      "domSha256": "2b2754bdb32f687420f8e2f507e8ed76db9c53bcddb1b1acd78a490d0ec41664",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -226,12 +226,12 @@
       "png": "screens/align-original.png",
       "sha256": "f6940bd5e7dafdb7448e8aa159a33183a8e5400129c5f2b81a26b99d4666afac",
       "dom": "dom/align-original.json",
-      "domSha256": "dd299a07ea2939ae100d81003f556c77d6267361e69906e38e970da0b6066a0c",
+      "domSha256": "d9ffd0a3cc3e697b6d82af8284d9d79407dd7bfb8be73d2d597964127417e5c3",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -255,12 +255,12 @@
       "png": "screens/align-workspace-row.png",
       "sha256": "d1190eded5ac3ab14ebabd65b6a5b9ae4564093669dd26148014c28770984544",
       "dom": "dom/align-workspace-row.json",
-      "domSha256": "3e5ffc80206a12165f12d709057d4433cf1d6576f045ccdca781704c29267ef7",
+      "domSha256": "40de6a9076d6a7ad306772c100e8ab51216b8554704135bd3275577382d32bec",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -284,12 +284,12 @@
       "png": "screens/ar-align-workspace-row.png",
       "sha256": "5218b6d614556dfb25d2e9ebbc50eafd5c7f49d403f6652c3860cb202e06f082",
       "dom": "dom/ar-align-workspace-row.json",
-      "domSha256": "82a65e83955530b5da0d6ac4f261f77d7206a256277e2d85e445b25cf66f15ce",
+      "domSha256": "3842307cf98e1fbb13f6cb37065db24ba6bd8f5e051f40203f552040ce880ea3",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -313,12 +313,12 @@
       "png": "screens/align-workspace-620.png",
       "sha256": "263e756d68c725c1840a7a720d650e7a902eb2a384d0dcc71c59e81950432648",
       "dom": "dom/align-workspace-620.json",
-      "domSha256": "b93e8feb49ddb7b0a647b6eea2951d477a130d1ed355efcb2e7bd27159e25be2",
+      "domSha256": "af0d988b06e44f34aad9fa9bd97fe0bf96b73cdf2b2471b5f953d8b0188f3e98",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -342,12 +342,12 @@
       "png": "screens/ar-align-workspace-620.png",
       "sha256": "fd135bb66ff7442cb9c712ff4a18c83cc0ed8017333ab36d612b792695c0da0a",
       "dom": "dom/ar-align-workspace-620.json",
-      "domSha256": "46bc0984a74fb63bbd7b61f345a144ea5d5c6ca6ef4b0c18bc6a09552aea0b89",
+      "domSha256": "cdc82e3dfaa674813f1abeeca4b1a1ac6e86898c04b2a520146db48e39dcba66",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -369,14 +369,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/project-settings.png",
-      "sha256": "2cb007330d4d56ea840c4acf1b84abcc14eff23643c70f7e4afb63d401505ba8",
+      "sha256": "5d8b0d1b089e7b36814d9bcc1c0b20790bf79015170dc24bf0302b7107c8f497",
       "dom": "dom/project-settings.json",
-      "domSha256": "c253f73b51bbafe3ec873a66940a3dc13c576d662959a91b03471082356fe6e2",
+      "domSha256": "20fef844b8a8d32ec9d0e313ca047130d3cd7b9dc8e63f3103787fc50d476f0f",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -398,14 +398,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-project.png",
-      "sha256": "fa6de78aa4b80a47aa198cb0cb252cdc79fc2e4013d1ccd27c09db1bbc4b526f",
+      "sha256": "c3e373eaffca037b21f263479cbc4cfb474d716f2c06409c265fff00937ee241",
       "dom": "dom/add-project.json",
-      "domSha256": "d59131b797d2a5f4a4c7d21a897cb177cb061de02e283503cb60a5d10c8776b7",
+      "domSha256": "b624d49650318c4f0a12d42cd7bd77dcb02dc0294635e90e1b9bb81cc7c04a9c",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -427,14 +427,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-bible.png",
-      "sha256": "4fdf1a48cdd92d3e363c82009d3fc91783fc70de5795919d03459c4c048f1057",
+      "sha256": "5e88cc7c85be14d5eef4d06abb20806c767811a30f2eec55f04634c504792ede",
       "dom": "dom/new-bible.json",
-      "domSha256": "63049d4df625b23ca9dcc072c920e42013c7d74c69bd45668bb2d9c09f089c34",
+      "domSha256": "8006cd8ab5dccbf055fca4d7a450ce80563772da8c20e6ed601663240d270ffc",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -456,14 +456,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import.png",
-      "sha256": "a98476dae4d260b03f16622e74acf4d8bc599df06b36bd1dda6edd2b7a0a1f30",
+      "sha256": "cfdc541a6c78d6db609ec6a948126640169bfbbfbb497cc36ada9972fc0447aa",
       "dom": "dom/import.json",
-      "domSha256": "eb6bc53c967ada06e7e34b362eb2caeb59d845f66dd02a18cbbebc9bbe523f07",
+      "domSha256": "434ae3ca6c344ace16ef47e188ec636d4c7811d6118adeba7599187434db4b0d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -488,14 +488,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-internet-consent.png",
-      "sha256": "1e5126998b60bc130d79431763a6bcd514cde24b70e8d11894578ba92657cc73",
+      "sha256": "f09c42ea026b749ac0c625b80cbe68b23582fef1cc4a3be25b2f85d87628bc7e",
       "dom": "dom/share-internet-consent.json",
-      "domSha256": "5a2dcbf485397324b1e97c16043bb638f6746683bcee8ab2be4a169b98d5746f",
+      "domSha256": "2de942a34a485ada85fc253741f5a732a8882809a0608baaf1d50da97ebc73a0",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -524,14 +524,14 @@
         }
       },
       "png": "screens/share-signin.png",
-      "sha256": "2c47b1652ee597876ce145a33e3a0fe5f5ede99549e1e56a21f64bf8f23bb4a9",
+      "sha256": "47b260f61920854cddf2ccb6cb0c528db8572388ddfdc45c2bac9fce7b9f324e",
       "dom": "dom/share-signin.json",
-      "domSha256": "0f33b0e78fd5fc80bf6abe88876d25e17501f9779738e93d7146abb46423bc33",
+      "domSha256": "b464a9510be170f5dc5f9e9487883ec19ee623900ab5dd0118c1073fa121a760",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -553,14 +553,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog.png",
-      "sha256": "3c0ee975b574649a1ff9b43c54a5f970924e894f6bf6794e8ee1ca7efeb054ef",
+      "sha256": "86ddaca077c34ffbc329cfe5c8962f6034191bfb52fd0a28d8fd309814b0bee3",
       "dom": "dom/share-dialog.json",
-      "domSha256": "8fb9cde8c42b45f6235797b2187927b9d667d95bc8e0a9ada6ad964bd11368c6",
+      "domSha256": "d3116871b2293677c887db78a6ad4abedb878cb5dc40ec37cb29bf9291171005",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -582,14 +582,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-dialog-check.png",
-      "sha256": "7d664bf7a1df12cba71d5ae15347900c8a16503ac29766d9a716184b15f4cdb9",
+      "sha256": "4e342634fec6c3efeed32170266b40c8e45d8b91683b53053e1076fabb085492",
       "dom": "dom/share-dialog-check.json",
-      "domSha256": "4f1618129e16e68a82534e0a2e683e1aeb94e26b6064d7e80dd591d091c2d46b",
+      "domSha256": "5bd8f0f491692d5edc4950858a4ecbefe3e20b3cad82443914249dcce7c6972f",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -614,14 +614,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/account-menu.png",
-      "sha256": "fb873e957fa53b031112f2fb1eb4d4de2b2927c2c1b90b5d52541b661612e1fe",
+      "sha256": "e750787a7247ceb9a11ef9c0f36a6f2f1d96c5e6d4293e0cef4ccd286f9f3fe1",
       "dom": "dom/account-menu.json",
-      "domSha256": "02d5a8be2f2e27b1f79ca1d2ee82f2bc9637b0ed7cfb15b2d779ba8ad2cd9a83",
+      "domSha256": "9a33d839c0314dd6b70a229427c66ad8de7937716d865334e1c1deba3705c8b8",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -646,14 +646,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/app-language.png",
-      "sha256": "523be2160d097aa72fa3f5e6eb2ba9594b81b1cbdd352c04d98e0bff72ad60cd",
+      "sha256": "9a1ff423fab65e314049cf5c8baa5b2d84d07d85d3b41be5024ab5221f35803c",
       "dom": "dom/app-language.json",
-      "domSha256": "692ed43d7620d845dae5354c3d85926a346c3239ba769c6257ad06a27394a876",
+      "domSha256": "2a3b8bd7c28729232ecc8fb5d4e57072fe4be2b808765c1c4759dbcd4b178626",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -677,12 +677,12 @@
       "png": "screens/help.png",
       "sha256": "ca1a6a778cb7794e043d263fe406e67c8920c2cb2531116ba4fb4e0e15b4f305",
       "dom": "dom/help.json",
-      "domSha256": "50eedc0e912cb62887ca9b106fd1cab1dcbccaaf53a02352dc6d5c385418daf5",
+      "domSha256": "7f8933dc8aa12fa10116fef88dffcc66ebd6561b4c758f7998b92edf48c095e6",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -711,14 +711,14 @@
         }
       },
       "png": "screens/about.png",
-      "sha256": "b9ea0a00b49d569b51cbad02d26e9b55a21477c8aeb00248cd232e57cf0a4a5c",
+      "sha256": "12fde643091256e099c9d44da8283a03b335b3f428e990180f40078cfe1ff916",
       "dom": "dom/about.json",
-      "domSha256": "1ee26dc8199be7597f09216d6e0732e8029a3cd6c96840454d3db2928da50952",
+      "domSha256": "101da00a029710f19abbc662c9299a412f1eff1fa7469cae2590af01689e0041",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -747,14 +747,14 @@
         }
       },
       "png": "screens/feedback.png",
-      "sha256": "2f46b79640bb3ce675c316e371dddee85e751ae650bd34672cea7c378e05a330",
+      "sha256": "843109b093f6b007c497e7b91cef9c317a3b51dfeacf6d57ce8db5cad3bc46d0",
       "dom": "dom/feedback.json",
-      "domSha256": "e974cdb5b899c993463aec3e24d88ca5a34f63b6c5c9004c530c1b435f659cc5",
+      "domSha256": "2c4e49524631b2116b4c71878f485ff8a55b3e9897b3226841cddc9495628b75",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -776,14 +776,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/new-obs.png",
-      "sha256": "cb4375797abf02d3aebab0e8bc99912fc741e2a0d7b34e40917a910a4be81b3d",
+      "sha256": "d0d27d1663175d9344568342b98d590f07e9686374124d242f49d9c53b217893",
       "dom": "dom/new-obs.json",
-      "domSha256": "464aeec6a36dd15f6be0b26921f596050c033dd43429e5d6f05a269d8cba0904",
+      "domSha256": "54ebc6ca75ebf3cfdaaac5e227271ac3e57f26eee97c9d97199e312e0692cb06",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -805,14 +805,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book.png",
-      "sha256": "fb8de5da460c4f342cd1175b45c8de3544d87b9aa5fff6f9d9fe6e96c1c80041",
+      "sha256": "16dbf18e7566495f0819e2bfc884c8ae5db6c80351ba60cb64d6877e8fa0f2dd",
       "dom": "dom/add-book.json",
-      "domSha256": "ceeef1dade95ab4733461f280459e50ae7e366f9e00c0f930f4ba92c8dca9bcb",
+      "domSha256": "a089d1ec4d9c04107c6b02c96b12078070a2b66159998006df95b014b071d149",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -836,12 +836,12 @@
       "png": "screens/source-texts.png",
       "sha256": "2655d3b14bbf41e2eec409d734d6fe6b2d64b1294cef1d1fa56bd1181d84e763",
       "dom": "dom/source-texts.json",
-      "domSha256": "34b6cdec1a52a379cb2d4e2742163484a633349fdc273e58511f17960bacd19b",
+      "domSha256": "436e032a51425c78366ebef4039f06ffe5b529597f22c43e2234baef6b0e4a6f",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -865,12 +865,12 @@
       "png": "screens/guided-fix.png",
       "sha256": "496ab122c8706c18616e009bb96e8c106c52bf6e7fede22279bf6227d74afec2",
       "dom": "dom/guided-fix.json",
-      "domSha256": "7b614ac0321290113b3f9874aa4d5b071c5887207c3d41cbc3e9d27ac35377bb",
+      "domSha256": "bb498d34cdeb9781d041a0052917654a9bcaf37e6960b7a663b6149a1107bb57",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -894,12 +894,12 @@
       "png": "screens/obs-understand.png",
       "sha256": "be4938ec0843c475afe7efb443c3f984c5cb534fdad430ecb445c7197fa038ee",
       "dom": "dom/obs-understand.json",
-      "domSha256": "03ff6231a8853f34a4777123fea23af53dcdc8df124312eb7151d0f724401878",
+      "domSha256": "831999a431a9e0f360de7b69af1318ad07689c73d5b25e0f222002e755470a46",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -923,12 +923,12 @@
       "png": "screens/obs-translate.png",
       "sha256": "c3c00c0de4ee21e8054db619df6b15cee04a972b5e10594af4378230fe6c7d06",
       "dom": "dom/obs-translate.json",
-      "domSha256": "199d72adb58d2349678f5c3c197c4badf8f064f550112ef6fb353af897766818",
+      "domSha256": "12eff46357ad929bf12853bd0e18277c109c0a965e089d55daa0a7130f2c6731",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -952,12 +952,12 @@
       "png": "screens/obs-check-picker.png",
       "sha256": "165976fe5621165d4c2265af2165c1af46dd58747622b4761fec41f605d5d414",
       "dom": "dom/obs-check-picker.json",
-      "domSha256": "03138b0863ae56032a72e923c50378483e9149b7856d7febf9ab215f57989d6f",
+      "domSha256": "901a69c4940bf34735058157b4e4234777d2a9aa5eeca78efad25350f46c37f9",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -986,14 +986,14 @@
         }
       },
       "png": "screens/open-door43.png",
-      "sha256": "96fdf0ccb8705467b09f4ec4144867438f4a79ef98b259a44e39363645417315",
+      "sha256": "e74af6c68c32e61a5d2f806d543f69e3b9e55e99deebb72a5b4b6fbff61c25e7",
       "dom": "dom/open-door43.json",
-      "domSha256": "51f6569c54f7d8aae2edd039a7525c7bbf7e8cd093a3a0e0f0e88104b32127f7",
+      "domSha256": "62f94d67d4a8e8fa3961ac7787d669c3c42575943b0155a4c298479978f009c2",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1022,14 +1022,14 @@
         }
       },
       "png": "screens/open-door43-internet-consent.png",
-      "sha256": "a406e83c656b1d5f00ffdae6f06ff151e77a98c11526647969e592159fcbdca4",
+      "sha256": "b9eb021985d355f96bce7cb9b15215ae68d5f4c1727609bfcb9b6743b7280e5e",
       "dom": "dom/open-door43-internet-consent.json",
-      "domSha256": "d4d607c69116f3129734d204cefcda784e4925d57386380f70e50e2eba703676",
+      "domSha256": "1bc9114576215b3f82035e4f444b93d28e2511c5606510bed7cd3d5e345521b9",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1064,14 +1064,14 @@
         }
       },
       "png": "screens/open-door43-refused.png",
-      "sha256": "5aad90611e73f178bd711adf08ad830a976892607cb317d529e6a58b9dacec12",
+      "sha256": "34245d3a9b3ff3a44d93fb4fe19135e0ab4b48fc55ed0e832d4c3691616e96e8",
       "dom": "dom/open-door43-refused.json",
-      "domSha256": "df3be86644418dca29d8763b53b485a3b6a1cbbd173e20db730076d0ae9a3441",
+      "domSha256": "e8645ee0c9ee12b98528ddfa7aa0c8dbe677f062742d51926f368a25d439e39f",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1095,12 +1095,12 @@
       "png": "screens/en-understand-tit1.png",
       "sha256": "f99e9dfadf99a65cc1134dafdacddaa95fcc30610ae016f3ccd0d5cd2bad7165",
       "dom": "dom/en-understand-tit1.json",
-      "domSha256": "6ee8c5b736bfee33c13c2f6defede32358369942d9f29db3743cc1f45e35087d",
+      "domSha256": "8f8a1e5d17207501f415ff8c65b95f4aeac3df6d8f5211910980e4bbfcb9d0fd",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1124,12 +1124,12 @@
       "png": "screens/en-understand-tw-article.png",
       "sha256": "36679e4f73fb85d9c048e49679b9272910d1d7225fde6a06848daf1b56adcbc1",
       "dom": "dom/en-understand-tw-article.json",
-      "domSha256": "4c3a846838a4cd21ee9b4cff2bb419ac702542b17c2883b595dffaa35877baf7",
+      "domSha256": "ce213c901ea3f2a305ce6f8a2305465ede7d0d18f33995cb7f986bb20a1fcf8d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1153,12 +1153,12 @@
       "png": "screens/en-understand-questions.png",
       "sha256": "0485e0b4b5fe9cf86cdad4517f98ad044039f0477935fecfe87ae33277e067c0",
       "dom": "dom/en-understand-questions.json",
-      "domSha256": "f8bdb214ae992100ffee9558f54fdf673d266156cbf0b4728093e5a0f153d013",
+      "domSha256": "376f05b51691bed8ae51b6251fed8ba2901bdf2d5c024a14a7c732740dc1666e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1182,12 +1182,12 @@
       "png": "screens/en-translate-tit1.png",
       "sha256": "fa34c1afb1c2ae6272e4eb7ca5841308773c209249ed39d888e029d7cee572bb",
       "dom": "dom/en-translate-tit1.json",
-      "domSha256": "ef7ad9b9ae6900da184516fa92f813da8a99d80aa6569cc8817e2ade29e3c958",
+      "domSha256": "9ae28762fd7fff8e1735f88c563bb4f8c2d5c2cd98f620fdb335844e60032d16",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1211,12 +1211,12 @@
       "png": "screens/en-translate-section-editor.png",
       "sha256": "dcfe58819cb9b1b8b3845ce6b9ed74eaecdc2bb4b7d287567cd9de5a0935558b",
       "dom": "dom/en-translate-section-editor.json",
-      "domSha256": "72a69e48d1b793de36d4b67f03a1fa381d3f3b269e47acdfcd65d725bd2ce4c9",
+      "domSha256": "b210fa811fb9ea624b7feb3d8167347f8409466f24cd4d317c9fa7f9e41f095a",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1240,12 +1240,12 @@
       "png": "screens/en-translate-verse-editor.png",
       "sha256": "f3392a70b3eaf2e941eeed9bc192fe4a0f30cb7a29cd4afc609ea80be926ae94",
       "dom": "dom/en-translate-verse-editor.json",
-      "domSha256": "6f20077b6a1152f953d2c95b18725fb4d8f06291a3a3fef0db00119812d631be",
+      "domSha256": "f5d8f84f9fda6678b43501ee7c55fd14b3c669ab3e0772fd91807d63cc1200be",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1269,12 +1269,12 @@
       "png": "screens/en-check-picker.png",
       "sha256": "ef6b1feeb9fcba1923604c5ee4f28a81600dd978e75fd462316c1e839298786c",
       "dom": "dom/en-check-picker.json",
-      "domSha256": "7ef0bf8b8471edb5855efacb250c2211e66c4dcc4c521458be7ad4c5815a731f",
+      "domSha256": "22308ecfd6c0efb7b791b635a863d96662e1c50de8ce25eb985df9c1901bde86",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1298,12 +1298,12 @@
       "png": "screens/en-check-tw-session.png",
       "sha256": "3e4d00a6bc259e038932ef7adeb94710a2f01aa68a01fa5ea23770415da50b93",
       "dom": "dom/en-check-tw-session.json",
-      "domSha256": "b44edd1f5ee57491f8a856d42885d1c28bf4e737f76b5cdbf0a903470dc759a5",
+      "domSha256": "09e906353e3bb5dc68230502e1439348158af0d47067a971091899951c177f97",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1327,12 +1327,12 @@
       "png": "screens/en-check-tw-article.png",
       "sha256": "036b10f111f3fec2590de61e40f0293bcbf4e2abc8ec62d10fadab2f85932fe0",
       "dom": "dom/en-check-tw-article.json",
-      "domSha256": "e9ebb5f86387e2a8a4000f0bac333fcca64d3c8b1f183b04cc74786e3a696d69",
+      "domSha256": "07f2b1857e55a0505aea73661e3c0b72402588cc3ad91ec6d2ad8c07395163bd",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1356,12 +1356,12 @@
       "png": "screens/en-check-tn-session.png",
       "sha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
       "dom": "dom/en-check-tn-session.json",
-      "domSha256": "dc584af20a56e6244435ddbd7dcb232fc3717f1f16de79b98d82942a30bd231c",
+      "domSha256": "6bebe80c240fbf12c349430ea1747bebe4fbe68bc84b4f3d07f104ca086ee6fb",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1385,12 +1385,12 @@
       "png": "screens/en-check-ta-drawer.png",
       "sha256": "c3ea07f68bfa2628ebc72812e979edc48ea8fd3428f54dfe959ccc04e962f892",
       "dom": "dom/en-check-ta-drawer.json",
-      "domSha256": "cbf3431d05eea53ced6060567a31f2c0fe20d9e81233ce3b42a0d12e88391f93",
+      "domSha256": "23a3fff28284252d445226f600f899d66dde868b1575ce8f565dcc239363f7b3",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1414,12 +1414,12 @@
       "png": "screens/en-community-checking.png",
       "sha256": "743053a120f55b966a23324eee503714aac85013527601ea2914c16d0146bf1f",
       "dom": "dom/en-community-checking.json",
-      "domSha256": "bab18397c5031ae6ebedce763402d3a0d8c294d39e58b08892ff6468ec5f01cf",
+      "domSha256": "820b516fc451dca2b54f389c25e796d951f4fd16fff6b10cfaa72fa15c6a7416",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1443,12 +1443,12 @@
       "png": "screens/en-obs-understand.png",
       "sha256": "0394132d609a545c7c7e6791044d05bca44436af75f87b4850983b3efd083346",
       "dom": "dom/en-obs-understand.json",
-      "domSha256": "180070a26b922dd02592b9798de8cb7fc6f065a0274fcbba31c0362c8db56a1f",
+      "domSha256": "63fd9daec073d1cec410b50a28db7d18d2c6cafa281349bf1bbd6e4ac8ab07d8",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1472,12 +1472,12 @@
       "png": "screens/en-obs-translate.png",
       "sha256": "a3d3512ef295e0fc1ac908efcf463e13b6b7e88377bfa80e918e6e7e23a99570",
       "dom": "dom/en-obs-translate.json",
-      "domSha256": "02c8fdd7016ae3bdb75e64ae8d3718bd93189bfe303035fc32bd2d76b1da4543",
+      "domSha256": "a9c4d862f5e1267421b3d3aedbaa418eed5ea375e8cee3e2f26b1b986ca51bb4",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1501,12 +1501,12 @@
       "png": "screens/en-obs-check-tn-session.png",
       "sha256": "8bf4327caa97ca0569d1b192734d4ad5a339d8b502b4204d84999f44167d0907",
       "dom": "dom/en-obs-check-tn-session.json",
-      "domSha256": "6ec5f547f991417f8e5ec029dfbe6414fb203c01a22003108b869bc536e2b0b4",
+      "domSha256": "873cecfbc9841601b7e50bdf21546ecb8eb011e639ae8133c84fdb1acf1c6412",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1530,12 +1530,12 @@
       "png": "screens/ar-check-tw-session.png",
       "sha256": "b5d7ebcdc2c44fc25207eb71f3bdfbc92d900f129f6fb140b37db499d39e3591",
       "dom": "dom/ar-check-tw-session.json",
-      "domSha256": "c239a67f1d08c1f29540ca275ff5284b2b32d67eff93d465ae8f86e997858fdd",
+      "domSha256": "ef84c020668442b623a0236ddaf776cfb4c92c8541bc208313e4b35fdebcc41a",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1559,12 +1559,12 @@
       "png": "screens/en-check-tw-session-620.png",
       "sha256": "48ff3230e789965863f7962919436c97bdc091dc3c0c381dd76b7becd6f7c585",
       "dom": "dom/en-check-tw-session-620.json",
-      "domSha256": "05153bb4f228f83b65ef5618d14f9d28f435f76ae0e1ddd0594851d4a21519be",
+      "domSha256": "9303a8e91a777563b42ce059fb65c5f3b9f568ed07fa2dff82ee69ac7d3ae443",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1588,12 +1588,12 @@
       "png": "screens/ar-check-tw-session-620.png",
       "sha256": "637e07ce734665af4b561a72aacf0b41f547e50f9cf283ee46384b1f71b944f6",
       "dom": "dom/ar-check-tw-session-620.json",
-      "domSha256": "d438f954706b4c0ac30f970c13fa264d3558f4c8e3b959c2e99075864832e350",
+      "domSha256": "b60584f3ac88dd3c6c856a0eadb29b97e721ab02487f4b72e57c9e376f64e44d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1617,12 +1617,12 @@
       "png": "screens/en-check-tn-session-row.png",
       "sha256": "2239616fc8349c1cb0d3894274f780fdfece8c7ce55d8b85ac1b66138b56f172",
       "dom": "dom/en-check-tn-session-row.json",
-      "domSha256": "cbfe4442877cdf4855647a2ca3e22a63ac01f4ca0b91180a0357c523fab6c742",
+      "domSha256": "5cd23b3d741893891e66c6a2592636e56a2279c1c66ddd155ee64f042dd1144c",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1646,12 +1646,12 @@
       "png": "screens/ar-check-tn-session-row.png",
       "sha256": "dfaee7ef506a09d8da11cc59e21af487f663fcc472c1e4b9320390fb92919904",
       "dom": "dom/ar-check-tn-session-row.json",
-      "domSha256": "377c27acfed20996dd85d82340b8e6a31cf8ae824d9e0bc2d2339bbd8ed3bbac",
+      "domSha256": "02e5e8e3896b02d60cd9de93728ffe12076f939435e60e40121c24df5f22ea4e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1675,12 +1675,12 @@
       "png": "screens/en-check-tn-session-620.png",
       "sha256": "c4c5e755c0b5c3d020f29912182ffa2f3d34f13a93d0661e418cc4f1e331c634",
       "dom": "dom/en-check-tn-session-620.json",
-      "domSha256": "51524f11ea3a8c58c1d4bc92829bb5b456a0ae2929365d04e9ac3412f8c9e87e",
+      "domSha256": "4adf09b651d8e535611d9dcf44c924f401bd797d3f3bba732df45ca74e0d8faf",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1704,12 +1704,12 @@
       "png": "screens/ar-check-tn-session-620.png",
       "sha256": "35b4d20b6f923f3716f805f3b9028f6715062491fca9339dc1e3918f0fcad033",
       "dom": "dom/ar-check-tn-session-620.json",
-      "domSha256": "a88800d2aa3beaab94c1c145523bf5f9f57fcd56a4a48c4dfcd4a50df65d3791",
+      "domSha256": "4d948137e53fdf5058f0f5fde5e289e111aca1bdb2b94cabcf7605c3864b9af0",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1734,21 +1734,21 @@
       "syncToast": null,
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/shared-home.png",
-      "sha256": "b72ff6d56d9fb0a61c7fcde90646de7a43e73bf903bea4e2fecbef8eb08ef07c",
+      "sha256": "2ae0dbf5f86c2a1c2a20a09e80c38a96ea3423b044641987443711176cf2c96b",
       "dom": "dom/shared-home.json",
-      "domSha256": "bf7521940419d2c7471cfd9caa3e400e6727a215c8bf5151d09fb55d87f75b0e",
+      "domSha256": "0a69e14ee3ce3383549e2157032c96dca3203c04ba66d2f5983c26c249263045",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1772,21 +1772,21 @@
       "syncToast": null,
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-internet-consent.png",
-      "sha256": "682809622eb872a4e9be3931c5d583bce985882b785f4363db69706d0561f219",
+      "sha256": "8eb3776a25b6c721fc1634af581da1a09366595e2e6bd812eb4cc4c0580323c6",
       "dom": "dom/sync-internet-consent.json",
-      "domSha256": "a45e02f85a253ad774e6d9df091f3d0a8ce42478324a833ad89f8eb8dfdd3396",
+      "domSha256": "f2426a4fc9e8825900f87c7004bc8b5840518477eb709b49879b34ac4e134d50",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1822,21 +1822,21 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-failed.png",
-      "sha256": "3a7b5cc94e0dc054d9f36fa8c053f3f4cc648403a0139478f5af0ce16324d21d",
+      "sha256": "6f1664840b35308d5aca265513f82be775873e4ab63391377578724c45100544",
       "dom": "dom/sync-failed.json",
-      "domSha256": "ab0c3c1efb33790fb05fb6cd568d1a4d3ca86ad27d64745c13f19ebdb39da866",
+      "domSha256": "53623761689d7a771f6bce4f728dc9ed9003858da7c63a01adc1180861f18d79",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1874,21 +1874,21 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok.png",
-      "sha256": "e018485eab1285e17fa3e868280793543f5daece7b128f8da9a4ee3284dda1ef",
+      "sha256": "a2e24225bf216bbe4ff6b7765964cf90b455f9c2c81f5d4ecd51010af55d3198",
       "dom": "dom/sync-ok.json",
-      "domSha256": "d26b5976243f938e7288cb9845e30dcff5126c23c92d07d3dd0e532df06bd561",
+      "domSha256": "a48a3cc8c9a4c0e4f8582d4842c34dd5bcdfee22a6ffa849a7f5ab4d2d278a84",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1913,8 +1913,8 @@
       "syncToast": {
         "ok": true,
         "code": null,
-        "text": "Synced with Door43 · 4 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 This project now uses 5 resource versions that are not on this computer. Review Download",
-        "received": 4,
+        "text": "Synced with Door43 · 2 changes from teammates · 0 conflicts kept the newest version · 1 verse conflict to review Changes from: teammate-1 · teammate-2 This project now uses 5 resource versions that are not on this computer. Review Download",
+        "received": 2,
         "newestWins": 0,
         "verseConflicts": 1,
         "from": "Changes from: teammate-1 · teammate-2",
@@ -1927,21 +1927,21 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok-teammates.png",
-      "sha256": "e81953cbd07f48213253eebd013525dd9edfdb2f1e2d700cf0a0ac018488f9b8",
+      "sha256": "363c1c4708b35af57063d8a44a32e6340b6604c657fcf7fdb8a2f80d343bed04",
       "dom": "dom/sync-ok-teammates.json",
-      "domSha256": "caa9d756253d61fcdcafcf3434281594d97748d98e73cbce299ba695d010b27b",
+      "domSha256": "4b3532aa68352935f7e0a394d2b8eae5519cf3ecf078d67ee03b3bed43dac532",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -1980,21 +1980,21 @@
       },
       "maskRects": {
         "q2-obs-card": {
-          "x": 658,
+          "x": 630,
           "y": 277,
           "width": 147,
           "height": 31
         }
       },
       "png": "screens/sync-ok-restored.png",
-      "sha256": "a52a699f51387d23b46220b5b9be0b7ca38b1ccfd87e349ea975f88a67f549a0",
+      "sha256": "db21cc875f3993fb4804ed659755ec78122b35cadb5ae2d56c134b42d618fca4",
       "dom": "dom/sync-ok-restored.json",
-      "domSha256": "52a14d6a52fc3555464457cff5876ef91a235a25ddc0ce4fd3a73a8bb1eab061",
+      "domSha256": "de9db0b9e9b9d4a54c3555e1cbefcbab88b2f0c98bc3a355d3599304fd1867e8",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2017,12 +2017,12 @@
       "png": "screens/conflict-review.png",
       "sha256": "0af3170dceffe7f4761c13910d1e45788326f2401f55f97e3a617c45c5d4b396",
       "dom": "dom/conflict-review.json",
-      "domSha256": "7225cd3b256614fda09631b6a5146c8725e66bb19b933a54a09c418c5cdeeb81",
+      "domSha256": "b1ce7308a3e85afe50c19a4c7673fd564bcc008a4eacc4c1c0980810875b17d7",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2045,12 +2045,12 @@
       "png": "screens/conflict-review-selected.png",
       "sha256": "249ff1e8faed5b7d690d3c01ddbcc6f046846e03030fe68252261099d304dcb4",
       "dom": "dom/conflict-review-selected.json",
-      "domSha256": "e05a86012e2283123c7f686266500fa7dea95a1595b2c513aa7008f67019a207",
+      "domSha256": "4bb7f6b9c2fd4af515292a6fb5710de9ae87feedd63136ab41d4ddd8746a615d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2078,14 +2078,14 @@
         }
       },
       "png": "screens/conflict-review-mine.png",
-      "sha256": "f4885fc3cbfe9e4e37d9ace071d66b038a88144d592d52e4c6f620523f78e77e",
+      "sha256": "6228672b13e6c9e20ce5ccc30fa41432c598e3e07f64a63a84e736dd60f9bc40",
       "dom": "dom/conflict-review-mine.json",
-      "domSha256": "b36227e5826968d0f7d8f1d6f0252d6fc1c71a495682e90c0eef3e2af5259d02",
+      "domSha256": "54163a8150f7579a2a08f81890e47b59677c6acbadb549caded56ef1eb923378",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2108,12 +2108,12 @@
       "png": "screens/cc-obs.png",
       "sha256": "8b22efbd6173fab306af6988f8a7c3f757b8d7767d3cd20b72937318dbd9a831",
       "dom": "dom/cc-obs.json",
-      "domSha256": "1c756f8304c9ed104c39cd6b60b0ee1550c64a68e6b6444c808921aa7d41d3c1",
+      "domSha256": "d71665b61b4289e465d539d75693c7416fd53860408a567689347a6f1531e7f1",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2136,12 +2136,12 @@
       "png": "screens/cc-obs-wrapped.png",
       "sha256": "f95de68d22107232b3d66a99325c5b6c3d158d0bc6aedac5d60984025ce988b3",
       "dom": "dom/cc-obs-wrapped.json",
-      "domSha256": "2d1f9f7eae99e6fe1c4008333aca7b30877f02cd6349c5843378383a1e6bf854",
+      "domSha256": "d2d72cd364077959d14f9a9da791fe651ed3974f51d1bf3a9e4e365358fbe371",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2165,14 +2165,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-journal.png",
-      "sha256": "a8215b6ec538710b9445a7b4c78fe0e6826cf61771a47b52f94f77fc0d4835f1",
+      "sha256": "b7f758478250ebcd4e92c52502930926a347972e96732004277e6b55e6e9df83",
       "dom": "dom/open-progress-journal.json",
-      "domSha256": "c1f83331639fd373fbaad8cadf03c4759d3210e6a19e143844af1b16898dde1a",
+      "domSha256": "2f10563b5188ffbe622f1c3bc664c02c7db62dfdeb835c78966f31a3a48f3754",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2196,14 +2196,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-state.png",
-      "sha256": "4901660573c212f3dcfed678f39fd323ef522d36c7eb7ec87ea8a9b76abb3671",
+      "sha256": "b6f8b588814b39e60c0af6cd7a8cf1b83f2580d3f2ac8ce03b23aafe80705b62",
       "dom": "dom/open-progress-state.json",
-      "domSha256": "58a5df2228024fc2c87cf4f20415486a6f4e8f3f3b6f2fa4c6d72f268f2486d3",
+      "domSha256": "d6082be79ea2308c508870d3480be59bd1825f78cff1ce4b0b8bd62ebfff3b4d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2227,14 +2227,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/open-progress-prepare.png",
-      "sha256": "efb791999f37952ae6b1e675005bcc56242130478c75d2e4fd0dea6ffb7ebe9c",
+      "sha256": "861b105679b77ed3eb9f058457368ec31818123c70586c1345c2be8a8cd50b8c",
       "dom": "dom/open-progress-prepare.json",
-      "domSha256": "c1f986dea93cddf435130f74c7382c912e97182d476019eb01b4e24a5b899178",
+      "domSha256": "3e71d16f37171ddd98fcb7a08df8875c3c12d586ee68db144c033cad8ac2adbf",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2257,12 +2257,12 @@
       "png": "screens/upgrade-set.png",
       "sha256": "4c19305741884f5670bd92668c545db23c677e56b1ab69c03aca18b55ac8679a",
       "dom": "dom/upgrade-set.json",
-      "domSha256": "fde21fe0f3b4caca5d1a195cda79d989331c704a86ec340e0ef8155699873129",
+      "domSha256": "ff2ff471215dc79d9e50e42cd929d96c5e1a5b2bfb2b93205346ac91c2ed12bd",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2285,12 +2285,12 @@
       "png": "screens/upgrade-set-harmless.png",
       "sha256": "ba1ad5b83071b0dbd651ea6487af98bf3b5f08ac0f923cc18950f27d9340b138",
       "dom": "dom/upgrade-set-harmless.json",
-      "domSha256": "3604486772d5556394f64b8664649290839786a01677bb729f9d5542d2553f1d",
+      "domSha256": "7de270c8ac04f20cab6d3d0744c59330fd8a171a57415051702cdf72ecf1b0fd",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2313,12 +2313,12 @@
       "png": "screens/upgrade-set-blocked.png",
       "sha256": "3fbc8120a721c1e840095eda0f0f8bc5ead80cca02e16d776b2a5e0a86823698",
       "dom": "dom/upgrade-set-blocked.json",
-      "domSha256": "8b021d0d4a423a8c792c99618edb95bf63c76d6bb53f6fb1475c1531b60a01f7",
+      "domSha256": "d8cd9c50a2e3d5b0aa1853fc0a915c5f9e10faf9d1f98503396c1e2205bc57dc",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2341,12 +2341,12 @@
       "png": "screens/upgrade-set-error.png",
       "sha256": "05ffc6c2fa9a0b1a483c80d314c11d1fbf34c9377d29bb9e5d81f7a56f75238d",
       "dom": "dom/upgrade-set-error.json",
-      "domSha256": "c93726247e7c5c2725a7faabe0ecc53fdc1c8cf4a28c2c3834b33c91e84461e8",
+      "domSha256": "2d2400984de8f66852b34801c50535f735acfb9707fbed5ddd512a0069772753",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2369,12 +2369,12 @@
       "png": "screens/upgrade-text.png",
       "sha256": "29bf10cfe6015871b7344d34ba28912e5ccd012bf0e50b54976683fcfc5f5487",
       "dom": "dom/upgrade-text.json",
-      "domSha256": "3eb624da11b4c28279532270442ddcfa511d40fcafa94a24904f70761e88cf0d",
+      "domSha256": "aa626136db9df37b41fe119a11e917540f2696e3737dd49a1ae2c60514062b87",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2397,12 +2397,12 @@
       "png": "screens/upgrade-repin.png",
       "sha256": "338b91b071570d3b481519f5c13e892568ba93b249c66bf5694a9795e6252135",
       "dom": "dom/upgrade-repin.json",
-      "domSha256": "ab7be9638dfdbab18d1ae7553e0ecf9c892fde2b83e24b466e3fc625a6c0122a",
+      "domSha256": "d56a6613c40e9b9f5e6c63cc09d17e3727c87a10f5ed44e63acf6d0998de6549",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2425,12 +2425,12 @@
       "png": "screens/gateway-change.png",
       "sha256": "15c8efbce07ff3d3d165b489721ddacd44d81e0786fb078ba2bafc90abe3e098",
       "dom": "dom/gateway-change.json",
-      "domSha256": "33e318eb70ae7efdf7efed130a5496b208aa508616134ca4e1a1e230209f8468",
+      "domSha256": "6a4d65bc43db5ec3a889652db22ff46d10c0af2925cb4d1209bf16261348a8a0",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2453,12 +2453,12 @@
       "png": "screens/gateway-change-busy.png",
       "sha256": "89858eb16f35e15f338130051bcae33dddd2384da20cfa0465daf07612406e22",
       "dom": "dom/gateway-change-busy.json",
-      "domSha256": "cdb317eaecc4361e2bb728e45071ea197a12e900c8aba709ba3f2224a202b904",
+      "domSha256": "e87f35f25a9928d1829d49f77c07ebe99a950041371ede1bd566f160422f9f95",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2481,12 +2481,12 @@
       "png": "screens/gateway-change-blocked.png",
       "sha256": "d1d397c64baf4f0174a287b5c03224aaaed93658c74435503ee8cc396d48f74b",
       "dom": "dom/gateway-change-blocked.json",
-      "domSha256": "3c606ea57dd7334052d3641e9af152d47cfc21cfd1f5896ce63ad31cac2348e9",
+      "domSha256": "edb7a116899a535aa41702c76a676f6dd90d885bb7d6aab85b310176da1a1109",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2509,12 +2509,12 @@
       "png": "screens/gateway-change-error.png",
       "sha256": "039ac001029c92a87923547da9f12159bba8cdd6a5f18e5eff7b0656ce5a9e3a",
       "dom": "dom/gateway-change-error.json",
-      "domSha256": "a2f7919ecf4cb326fb544428b24f62a2f515d2fde757e307ab1a2f866abde4d5",
+      "domSha256": "c5cda13c9df13d1ba66552bbf00ef0883b0595b65c19aca8ceb65bc8b41c72e9",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2537,12 +2537,12 @@
       "png": "screens/gateway-change-failed.png",
       "sha256": "007ac25fcc03a358d7ac30b4261514267c972c418ba2b94f85fdd33f8e10f619",
       "dom": "dom/gateway-change-failed.json",
-      "domSha256": "fda5360546f2ebfb9c3f45282a2b508eea4d89536f1aad0e2bedd1edd7d48c1b",
+      "domSha256": "6cf76ea1714b96845ff0ef5f22a8383258c78d66112316ec723d82f45d6d6cdf",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2565,12 +2565,12 @@
       "png": "screens/section-empty-confirm.png",
       "sha256": "7d898acb713d79d9e135a5a4654abba7aab6df2e2398c09487bf8c5360147fb7",
       "dom": "dom/section-empty-confirm.json",
-      "domSha256": "6ca07b1423fb942dfce3371d34063f7e57d1dd3cd2d2920f03f4c16494db6ce5",
+      "domSha256": "17d080e9cf248fb58ff0f0fa2ab8aa24fa06ad7ee2f76ca849c3beab6a003910",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2593,12 +2593,12 @@
       "png": "screens/license.png",
       "sha256": "d0a0c880e04ccb899ffe0b2852a2fcdb79839af8e9def02d53ceb905ecf42bcc",
       "dom": "dom/license.json",
-      "domSha256": "0a39f453d1af2ee2785b0b6094bc899c52f3637130e7b89f5cde7ea00e948ff9",
+      "domSha256": "fd4b8f36c7f1e8750910b11dab7bdd2f0671c14d6fbcc07a6959c01b0ae23e5d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2622,14 +2622,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/net-failed.png",
-      "sha256": "e35a7ec6d7be57464c504f4a8cf19b8cfe5e3ce3d21aa8d6e1ad42e0d796c9be",
+      "sha256": "d996cae130e7711f79a3e6168f314993e268f50b87e04fec80d0c9089c83115d",
       "dom": "dom/net-failed.json",
-      "domSha256": "da26a511ee7428b79c17cc70b3e3139402f6ce9bc7af89c26d992706618d24f5",
+      "domSha256": "3e2ef068d8df273ec70d3df2dae6ab8f8b0c8c0c804e0a565a5d8390b8150dab",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2653,14 +2653,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-preparing.png",
-      "sha256": "62c5a15ab9dfb1524772f81e40dd33c06afb8d64d354ca70ad2390e5854f0966",
+      "sha256": "7a52e8b81dd1e8b7cc2632a7d8696ee69adb86b45dfe6c18e4b2494efe54c4c9",
       "dom": "dom/share-progress-preparing.json",
-      "domSha256": "b22ac94be51088e3b1f5cfd6b912072055a7802fdef76bf0e663797833159529",
+      "domSha256": "7e3fb14810bf1b12a46958d0b5866577f6c29fb938bc722cab84c941e6ac344a",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2684,14 +2684,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-create.png",
-      "sha256": "4ed316ead04d29943272fceb08f92abcc98969e1ca9dbf01c05bd54021b2dcf5",
+      "sha256": "43e64e07b65ac85de463dce69913a43a0c6896719a68c0011b3aefae0ca0df2a",
       "dom": "dom/share-progress-create.json",
-      "domSha256": "776d8af715910451e4b225b25da1a15f5626eb9d409227d2adf889299bd41d9e",
+      "domSha256": "dcfa4f6df809cf055a278345f96d50a65b3359dd70126c5a875d38f19bc2a7bb",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2715,14 +2715,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-progress-push.png",
-      "sha256": "762ab36d6d1cbbea2b75635906bf808ed3dbf965720c2f63382d891c91db9f0c",
+      "sha256": "fd5b9ae99b42bb757c5877c8980ef43360551890ab9e5d05ac78b8ac3cc8795e",
       "dom": "dom/share-progress-push.json",
-      "domSha256": "f7871c64c0445f5c5101239cf4d488422356908935fdeb996e8726f887924d51",
+      "domSha256": "01eb0d9754bfb81dfccdb199ef83132b9e3c922aff3d8ff49ec2191cf3186e05",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2743,14 +2743,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/share-done.png",
-      "sha256": "9e18b0862161db58fd97f6c31d98282a3f8c8eca42cc6023b1ede74768da094d",
+      "sha256": "3126cade5110f1c97bf93203d43d764603757ea4926fe481c0ce168a664f9436",
       "dom": "dom/share-done.json",
-      "domSha256": "4c5b646fd2daf99fe3649f36bdb924c5c50070211cd6ccd205a886e4f76654dc",
+      "domSha256": "853b56487a423175f5eb0bfeb506d1fafc193080848c9d9cac9a644ebb036551",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2771,14 +2771,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-files.png",
-      "sha256": "80a1f21fb02cbeb03b84b215608dea0f234bfefc850effbdfd3db563fe6c64be",
+      "sha256": "68f20ba53ce7c8d79427a41dc1000c5be76b2fc7c116784123c504869c732b6f",
       "dom": "dom/import-files.json",
-      "domSha256": "31aa4c9ea912ae546015ba3d0234baca10399dbddbecd7e80b719ea687548c61",
+      "domSha256": "339a59a91a9dc022622c9f8d08d3bb25ba370c51b24d6b4e0e18f0a924750c88",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2801,12 +2801,12 @@
       "png": "screens/import-review-usfm.png",
       "sha256": "aa48b01ca6242ebdebec9d0054c5d98fd8e60c2115f351eec83f5a77966ca143",
       "dom": "dom/import-review-usfm.json",
-      "domSha256": "8a9ca89d5d641fd7e893a7626651e22b98638514b7ec9830998519f93d1b6eb6",
+      "domSha256": "acfd1746c662dec4ddc9efac7f04a839e055490511a67b892fcbd9dea92d611e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2829,12 +2829,12 @@
       "png": "screens/import-review-tc3.png",
       "sha256": "1728c92cc3599517800ec942f27a00bbcf908f5944dbcd240d53c0f0198bdf29",
       "dom": "dom/import-review-tc3.json",
-      "domSha256": "3d5b8a1ca7d2d7cf1d50dd06f5f5d6b4f4146e9edf52214808a1664af71090a9",
+      "domSha256": "b8d18c60eb5db6f7a1d6696c4b1ceae06145a90c40c81e9057542fdf5b1a568e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2855,14 +2855,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-working.png",
-      "sha256": "b5c3837dff51e9e6f4d52c6f292161e018cf205477e0a162a80e0e3a76f492fd",
+      "sha256": "00ff8bb3c603f24e8d2d0f328c52633630fcad09ff5c814b72875cf4e4dd7f4b",
       "dom": "dom/import-working.json",
-      "domSha256": "707893498a04b386cb4838c1c59e6169a70f3829e811b479707c72b94bb18011",
+      "domSha256": "4377284b50d3253ea28c7b50cd33cda17c850e52f5af4f7fc0fef85224e24b3d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2883,14 +2883,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-failed.png",
-      "sha256": "17589b628dbd8292e01e80aeafcfcd98c8c5a924f22df50c971a8fb8f7cbd81a",
+      "sha256": "b91ed463a9efbefd60f469e28b82e4c676a35f79f2f10821ef79016ab9e5b5c4",
       "dom": "dom/import-failed.json",
-      "domSha256": "094ea9626fd4cdb203392da745de9951933ccbec7878e5d2fa9fabcfb7270f40",
+      "domSha256": "f090a9c22544770b76ac269ad0947a314df6450ad61bf41b342bb90541ba295e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2911,14 +2911,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-pick.png",
-      "sha256": "f73066f4032e1ca36702ef820fbcd2ea1e7759ed819acf1aeeb4d7439cedfb4d",
+      "sha256": "b9aba1303b7ca76a1a31410887df3440c4bd1fcb6e6efc17d417de8d6192293d",
       "dom": "dom/add-book-pick.json",
-      "domSha256": "6a4a5be962e5d1e145e088decfaa0d9cb76e3408ccc4b74d587454a35f437f50",
+      "domSha256": "168142bdff6567e686fee74a65002661679fbb044de17147e02abd82352c6469",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2939,14 +2939,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-pick-multi.png",
-      "sha256": "eeb8d9f7cacc33dc006747536b1589d371952c3b61fbc17b1567b8c34363ddb6",
+      "sha256": "fdea56dbdde1e016f887d3bf3833d1a69613f6794b11b71b74ccc3c76a192795",
       "dom": "dom/add-book-pick-multi.json",
-      "domSha256": "386912efd8c6179aeeca464372f7bd071a326efac9f4e97af0b53e0e26ee9c3d",
+      "domSha256": "d714392ee76f1d0b27c338302f1484f89c1acdaa3faa457213b89171f0dc743e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2967,14 +2967,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm.png",
-      "sha256": "912069e2d0e73d5a66e80d0eb46b7867a0ede0618b1655d9634a0881247d6827",
+      "sha256": "91a847c7996b1a4123ef7c956a4c9470f2d164a9ee7bf9f911f6909820e52eaa",
       "dom": "dom/add-book-usfm.json",
-      "domSha256": "2e66522143841615fee22df078a0fb224d354885838cea38a2dc37c12156528a",
+      "domSha256": "4377293c06e6e2278e82f457777c13fd8d0b4a50e86946d5d554d9c7727995c0",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -2995,14 +2995,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/add-book-usfm-files.png",
-      "sha256": "785417b404622f98e2f7ccf682e0bd88aa29233f05479505dbd12bd845b3d928",
+      "sha256": "97602f06da14a831e549cf8198b5e1c1fe144262abbb1c9320900ade3caffef7",
       "dom": "dom/add-book-usfm-files.json",
-      "domSha256": "efb785ad84966d5aa001e4c140e68ebfea8da44e96ee19bb52617b75996c270c",
+      "domSha256": "927d83d2e8141e88f85efaa2a1023e1444d97a67dd4a240845710bba3263019e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3030,14 +3030,14 @@
         }
       },
       "png": "screens/signin-error.png",
-      "sha256": "0315859a16b8279870b3b8f18ca674015a49ec1145244e4015ce28f32f8594f9",
+      "sha256": "21d4b66ea8e597b29f6d17d1e98f859cd6729c1989801042369828185dcab995",
       "dom": "dom/signin-error.json",
-      "domSha256": "daa5c642a4cd03c487c72fa99cc0ca4ddb5cbb42683420446bdbdb4280cf0137",
+      "domSha256": "444e0651ba19be22942df4296b4010ffc6199bb118ba77270e5629c38b47246e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3060,12 +3060,12 @@
       "png": "screens/check-empty-none.png",
       "sha256": "c80ef91193ef183ea56a4d52f283c242f1cf1ef613af174989595620f7a6f30e",
       "dom": "dom/check-empty-none.json",
-      "domSha256": "5cb631d01e0d5ec2d612cd0ec0e7083a7678b0f1cda4616a377899349b2d1a49",
+      "domSha256": "6eca13d3b81061d9716df593fc8672c256b4dc4d5b6b5186cf84d5e12112b41f",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3088,12 +3088,12 @@
       "png": "screens/check-empty-all-dropped.png",
       "sha256": "6be9f22d8aec5034a7ac3b627b01c92de698279b24c252a0c56926692c2680b9",
       "dom": "dom/check-empty-all-dropped.json",
-      "domSha256": "b19a3d9a7a8e33a45ba880a200437249e29c5eba35b60d5031cbdac7437355ec",
+      "domSha256": "c2c32c898ff0a2108a9db6aa0f93d2173b103e4a0265ccaf1905ed08031a5c22",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3116,12 +3116,12 @@
       "png": "screens/check-empty-missing.png",
       "sha256": "7bfa790a1d4443376e397700790d0967004366647fca7c143c797cdc36ddcf18",
       "dom": "dom/check-empty-missing.json",
-      "domSha256": "a01ff828591aa60abab1ab39a6403d2058151e3aae930c4eeb1284d6c4f1338a",
+      "domSha256": "593db2eea5b9be1314585ee6017b8b782e5fdcb8df7761f49ce30a829c037408",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3144,12 +3144,12 @@
       "png": "screens/check-empty-versification-unavailable.png",
       "sha256": "b4bbb65af7eadb605b7d71ea1466edb4aa2f8de6e19d00291260d16e89286585",
       "dom": "dom/check-empty-versification-unavailable.json",
-      "domSha256": "d3690874f1d042011177e34aa79d6f6907d421da67a1938d8f044301506c3c74",
+      "domSha256": "49207d8ac54aeebbae9308ee030a36284f74c25c8e4d87657d2e08452b624011",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3172,12 +3172,12 @@
       "png": "screens/check-empty-versification-unknown.png",
       "sha256": "152e562d3e6834cbef6f268ef0a1e662ad29e65c2a028bb4dc626887e26f63a7",
       "dom": "dom/check-empty-versification-unknown.json",
-      "domSha256": "f14a428af5593876835ee44e121e51e3b37acd11d138b11cbbb7c3ffe197927f",
+      "domSha256": "3e71e87fe46bfabb74365c28ce599e44abcca0cc24c1fb8c03a2cadf33b640f8",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3200,12 +3200,12 @@
       "png": "screens/check-deriving.png",
       "sha256": "e10c95f6efbf2d55f2f391ff57a439bb5de03511c8309f5d62a4eafe2388165c",
       "dom": "dom/check-deriving.json",
-      "domSha256": "69d10da674166f606b88f19722ae15b54bfe0ff54d0569103ee09d35cffadb0b",
+      "domSha256": "f3262ac5b67b9caf958fd3784d538ef78185463e9a49681a8ac439d5bc4450e5",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3228,12 +3228,12 @@
       "png": "screens/check-error.png",
       "sha256": "a0c30ab7badfca84aaef06fb64182445f6a096564dfc67572f428fd06a0fd708",
       "dom": "dom/check-error.json",
-      "domSha256": "2e743597cb5f3c63aae5b63d9ba3f8f696417dc907e74ef3616c52c7cd9c2b94",
+      "domSha256": "05653eb6dad92514fb34e0cea920987655554c9fca2b99c234df9f0a5669f474",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3256,12 +3256,12 @@
       "png": "screens/check-rail-empty.png",
       "sha256": "3ed06c4558c3ccd12fec330372767a92605da67b89c2216e0adb430e3d92190b",
       "dom": "dom/check-rail-empty.json",
-      "domSha256": "d23e47580deb8886ae544cf7ecc6a01bc165f39458a936bf202530cd8e952bae",
+      "domSha256": "19407af5c6fabf283d62c607ae090de6260cd6a6436d8c5820e61e175c5d8488",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3284,12 +3284,12 @@
       "png": "screens/check-picker-no-items.png",
       "sha256": "4ba83a16d9b6ed700220d3a94b1e5b2c16f75a85c43e738f2d7ccc7f1a98baff",
       "dom": "dom/check-picker-no-items.json",
-      "domSha256": "e29df02eba28006eba8de92317ed1b60841a9e0f45a3dbc4f42303d5425d83f9",
+      "domSha256": "2781cbbe5cbbc078861de1a04ce209a577c1fdb1be9f491a086a133fd11b870d",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3312,12 +3312,12 @@
       "png": "screens/align-unavailable-undrafted.png",
       "sha256": "7b32a9733ce94fadc8f2c20353ec550a549ca65dc808f2d03a4954ff28e071bf",
       "dom": "dom/align-unavailable-undrafted.json",
-      "domSha256": "ac0ecb904d337bed8a9cb22bc6be5106374ffca6be7159572269e5f6854fa3f3",
+      "domSha256": "81cb2e5db69f22986a2f3663df59fd676dddfe39e4b1d18b16b9c05a476b46de",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3340,12 +3340,12 @@
       "png": "screens/align-unavailable-unpinned.png",
       "sha256": "57e36d77db065168b33876562baa3244d26a47ee6a14f6e15a40d29219050077",
       "dom": "dom/align-unavailable-unpinned.json",
-      "domSha256": "757b7ac78d9073db0abec2cc5c5f2fe8f9c770fcc68cc76b87681a9ee4914354",
+      "domSha256": "6bbe4a604ebab4855e06c3b138b19d3eb359ef3de52e4f891a5772fd2f18d855",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3368,12 +3368,12 @@
       "png": "screens/align-unavailable-missing.png",
       "sha256": "94d6f33197e4ac5eb315f15589a1366ac5a9dd1b049105a79808feb424dbf2d0",
       "dom": "dom/align-unavailable-missing.json",
-      "domSha256": "55dbb98a396b4f2f170d111166db6d8fc53caa6a8a7f66e01fce72238e42a352",
+      "domSha256": "d80c4f899a2ba1867e10ed4b050edcca86d01b9b021bb86da6bb0dfaab5166b3",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3396,12 +3396,12 @@
       "png": "screens/align-unavailable-versification-unavailable.png",
       "sha256": "ddd3162b714410c34a00954ca686307d35036adb6ec3bf750e3a8bba2c7fc284",
       "dom": "dom/align-unavailable-versification-unavailable.json",
-      "domSha256": "0c67df6bf0bc28145c976550f19d421c389c73d905b2f9c66a3fe480a23c7a51",
+      "domSha256": "6babfa203f00451150943da6f104423914d602931297d4e83321d2a5a2d16d99",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3424,12 +3424,12 @@
       "png": "screens/align-unavailable-no-counterpart.png",
       "sha256": "346db33ffc8dd535451bb3af362dacd3c09832c41843c6cd176c5a454ed55605",
       "dom": "dom/align-unavailable-no-counterpart.json",
-      "domSha256": "60266efc10e6e6d66d0efadc8d86c1f7efe9f487d9017f627de150ce52a1090b",
+      "domSha256": "dfb4d4125b96db5ff159cfbc6ad7c050b96422642b1a826210e81a8680eb62df",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3452,12 +3452,12 @@
       "png": "screens/align-unavailable-versification-unknown.png",
       "sha256": "b85b2dffcb96f675dbd79c23997d2d83ae417b6537dce58ca7d18018012a3c5f",
       "dom": "dom/align-unavailable-versification-unknown.json",
-      "domSha256": "e0b4e538aecc43d2843154c3c8470da13b8a87f5c3215b541c824a284d6c3d94",
+      "domSha256": "d6698d5df52a6cf0ecdc0a8b2f95dc3a976ac1ca30e0feba200e754c1baa0cd4",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3480,12 +3480,12 @@
       "png": "screens/align-unavailable-unreadable.png",
       "sha256": "e0f59409d7a644ab0f88fc341c8ef874847f26812abf28d66a83aa271097fd05",
       "dom": "dom/align-unavailable-unreadable.json",
-      "domSha256": "e8f3d4a2ca9f00b395aa2fd5b839f004088e8a5dd8ff4e6f996db63f80f310c9",
+      "domSha256": "052fef1879e65b22ca9be955956a9c8490273ed4f586b81db6a9d494c21e00b9",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3508,12 +3508,12 @@
       "png": "screens/align-loading.png",
       "sha256": "244997f250d1f4d23b6333229091e8811915f4f90e7a94c9fb57a911c2798aaf",
       "dom": "dom/align-loading.json",
-      "domSha256": "2a2e04dcc0908ae3f0e594005329e500dd84f4cc5ac1cf6ae9405a27e4a81849",
+      "domSha256": "1e6bce1b811daf46ae8fe0a4a13bd4b1609decbe09777ca861433429e560d523",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3536,12 +3536,12 @@
       "png": "screens/align-error.png",
       "sha256": "83cced400641a08cb6a31d240893babe9f249006b46048f5bbfcc128f25316eb",
       "dom": "dom/align-error.json",
-      "domSha256": "653d1da6b444898ef18135683e4a0630a21814ad7a54951924d0ad707089c277",
+      "domSha256": "9ed2cd5bd55751f27f75710d58d2e057272f048c677b998c122f5352f80b3be7",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3564,12 +3564,12 @@
       "png": "screens/home-loading.png",
       "sha256": "e8e117be3c5743d2a8fca02a9ad64369634b15213f4416edf653c009ceb0f3e2",
       "dom": "dom/home-loading.json",
-      "domSha256": "dcefcb34ac85cf4884115e5b691a0b7552708e1d8eae36c3b287f8866ef413a8",
+      "domSha256": "d648a6e655218c1f8d9969f810aa7bd1d6e62b84e60023c50ff9fafa729a1f37",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3592,12 +3592,12 @@
       "png": "screens/home-empty.png",
       "sha256": "f1e26c0784e1a9e26504707a0e5542d30ab0f08e35023123d6340e3376b0e0f7",
       "dom": "dom/home-empty.json",
-      "domSha256": "966b7054eebaa26c33254d09a044f3d616fdcab5b976317d53cfc2d70eaf93a9",
+      "domSha256": "20c7af81d949cafa4e487335cbf83b7600ce657972fb54c2bd5c7c1a74a9763c",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3620,12 +3620,12 @@
       "png": "screens/home-list-error.png",
       "sha256": "85218517891b73f5f5c900e50a65c3fc33bab3042a44f38c223ef7dad5ee298d",
       "dom": "dom/home-list-error.json",
-      "domSha256": "319aee191640ca4b7ba44457dd932d00bb98d403a473020294fc00819e6145e9",
+      "domSha256": "cd44f4824beeb170ba0438243962cd6912feb7d14775d2cc9d7f7fbedd23f36a",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3649,14 +3649,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-open-error.png",
-      "sha256": "8ab3a69f06ad5305d04b22a0a174838088a267a42042fd77b90d11423760efbd",
+      "sha256": "7ae02c52222807d9d38be0a9c03fee61a77c8d60e4ffa32eac88531abd67ba0f",
       "dom": "dom/home-open-error.json",
-      "domSha256": "0343e0e51639cdf92c59017de135a270b19a6b48e39d261a50e9d951542437f9",
+      "domSha256": "cfe57d3e77838109cfe06f57e9f628be977d10c8dfdc41ee5f55591ce1f6e626",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3680,14 +3680,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-checkpoint-error.png",
-      "sha256": "4f3a077000c9ed76c999621673863849261d23d08ffaf9ff28bb054ab69a2ad1",
+      "sha256": "d5c8e1664aae9d0a214766518075f9d7ec451db993ada9e6b6c8eb29a66a02be",
       "dom": "dom/home-checkpoint-error.json",
-      "domSha256": "3857bf3ba10cddc013497266da358fd1d8415f35ea5f09f5d36a77a1628c032f",
+      "domSha256": "529e59a0cbe13f72a0e61400de6c3b1eea5e9e8afa59ac09069175a534298ac7",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3711,14 +3711,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/home-resume.png",
-      "sha256": "2b0327ea9c0ab81cb7f3ab75048ca93a38c912810bb20e66406723b2490df9ee",
+      "sha256": "f70b5b5b2a8562b35087e365e4bd14cf230e436be7827c51208e1629ceb665c6",
       "dom": "dom/home-resume.json",
-      "domSha256": "8b2472639f4f41f8830559e34341d27357ce2d9c00364b011849f41ec48e62ff",
+      "domSha256": "5b25dd2e709bd4c158b49bbcce82292d83790205cfe455216530fc31918f7b69",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     },
     {
@@ -3743,14 +3743,14 @@
       "syncToast": null,
       "maskRects": {},
       "png": "screens/import-toast.png",
-      "sha256": "fadb0b4a5549c99fca2974f488365561033228b0e99b48a4040ed3bf83a13c7f",
+      "sha256": "cdeea6b083f8d189f4bd331d1db6b10c0ba791063dcc3e234c68675ebded8070",
       "dom": "dom/import-toast.json",
-      "domSha256": "5d5abd04c67720d809c3525a83a6e4cb9f67e39ed37b4869de26088366812de1",
+      "domSha256": "518a527f104fe6d0f147abb2dedc2491b496c50164c3199acea482464d032f0e",
       "trees": {
-        "crates/tc-ui/src": "df4ff54a41bd0f641adeb17831ddc4966bb0da5e",
-        "crates/tc-ui/assets": "b7e748dd24708f41d4e797c7d3f325ab56c9fac7",
+        "crates/tc-ui/src": "05fb233a257570f60c70b6e7bc8d132d8a9dc33d",
+        "crates/tc-ui/assets": "64830bac915db76857ea1dcfbe145396d76e9011",
         "crates/tc-ui/app": "08878a69ac7ecb3fe0dc06a450839b3fc4be3479",
-        "crates/tc-api/src": "1c06cbed790fbcc85fc7481024b13f4b586b2017"
+        "crates/tc-api/src": "b5e5be844855b639b8ab1807389cd71b29608d26"
       }
     }
   ]
