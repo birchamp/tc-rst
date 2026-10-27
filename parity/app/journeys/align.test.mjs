@@ -441,8 +441,9 @@ browserTest('a_click_that_saves_within_the_wait_leaves_with_no_question', async 
     await page.getByTestId('project-switch').click();
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     hold.release();
-    await home(page).waitFor();
+    await home(page).waitFor({ timeout: 10_000 }).catch(() => {});
     assert.equal(await asked(), false, 'INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: no question for a click that saved');
+    await home(page).waitFor();
     await openAlign(page);
     await until('the click was saved', async () => (await placed(page)) === '7 of 27 words placed');
   });
@@ -507,8 +508,12 @@ browserTest('stay_keeps_the_click_on_the_page', async () => {
     await question(page).getByRole('button', { name: 'Stay' }).click();
     await question(page).waitFor({ state: 'detached' });
     cut = false;
-    await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click();
-    await until('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: the click Stay kept saves on Retry', async () => (await placed(page)) === '7 of 27 words placed');
+    try {
+      await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click({ timeout: 5_000 });
+      await until('the click Stay kept saves on Retry', async () => (await placed(page)) === '7 of 27 words placed');
+    } catch {
+      throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: Stay keeps the click, so Retry saves it');
+    }
   });
 });
 
