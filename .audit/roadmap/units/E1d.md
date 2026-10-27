@@ -15,7 +15,7 @@ no_loss: true
 size: 0.5 d (basis: two tests over existing code)
 merged: none
 updated: 2026-10-26
-next: Both tests written and proved; three lenses, then the touched gate and the hand-over to the integration lane.
+next: Ready for a batch: reviewed by three lenses, touched gate passed; the merge waits for E1a (this branch carries E1a, E1b and E1c).
 blocked_by: none
 ---
 
@@ -77,3 +77,4 @@ and Home is how they leave. A refusal must not take either away.
 - 2026-10-26 19:30 EDT | races and protocol lens (Claude Code subagent of 07ffe14c) | verify | 12074edd | No blocker. Major (pre-existing, not this diff): a page edit the server refuses stays queued as `Refused`, so the gate holds; those clicks live only in the page, so holding keeps them, and it is a follow-up for the owner's lane, not this card. Minors: the journey did not count hits on the faked flush (fixed); the toast check ran right as the error appeared (now after 500 ms); `refused_for_good` reads the map entry the flush just wrote, so it is current on the path that matters. Six questions: code fine; checks red without the fix; reach yes; siblings: the refused edit above; no loss; prose fine | code reading
 - 2026-10-26 19:33 EDT | browser and parity lens (Claude Code subagent of 07ffe14c) | verify | 12074edd | Both journeys pass in Chromium. Major: after a refused alignment save Home says nothing, where tC4 keeps Home blocked with the refusal shown; PLAN's #801 difference named a field's text only. Minors: the name promises a span save the test cannot make (kept: the card names it, the comment says why); the faked reply never shows a lasting refusal (the server's draft tests now named); no proof the faked flush ran (fixed). Six questions: code fine; checks deterministic and in CI; reach yes (BadToken, StaleScope); siblings: the aligner is the only gate hook; no loss on disk is the server's tests; prose needed the declared difference | scratchpad probe, node --test sync-button align
 - 2026-10-26 19:35 EDT | E1d lane (Claude Code 07ffe14c) | fix | see branch | PLAN's declared difference now covers the aligner's links (#801, #807): kept for the next open's offer, Home not blocked, a full disk still holds; the #807 row names the server's draft tests. The journey counts the faked flush; the toast check waits 500 ms. Owner to be told: Home after a refused alignment save says nothing, as after a refused field | node --test --test-name-pattern="failed_open_keeps|a_refused_align_save" (2 pass)
+- 2026-10-26 20:06 EDT | E1d lane (Claude Code 07ffe14c) | gate | 4c370b8f | `scripts/gates.sh --touched` exits 0: the crates' tests and 111 journeys pass, 0 skipped | scripts/gates.sh --touched
