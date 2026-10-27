@@ -1,0 +1,37 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:44313/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793105996227/en-pins/projects, Door43: http://127.0.0.1:9)
+# marks with no current card: 0
+# word cards: [["1","KEY WORD /  / Paul /  / paul / Read the article →"],["1","KEY WORD /  / a servant /  / servant / Read the article →"],["1","KEY WORD /  / of God /  / god / Read the article →"],["1","KEY WORD /  / an apostle /  / apostle / Read the article →"],["1","KEY WORD /  / of Jesus /  / jesus / Read the article →"],["1","KEY WORD /  / Christ /  / christ / Read the article →"],["1","KEY WORD /  / the faith /  / faith / Read the article →"],["1","KEY WORD /  / of the chosen people /  / elect / Read the article →"],["1","KEY WORD /  / of God /  / god / Read the article →"],["1","KEY WORD /  / knowledge /  / know / Read the article →"],["1","KEY WORD /  / godliness /  / godly / Read the article →"],["2","KEY WORD /  / the certain hope /  / hope / Read the article →"],["2","KEY WORD /  / eternal /  / eternity / Read the article →"],["2","KEY WORD /  / promised /  / promise / Read the article →"]]
+# occurrence 1 marks: [[2,"Θεοῦ"]] occurrence 2 marks: [[10,"Θεοῦ"]]
+# Subtest: 840_greek_tab_plain_without_a_card_and_second_occurrence_marks_the_second
+ok 1 - 840_greek_tab_plain_without_a_card_and_second_occurrence_marks_the_second
+  ---
+  duration_ms: 7291.52872
+  type: 'test'
+  ...
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:40987/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1755473-1793106003507/en-pins/projects, Door43: http://127.0.0.1:9)
+# Jonah helps tabs and card counts: {"Notes":0,"Words":0,"Questions":0,"UST":0,"Comments":0}
+# Jonah helps panel text: Notes | Words | Questions | UST | Comments |  | Nothing in this chapter.
+# Subtest: 840_hebrew_jonah_has_a_card_to_mark
+ok 2 - 840_hebrew_jonah_has_a_card_to_mark
+  ---
+  duration_ms: 10504.625783
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 27903.27114

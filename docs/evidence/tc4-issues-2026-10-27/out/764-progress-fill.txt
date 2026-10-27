@@ -1,0 +1,27 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:34211/ (projects: /home/bot/tc-rst/.claude/worktrees/tc4-issues/target/parity-rust/1737018-1793105664889/en-pins/projects, Door43: http://127.0.0.1:9)
+# picker before: [{"in":"picker-progress-check","track":270,"fill":6,"styleWidth":"1.0989%","minWidth":"6px","valuenow":"1","label":"2 of 182 resolved"},{"in":"picker-progress-check","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":"0 of 157 resolved"},{"in":"picker-progress-align","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":null},{"in":"community-checking-card","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":null}]
+# rail before: [{"in":"check-rail","track":263,"fill":6,"styleWidth":"1.0989%","minWidth":"6px","valuenow":"1","label":"2 of 182 resolved"}]
+# rail after 1: [{"in":"check-rail","track":263,"fill":6,"styleWidth":"1.64835%","minWidth":"6px","valuenow":"2","label":"3 of 182 resolved"}]
+# rail count line: 3 of 182 resolved
+# picker after 1: [{"in":"picker-progress-check","track":270,"fill":6,"styleWidth":"1.64835%","minWidth":"6px","valuenow":"2","label":"3 of 182 resolved"},{"in":"picker-progress-check","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":"0 of 157 resolved"},{"in":"picker-progress-align","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":null},{"in":"community-checking-card","track":270,"fill":0,"styleWidth":"0%","minWidth":"","valuenow":"0","label":null}]
+# tW card text: Continue →
+# Subtest: 764_one_resolved_check_fills_the_bars
+ok 1 - 764_one_resolved_check_fills_the_bars
+  ---
+  duration_ms: 8700.82177
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18472.539339
