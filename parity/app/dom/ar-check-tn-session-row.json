@@ -8,7 +8,7 @@
     "    <header data-on=\"dark\" data-tone=\"ocean\" style=@13b929166c5f>",
     "      <div  style=@5f78f89eed59>",
     "        <div  style=@5a0879cfa54c>",
-    "          <img alt=\"translationCore\" src=\"/ui/12a29d59319cbc56/images/translationcore-logo.png\" style=@5eb9880b9718>",
+    "          <img alt=\"translationCore\" src=\"/ui/518febf425ed83f6/images/translationcore-logo.png\" style=@5eb9880b9718>",
     "          <span  style=@ccce8906d497>",
     "            \"translationCore\"",
     "            <span  style=@9abff5f59e8f>",
@@ -1214,7 +1214,7 @@
     "                \"إضافة تعليق\"",
     "          <div data-testid=\"check-history\" style=@68b425d7813e>",
     "            <button aria-expanded=\"false\" data-i=\"text\" data-testid=\"history-toggle\" data-tone=\"accent\" data-trim=\"cap\" type=\"button\" style=@54684f95afef>",
-    "              \"History\""
+    "              \"السجل\""
   ],
   "styles": {
     "0025e4fe9c26": "align-items: center; background-attachment: ; background-clip: ; background-color: ; background-image: ; background-origin: ; background-position-x: ; background-position-y: ; background-repeat: ; background-size: ; border-bottom-color: initial; border-bottom-left-radius: ; border-bottom-right-radius: ; border-bottom-style: initial; border-bottom-width: 0px; border-image-outset: initial; border-image-repeat: initial; border-image-slice: initial; border-image-source: initial; border-image-width: initial; border-left-color: initial; border-left-style: initial; border-left-width: 0px; border-right-color: initial; border-right-style: initial; border-right-width: 0px; border-top-color: initial; border-top-left-radius: ; border-top-right-radius: ; border-top-style: initial; border-top-width: 0px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--tone-on-fill); column-gap: ; cursor: pointer; display: inline-flex; flex-basis: auto; flex-grow: 0; flex-shrink: 0; font-family: var(--font-ui); font-feature-settings: inherit; font-kerning: inherit; font-optical-sizing: inherit; font-size-adjust: inherit; font-size: var(--fs-caption-lg); font-stretch: inherit; font-style: inherit; font-variant-alternates: inherit; font-variant-caps: inherit; font-variant-east-asian: inherit; font-variant-emoji: inherit; font-variant-ligatures: inherit; font-variant-numeric: inherit; font-variant-position: inherit; font-variation-settings: inherit; font-weight: var(--fw-heavy); height: var(--control-h-md); justify-content: center; letter-spacing: var(--track-12-5); line-height: 1.2; padding-inline-end: ; padding-inline-start: ; row-gap: ; text-wrap-mode: nowrap; white-space-collapse: collapse",
