@@ -479,12 +479,10 @@ browserTest('a_click_refused_for_good_asks_and_leave_without_it_goes_home', asyn
     await page.route('**/api/v1/align/edit', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"type":"err","value":{"type":"staleSession"}}' }));
     await card(page, 'πίστιν').click();
     await page.getByTestId('align-edit-error').waitFor();
-    const started = Date.now();
     await page.getByTestId('project-switch').click();
     await question(page).waitFor({ timeout: 2_000 }).catch(() => {
       throw new Error('INV-HOME-ASKS-ONLY-WHEN-A-CLICK-IS-LOST: a click refused for good asks at once');
     });
-    assert.ok(Date.now() - started < 2_000, 'no wait for a click that cannot save');
     assert.equal(await home(page).count(), 0, 'Home waits for the answer');
     await question(page).getByRole('button', { name: 'Leave without it' }).click();
     await home(page).waitFor();
@@ -503,6 +501,8 @@ browserTest('a_stuck_click_asks_after_the_limit_and_stay_keeps_it', async () => 
       });
       const waited = Date.now() - started;
       assert.ok(waited >= 2_900, `Home waited the limit first (${waited} ms)`);
+      await until('focus moves into the question, on Stay', () => page.evaluate(() => document.activeElement?.closest('[role="alertdialog"]') != null
+        && document.activeElement.textContent.trim() === 'Stay'));
       await question(page).getByRole('button', { name: 'Stay' }).click();
       await question(page).waitFor({ state: 'detached' });
       assert.equal(await home(page).count(), 0, 'Stay keeps the person in the aligner');
@@ -547,8 +547,9 @@ browserTest('stay_keeps_the_click_on_the_page', async () => {
     await card(page, 'πίστιν').click();
     await page.getByTestId('project-switch').click();
     await question(page).waitFor({ timeout: 6_000 });
-    await question(page).getByRole('button', { name: 'Stay' }).click();
+    await page.keyboard.press('Escape');
     await question(page).waitFor({ state: 'detached' });
+    assert.equal(await home(page).count(), 0, 'Escape is Stay');
     cut = false;
     try {
       await page.getByTestId('save-indicator').getByRole('button', { name: 'Retry' }).click({ timeout: 5_000 });

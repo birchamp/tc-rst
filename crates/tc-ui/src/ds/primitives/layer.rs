@@ -267,6 +267,30 @@ pub fn Layer(
         }
     });
 
+    // A layer whose panel mounts after `open` turned true gets its first focus here: the effect
+    // below ran while there was no panel yet, so focus stayed behind the scrim.
+    Effect::new(move |_| {
+        if !trap_focus || !open.get() {
+            return;
+        }
+        let Some(p) = panel.get() else {
+            return;
+        };
+        let inside = document()
+            .active_element()
+            .is_some_and(|el| p.contains(Some(&el)));
+        if !inside {
+            match focusables(&p).into_iter().next() {
+                Some(el) => {
+                    let _ = el.focus();
+                }
+                None => {
+                    let _ = p.focus();
+                }
+            }
+        }
+    });
+
     // Focus, Escape, outside presses, scroll lock and the focus trap, while open.
     Effect::new(move |_| {
         if !open.get() {
