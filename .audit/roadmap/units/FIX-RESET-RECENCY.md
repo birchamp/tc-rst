@@ -4,7 +4,7 @@ title: Each captured screen starts with Home's cards in the seed's order
 track: A
 lane: app
 milestone: M1
-state: claimed
+state: done
 owner: reset-recency session (Claude Code d4604680)
 branch: fix-reset-recency
 worktree: .worktrees/fix-reset-recency
@@ -13,9 +13,9 @@ needs_owner: []
 proves: [P8]
 no_loss: false
 size: 0.25 d (basis: a test hook and one test)
-merged: none
+merged: 9be14d41
 updated: 2026-10-26
-next: Ready for a batch: reviewed, touched gate passed. No recapture here: CHK-6 step 5's full recapture covers the screens (orchestrator, 2026-10-26).
+next: none
 blocked_by: none
 ---
 
@@ -40,7 +40,7 @@ it (open-progress-prepare's did).
 ## Funnel card
 
 - **Invariants**:
-  - After `test/reset` returns, no work begun before it writes anything.
+  - INV-RESET-STOPS-OLD-WORK: after `test/reset` returns, no work begun before it writes anything.
 - **Wrong states**:
   - An open held at `test/hold open` is released by the reset, opens the project and records its
     last use after the preferences were reset; Home then lists that project first.
@@ -66,3 +66,4 @@ it (open-progress-prepare's did).
 - 2026-10-26 | reviewer (Claude Code subagent of d4604680) | verify | f42d712b | no blocker, no major. No job the harness reaches ignores cancel while the reset waits (open's hold is released first; train, download and the Home summary stop on cancel); the registry lock is dropped before any await; the test is red without the fix and cannot fail spuriously, because the recorded use and the prefs reset go through one FIFO channel. Two minors to minors.tsv | code reading
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | gate | f42d712b | `scripts/gates.sh --touched` exits 0 with main merged: tc-app 1039 tests pass (6 slow, none new), app-e2e 8 of 8 | scripts/gates.sh --touched
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | note | none | step 2 (recapture) dropped on the orchestrator's word: CHK-6 step 5 lands last with one full recapture | none
+- 2026-10-26 21:30 EDT | integration lane (Claude Code 3d07d5f8) | merge | 9be14d41 | merged into main in batch 24 (a test file reformatted by cargo fmt), gated by scripts/gates.sh --wait-ci batch-24 | scripts/gates.sh --wait-ci batch-24

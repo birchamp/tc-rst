@@ -717,9 +717,8 @@ async fn a_reset_during_a_held_open_leaves_home_in_the_seed_order() {
     let (store, _, _watch) = scenario_on(&fs, "sample");
     let dir = tempfile::tempdir().unwrap();
     let t = app_over(dir.path(), Arc::new(store)).await;
-    let order = |home: HomeView| -> Vec<_> {
-        home.cards.into_iter().map(|card| card.project).collect()
-    };
+    let order =
+        |home: HomeView| -> Vec<_> { home.cards.into_iter().map(|card| card.project).collect() };
     let seed = order(post(&t.app, &List {}).await.unwrap());
     let last = seed.last().unwrap().clone();
     assert!(seed.len() > 1 && seed[0] != last, "{seed:?}");
@@ -749,7 +748,11 @@ async fn a_reset_during_a_held_open_leaves_home_in_the_seed_order() {
     .await
     .expect("hung: the open never ended")
     .unwrap();
-    assert_eq!(order(post(&t.app, &List {}).await.unwrap()), seed);
+    assert_eq!(
+        order(post(&t.app, &List {}).await.unwrap()),
+        seed,
+        "INV-RESET-STOPS-OLD-WORK: an open begun before the reset recorded its use after it"
+    );
     t.app.quit().await;
 }
 
