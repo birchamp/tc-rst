@@ -151,7 +151,7 @@ async fn align_index_costs_the_book() {
 /// The edit stays inside the measured action so its timer cannot save during setup.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn align_save_costs_one_verse() {
-    let (_, (stored, _)) = costs_what_it_touches(
+    let (_, (stored, larger)) = costs_what_it_touches(
         "opening, editing and saving one verse's cached aligner",
         OnStore::Everything,
         async |s: &Scale| {
@@ -170,6 +170,17 @@ async fn align_save_costs_one_verse() {
                 .iter()
                 .find_map(|card| card.placed.first().map(|word| (card.index, word.clone())))
                 .expect("the real Psalms verse has placed words");
+            let drafts = s.drafts_written();
+            // Held so the autosave, two seconds after the edit, cannot clear the draft before
+            // the writer has written it on a starved machine.
+            ok(
+                &s.app,
+                &Hold {
+                    request: request(5),
+                    at: HoldPoint::Save,
+                },
+            )
+            .await;
             let edited: AlignerView = ok(
                 &s.app,
                 &Edit {
@@ -183,6 +194,17 @@ async fn align_save_costs_one_verse() {
             .await;
             assert_eq!(edited.placed + 1, view.placed);
             assert_eq!(edited.save, tc_api::align::AlignSave::Unsaved);
+            // The edit's draft is written before the save, as when a person pauses: the save
+            // then writes the list once more to clear it, on every machine.
+            s.wait_draft_written(drafts);
+            ok(
+                &s.app,
+                &Release {
+                    request: request(6),
+                    at: HoldPoint::Save,
+                },
+            )
+            .await;
             let saved: tc_api::align::AlignSave = ok(
                 &s.app,
                 &tc_api::align::Flush {
@@ -195,6 +217,10 @@ async fn align_save_costs_one_verse() {
         },
     )
     .await;
+    // The edit's draft, then the list without it once the save cleared it.
+    for cost in [&stored, &larger] {
+        assert_eq!(cost.store.drafts_written, 2, "{cost:?}");
+    }
     assert!(stored.fold.keys_updated > 0, "{stored:?}");
     assert!(stored.store.commands > 0, "{stored:?}");
 }
