@@ -158,6 +158,32 @@ fn escape_body(body: &str, pins: &[String]) -> String {
 /// a verse holds three (`\q3`, tC4 #812). The caret is a UTF-16 offset, as a text field reports
 /// it; the new one is too.
 pub fn indent_line(text: &str, caret: usize, delta: i32, pins: &[String]) -> (String, usize) {
+    indent(text, caret, delta, |_, line| {
+        let inner = !pins.is_empty() && marker_line(line.trim_start_matches('\t'), pins).is_none();
+        if inner { 3 } else { 2 }
+    })
+}
+
+/// The verse card's Tab and Shift+Tab (tC4 #829): as [`indent_line`] on a section's line inside
+/// a verse, three tabs at most (`\q3`). The card's first line is the verse's own, whose format
+/// only the section card sets, so it takes none.
+pub fn indent_verse_line(text: &str, caret: usize, delta: i32) -> (String, usize) {
+    indent(
+        text,
+        caret,
+        delta,
+        |line_start, _| if line_start == 0 { 0 } else { 3 },
+    )
+}
+
+/// One tab more or less at the caret's line; `most` gives the tabs a line may hold from its
+/// start (a UTF-16 offset) and its text.
+fn indent(
+    text: &str,
+    caret: usize,
+    delta: i32,
+    most: impl Fn(usize, &str) -> usize,
+) -> (String, usize) {
     let units: Vec<u16> = text.encode_utf16().collect();
     let caret = caret.min(units.len());
     let tab = u16::from(b'\t');
@@ -181,8 +207,7 @@ pub fn indent_line(text: &str, caret: usize, delta: i32, pins: &[String]) -> (St
             .position(|&u| u == u16::from(b'\n'))
             .map_or(units.len(), |n| line_start + n);
         let line = String::from_utf16_lossy(units.get(line_start..line_end).unwrap_or_default());
-        let inner = !pins.is_empty() && marker_line(line.trim_start_matches('\t'), pins).is_none();
-        if tabs >= if inner { 3 } else { 2 } {
+        if tabs >= most(line_start, &line) {
             return (text.to_owned(), caret);
         }
         let mut out = units;

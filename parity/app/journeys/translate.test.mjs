@@ -8,7 +8,7 @@
 //     node --test parity/app/journeys/translate.test.mjs
 import assert from 'node:assert/strict';
 import { newRequestId } from '../env-rust.mjs';
-import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, until, withApp } from './kit.mjs';
+import { browserTest, catalog, choose, openLanguage, recordRequests, sleep, tabSize, until, withApp } from './kit.mjs';
 
 const BIBLE = 'sample_burrito';
 const titus = (page) => page.getByTestId(`project-${BIBLE}`).getByRole('button', { name: /Titus/ });
@@ -240,7 +240,7 @@ browserTest('tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it', asy
     await openVerse(page, 4);
     const field = box(page, 4);
     assert.equal(await field.inputValue(), 'a Tito,\n\t\tmi verdadero hijo\n\ten la fe común');
-    assert.equal(await field.evaluate((el) => getComputedStyle(el).tabSize), '2ch');
+    assert.equal(await tabSize(field), '2ch');
     const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
     await field.press('Control+End');
     await field.press('Tab');
@@ -260,7 +260,9 @@ browserTest('tab_indents_a_poem_line_in_the_verse_card_and_escape_saves_it', asy
     await field.press('Escape');
     await field.waitFor({ state: 'detached' });
     await until('saved', async () => (await indicator(page).getAttribute('data-state')) === 'saved');
-    assert.equal((await verse(env, 4)).words.value, 'a Tito,\n\\q2 mi verdadero hijo\n\\q2 en la fe común:');
+    // The read shows the saved words as the card does, each `\\q2` line as two tabs.
+    assert.equal((await verse(env, 4)).words.value, 'a Tito,\n\t\tmi verdadero hijo\n\t\ten la fe común:');
+    assert.equal((await verse(env, 4)).text, 'a Tito, mi verdadero hijo en la fe común:');
   });
 });
 

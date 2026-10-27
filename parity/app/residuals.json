@@ -759,7 +759,7 @@
       "layers": [
         "dom"
       ],
-      "why": "Every line and pixel was tC4's before these changes. FIX-R step 1 (62659511) gives notes, articles and verse text their own direction: each sits in an element with `dir` (auto for helps, the project's own for its text), so the DOM nests the same text one level deeper; every line of text is unchanged.",
+      "why": "Every line and pixel was tC4's before these changes. FIX-R step 1 (62659511) gives notes, articles and verse text their own direction: each sits in an element with `dir` (auto for helps, the project's own for its text), so the DOM nests the same text one level deeper; every line of text is unchanged. POEM-TAB (tC4 #829) gives the card's text field `tab-size: 2ch`, so one poem level is two characters wide where tC4 draws eight: the field's inline style has that one longhand more; the captured verse has no tab, so its pixels are tC4's.",
       "until": null
     },
     "en-translate-tit1": {
@@ -773,7 +773,7 @@
       "layers": [
         "dom"
       ],
-      "why": "Every line and pixel was tC4's before these changes. FIX-R step 1 (62659511) gives notes, articles and verse text their own direction: each sits in an element with `dir` (auto for helps, the project's own for its text), so the DOM nests the same text one level deeper; every line of text is unchanged.",
+      "why": "Every line and pixel was tC4's before these changes. FIX-R step 1 (62659511) gives notes, articles and verse text their own direction: each sits in an element with `dir` (auto for helps, the project's own for its text), so the DOM nests the same text one level deeper; every line of text is unchanged. POEM-TAB (tC4 #829) gives the card's text field `tab-size: 2ch`, so one poem level is two characters wide where tC4 draws eight: the field's inline style has that one longhand more; the captured verse has no tab, so its pixels are tC4's.",
       "until": null
     },
     "en-understand-tit1": {

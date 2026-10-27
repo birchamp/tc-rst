@@ -23,6 +23,7 @@ use tc_api::editor::{
 use tc_api::event::{ChangeScope, Event, SessionEvent};
 use tc_api::helps::Passage;
 use tc_api::ids::{Scope, ViewSeq};
+use tc_api::model::section::indent_verse_line;
 use tc_api::shown::{Direction as TextDir, PersonLabel};
 use tc_core::{BookId, Testament};
 use wasm_bindgen::JsCast;
@@ -1245,6 +1246,27 @@ fn VerseEditor(
         let actions = actions.clone();
         move || actions.close_verse()
     };
+    let on_key = {
+        let saves = SendWrapper::new(saves.clone());
+        let key = SendWrapper::new(key.clone());
+        move |event: leptos::ev::KeyboardEvent| {
+            // Tab indents here (tC4 #829), so Escape is the keyboard's way out: it leaves the
+            // field as tC4's Tab did, which saves and closes the card (a declared difference).
+            if event.key() == "Escape" && !event.is_composing() {
+                if let Some(el) = area.get_untracked() {
+                    let _ = el.blur();
+                }
+                return;
+            }
+            if let Some(next) = crate::views::section_editor::tab_indent(
+                &event,
+                area.get_untracked(),
+                indent_verse_line,
+            ) {
+                saves.typed(&key, &next, Source::Program);
+            }
+        }
+    };
     let on_blur = {
         let close = close.clone();
         move |_: leptos::ev::FocusEvent| close()
@@ -1267,6 +1289,7 @@ fn VerseEditor(
         "border": 0,
         "outline": "none",
         "resize": "vertical",
+        "tab-size": "2ch",
     };
     field.extend(&target_type());
     field.extend(&crate::css! { "color": "var(--text-scripture)", "background": "transparent" });
@@ -1298,6 +1321,7 @@ fn VerseEditor(
             on:focus=on_focus
             on:blur=on_blur
             on:compositionstart=on_composition
+            on:keydown=on_key
         >
             {initial}
         </textarea>

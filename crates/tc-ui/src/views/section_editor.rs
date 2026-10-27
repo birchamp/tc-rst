@@ -439,23 +439,11 @@ fn type_field(
         move |_: leptos::ev::CompositionEvent| saves.composition(&key)
     };
     let on_key = move |event: leptos::ev::KeyboardEvent| {
-        if event.key() != "Tab" {
-            return;
-        }
-        event.prevent_default();
         // The card is read-only while its save runs (D7), and `readonly` stops only input.
-        let Some(el) = area.get_untracked().filter(|_| !saving.get_untracked()) else {
-            return;
-        };
-        let caret = el.selection_start().ok().flatten().unwrap_or(0) as usize;
-        let delta = if event.shift_key() { -1 } else { 1 };
-        let now = el.value();
-        let (next, at) = indent_line(&now, caret, delta, &pins);
-        if next != now {
-            // The value and the caret together, before the signal writes the same value again.
-            el.set_value(&next);
-            let at = u32::try_from(at).unwrap_or(0);
-            let _ = el.set_selection_range(at, at);
+        let field = area.get_untracked().filter(|_| !saving.get_untracked());
+        if let Some(next) = tab_indent(&event, field, |text, caret, delta| {
+            indent_line(text, caret, delta, &pins)
+        }) {
             set_text.run(next);
         }
     };
@@ -465,6 +453,7 @@ fn type_field(
         "border": 0,
         "outline": "none",
         "resize": "vertical",
+        "tab-size": "2ch",
     };
     style.extend(&edit_type());
     style.extend(&crate::css! { "color": "var(--text-scripture)", "background": "transparent" });
@@ -489,6 +478,33 @@ fn type_field(
         </textarea>
     }
     .into_any()
+}
+
+/// Tab and Shift+Tab in a poem field (#54, tC4 #829): every Tab stays in the field, and
+/// `indent` gives the caret's line one level more or less. The new text, when it changed; the
+/// field already shows it, with its caret.
+pub(crate) fn tab_indent(
+    event: &web_sys::KeyboardEvent,
+    field: Option<web_sys::HtmlTextAreaElement>,
+    indent: impl Fn(&str, usize, i32) -> (String, usize),
+) -> Option<String> {
+    if event.key() != "Tab" {
+        return None;
+    }
+    event.prevent_default();
+    let el = field?;
+    let caret = el.selection_start().ok().flatten().unwrap_or(0) as usize;
+    let delta = if event.shift_key() { -1 } else { 1 };
+    let now = el.value();
+    let (next, at) = indent(&now, caret, delta);
+    if next == now {
+        return None;
+    }
+    // The value and the caret together, before the signal writes the same value again.
+    el.set_value(&next);
+    let at = u32::try_from(at).unwrap_or(0);
+    let _ = el.set_selection_range(at, at);
+    Some(next)
 }
 
 /// Place mode: the bank of unplaced pins, then the words with their pins.
