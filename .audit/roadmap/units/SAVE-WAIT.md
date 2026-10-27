@@ -4,18 +4,18 @@ title: The save-machine tests fail with a message instead of hanging
 track: A
 lane: checks
 milestone: M5
-state: todo
-owner: none
-branch: none
-worktree: none
-depends: [REL-1]
+state: verifying
+owner: save-wait session (Claude Code 749c177d)
+branch: track-SAVE-WAIT
+worktree: .worktrees/track-SAVE-WAIT
+depends: []
 needs_owner: []
 proves: []
-no_loss: false
+no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
 merged: none
-updated: 2026-10-26
-next: Claim this card after the release, then do step 1.
+updated: 2026-10-27
+next: The integration lane takes track-SAVE-WAIT into a batch.
 blocked_by: none
 ---
 
@@ -45,7 +45,8 @@ the thread, not the wait.
 ## Funnel card
 
 - **Invariants**:
-  - A save-machine test that waits longer than its limit fails and names the wait.
+  - INV-WAITS-CATCH-HANGS: a save-machine test that waits longer than its limit fails and names
+    the wait, including the store watch's wait when the test ends; no hold outlives a run's settle.
 - **Wrong states**:
   - `World::deliver` (save_machine.rs, about line 680): after a minute's poll, `flight.handle.await`
     waits with no limit when the store neither finished nor reached a hold.
@@ -54,6 +55,8 @@ the thread, not the wait.
 - **Code**:
   - A timeout round each wait, with a "hung: …" message, as `store_world::for_a_minute` and the
     other waits in the file do.
+  - tc-store `Hooks`: a release frees the threads waiting at that moment (a count of releases each
+    waiter compares), so a hold that follows at once catches only the next thread.
 - **Checks**:
   - The save-machine tests pass as before; a deliberately held store makes each wait fail with
     its message instead of hanging.
@@ -63,6 +66,39 @@ the thread, not the wait.
 
 ### Step 1: Bound both waits
 
+### What the hang was (2026-10-27)
+
+Reproduced under load (6 copies on 4 cores; about 1 hang in 65 runs) and caught with gdb: the
+store actor sat at `Point::BeforeDurablePending` in a save's `commit`, held, while nothing in the
+test knew. The cause is in tc-store's test hooks (`hooks.rs`, `Hooks::wait`): `release` cleared
+the point's flag, and a `hold` that came before the released thread ran set it again; the thread
+saw the point held and waited on, without counting a second arrival. `reached` no longer grew,
+so tc-app's `holding()` said 0 and no release loop ever freed it. A `Release` step followed by a
+`Hold` step does exactly this when the machine is busy (every shrunk case in
+`save_machine.proptest-regressions` has `Release, Hold`). The test then hung silently because
+the store watch's drop waited for the store to go idle with no limit, on the test's own thread,
+so the case's 120 s timeout never fired and nextest killed the test at 300 s. c3_reload (ci
+40423604313) runs the same `World`.
+
+The first fix (settle waits for the calls a reload or cut dropped) turned the silent hang into
+"hung: a call the page dropped did not end in a minute" in about 1 run in 10 under load: that
+dropped save was the one the race kept. With the hook fixed, a release frees every thread
+waiting at that moment, even when a hold follows at once.
+
+No translator can reach it: the hold is a test hook (`test-hooks`, absent from a release
+build), and a product save never waits at it. The app needs no change; a person sees nothing.
+
 ## Log
 
 - 2026-10-26 | reset-recency session (Claude Code d4604680) | created | none | from the orchestrator's message: the two unbounded waits found while looking for the 18:31 hang; after the release, since no translator can reach either | side-session-notes 2026-10-26-tc-app-hang-1831.md
+- 2026-10-27 01:10 EDT | save-wait session (Claude Code 749c177d) | claim | none | a release card now: REL-1 waits for it, and it is no_loss, since save-path tests keep timing out in CI (production_reload_anywhere at 300 s on gate/batch-30, ci 40449554417; before it c3_reload and FIX-KEPT-EVENT's test); its REL-1 dependency is turned round | gh run view 40449554417 --log
+- 2026-10-27 01:55 EDT | save-wait session (Claude Code 749c177d) | step 1 | none | settle waits for the calls a reload or cut dropped (releasing a hold each reaches) and leaves no hold armed; deliver's await and settle's release loop stop after a minute with "hung: …"; the store watch's idle wait runs off the test thread and fails after a minute. New test a_save_left_at_a_hold_fails_the_store_watch_instead_of_hanging hangs without the watch fix (killed at 151 s) and passes with it (60 s); app::save_machine 20/20 pass | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop1/c6-r7.txt (gdb stacks of the hang)
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | loss lens (subagent, read-only): no blocker, no major. 1 Code: test-only; the waits are tokio and Condvar calls no type can bound. 2 Checks: the watch test hangs without the fix and passes with it. 3 Reach: release-build Hooks::wait is a no-op (tc-store hooks.rs), tc-app wait_idle is test-hooks only; no product save waits without a limit. 4 Siblings: about 78 limitless wait_reached/wait_idle in other tc-app tests, a minor. 5 No loss: finish_dropped adds coverage (a dropped save now lands before check); the final release only disarms; restart's clear drops calls the old harness never awaited. 6 Prose fine. Minors fixed: a dropped call's panic is no longer swallowed; a panicked idle wait is told from a timeout | .audit/minors.tsv
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | races-and-protocol lens (subagent, read-only): no blocker, no major. finish_dropped cannot deadlock: a call queued behind a held save makes holding() > 0, a retry waiting on the reply cache has its first attempt released by the same loop, an ended app's die() releases all; the end-of-settle release is safe for every caller; the watch test is deterministic (gated on reached > 0, the live handle keeps the project open). Minors: no deterministic test for finish_dropped (the loaded loop covers it), the test's fixed 60 s, the sibling list | .audit/minors.tsv
+- 2026-10-27 02:20 EDT | save-wait session (Claude Code 749c177d) | verify | 8737b073 | browser-and-parity lens (subagent, read-only): no finding. No product code, page, words, keys or flows change (crates/tc-ui, tc-api, tc-app/src untouched); test-hooks is opt-in in every crate and release_has_no_test_hooks checks the release binary; no journey uses the harness; no APP-DESIGN difference needed | crates/tc4/tests/release.rs
+- 2026-10-27 03:05 EDT | save-wait session (Claude Code 749c177d) | fix | none | the loaded loop after the first fix: "hung: a call the page dropped did not end in a minute" in 30 of 331 runs and one more silent hang; gdb showed the actor held while holding() said 0. tc-store Hooks: a release frees the threads waiting at that moment even when a hold follows at once (a release count each waiter compares). Unit test a_release_frees_the_waiting_thread_even_when_a_hold_follows_at_once fails 3/3 without it, passes with it. Shrunk seeds kept (each has Release, Hold) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | verify | 268ff40c | loss lens again (subagent, read-only), on the hook fix: no blocker, no major. The only change is that a thread waiting at a release leaves even when a hold follows before it wakes; a test that relied on the old way would have been a race; of 75 hold and release sites none holds right after a release; tc-app holding() stays right (a freed waiter never adds to reached). Minor: on the old code the unit test fails most runs, not all (3/3 here) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | verify | 268ff40c | races-and-protocol lens again (subagent, read-only): no blocker, no major. Several waiters, hold-release-hold-release and wait_reached are right; none of 97 sites relies on the old way (carried.rs:805, tc-app hooks.rs:250 and :482 looked at closely); tc-app's own Holds has no such bug (notify_one keeps a permit); the unit test passes deterministically (wait_reached returns only once the waiter is in changed.wait) | crates/tc-store/src/hooks.rs
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | browser-and-parity lens stands: the hook fix is test-hooks code only, no page, word, key or flow changes | git show 268ff40c --stat
+- 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | loaded loops on the fixed build (6 copies on 4 cores, 20 min): production_reload 241 runs and c3_reload 60 runs, no failure, no hang; before the hook fix 31 of 331 production_reload runs failed or hung | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop4/runs.txt
+- 2026-10-27 04:20 EDT | save-wait session (Claude Code 749c177d) | gate | 2cbfe3eb | scripts/gates.sh --touched passed with main merged: 5 crates (tc-store and its dependents), 1591 tests passed, 3 skipped, no timeout; ready for a batch | scripts/gates.sh --touched
