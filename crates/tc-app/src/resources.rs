@@ -25,7 +25,7 @@ use tc_door43::{
 use tc_resources::gateways::{self, Gateway};
 use tc_resources::{
     DCS_HOST, InstallError, Packaging, ProjectPins, RepoPath, ResourcePin, ResourceStore, Rung,
-    install_dcs_watched, pin_release,
+    SetSlot, install_dcs_watched, pin_release,
 };
 
 use crate::app::{App, lock};
@@ -224,27 +224,45 @@ impl Handle<Sources> for App {
             .and_then(|p| p.set(Rung::Primary))
             .and_then(|set| set.gateway.named())
             .map(named);
-        let checkable = match self.installed_pins().await {
+        let installed = self.installed_pins().await;
+        let checkable = match &installed {
             Ok(installed) => FromInstalls::Listed(
                 gateways::GATEWAYS
                     .iter()
                     .filter(|g| {
-                        gateways::language_set_from_installed(&installed, g, sets_kind(kind))
+                        gateways::language_set_from_installed(installed, g, sets_kind(kind))
                             .is_some()
                     })
                     .map(|g| package(g).gateway)
                     .collect(),
             ),
-            Err(reason) => FromInstalls::Failed { reason },
+            Err(reason) => FromInstalls::Failed {
+                reason: reason.clone(),
+            },
         };
+        // An unreadable install list is already stated by `checkable`; the cards then name
+        // tC4's releases.
+        let pins_here = installed.as_deref().unwrap_or_default();
         Ok(SourcesView {
             gateways: gateways::GATEWAYS
                 .iter()
                 .map(|g| {
                     let key = g.key().to_string();
                     let installed = downloaded.iter().filter(|(k, _)| *k == key).count();
+                    let release = |slot, seen: &str| {
+                        gateways::installed_release(pins_here, g, slot)
+                            .unwrap_or(seen)
+                            .to_owned()
+                    };
                     SourceGateway {
-                        package: package(g),
+                        package: GatewayPackage {
+                            seen: Seen {
+                                tn: release(SetSlot::TranslationNotes, g.seen.tn),
+                                tw: release(SetSlot::TranslationWords, g.seen.tw),
+                                ta: release(SetSlot::TranslationAcademy, g.seen.ta),
+                            },
+                            ..package(g)
+                        },
                         installed: u32::try_from(installed).unwrap_or(u32::MAX),
                     }
                 })

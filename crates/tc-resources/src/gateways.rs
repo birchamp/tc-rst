@@ -60,7 +60,8 @@ pub struct Gateway {
     /// The literal Bible's repository when it is not `<lang>_ult` or `<lang>_glt`.
     pub literal: Option<&'static str>,
     /// The releases of the owner's notes, words and academy that tC4 saw when it built the
-    /// list, which Get source texts shows under each package (`seen`).
+    /// list (`seen`). Get source texts shows them under a package only for what is not
+    /// installed (`installed_release`, tC4 #833.5).
     pub seen: Seen,
 }
 
@@ -472,6 +473,17 @@ pub fn language_set_from_installed(
         set.pins.insert(SetSlot::ObsImages, pack.clone());
     }
     Some(set)
+}
+
+/// The release of a gateway's `slot` installed on this computer: the install a language set
+/// would pin (`preferred`), when its pin names a release.
+pub fn installed_release<'a>(
+    installed: &'a [ResourcePin],
+    gateway: &Gateway,
+    slot: SetSlot,
+) -> Option<&'a str> {
+    let repo = gateway.repo_for(slot)?;
+    Some(preferred(installed, &repo)?.version.as_ref()?.as_str())
 }
 
 /// The Bibles a gateway package supplies for the source panes, each when installed

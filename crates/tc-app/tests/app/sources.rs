@@ -40,7 +40,11 @@ const SAMPLE: &str = "sample_burrito";
 /// The sample on the memory backend with the scenario's resources installed, its Door43 the
 /// given fake.
 async fn start(door43: Option<&FakeDoor43>) -> (tempfile::TempDir, TestApp) {
-    let state = scenario("sample");
+    start_scenario("sample", door43).await
+}
+
+async fn start_scenario(name: &str, door43: Option<&FakeDoor43>) -> (tempfile::TempDir, TestApp) {
+    let state = scenario(name);
     let (backend, _) = MemoryBackend::from_scenario(state).unwrap();
     let dir = tempfile::tempdir().unwrap();
     install_resources_into(&dir.path().join("app-data"), &state.resources().unwrap()).unwrap();
@@ -258,10 +262,6 @@ async fn the_first_step_lists_tc4s_packages_with_the_projects_checking_language(
     assert_eq!(view.gateways.len(), 18);
     let english = &view.gateways[0].package;
     assert_eq!(english.gateway.key(), "en::unfoldingWord");
-    assert_eq!(
-        (&*english.seen.tn, &*english.seen.tw, &*english.seen.ta),
-        ("v89", "v89", "v89")
-    );
     let urdu = &view.gateways[17].package;
     assert_eq!(urdu.autonym, "उर्दू", "#701: named in Devanagari");
     assert_eq!(urdu.direction, Direction::Ltr);
@@ -272,6 +272,25 @@ async fn the_first_step_lists_tc4s_packages_with_the_projects_checking_language(
         panic!("{:?}", view.checkable)
     };
     assert_eq!(checkable, [gateway("en", "unfoldingWord")]);
+}
+
+/// tC4 #833.5: tC4's registry says v89 under English while v91 is installed and pinned.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_package_card_names_the_installed_releases_else_tc4s() {
+    let (_dir, t) = start_scenario("en-pins", None).await;
+    let at = open_sample(&t.app).await;
+    let view: SourcesView = ok(&t.app, &Sources { at }).await;
+    let seen = |i: usize| {
+        let s = &view.gateways[i].package.seen;
+        (s.tn.clone(), s.tw.clone(), s.ta.clone())
+    };
+    let v91 = || "v91".to_owned();
+    assert_eq!(seen(0), (v91(), v91(), v91()), "English: what is installed");
+    assert_eq!(
+        seen(1),
+        ("v66".to_owned(), "v37".to_owned(), "v4".to_owned()),
+        "Spanish, not installed: the release tC4's registry names"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
