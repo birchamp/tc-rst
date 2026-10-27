@@ -90,6 +90,9 @@ struct Node {
     mtime_ns: i64,
 }
 
+/// A file another program changed in place: the bytes before, the bytes after.
+type InPlace = (Arc<Vec<u8>>, Arc<Vec<u8>>);
+
 #[derive(Debug, Clone, Default)]
 struct Faults {
     kill_before: Option<u64>,
@@ -111,6 +114,9 @@ struct Faults {
     /// Files another program cut short in place, at this length: a handle opened before
     /// reads nothing past it either.
     cut: BTreeMap<PathBuf, u64>,
+    /// Files another program changed in place, each as (the bytes before, the bytes after):
+    /// a handle opened on the bytes before reads the bytes after, as one file it names.
+    changed: Vec<InPlace>,
     busy: BTreeSet<PathBuf>,
     /// Folders whose new files another program holds, each for this many refused renames
     /// or removals (`None`: until the hold is released).
@@ -759,6 +765,25 @@ impl FaultFs {
         self.model().faults.cut.insert(path.to_owned(), len as u64);
     }
 
+    /// Another program writes `bytes` over the file at `path` in place, the same length or
+    /// not: what a handle opened before reads is the new bytes too, as on a real filesystem.
+    pub fn change_in_place(&self, path: &Path, bytes: &[u8]) {
+        let Some(old) = self.peek_data(path) else {
+            return;
+        };
+        self.put_unseen(path, bytes, None);
+        let Some(new) = self.peek_data(path) else {
+            return;
+        };
+        let mut model = self.model();
+        for (_, after) in &mut model.faults.changed {
+            if Arc::ptr_eq(after, &old) {
+                *after = new.clone();
+            }
+        }
+        model.faults.changed.push((old, new));
+    }
+
     /// Another program holds `path` open: a rename onto it or from it, and a removal of it,
     /// fail (Windows), with the error a held file gives.
     pub fn set_busy(&self, path: &Path, on: bool) {
@@ -922,6 +947,15 @@ impl FaultFs {
         }
     }
 
+    fn peek_data(&self, path: &Path) -> Option<Arc<Vec<u8>>> {
+        let model = self.model();
+        let ino = model.resolve(path).ok()?;
+        match &model.nodes[ino].kind {
+            Kind::File(f) => Some(f.data.clone()),
+            Kind::Dir(_) => None,
+        }
+    }
+
     /// Every file under `dir`, by path, read without a fault or a count.
     pub fn files_under(&self, dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
         let model = self.model();
@@ -981,7 +1015,16 @@ impl ReadHandle for FaultRead {
             .checked_add(buf.len())
             .filter(|end| *end <= self.data.len())
             .ok_or(io::ErrorKind::UnexpectedEof)?;
-        buf.copy_from_slice(&self.data[start..end]);
+        let changed = self
+            .fs
+            .model()
+            .faults
+            .changed
+            .iter()
+            .find(|(before, _)| Arc::ptr_eq(before, &self.data))
+            .map(|(_, after)| after.clone());
+        let data = changed.as_ref().unwrap_or(&self.data);
+        buf.copy_from_slice(data.get(start..end).ok_or(io::ErrorKind::UnexpectedEof)?);
         Ok(())
     }
 }

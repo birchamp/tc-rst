@@ -170,10 +170,12 @@ fn kill_point(
     let probe = fs.copy();
     let at = Arc::new(ManualClock::at(clock.now().0));
     let store = store_on(&probe, &at);
-    let handle = store.open(folder, &OpenOptions::default()).unwrap();
-    handle.wait_idle();
+    // From before the open: it seals what the last session left (§6.1 O15), consolidation
+    // included, so the windows below lie in the open as often as in the checkpoint.
     let start = probe.ops();
     probe.clear_log();
+    let handle = store.open(folder, &OpenOptions::default()).unwrap();
+    handle.wait_idle();
     let _ = handle
         .checkpoint(tc_store::CheckpointReason::Periodic)
         .wait();
@@ -239,14 +241,21 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
                 let point =
                     kill.map(|(window, pick, _)| kill_point(&fs, &folder, &clock, window, pick));
                 let store = store_on(&fs, &clock);
-                let handle = store.open(&folder, &OpenOptions::default()).unwrap();
-                handle.wait_idle();
                 if let Some(k) = point {
                     fs.kill_before(k, false);
                 }
-                let _ = handle
-                    .checkpoint(tc_store::CheckpointReason::Periodic)
-                    .wait();
+                let handle = store.open(&folder, &OpenOptions::default());
+                assert!(
+                    handle.is_ok() || fs.is_dead(),
+                    "{:?}",
+                    handle.as_ref().err()
+                );
+                if let Ok(handle) = &handle {
+                    handle.wait_idle();
+                    let _ = handle
+                        .checkpoint(tc_store::CheckpointReason::Periodic)
+                        .wait();
+                }
                 let killed = fs.is_dead();
                 let power_cut = kill.is_some_and(|(_, _, p)| p);
                 let next = fs.crash(power_cut);
@@ -279,9 +288,11 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
                     .unwrap();
             }
         }
-        // Every change the folder holds is in the fold of the next open.
+        // Every change the folder holds is in the fold of the next open. The open looks at a
+        // copy: it seals what a step left (§6.1 O15), which is the next step's to do.
         let on_disk = ids_on_disk(&fs, &folder);
-        let store = store_on(&fs, &clock);
+        let looked = fs.copy();
+        let store = store_on(&looked, &clock);
         let handle = store.open(&folder, &OpenOptions::default()).unwrap();
         let fold = handle.snapshot();
         let missing: Vec<&ChangeId> = on_disk
@@ -290,7 +301,6 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
             .collect();
         assert!(missing.is_empty(), "the open lost {missing:?}");
         handle.wait_idle();
-        fs = fs.crash(false);
         drop(handle);
     }
 }

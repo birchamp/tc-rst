@@ -329,24 +329,21 @@ fn crash_draft_write_never_affects_saves() {
 #[test]
 fn crash_checkpoint_seal_and_materialize_lose_nothing() {
     let (base, folder) = base_titus();
-    // Saves waiting to be sealed.
-    let fs = base.copy();
-    let rig = rig_as(fs.clone(), APP, "host-1");
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    for v in 2..=5 {
-        save_verse(&handle, 1, v, &format!("sealed {v}")).unwrap();
-    }
-    handle.wait_idle();
-    // The files before the close seals them: a kill after the saves.
-    let base = fs.crash(false);
-    drop(handle);
+    // Saves waiting to be sealed, in the session the checkpoint runs in (an open seals what
+    // an earlier session left, §6.1 O15).
+    let save = |_: &FaultFs, handle: &ProjectHandle| {
+        for v in 2..=5 {
+            save_verse(handle, 1, v, &format!("sealed {v}")).unwrap();
+        }
+        handle.wait_idle();
+    };
     let action = |handle: &ProjectHandle| {
         let _ = handle
             .checkpoint(tc_store::CheckpointReason::LeavingProject)
             .wait();
         Outcome::NotSaved
     };
-    let points = kill_everywhere(&base, &folder, &action, &|handle, _| {
+    let points = kill_everywhere_after(&base, &folder, &save, &action, &|handle, _| {
         for v in 2..=5 {
             assert_eq!(
                 words(handle, 1, v).as_deref(),
@@ -367,15 +364,14 @@ fn crash_checkpoint_seal_and_materialize_lose_nothing() {
 #[test]
 fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
     let (base, folder) = base_titus();
-    let fs = base.copy();
-    let rig = rig_as(fs.clone(), APP, "host-1");
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    for v in 2..=5 {
-        save_verse(&handle, 1, v, &format!("sealed {v}")).unwrap();
-    }
-    handle.wait_idle();
-    let base = fs.crash(false);
-    drop(handle);
+    // The saves wait unsealed in the session the checkpoint runs in: an open seals what an
+    // earlier session left (§6.1 O15), which would make the month folder before the action.
+    let save = |_: &FaultFs, handle: &ProjectHandle| {
+        for v in 2..=5 {
+            save_verse(handle, 1, v, &format!("sealed {v}")).unwrap();
+        }
+        handle.wait_idle();
+    };
     let action = |handle: &ProjectHandle| {
         let _ = handle
             .checkpoint(tc_store::CheckpointReason::LeavingProject)
@@ -388,6 +384,7 @@ fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
         let rig = rig_as(probe.clone(), APP, "host-1");
         let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
         handle.wait_idle();
+        save(&probe, &handle);
         probe.clear_log();
         action(&handle);
         let made = probe
@@ -403,7 +400,7 @@ fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
             "the checkpoint made no pack folder: the test proves nothing"
         );
         drop(handle);
-        kill_everywhere(&base, &folder, &action, &|handle, _| {
+        kill_everywhere_after(&base, &folder, &save, &action, &|handle, _| {
             for v in 2..=5 {
                 assert_eq!(
                     words(handle, 1, v).as_deref(),

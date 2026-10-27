@@ -644,6 +644,8 @@ fn open_inner(
         reasons: BTreeMap::new(),
         values_told: None,
         opening: false,
+        sealed_at_open: false,
+        derived_unread: false,
         git,
         device,
         recover: broken_git,
@@ -683,6 +685,10 @@ fn open_inner(
                     .shared
                     .set_mode(Mode::ReadOnly(ReadOnlyReason::WriteFailed(reason.clone())));
                 write_failed = Some(reason);
+                // No O10 job runs to end the seal's write group.
+                if std::mem::take(&mut writer.sealed_at_open) {
+                    project.shared.close_group();
+                }
             }
         }
     } else {
@@ -803,6 +809,27 @@ fn repair_and_classify(
     if manifest_lost {
         // The `kept` entries the lost manifest held (delta §2.3): their copies are told again.
         writer.relist_unnamed_copies()?;
+    }
+    // O15: saves an earlier session left unsealed are sealed now, after O9 classified the
+    // files against the packs they were written from, so O10 lists the new packs. Their only
+    // copy is a pending file and their age is unknown (ruling 2026-10-22: at most the last 2
+    // minutes may be lost). K3 stores each pack as a blob; the next checkpoint commits them.
+    // Not while O9 could not read a derived file: the group a kill left half done cannot be
+    // finished, and a seal then makes `metadata.json` read as edited outside; the 2-minute
+    // seal takes these saves (§6.1 O15).
+    if project.journal.has_unsealed() && !writer.derived_unread {
+        project.shared.open_group();
+        writer.sealed_at_open = true;
+        let sealed = (|| {
+            let mut run = project.seal_start()?;
+            while project.seal_step(&mut run)? {}
+            Ok::<(), StoreError>(())
+        })();
+        // A seal that fails keeps its pending files and says why in Notices, as at a
+        // checkpoint; the open goes on writable, O10 lists any pack it renamed (I7), and the
+        // 2-minute seal tries again.
+        drop(sealed);
+        writer.packs = project.pack_facts();
     }
     tracker.phase(Phase::Writing, 1, 0);
     if writer.manifest_changed {
@@ -1022,7 +1049,13 @@ fn journal_of(
                             .unwrap_or_default(),
                         ids: pack.ids,
                         blob: None,
-                        seen: None,
+                        // The bytes just read are the ones listed when the size agrees, so a
+                        // later change in place moves the time and is read again (§4.4).
+                        seen: read
+                            .file
+                            .mtime_ns
+                            .filter(|_| read.file.size == facts.key.size)
+                            .map(|t| (facts.key.size, t)),
                         damaged: matches!(pack.status, PackStatus::Damaged(_)),
                     },
                 );
@@ -1305,6 +1338,7 @@ impl Project {
                     abs: habs,
                     kind: JournalKind::Pack,
                     size: hbytes.len() as u64,
+                    mtime_ns: None,
                 },
                 hnumber,
                 hbytes,
@@ -1315,6 +1349,7 @@ impl Project {
             abs,
             kind,
             size: bytes.len() as u64,
+            mtime_ns: None,
         };
         let refs: Vec<(&JournalFile, u32, &[u8])> = targets
             .iter()
@@ -1361,22 +1396,25 @@ impl Project {
             )?;
             let new_rel = format!("{PENDING}/{name}");
             let new_abs = self.folder.path(&new_rel);
-            let number = self
-                .source
-                .add_target(&new_abs)
-                .map_err(|e| StoreError::io("open the verified salvage", &new_abs, e))?;
+            // The fold reads these values from the bytes written, as for a file the open read.
+            let number = self.source.add_target_held(
+                &new_abs,
+                std::sync::Arc::new(crate::load::Held(encoded.bytes.clone().into())),
+            );
             if let Some(old) = self.journal.pending.get(rel).and_then(|p| p.number) {
                 let from = JournalFile {
                     rel: rel.to_owned(),
                     abs: abs.clone(),
                     kind: JournalKind::Pending,
                     size: bytes.len() as u64,
+                    mtime_ns: None,
                 };
                 let to = JournalFile {
                     rel: new_rel.clone(),
                     abs: new_abs,
                     kind: JournalKind::Pending,
                     size: encoded.bytes.len() as u64,
+                    mtime_ns: None,
                 };
                 match relocation(self.id, (&from, &bytes), &[(&to, number, &encoded.bytes)]) {
                     Some(map) => {

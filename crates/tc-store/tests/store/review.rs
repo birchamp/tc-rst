@@ -762,16 +762,21 @@ fn an_unreadable_pending_file_makes_this_device_start_a_new_one() {
 fn a_seal_that_fails_after_its_pack_leaves_a_valid_burrito() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
-    leave(&handle);
-    save_verse(&handle, 1, 2, "to Titus").unwrap();
-    leave(&handle);
-    handle.wait_idle();
+    // The probe saves in its own session: an open seals what an earlier one left (§6.1 O15).
+    let probe = rig.fs.copy();
+    let saves = |handle: &ProjectHandle| {
+        save_verse(handle, 1, 1, "Paul, a servant").unwrap();
+        leave(handle);
+        save_verse(handle, 1, 2, "to Titus").unwrap();
+        leave(handle);
+        handle.wait_idle();
+    };
+    saves(&handle);
     // The flush of `.tc/pending` after the pending files go (K4) is the last flush of the
     // seal's pending files: find it on a copy.
-    let probe = rig.fs.copy();
     let probe_rig = rig_as(probe.clone(), APP, "host-1");
     let probe_handle = open(&probe_rig, &folder);
+    saves(&probe_handle);
     probe.clear_log();
     let start = probe.ops();
     probe_handle
