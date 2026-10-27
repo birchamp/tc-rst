@@ -74,7 +74,7 @@ named.
 | Work item, card | A unit or a new item of this roadmap, with its card in `units/` |
 | Lane | A set of work items with one owner at a time (integration, storage, app, checks, domain, shell) |
 | Track | A: the main line on the owner's PC. B: the second developer's package (B′: the import-core package; `evidence/2026-10-21/split-seams.md` calls it A′, the same package) |
-| main | The branch `claude/focused-ride-5uzj7p`, origin's default branch. No branch is literally named `main`; every document calls that branch main |
+| main | The branch `claude/focused-ride-5uzj7p`, origin's default branch. No branch is literally named `main`; every document calls that branch main. At the move to `unfoldingWord/translationCore4` it is pushed there as `main`; CI and `scripts/gates.sh` accept either name |
 | Worktree | A second checkout of this repository: `.worktrees/track-<ID>` (new, `TRACKING.md`) or `.claude/worktrees/*` (old; INT-6 cleans them). Never touch one the board lists under "Worktrees in use" |
 | Orchestrator | The owner of the integration lane's current card. When no integration card is active: decide yourself, log the decision as a `note`, and tell the owner only if a translator would notice (`TRACKING.md` "Heavy runs") |
 | Gate | The full list of checks a tree must pass before it merges (INT-3) |

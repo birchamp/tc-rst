@@ -122,7 +122,7 @@ ci_receipt() {
 green_run_for() {
   local name id run_sha branch
   while read -r name id run_sha branch; do
-    [[ "$branch" == gate/* || "$branch" == claude/focused-ride-5uzj7p ]] || continue
+    [[ "$branch" == gate/* || "$branch" == main || "$branch" == claude/focused-ride-5uzj7p ]] || continue
     [[ "$name" == "$1" && "$(git rev-parse "$run_sha^{tree}" 2> /dev/null)" == "$3" ]] && { echo "$id"; return; }
   done <<< "$2"
 }
@@ -176,7 +176,7 @@ journeys() {
 # of every crate that depends on them, tc-api's endpoint and golden lists, and the journeys that
 # name a changed endpoint or test id. CI on a track branch runs only the lints.
 touched() {
-  local base="${1:-origin/claude/focused-ride-5uzj7p}" picked crates=() files=() code=0
+  local base="${1:-origin/HEAD}" picked crates=() files=() code=0
   python3 -I -B .audit/tools/board.py --check
   node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs .audit/tools/touched.test.mjs
   picked="$(node .audit/tools/touched.mjs "$base")"

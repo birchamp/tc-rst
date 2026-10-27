@@ -66,5 +66,5 @@ function main(base) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   process.chdir(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..'));
-  main(process.argv[2] ?? 'origin/claude/focused-ride-5uzj7p');
+  main(process.argv[2] ?? 'origin/HEAD');
 }

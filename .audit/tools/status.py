@@ -7,7 +7,7 @@ script existed), so the file is right even when nobody updated it by hand.
 import os, re, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REF = sys.argv[1] if len(sys.argv) > 1 else "origin/claude/focused-ride-5uzj7p"
+REF = sys.argv[1] if len(sys.argv) > 1 else "origin/HEAD"
 
 def git(*a):
     return subprocess.run(["git", "-C", REPO, *a], capture_output=True, text=True, check=True).stdout

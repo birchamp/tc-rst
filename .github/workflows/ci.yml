@@ -3,19 +3,21 @@ permissions:
   contents: read
 on:
   push:
-  # A pull request runs the lints only: the full tests run where they gate a merge (main, gate/*).
+  # A pull request runs the lints only: the full tests run where they gate a merge (main, gate/*,
+  # the merge queue).
   pull_request:
   # The Windows test run, once a night; workflow_dispatch lets anyone run it on a branch.
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+  merge_group:
 concurrency:
   # The event name too, so a nightly or dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   # A newer push to a track branch cancels the run it supersedes, which frees runners. Main's
   # runs always finish (a quick follow-up must not cancel the test of the one before), and so
   # do gate/* runs, which are a merge's receipt (scripts/gates.sh --wait-ci).
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
   lint-linux:
     runs-on: ubuntu-latest
@@ -86,7 +88,7 @@ jobs:
     # The scale tests run at twice Psalms (CHK-7c); ten times runs at night.
     timeout-minutes: 75
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
+    if: github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -111,7 +113,7 @@ jobs:
     # tc-app's tests, on their own runner: with the rest they ran past 75 min (batch 7).
     timeout-minutes: 75
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
+    if: github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -180,7 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
+    if: github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -208,7 +210,7 @@ jobs:
   parity-baseline:
     runs-on: ubuntu-latest
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    if: github.event_name != 'schedule' && (github.ref == 'refs/heads/claude/focused-ride-5uzj7p' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch')
+    if: github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v4
         with:

@@ -9,7 +9,7 @@ exclude = ["spikes"]
 version = "4.1.0-preview"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/birchamp/tc-rst"
+repository = "https://github.com/unfoldingWord/translationCore4"
 rust-version = "1.97"
 
 [workspace.lints.rust]

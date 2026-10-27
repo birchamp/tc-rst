@@ -93,16 +93,24 @@ test('INV-BUILDS-ON-WINDOWS: the gate list builds for Windows, and CI runs it', 
 
 test('INV-JOURNEYS-RUN: every browser journey runs in CI on every main and gate push', () => {
   const e2e = read('.github/workflows/app-e2e.yml');
-  assert.match(e2e.split(/^jobs:/m)[0], /^\s+push:\n\s+branches: \[claude\/focused-ride-5uzj7p, 'gate\/\*\*'\]/m, 'INV-JOURNEYS-RUN: app-e2e does not run on pushes to main and gate/**');
+  assert.match(e2e.split(/^jobs:/m)[0], /^\s+push:\n\s+branches: \[main, claude\/focused-ride-5uzj7p, 'gate\/\*\*'\]/m, 'INV-JOURNEYS-RUN: app-e2e does not run on pushes to main and gate/**');
   assert.match(e2e, /scripts\/gates\.sh --step journeys/, 'INV-JOURNEYS-RUN: app-e2e does not run scripts/gates.sh --step journeys');
   assert.match(gates, /node --test[^\n]*parity\/app\/journeys\/\*\.test\.mjs/, 'INV-JOURNEYS-RUN: the journeys step does not run every parity/app/journeys/*.test.mjs');
 });
 
-test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/* and on request, not on other pushes', () => {
+test('INV-FULL-TESTS-GATE-MERGES: the full tests run on main, gate/*, in the merge queue and on request, not on other pushes', () => {
   const ci = read('.github/workflows/ci.yml');
   for (const job of ['test', 'test-app', 'alignment-budget', 'parity-baseline']) {
     const body = ci.split(new RegExp(`^  ${job}:$`, 'm'))[1]?.split(/^  [a-z-]+:$/m)[0] ?? '';
-    assert.match(body, /if: .*refs\/heads\/claude\/focused-ride-5uzj7p.*startsWith\(github\.ref, 'refs\/heads\/gate\/'\).*workflow_dispatch/, `INV-FULL-TESTS-GATE-MERGES: ci.yml job ${job} runs on every push`);
+    assert.match(body, /if: .*format\('refs\/heads\/\{0\}', github\.event\.repository\.default_branch\).*startsWith\(github\.ref, 'refs\/heads\/gate\/'\).*github\.event_name == 'merge_group'.*workflow_dispatch/, `INV-FULL-TESTS-GATE-MERGES: ci.yml job ${job} runs on every push, or is skipped in the merge queue`);
+  }
+});
+
+// A required check whose workflow never runs in the merge queue holds every pull request there.
+test('INV-MERGE-QUEUE-RUNS-CI: ci, app-e2e and shell run in the merge queue', () => {
+  for (const name of ['ci', 'app-e2e', 'shell']) {
+    const on = read(`.github/workflows/${name}.yml`).split(/^jobs:/m)[0];
+    assert.match(on, /^  merge_group:$/m, `INV-MERGE-QUEUE-RUNS-CI: ${name}.yml has no merge_group trigger`);
   }
 });
 

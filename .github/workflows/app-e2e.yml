@@ -6,18 +6,20 @@ name: app-e2e
 permissions:
   contents: read
 on:
-  # The journeys gate a merge: they run on main and gate/* (and on request), not on every
-  # track push (rulings/2026-10-24-test-process.md).
+  # The journeys gate a merge: they run on main, gate/* and in the merge queue (and on request),
+  # not on every track push (rulings/2026-10-24-test-process.md). Main is
+  # claude/focused-ride-5uzj7p until the move to unfoldingWord/translationCore4.
   push:
-    branches: [claude/focused-ride-5uzj7p, 'gate/**']
+    branches: [main, claude/focused-ride-5uzj7p, 'gate/**']
   workflow_dispatch:
+  merge_group:
 concurrency:
   # The event name too, so a dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   # A newer push to a track branch cancels the run it supersedes, which frees runners. Main's
   # runs always finish (a quick follow-up must not cancel the test of the one before), and so
   # do gate/* runs, which are a merge's receipt (scripts/gates.sh --wait-ci).
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
   journeys:
     runs-on: ubuntu-24.04

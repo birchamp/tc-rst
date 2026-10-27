@@ -80,7 +80,7 @@ def windows_gate_tick():
         return
     try:
         subprocess.run(["git", "-C", REPO, "fetch", "-q", "origin"], timeout=120)
-        sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/claude/focused-ride-5uzj7p"], capture_output=True, text=True, timeout=30).stdout.strip()
+        sha = subprocess.run(["git", "-C", REPO, "rev-parse", "origin/HEAD"], capture_output=True, text=True, timeout=30).stdout.strip()
     except Exception:
         return
     last = open(WIN_STATE).read().strip() if os.path.exists(WIN_STATE) else ""

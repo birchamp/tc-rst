@@ -9,10 +9,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  merge_group:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   # As in ci.yml: a superseded track run is cancelled; main and gate/* runs always finish.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 env:
   ELECTRONITE: v37.1.0-graphite
 jobs:
