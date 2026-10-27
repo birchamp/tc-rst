@@ -444,11 +444,11 @@ async fn an_export_while_a_book_file_is_undecided_is_a_valid_burrito() {
     let usfm = folder.join("ingredients/TIT.usfm");
     let a = open(&ana, &folder);
     save(&a, 1, 1, "first save");
-    a.leave(titus_book.clone()).wait().unwrap();
+    a.leave(titus_book).wait().unwrap();
     a.wait_idle();
     save(&a, 1, 1, "second save");
     fs.kill_after_rename(&usfm);
-    let _ = a.leave(titus_book.clone()).wait();
+    let _ = a.leave(titus_book).wait();
     assert!(fs.is_dead(), "killed after the rename of TIT.usfm");
     let fs = fs.crash(false);
     drop(a);
