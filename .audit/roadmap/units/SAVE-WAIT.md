@@ -4,7 +4,7 @@ title: The save-machine tests fail with a message instead of hanging
 track: A
 lane: checks
 milestone: M5
-state: verifying
+state: done
 owner: save-wait session (Claude Code 749c177d)
 branch: track-SAVE-WAIT
 worktree: .worktrees/track-SAVE-WAIT
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: true
 size: 0.25 d (basis: FIX-RESET-RECENCY, a test-only change of the same size)
-merged: none
+merged: abcc0ea5
 updated: 2026-10-27
-next: The integration lane takes track-SAVE-WAIT into a batch.
+next: none
 blocked_by: none
 ---
 
@@ -102,3 +102,4 @@ build), and a product save never waits at it. The app needs no change; a person 
 - 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | browser-and-parity lens stands: the hook fix is test-hooks code only, no page, word, key or flow changes | git show 268ff40c --stat
 - 2026-10-27 03:30 EDT | save-wait session (Claude Code 749c177d) | note | 268ff40c | loaded loops on the fixed build (6 copies on 4 cores, 20 min): production_reload 241 runs and c3_reload 60 runs, no failure, no hang; before the hook fix 31 of 331 production_reload runs failed or hung | /tmp/claude-1000/-home-bot-tc-rst/749c177d-e0a2-4ed0-b871-e79b599ba496/scratchpad/loop4/runs.txt
 - 2026-10-27 04:20 EDT | save-wait session (Claude Code 749c177d) | gate | 2cbfe3eb | scripts/gates.sh --touched passed with main merged: 5 crates (tc-store and its dependents), 1591 tests passed, 3 skipped, no timeout; ready for a batch | scripts/gates.sh --touched
+- 2026-10-27 02:45 EDT | integration lane (Claude Code 3d07d5f8) | merge | abcc0ea5 | merged into main in batch 34, gated by scripts/gates.sh --wait-ci batch-34 | scripts/gates.sh --wait-ci batch-34
