@@ -17,7 +17,6 @@ use super::ExchangePort;
 use crate::app::App;
 use crate::backend::BoxFuture;
 use crate::jobs::{JobEnd, ProgressSink};
-use crate::sync::ConflictTally;
 
 pub struct UsbExchange;
 
@@ -219,27 +218,21 @@ async fn receive_into(
     let view = match report {
         Ok(report) => {
             let session = lease.session();
-            let snapshot = session.read();
-            let tally = ConflictTally::of(snapshot.conflict_counts());
-            Ok(ReceivedView {
-                received: report.received_by.values().sum(),
-                from: report
-                    .received_by
-                    .keys()
-                    .map(crate::wire::scope::person_label)
-                    .collect(),
-                kept_newest: tally.others,
-                verse_conflicts: tally.verse,
-                alignments: tally.alignments,
-                hand_edited: report
-                    .hand_edited
-                    .into_iter()
-                    .map(|path| HandEdited {
-                        path,
-                        outcome: HandEditOutcome::NotTakenIn,
-                    })
-                    .collect(),
-            })
+            let me = session.handle().facts().device;
+            let resources = &app.inner.resources;
+            let mut view =
+                crate::sync::synced_view(&session.read(), me, &report.received_ids, 0, &|pin| {
+                    resources.has_dcs(pin)
+                });
+            view.hand_edited = report
+                .hand_edited
+                .into_iter()
+                .map(|path| HandEdited {
+                    path,
+                    outcome: HandEditOutcome::NotTakenIn,
+                })
+                .collect();
+            Ok(view)
         }
         // The refusal names the file's project, as the dialog does before a receive.
         Err(ExchangeError::OtherProject) => {

@@ -233,6 +233,10 @@ pub struct SyncResultView {
     /// alignment of Titus 1:1 replaced yours. Your version is in History."
     #[serde(default)]
     pub replaced: Vec<ReplacedView>,
+    /// Files inside an exchange file that were edited by hand and not taken in (E2; a sync
+    /// has none): the Received sheet says so once.
+    #[serde(default)]
+    pub hand_edited: Vec<crate::exchange::HandEdited>,
 }
 
 /// The versions of one kind of `whose` that the newer changes of `by` replaced: `place` is

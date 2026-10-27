@@ -414,6 +414,56 @@ struct Made {
 }
 
 impl App {
+    /// The J7 Burrito zip is the exchange file: tc-sync's export writes and verifies it in the
+    /// downloads folder, and it is registered under tC4's name for the project.
+    async fn burrito_zip(
+        &self,
+        session: &Arc<ProjectSession>,
+        downloads: Option<Downloads>,
+        utc_offset: tc_api::export::UtcOffset,
+    ) -> Result<Exported, JobEnd> {
+        let Some(downloads) = downloads else {
+            return Err(JobEnd::Failed(self.internal(
+                "the server gave no downloads folder",
+                crate::reports::facts(serde_json::json!({})),
+            )));
+        };
+        let project = session.scope().project.clone();
+        let written = self
+            .inner
+            .exchange
+            .export(self.clone(), project, downloads.dir())
+            .await?;
+        let file_name = file_name(
+            &self.export_name(session).await,
+            self.today(utc_offset),
+            "zip",
+        );
+        let name = file_name.clone();
+        let registered = tokio::task::spawn_blocking(move || {
+            downloads.add(Path::new(&written.path), &name, "application/zip")
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r);
+        let download = registered.map_err(|reason| {
+            self.report_export_failure(reason.clone());
+            failed(ExportRefusal::WriteFailed { error: reason })
+        })?;
+        Ok(Exported {
+            file: ExportedFile::Download {
+                download,
+                file_name,
+            },
+            facts: tc_api::export::ExportFacts::default(),
+        })
+    }
+
+    /// The translator's own day, as tC4 dates a file in its window.
+    fn today(&self, utc_offset: tc_api::export::UtcOffset) -> tc_api::ids::WallMs {
+        tc_api::ids::WallMs(self.inner.clock.now().0 + i64::from(utc_offset.minutes()) * 60_000)
+    }
+
     /// Reads the subject and makes the file. Reads only.
     async fn make_export(
         &self,
@@ -423,10 +473,7 @@ impl App {
         print: Option<PrintRequest>,
         utc_offset: tc_api::export::UtcOffset,
     ) -> Result<Made, JobEnd> {
-        // The translator's own day, as tC4 dates a file in its window.
-        let today = tc_api::ids::WallMs(
-            self.inner.clock.now().0 + i64::from(utc_offset.minutes()) * 60_000,
-        );
+        let today = self.today(utc_offset);
         let title = print.as_ref().map(|p| p.title.clone()).unwrap_or_default();
         let made = |produced: Result<(Produced, tc_export::ExportFacts), ExportError>,
                     name: String,
@@ -673,7 +720,13 @@ impl Handle<RunExport> for App {
                     reason: "a print needs its page setup and words".to_owned(),
                 });
             }
-            (Producer::AlignedUsfm | Producer::PlainUsfm | Producer::StoryMarkdown, Some(_)) => {
+            (
+                Producer::AlignedUsfm
+                | Producer::PlainUsfm
+                | Producer::StoryMarkdown
+                | Producer::BurritoZip,
+                Some(_),
+            ) => {
                 return Err(ApiError::BadRequest {
                     field: "print".to_owned(),
                     reason: "only a print takes a page setup".to_owned(),
@@ -715,6 +768,9 @@ impl Handle<RunExport> for App {
                         return Err(failed(ExportRefusal::CheckpointFailed { error: reason }));
                     }
                     CheckpointOutcome::Committed | CheckpointOutcome::Unchanged => {}
+                }
+                if req.producer == Producer::BurritoZip {
+                    return app.burrito_zip(&session, downloads, req.utc_offset).await;
                 }
                 let Made {
                     bytes,

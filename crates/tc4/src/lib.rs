@@ -230,14 +230,13 @@ fn serve(args: &Args) -> ExitCode {
             keychain: keychain.clone(),
             test_keychain: Some(keychain),
             // The journeys script how a sync or an open from Door43 ends (UI-2), or, with
-            // `--real-sync`, sync with the fake Door43 for real (E1a); and how a USB export or
-            // receive ends (E2).
+            // `--real-sync`, sync with the fake Door43 for real (E1a). A USB export or receive
+            // runs for real: the journey's apps write and read files on disk (E2).
             sync: if args.real_sync {
                 Arc::new(tc_app::ports::door43::Door43Sync)
             } else {
                 Arc::new(tc_app::ports::scripted::ScriptedSyncPort::default())
             },
-            exchange: Arc::new(tc_app::ports::scripted::ScriptedExchangePort::default()),
             ..deps
         }
     } else {

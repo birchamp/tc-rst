@@ -73,10 +73,15 @@ impl Handle<Receive> for App {
             .jobs
             .start_typed::<Receive, _, _>(spec, move |_ctx| async move {
                 app.inner.sessions.settled(&req.project).await;
-                app.inner
+                let view = app
+                    .inner
                     .exchange
-                    .receive(app.clone(), req.project, req.file)
-                    .await
+                    .receive(app.clone(), req.project.clone(), req.file)
+                    .await?;
+                // The Received sheet reads it again after a gap, as the sync's toast does
+                // (`door43/lastSync`, HIST-1).
+                crate::app::lock(&app.inner.last_sync).insert(req.project, view.clone());
+                Ok(view)
             }))
     }
 }
@@ -131,14 +136,8 @@ impl App {
         changes: tc_api::test::ScriptedSync,
         hand_edited: Vec<tc_api::exchange::HandEdited>,
     ) -> Result<ReceivedView, JobEnd> {
-        let synced = self.scripted_sync(folder, changes).await?;
-        Ok(ReceivedView {
-            received: synced.received,
-            from: synced.from,
-            kept_newest: synced.kept_newest,
-            verse_conflicts: synced.verse_conflicts,
-            alignments: synced.alignments,
-            hand_edited,
-        })
+        let mut view = self.scripted_sync(folder, changes).await?;
+        view.hand_edited = hand_edited;
+        Ok(view)
     }
 }

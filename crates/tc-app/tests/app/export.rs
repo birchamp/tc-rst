@@ -432,9 +432,9 @@ async fn preflight_counts_open_conflicts() {
 
 /// The server's downloads, kept in memory: each file registered, by its name, and where the
 /// app wrote it.
-struct Downloads {
+pub(super) struct Downloads {
     dir: tempfile::TempDir,
-    files: Mutex<Vec<(String, Vec<u8>)>>,
+    pub(super) files: Mutex<Vec<(String, Vec<u8>)>>,
     written: Mutex<Vec<PathBuf>>,
 }
 
@@ -457,7 +457,7 @@ impl tc_app::DownloadFiles for Downloads {
     }
 }
 
-fn give_downloads(app: &tc_app::App) -> Arc<Downloads> {
+pub(super) fn give_downloads(app: &tc_app::App) -> Arc<Downloads> {
     let downloads = Arc::new(Downloads {
         dir: tempfile::tempdir().unwrap(),
         files: Mutex::default(),
@@ -468,7 +468,7 @@ fn give_downloads(app: &tc_app::App) -> Arc<Downloads> {
 }
 
 /// Runs an export and waits for its end; a minute is a hang.
-async fn run(app: &tc_app::App, req: &export::RunExport) -> (JobId, JobState) {
+pub(super) async fn run(app: &tc_app::App, req: &export::RunExport) -> (JobId, JobState) {
     let job = post(app, req).await.unwrap();
     let mut watch = app.jobs().watch(job).unwrap();
     let state = tokio::time::timeout(Duration::from_secs(60), async {
@@ -483,7 +483,7 @@ async fn run(app: &tc_app::App, req: &export::RunExport) -> (JobId, JobState) {
     (job, state)
 }
 
-fn exported(state: JobState) -> export::Exported {
+pub(super) fn exported(state: JobState) -> export::Exported {
     match state {
         JobState::Done(JobOutcome::ExportReady(done)) => done,
         other => panic!("{other:?}"),

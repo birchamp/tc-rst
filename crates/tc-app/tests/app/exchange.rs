@@ -17,7 +17,7 @@ use tc_door43_fake::FakeDoor43;
 use tc_journal::command::Command;
 use tc_journal::{BookId, ChapterNo, RecordKey, VerseNo};
 
-use super::common::{Parts, TestApp, post};
+use super::common::{Parts, TestApp, open_progress, post, rid};
 use super::port_contract::ExchangePortFixture;
 use super::store::{OnDisk, files_on_disk, make_project};
 use crate::store_world::assert_valid_burrito_files;
@@ -268,4 +268,134 @@ async fn a_teammates_audio_file_arrives_byte_for_byte() {
         .join(SAMPLE)
         .join("ingredients/audio/jon_01.wav");
     assert_eq!(std::fs::read(&arrived).unwrap(), wav, "INV-CARRIED-BYTES");
+}
+
+/// E2 step 4: what a receive brought is readable again after a gap, through the same query
+/// the sync's toast uses (`door43/lastSync`, HIST-1), hand-edited files included.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_received_sheet_reads_again_after_a_resync() {
+    use tc_api::door43::{LastSync, LastSyncView};
+    use tc_api::jobs::{JobOutcome, JobState};
+
+    use super::common::folder;
+    use super::port_contract::{ExchangePortFixture, ScriptedExchange, ended, receive};
+
+    let w = ScriptedExchange::world().await;
+    let app = ScriptedExchange::app(&w);
+    let before: LastSyncView = post(
+        app,
+        &LastSync {
+            project: folder("sample_burrito"),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(before.view, None, "nothing received yet");
+    let (file, path) = ScriptedExchange::receive_with_a_hand_edit(&w).await;
+    let job = post(app, &receive(12, file)).await.unwrap();
+    let JobState::Done(JobOutcome::Received(shown)) = ended(app, job).await else {
+        panic!("the receive did not end");
+    };
+    let again: LastSyncView = post(
+        app,
+        &LastSync {
+            project: folder("sample_burrito"),
+        },
+    )
+    .await
+    .unwrap();
+    let view = again.view.expect("the receive's result is readable again");
+    assert_eq!(view, shown);
+    assert_eq!(view.received, 2);
+    assert_eq!(view.hand_edited.len(), 1, "{view:?}");
+    assert_eq!(view.hand_edited[0].path, path);
+}
+
+/// The export menu's Scripture Burrito zip (J7) is the exchange file of "Save work for a
+/// teammate", registered as a download under tC4's name for the project.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_burrito_zip_item_downloads_the_exchange_file() {
+    let w = Usb::world().await;
+    let downloads = super::export::give_downloads(&w.t.app);
+    let at =
+        w.t.app
+            .sessions()
+            .open_screen(&ProjectRef::parse(SAMPLE).unwrap(), open_progress())
+            .await
+            .unwrap()
+            .at;
+    let (_, state) = super::export::run(
+        &w.t.app,
+        &tc_api::export::RunExport {
+            utc_offset: tc_api::export::UtcOffset::UTC,
+            request: rid(90),
+            at,
+            producer: tc_api::export::Producer::BurritoZip,
+            subject: tc_api::export::Subject::Book {
+                book: BookId::Titus,
+            },
+            print: None,
+        },
+    )
+    .await;
+    let tc_api::export::ExportedFile::Download { file_name, .. } =
+        super::export::exported(state).file
+    else {
+        panic!("a download")
+    };
+    assert!(
+        file_name.starts_with("Sample translation-") && file_name.ends_with(".zip"),
+        "{file_name}"
+    );
+    let files = downloads.files.lock().unwrap();
+    let [(name, zip)] = files.as_slice() else {
+        panic!("one file")
+    };
+    assert_eq!(name, &file_name);
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip.clone())).unwrap();
+    let names: Vec<String> = (0..archive.len())
+        .map(|i| archive.by_index(i).unwrap().name().to_owned())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.ends_with("metadata.json"))
+            && names.iter().any(|n| n.ends_with("ingredients/TIT.usfm")),
+        "{names:?}"
+    );
+}
+
+/// A zip's entries by name, as a project's files are checked.
+fn zip_entries(path: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    (0..archive.len())
+        .filter_map(|i| {
+            let mut entry = archive.by_index(i).unwrap();
+            if entry.is_dir() {
+                return None;
+            }
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            Some((entry.name().to_owned(), bytes))
+        })
+        .collect()
+}
+
+/// P5/INV-VALID-BURRITO for the files that leave the app: a teammate's exchange file and this
+/// computer's own are each a valid Scripture Burrito, entry for entry.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn every_exchange_file_is_a_valid_burrito() {
+    use tc_app::ports::ExchangePort as _;
+    let w = Usb::world().await;
+    let juans = juans_file_with(&w, |_| {}).await;
+    assert_valid_burrito_files(&zip_entries(&juans));
+    let stick = w.disk.dir.path().join("own-stick");
+    std::fs::create_dir_all(&stick).unwrap();
+    let own = tc_app::ports::usb::UsbExchange
+        .export(
+            w.t.app.clone(),
+            ProjectRef::parse(SAMPLE).unwrap(),
+            stick.clone(),
+        )
+        .await
+        .unwrap();
+    assert_valid_burrito_files(&zip_entries(Path::new(&own.path)));
 }

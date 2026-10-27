@@ -38,6 +38,7 @@ fn ok_sync() -> SyncResultView {
         restored: 1,
         missing_pins: 0,
         recreated: false,
+        hand_edited: Vec::new(),
         replaced: Vec::new(),
     }
 }
@@ -105,6 +106,7 @@ fn a_sync_with_no_teammate_change_still_gives_all_three_as_0_and_no_restored_lin
         restored: 0,
         missing_pins: 0,
         recreated: false,
+        hand_edited: Vec::new(),
         replaced: Vec::new(),
     });
     assert_eq!(
@@ -153,6 +155,7 @@ fn a_verse_with_two_alignments_is_named_and_offers_review() {
 fn a_version_this_computer_lacks_offers_download() {
     let toast = synced(SyncResultView {
         missing_pins: 2,
+        hand_edited: Vec::new(),
         replaced: Vec::new(),
         ..ok_sync()
     });
@@ -173,6 +176,7 @@ fn a_version_this_computer_lacks_offers_download() {
         restored: 0,
         missing_pins: 5,
         recreated: false,
+        hand_edited: Vec::new(),
         replaced: Vec::new(),
     });
     assert_eq!(only_pins.dot(), Dot::Kindle);
@@ -195,6 +199,7 @@ fn a_project_put_back_on_door43_says_so_with_a_kindle_dot_and_no_button() {
         restored: 0,
         missing_pins: 0,
         recreated: true,
+        hand_edited: Vec::new(),
         replaced: Vec::new(),
     });
     assert_eq!(notes(&toast), [("sync-recreated", 1)]);

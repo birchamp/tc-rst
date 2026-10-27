@@ -214,6 +214,10 @@ fn a_receive_confirms_the_files_project_then_shows_what_it_brought() {
             kept_newest: 0,
             verse_conflicts: 1,
             alignments: 0,
+            restored: 0,
+            missing_pins: 0,
+            replaced: Vec::new(),
+            recreated: false,
             hand_edited: vec![HandEdited {
                 path: "ingredients/TIT.usfm".into(),
                 outcome: HandEditOutcome::NotTakenIn,
