@@ -384,7 +384,7 @@ impl App {
             })?;
         let handle = lease.session().handle().clone();
         let report = handle.door43_sync(client, Some(session.clone())).await;
-        let (ended, received_by, received_ids, recreated, restored) = match report {
+        let (ended, received_ids, recreated, restored) = match report {
             Some(report) => (
                 match report.ended {
                     tc_sync::machine::Ended::Synced { .. } => Ok(()),
@@ -392,14 +392,12 @@ impl App {
                         Err(ApiError::Refused(tc_api::Refusal::Sync(failure)))
                     }
                 },
-                report.received_by,
                 report.received_ids,
                 report.recreated,
                 report.restored,
             ),
             None => (
                 Err(ApiError::Unavailable(tc_api::error::Feature::Sync)),
-                BTreeMap::new(),
                 Vec::new(),
                 false,
                 0,
@@ -414,12 +412,6 @@ impl App {
                 resources.has_dcs(pin)
             });
             view.recreated = recreated;
-            // Unit X counts what came in, by the person who made it (§9.7 `received`).
-            view.received = received_by.values().sum();
-            view.from = received_by
-                .keys()
-                .map(crate::wire::scope::person_label)
-                .collect();
             view
         };
         drop(lease);

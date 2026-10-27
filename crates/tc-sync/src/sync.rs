@@ -209,10 +209,12 @@ impl Run<'_> {
                 .unwrap_or(tc_journal::fold::PersonLabel::Teammate(0));
             *self.report.received_by.entry(label).or_insert(0) += count;
         }
+        // A raced round can read a change again before any intake took it in.
+        let mut seen = std::collections::BTreeSet::new();
         self.report.received_ids = self
             .received_ids
             .iter()
-            .filter(|id| fold.change(id).is_some())
+            .filter(|id| fold.change(id).is_some() && seen.insert(**id))
             .copied()
             .collect();
         self.report.new_conflicts = fold
