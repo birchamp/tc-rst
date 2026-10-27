@@ -36,6 +36,9 @@ impl Actions {
     /// Drains every field, then takes the checkpoint of `to`; answers whether the caller may
     /// switch. A standing failure keeps the person where they are (FR-32).
     pub(crate) async fn leave(&self, to: LeaveTo) -> bool {
+        if to == LeaveTo::Home && !self.settle_align_clicks().await {
+            return false;
+        }
         if !self.runtime().saves().gate().await {
             return false;
         }

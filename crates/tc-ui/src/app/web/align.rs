@@ -30,7 +30,7 @@ use super::app_ctx::Actions;
 use super::js;
 use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
-    EditFailure, EditQueue, Lens, RailFilter, SentEdit, refresh_for, same_verse,
+    EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, refresh_for, same_verse,
 };
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
@@ -139,6 +139,8 @@ pub struct AlignState {
     pub restoring: ArcRwSignal<bool>,
     /// The last *Restore this version* of the open verse was not saved.
     pub restore_failed: ArcRwSignal<bool>,
+    /// Home asks whether to leave without the clicks that cannot be saved.
+    pub leave_ask: ArcRwSignal<bool>,
 }
 
 impl AlignState {
@@ -157,6 +159,7 @@ impl AlignState {
             history_open: ArcRwSignal::new(false),
             restoring: ArcRwSignal::new(false),
             restore_failed: ArcRwSignal::new(false),
+            leave_ask: ArcRwSignal::new(false),
         }
     }
 }
@@ -180,6 +183,8 @@ thread_local! {
     static REFRESHES: Latest = const { Latest::new() };
     /// A newer navigation wins while earlier requests wait for page edits to drain.
     static NAVIGATIONS: Latest = const { Latest::new() };
+    /// The answer Home waits for while it asks Stay or Leave without it.
+    static LEAVE_ANSWER: RefCell<Option<Function>> = const { RefCell::new(None) };
     /// The gate hook that asks the server to save the links, while the tool is open.
     static HOOK: Cell<Option<GateHookId>> = const { Cell::new(None) };
     /// The listener that keeps the rail and the view true to the server's events.
@@ -593,6 +598,69 @@ impl Actions {
             }
         }
         true
+    }
+
+    /// Before Home: the clicks not yet saved get a few seconds to save, sent again when a send
+    /// fails on the way; only a click lost for sure makes Home ask, Stay or Leave without it
+    /// (owner ruling ALIGN-LEAVE). Answers whether Home may go on.
+    pub(super) async fn settle_align_clicks(&self) -> bool {
+        // A send that fails at once (no connection) is sent again at most this often.
+        const RETRY_EVERY_MS: f64 = 250.0;
+        let start = js::now_ms();
+        let mut retried = f64::NEG_INFINITY;
+        loop {
+            let now = js::now_ms();
+            let mut wake = crate::app::align::LEAVE_WAIT_MS - (now - start);
+            match QUEUE.with(|q| q.borrow().on_leave(now - start)) {
+                LeaveWait::Leave => return true,
+                LeaveWait::Ask => return self.ask_leave_without_clicks().await,
+                LeaveWait::Retry if now - retried >= RETRY_EVERY_MS => {
+                    retried = now;
+                    if let Some(sent) = QUEUE.with(|q| q.borrow_mut().retry()) {
+                        self.align_edits_changed();
+                        self.send_align_request(sent, true);
+                    }
+                }
+                LeaveWait::Retry => wake = wake.min(retried + RETRY_EVERY_MS - now),
+                LeaveWait::Wait => {}
+            }
+            // Woken by the click's answer, or when there is something to do again.
+            let changed = Promise::new(&mut |resolve, _| {
+                if let Ok(window) = js::window() {
+                    let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                        &resolve,
+                        wake.max(0.0) as i32 + 1,
+                    );
+                }
+                EDIT_WAITERS.with(|w| w.borrow_mut().push(resolve));
+            });
+            let _ = JsFuture::from(changed).await;
+        }
+    }
+
+    async fn ask_leave_without_clicks(&self) -> bool {
+        let answer = Promise::new(&mut |resolve, _| {
+            LEAVE_ANSWER.with(|a| *a.borrow_mut() = Some(resolve));
+        });
+        self.s().a.leave_ask.try_set(true);
+        let leave = JsFuture::from(answer)
+            .await
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        self.s().a.leave_ask.try_set(false);
+        if leave {
+            QUEUE.with(|q| q.borrow_mut().drop_waiting());
+            self.align_edits_changed();
+        }
+        leave
+    }
+
+    /// The person's answer to Home's question: Leave without it, or Stay.
+    pub fn answer_align_leave(&self, leave: bool) {
+        if let Some(resolve) = LEAVE_ANSWER.with(|a| a.borrow_mut().take()) {
+            let _ = resolve.call1(&JsValue::NULL, &JsValue::from_bool(leave));
+        }
     }
 
     fn send_align_edit(&self, edit: AlignEdit) {
