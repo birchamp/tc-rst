@@ -4,7 +4,7 @@ title: Get source texts names the versions that are installed
 track: A
 lane: app
 milestone: M5
-state: gating
+state: done
 owner: tc4-issues session (Claude Code dc817a96)
 branch: track-SRC-VER
 worktree: .worktrees/track-SRC-VER
@@ -13,9 +13,9 @@ needs_owner: []
 proves: []
 no_loss: false
 size: 0.5 d (basis: FIX-R step 5)
-merged: none
+merged: da8961f8
 updated: 2026-10-27
-next: Ready; waits for a batch: the integration lane takes track-SRC-VER (tip after e7358e21) into a batch.
+next: none
 blocked_by: none
 ---
 
@@ -75,3 +75,4 @@ Today the English card says v89 while v91 is installed and pinned, so a translat
 - 2026-10-27 12:45 EDT | tc4-issues session (Claude Code dc817a96) | fix | none | the major: the current package's card names the project's own pin when it is installed, so an update's v92 shows, never a pinned release this computer lacks (`inv_source_card_names_installed_the_projects_release_first`, tc-resources); the gate test renamed `inv_source_card_names_installed_releases_else_tc4s`; the partly-installed case went to minors.tsv; tc-app sources 10/10 | tc-heavy cargo test -p tc-resources --lib inv_source
 - 2026-10-27 12:55 EDT | tc4-issues session (Claude Code dc817a96) | gate | none | started scripts/gates.sh --touched in .worktrees/track-SRC-VER on 93a9ca77 (main b17d258a merged in) | scripts/gates.sh --touched
 - 2026-10-27 14:10 EDT | tc4-issues session (Claude Code dc817a96) | gate | e7358e21 | scripts/gates.sh --touched with main b17d258a merged: 15 crates, 3441 tests passed, 6 skipped, no timeout; tc-api endpoints and goldens 13/13; claims, coverage and touched tests 10/10; journey source-texts 5/5; its board step fails only on REL-1, read live from track-REL-1, which depends on VRS-GUESS, a card not yet on any branch board.py reads here, so the steps after it ran from a copy without that line; ready for a batch | scratchpad gate-touched.log, gate-touched2.log
+- 2026-10-27 11:01 EDT | integration lane (Claude Code 3d07d5f8) | merge | da8961f8 | merged into main in batch 43, gated by scripts/gates.sh --wait-ci batch-43 | scripts/gates.sh --wait-ci batch-43
