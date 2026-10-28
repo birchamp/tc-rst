@@ -9,3 +9,4 @@ the_growth_bench_on_en_ult_and_en_ust_titus_gives_tc4s_recall	local: over a minu
 the_shown_text_is_what_tc4_reads_on_a_dump	local: needs a 12 MB dump of tC4's text (TC_USFM_SHOWN_TEXT_DUMP), not committed
 model::random_histories_lose_no_work_long	store-model-nightly
 model::random_syncs_lose_no_work_long	store-model-nightly
+captures_match_the_current_ui_source	local: captures paused after the preview release (owner, 2026-10-28); run it before a recapture
