@@ -231,6 +231,67 @@ fn rewrite_entry(from: &Path, to: &Path, name: &str, edit: impl Fn(&str) -> Stri
     out.finish().unwrap();
 }
 
+/// The server's uploads as a test keeps them: what is still registered, so swept when
+/// abandoned.
+#[derive(Default)]
+struct Registered(std::sync::Mutex<Vec<tc_api::ids::UploadId>>);
+
+impl tc_app::UploadedFiles for Registered {
+    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
+        let mut ids = self.0.lock().unwrap();
+        let at = ids.iter().position(|held| held == id)?;
+        ids.remove(at);
+        Some(tc_app::UploadedFile {
+            name: "juan.zip".to_owned(),
+            path: PathBuf::new(),
+        })
+    }
+}
+
+/// #7 (review 2026-10-28): a receive takes its upload from the server's registry as it
+/// starts, so the sweep of abandoned uploads cannot delete the file it reads, and deletes
+/// the file when done.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_receive_takes_its_upload_from_the_sweep_and_deletes_it() {
+    use tc_api::ids::UploadId;
+    use tc_api::jobs::{JobOutcome, JobState};
+
+    use super::common::{folder, rid};
+    use super::port_contract::ended;
+
+    let w = Usb::world().await;
+    let exported = juans_file(&w).await;
+    let id = UploadId::parse(&format!("{:032x}", 7)).unwrap();
+    let uploads = w.disk.app_data().join("uploads");
+    std::fs::create_dir_all(&uploads).unwrap();
+    std::fs::copy(&exported, uploads.join(id.as_str())).unwrap();
+    let registry = Arc::new(Registered::default());
+    registry.0.lock().unwrap().push(id.clone());
+    w.t.app.provide_uploads(registry.clone());
+    let job = post(
+        &w.t.app,
+        &tc_api::exchange::Receive {
+            request: rid(10),
+            project: folder(SAMPLE),
+            file: ExchangeFile::Upload(id.clone()),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        ended(&w.t.app, job).await,
+        JobState::Done(JobOutcome::Received(_))
+    ));
+    assert!(
+        registry.0.lock().unwrap().is_empty(),
+        "taken, so never swept"
+    );
+    assert!(
+        !uploads.join(id.as_str()).exists(),
+        "the receive deleted it"
+    );
+}
+
 /// #705: a recording a teammate put into the project folder with another program arrives
 /// byte for byte through an exchange file (STORAGE §10.2 R5, carried files as X built them).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

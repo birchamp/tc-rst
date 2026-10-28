@@ -141,6 +141,9 @@ impl ExchangePort for UsbExchange {
         file: ExchangeFile,
     ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
         Box::pin(async move {
+            if let ExchangeFile::Upload(id) = &file {
+                app.take_upload(id);
+            }
             let path = app.exchange_path(&file);
             let result = receive_into(&app, &project, &path).await;
             // The upload is read once, whatever came of it; a file the shell chose stays.
@@ -158,6 +161,9 @@ impl ExchangePort for UsbExchange {
         name: ProjectName,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
         Box::pin(async move {
+            if let ExchangeFile::Upload(id) = &file {
+                app.take_upload(id);
+            }
             let path = app.exchange_path(&file);
             let folder = name.as_str().to_owned();
             let made = app

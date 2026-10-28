@@ -315,6 +315,16 @@ impl App {
         })
     }
 
+    /// Takes the upload from the server's registry before a job reads it over time, so the
+    /// sweep of abandoned uploads never deletes it mid-read; the job then owns the file and
+    /// deletes it with [`App::drop_upload`]. Without a server (tests) there is nothing to
+    /// take.
+    pub(crate) fn take_upload(&self, upload: &UploadId) {
+        if let Some(uploads) = self.inner.uploads.get() {
+            let _ = uploads.take(upload);
+        }
+    }
+
     pub(crate) fn drop_upload(&self, upload: &UploadId) {
         // A file that is already gone, or cannot be removed now, is emptied at the next start.
         let _ = std::fs::remove_file(self.upload_path(upload));

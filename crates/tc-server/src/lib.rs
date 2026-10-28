@@ -84,7 +84,10 @@ pub struct Limits {
     pub upload_cap: fn(UploadFlow) -> u64,
     /// How long a finished file stays available for download: 10 minutes.
     pub downloads_keep: Duration,
-    /// How often expired downloads are looked for: a minute.
+    /// How long a stored upload no job has taken stays: an hour. A person who picks a file
+    /// and leaves the dialog open longer picks it again.
+    pub uploads_keep: Duration,
+    /// How often expired downloads and uploads are looked for: a minute.
     pub downloads_sweep: Duration,
 }
 
@@ -97,6 +100,7 @@ impl Default for Limits {
             drain_within: Duration::from_secs(1),
             upload_cap: UploadFlow::cap,
             downloads_keep: Duration::from_secs(10 * 60),
+            uploads_keep: Duration::from_secs(60 * 60),
             downloads_sweep: Duration::from_secs(60),
         }
     }
@@ -203,7 +207,7 @@ impl Server {
             url: format!("http://127.0.0.1:{port}/"),
             token: token.as_str().to_owned(),
         };
-        let downloads_keep = limits.downloads_keep;
+        let (downloads_keep, uploads_keep) = (limits.downloads_keep, limits.uploads_keep);
         let shared = Arc::new(Shared {
             token,
             host: format!("127.0.0.1:{port}"),
@@ -211,7 +215,7 @@ impl Server {
             limits,
             ui_dir,
             routes: routes::RouteTable::new(),
-            uploads: Arc::new(Uploads::new(uploads_dir)),
+            uploads: Arc::new(Uploads::new(uploads_dir, uploads_keep)),
             downloads: Arc::new(Downloads::new(downloads_dir, downloads_keep)),
             #[cfg(feature = "test-hooks")]
             ender,
@@ -291,7 +295,7 @@ impl Server {
             backend: Arc::clone(&backend),
         };
         let mut serving = tokio::spawn(axum::serve(listener, router(state)).into_future());
-        let sweeper = tokio::spawn(sweep_downloads(Arc::clone(&shared)));
+        let sweeper = tokio::spawn(sweep_files(Arc::clone(&shared)));
 
         let cause = tokio::select! {
             exit = lifecycle::watch_stdin(input) => exit,
@@ -380,13 +384,15 @@ fn fresh_folder(app_data: &std::path::Path, name: &str) -> Result<PathBuf, Serve
     Ok(dir)
 }
 
-/// Deletes the downloads that have been kept long enough.
-async fn sweep_downloads(shared: Arc<Shared>) {
+/// Deletes the downloads and the untaken uploads that have been kept long enough.
+async fn sweep_files(shared: Arc<Shared>) {
     let mut tick = tokio::time::interval(shared.limits.downloads_sweep);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tick.tick().await;
-        for file in shared.downloads.sweep(std::time::Instant::now()) {
+        let now = std::time::Instant::now();
+        let expired = shared.downloads.sweep(now);
+        for file in expired.into_iter().chain(shared.uploads.sweep(now)) {
             // Already gone is as good as deleted.
             let _ = tokio::fs::remove_file(file).await;
         }
