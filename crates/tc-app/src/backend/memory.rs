@@ -11,8 +11,9 @@
 //! Like tc-store, it refuses a second open of a folder whose handle is live (STORAGE §6.1
 //! O1), so the session registry's sharing is tested against a backend that would refuse it.
 
+use crate::app::lock;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tc_api::event::{CheckpointOutcome, SessionMode};
@@ -123,11 +124,6 @@ pub enum MemoryError {
     NotATextVerse(String),
     #[error("a teammate's change could not be made: {0}")]
     Change(String),
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    // Every change under these locks is a store of whole values.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// A fold with the key its tokens are signed with. The fold is shared: a snapshot of each open

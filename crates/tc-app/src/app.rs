@@ -650,6 +650,18 @@ impl App {
             .map_err(|current| ApiError::StaleScope { current })
     }
 
+    /// The session a write names. A write's scope was checked by dispatch, so a stale one
+    /// here is refused as not saved, never as `ApiError::StaleScope` (A-19).
+    pub(crate) fn write_session(
+        &self,
+        at: &tc_api::Scope,
+    ) -> Result<Arc<ProjectSession>, ApiError> {
+        self.inner
+            .sessions
+            .reader(at)
+            .map_err(|_| ApiError::NotSaved(tc_api::write::NotSaved::StaleScope))
+    }
+
     /// The first-launch state `hello` answers: `Ready` unless a seeding is under way or
     /// stopped (unit A9).
     pub fn startup(&self) -> StartupState {

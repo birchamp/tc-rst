@@ -46,10 +46,11 @@
 //! awaits it, so writes still never overlap. A document's first read (`prefs/app.json` at the
 //! start, a project's file when it is first asked for) is a few hundred bytes and stays inline.
 
+use crate::app::lock;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -470,11 +471,6 @@ pub fn read_reports(files: &dyn AppDataFiles) -> KeptReports {
         last_id,
         problem: None,
     }
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    // Nothing that holds one of these locks leaves its data half changed.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 // ---- the records ---------------------------------------------------------------------------

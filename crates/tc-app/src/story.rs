@@ -694,11 +694,7 @@ impl App {
         text: String,
         reference: bool,
     ) -> Result<tc_api::write::Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&at)?;
         let handle = session.handle();
         let shown = wire::token::edit_token(handle.as_ref(), &token)?;
         if !matches!(
