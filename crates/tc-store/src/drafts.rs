@@ -217,17 +217,20 @@ enum Found {
 impl Found {
     fn read(vfs: &dyn Vfs, folder: &Folder) -> Self {
         let path = folder.path(DRAFTS);
-        let reason = match read_held(vfs, &path, &HeldRetry::SAVE) {
-            Err(e) if is_not_found(&e) => return Self::Missing,
-            Err(e) => e.to_string(),
-            Ok(bytes) => match serde_json::from_slice(&bytes) {
-                Ok(entries) => return Self::Loaded(entries),
-                Err(e) => e.to_string(),
+        match read_held(vfs, &path, &HeldRetry::SAVE) {
+            Err(e) if is_not_found(&e) => Self::Missing,
+            // Bytes not read may be sound: they stay where the next open reads them again.
+            Err(e) => Self::Unreadable {
+                kept_at: None,
+                reason: e.to_string(),
             },
-        };
-        Self::Unreadable {
-            kept_at: move_aside(vfs, folder),
-            reason,
+            Ok(bytes) => match serde_json::from_slice(&bytes) {
+                Ok(entries) => Self::Loaded(entries),
+                Err(e) => Self::Unreadable {
+                    kept_at: move_aside(vfs, folder),
+                    reason: e.to_string(),
+                },
+            },
         }
     }
 

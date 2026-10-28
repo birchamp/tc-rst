@@ -978,7 +978,6 @@ fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
     draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
     handle.wait_idle();
     assert_eq!(rig.fs.peek(&path), Some(before.clone()), "the held file is untouched");
-    assert!(!rig.fs.held_waits().is_empty(), "the move was retried while held");
     handle.close().unwrap();
     assert_eq!(rig.fs.peek(&path), Some(before));
     rig.fs.set_unreadable(&path, false);
@@ -989,6 +988,29 @@ fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
     assert_eq!(texts_offered(&handle), ["last session's text"]);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// A drafts file that cannot be read, though it could be moved, stays where it is: its bytes
+/// may be sound, and the next open offers them.
+#[test]
+fn a_drafts_file_that_cannot_be_read_is_not_moved_aside() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 2)], "last session's text");
+    let fs = crashed_after_drafts(&rig, handle);
+    let path = folder.join(DRAFTS);
+    let before = fs.peek(&path).unwrap();
+    fs.set_unreadable(&path, true);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(unreadable_notices(&handle), [DRAFTS]);
+    draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
+    handle.wait_idle();
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&path), Some(before), "the file is neither moved nor replaced");
+    rig.fs.set_unreadable(&path, false);
+    let (_rig, handle) = reopen(rig.fs.copy(), &folder);
+    assert_eq!(texts_offered(&handle), ["last session's text"]);
+    handle.close().unwrap();
 }
 
 /// An entry of a field this version does not know, written by a newer app, stays in the file
