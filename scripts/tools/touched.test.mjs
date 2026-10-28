@@ -41,3 +41,17 @@ test('INV-TOUCHED-RUNS-WHAT-A-CHANGE-REACHES: a journey that names a changed end
   assert.deepEqual(journeysFor(['parity/app/journeys/edited.test.mjs'], tokens, journeys),
     ['parity/app/journeys/cc.test.mjs', 'parity/app/journeys/edited.test.mjs', 'parity/app/journeys/rail.test.mjs']);
 });
+
+// INV-TOUCHED-RUNS-THE-PR-LINTS: a pull request's CI runs only the lint-* jobs, so `--touched`
+// runs each of their steps; a branch that passed it failed lint-linux's fmt (PR 857).
+test('INV-TOUCHED-RUNS-THE-PR-LINTS: --touched runs every step a lint job runs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const ci = await readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const gates = await readFile(new URL('../gates.sh', import.meta.url), 'utf8');
+  const jobs = ci.split(/^ {2}(?=[a-z][\w-]*:\s*$)/m).filter((job) => job.startsWith('lint-'));
+  assert.ok(jobs.length >= 3, 'lint-linux, lint-windows and lint-wasm are found');
+  const ciSteps = new Set(jobs.flatMap((job) => [...job.matchAll(/gates\.sh --step (\S+)/g)].map((m) => m[1])));
+  const list = gates.match(/^PR_LINTS=\(([^)]*)\)/m);
+  assert.ok(list, 'gates.sh defines PR_LINTS');
+  assert.deepEqual(new Set(list[1].split(/\s+/).filter(Boolean)), ciSteps);
+});

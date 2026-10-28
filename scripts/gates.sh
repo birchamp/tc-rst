@@ -94,11 +94,19 @@ journeys() {
   return "$code"
 }
 
-# Before a pull request (CHK-7b): the fast checks, then the tests of the crates the branch changed and
-# of every crate that depends on them, tc-api's endpoint and golden lists, and the journeys that
-# name a changed endpoint or test id. CI on a pull request runs only the lints.
+# Before a pull request (CHK-7b): every lint a pull request's CI runs (lint-linux, lint-windows,
+# lint-wasm), so a branch that passes here passes its PR checks; the fast checks; then the tests
+# of the crates the branch changed and of every crate that depends on them, tc-api's endpoint and
+# golden lists, and the journeys that name a changed endpoint or test id.
+PR_LINTS=(fmt clippy clippy-release-bins clippy-release-app clippy-windows
+  wasm-ui wasm-ui-gallery wasm-ui-app wasm-ui-hooks wasm-api)
+
 touched() {
-  local base="${1:-origin/HEAD}" picked crates=() files=() code=0
+  local base="${1:-origin/HEAD}" picked crates=() files=() code=0 step
+  for step in "${PR_LINTS[@]}"; do
+    echo "gates: --touched: $step"
+    run_step "$step" || { echo "gates: step $step failed" >&2; code=1; }
+  done
   node --test scripts/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs scripts/tools/touched.test.mjs
   picked="$(node scripts/tools/touched.mjs "$base")"
   mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
