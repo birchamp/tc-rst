@@ -936,7 +936,7 @@ fn an_unreadable_drafts_file_is_moved_aside_and_the_person_is_told() {
         fs.put(&folder.join(DRAFTS), bytes, None);
         let (rig, handle) = reopen(fs, &folder);
         let kept = format!(".tc/drafts.unreadable-{}.json", n + 1);
-        assert_eq!(unreadable_notices(&handle), [kept.as_str()]);
+        assert_eq!(unreadable_notices(&handle), aside(1..=n + 1));
         assert_eq!(rig.fs.peek(&folder.join(&kept)).as_deref(), Some(*bytes));
         draft(&handle, DraftField::Words, &[verse(1, 2)], "typed after");
         let fs_after = crashed_after_drafts(&rig, handle);
@@ -960,6 +960,82 @@ fn an_unreadable_drafts_file_is_moved_aside_and_the_person_is_told() {
     assert_eq!(texts_offered(&handle), ["typed after"]);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
+}
+
+fn aside(numbers: std::ops::RangeInclusive<usize>) -> Vec<String> {
+    numbers
+        .map(|n| format!(".tc/drafts.unreadable-{n}.json"))
+        .collect()
+}
+
+/// A drafts file moved aside is told again at every later open, even when the session that
+/// moved it typed nothing, so `drafts.json` was never written again. Dismissing the notice
+/// hides it for the session and keeps the file: it may hold the only trace of unsaved text.
+#[test]
+fn a_moved_aside_drafts_file_is_told_at_every_open_until_it_is_gone() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.close().unwrap();
+    let fs = rig.fs.copy();
+    fs.put(&folder.join(DRAFTS), b"\x00garbage", None);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(unreadable_notices(&handle), aside(1..=1));
+    handle.close().unwrap();
+    let (rig, handle) = reopen(rig.fs.copy(), &folder);
+    assert_eq!(unreadable_notices(&handle), aside(1..=1));
+    let notice = handle.notices().into_iter().next().unwrap();
+    handle.dismiss_notice(notice.id).wait().unwrap();
+    assert!(unreadable_notices(&handle).is_empty());
+    handle.close().unwrap();
+    let kept = folder.join(&aside(1..=1)[0]);
+    assert_eq!(rig.fs.peek(&kept).as_deref(), Some(&b"\x00garbage"[..]));
+    let (rig, handle) = reopen(rig.fs.copy(), &folder);
+    assert_eq!(unreadable_notices(&handle), aside(1..=1));
+    handle.close().unwrap();
+    // The person dealt with it: moved or deleted the file outside the app.
+    rig.fs.delete(&kept).unwrap();
+    let (_rig, handle) = reopen(rig.fs.copy(), &folder);
+    assert!(unreadable_notices(&handle).is_empty());
+    handle.close().unwrap();
+}
+
+/// Every file moved aside is told, in order, and a good `drafts.json` beside them is still
+/// offered; a read-only open tells of them too, and leaves them as they are.
+#[test]
+fn moved_aside_drafts_files_are_told_beside_offered_drafts_and_when_read_only() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 2)],
+        "last session's text",
+    );
+    let fs = crashed_after_drafts(&rig, handle);
+    fs.put(&folder.join(&aside(2..=2)[0]), b"second", None);
+    fs.put(&folder.join(&aside(10..=10)[0]), b"tenth", None);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(
+        unreadable_notices(&handle),
+        [aside(2..=2), aside(10..=10)].concat()
+    );
+    assert_eq!(texts_offered(&handle), ["last session's text"]);
+    handle.close().unwrap();
+    let fs = rig.fs.copy();
+    drop(rig);
+    let cloud = cloud_synced_rig(fs);
+    let reader = cloud.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert!(matches!(reader.facts().mode, tc_store::Mode::ReadOnly(_)));
+    assert_eq!(
+        unreadable_notices(&reader),
+        [aside(2..=2), aside(10..=10)].concat()
+    );
+    assert!(reader.offered_drafts().is_empty());
+    reader.close().unwrap();
+    assert_eq!(
+        cloud.fs.peek(&folder.join(&aside(2..=2)[0])).as_deref(),
+        Some(&b"second"[..])
+    );
 }
 
 /// Another program holds the drafts file so that it can be neither read nor moved (a

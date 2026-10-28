@@ -2322,6 +2322,11 @@ Only a missing `drafts.json` means no drafts. A `drafts.json` is never written o
 - One read but not understood (damaged, cut short, a newer app's layout) is moved to
   `.tc/drafts.unreadable-N.json` under the first free N, the notice names that path, and drafts
   are written as usual. When it cannot be moved, it is handled as one that cannot be read.
+- Every open, a read-only one included, names each `.tc/drafts.unreadable-N.json` there in a
+  notice `FileUnreadable`, whether or not the session that moved it wrote drafts since, until
+  the file is gone. The notice keeps no copy: dismissing it hides it for the session and leaves
+  the file where it is, since it may hold the only trace of unsaved text. The app has no action
+  that reads such a file or removes it; the person moves or deletes it outside the app.
 
 An entry whose field this version does not know stays in the file as it is.
 

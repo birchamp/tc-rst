@@ -24,7 +24,7 @@ use crate::atomic::{HeldRetry, SyncDir, atomic_create_dirs, atomic_write, read_h
 use crate::counters::Counters;
 use crate::hooks::{Hooks, Point};
 use crate::layout::{DRAFTS, Folder, TC};
-use crate::vfs::{Vfs, is_not_found};
+use crate::vfs::{EntryKind, Vfs, is_not_found};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -200,55 +200,106 @@ impl Writer {
     }
 }
 
-/// What the open found at `.tc/drafts.json`. Only `Unreadable` without `kept_at` stops this
-/// session's draft writes: the list would replace bytes nobody has read.
+/// What the open found of the drafts files: `.tc/drafts.json`, and in every state the
+/// `.tc/drafts.unreadable-N.json` files earlier opens moved aside (`aside`), each told again
+/// at every open while it is there. Only `Unreadable` without `kept_at` stops this session's
+/// draft writes: the list would replace bytes nobody has read.
 enum Found {
-    Missing,
-    Loaded(Vec<Entry>),
+    Missing {
+        aside: Vec<String>,
+    },
+    Loaded {
+        entries: Vec<Entry>,
+        aside: Vec<String>,
+    },
     /// Unreadable or not understood (held, damaged, a newer app's format). Its bytes are
     /// never written over: moved to `kept_at`, or, when they could not be moved, left where
     /// they are.
     Unreadable {
         kept_at: Option<String>,
         reason: String,
+        aside: Vec<String>,
     },
 }
 
 impl Found {
-    fn read(vfs: &dyn Vfs, folder: &Folder) -> Self {
+    /// A read-only open reads no drafts (§5.14) but still tells of the files moved aside.
+    fn read(vfs: &dyn Vfs, folder: &Folder, read_only: bool) -> Self {
+        // Listed before a move, so the file this open moves is told once, with its reason.
+        let aside = aside_files(vfs, folder);
+        if read_only {
+            return Self::Missing { aside };
+        }
         let path = folder.path(DRAFTS);
         match read_held(vfs, &path, &HeldRetry::SAVE) {
-            Err(e) if is_not_found(&e) => Self::Missing,
+            Err(e) if is_not_found(&e) => Self::Missing { aside },
             // Bytes not read may be sound: they stay where the next open reads them again.
             Err(e) => Self::Unreadable {
                 kept_at: None,
                 reason: e.to_string(),
+                aside,
             },
             Ok(bytes) => match serde_json::from_slice(&bytes) {
-                Ok(entries) => Self::Loaded(entries),
+                Ok(entries) => Self::Loaded { entries, aside },
                 Err(e) => Self::Unreadable {
                     kept_at: move_aside(vfs, folder),
                     reason: e.to_string(),
+                    aside,
                 },
             },
         }
     }
 
     /// The entries to judge, whether drafts may be written, and what the person is told.
-    fn into_parts(self) -> (Vec<Entry>, bool, Option<Notice>) {
+    fn into_parts(self) -> (Vec<Entry>, bool, Vec<Notice>) {
+        let told = |aside: Vec<String>| -> Vec<Notice> {
+            aside
+                .into_iter()
+                .map(|path| Notice::FileUnreadable {
+                    path: path.into(),
+                    reason: "drafts an earlier open could not understand were moved here".into(),
+                })
+                .collect()
+        };
         match self {
-            Self::Missing => (Vec::new(), true, None),
-            Self::Loaded(entries) => (entries, true, None),
-            Self::Unreadable { kept_at, reason } => (
-                Vec::new(),
-                kept_at.is_some(),
-                Some(Notice::FileUnreadable {
+            Self::Missing { aside } => (Vec::new(), true, told(aside)),
+            Self::Loaded { entries, aside } => (entries, true, told(aside)),
+            Self::Unreadable {
+                kept_at,
+                reason,
+                aside,
+            } => {
+                let mut notices = told(aside);
+                notices.push(Notice::FileUnreadable {
                     path: kept_at.as_deref().unwrap_or(DRAFTS).into(),
                     reason: reason.into(),
-                }),
-            ),
+                });
+                (Vec::new(), kept_at.is_some(), notices)
+            }
         }
     }
+}
+
+/// The `.tc/drafts.unreadable-N.json` files there now, by N. A folder that cannot be listed
+/// lists none: the next open looks again.
+fn aside_files(vfs: &dyn Vfs, folder: &Folder) -> Vec<String> {
+    let mut found: Vec<(u32, String)> = vfs
+        .read_dir(&folder.path(TC))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == EntryKind::File)
+        .filter_map(|e| {
+            let name = e.name.to_str()?;
+            let n = name
+                .strip_prefix("drafts.unreadable-")?
+                .strip_suffix(".json")?
+                .parse()
+                .ok()?;
+            Some((n, format!("{TC}/{name}")))
+        })
+        .collect();
+    found.sort();
+    found.into_iter().map(|(_, rel)| rel).collect()
 }
 
 /// Moves an unreadable `drafts.json` to a free `.tc/drafts.unreadable-N.json`; its relative
@@ -373,8 +424,9 @@ fn judge(entry: &Entry, fold: &FoldState, signing: &TokenKey) -> Option<(Draft, 
 impl DraftWriter {
     /// Starts the writer of a writable project. The last session's drafts that are still
     /// unsaved are offered and marked so in the file, written before the open returns: from
-    /// then on only *Keep* or *Discard* removes them. The notice says the file could not be
-    /// read; the writer then writes nothing unless its bytes were moved aside first.
+    /// then on only *Keep* or *Discard* removes them. The notices name a file that could not be
+    /// read, where the writer then writes nothing unless its bytes were moved aside first, and
+    /// each file moved aside, this open or an earlier one.
     #[expect(
         clippy::too_many_arguments,
         reason = "the open's parts the writer needs, each from its own step of the open"
@@ -388,15 +440,10 @@ impl DraftWriter {
         hooks: Arc<Hooks>,
         counters: Arc<Counters>,
         read_only: bool,
-    ) -> (Self, Option<Notice>) {
+    ) -> (Self, Vec<Notice>) {
         // A read-only open offers nothing (§5.14): keeping a draft would write, and the
         // computer that holds the project may still be writing the same drafts.
-        let found = if read_only {
-            Found::Missing
-        } else {
-            Found::read(&*vfs, &folder)
-        };
-        let (entries, writes, notice) = found.into_parts();
+        let (entries, writes, notices) = Found::read(&*vfs, &folder, read_only).into_parts();
         let next_id = AtomicU64::new(1);
         let mut changed = false;
         let mut offered = Vec::new();
@@ -448,7 +495,7 @@ impl DraftWriter {
             run,
         };
         if read_only || !writes {
-            return (writer, notice);
+            return (writer, notices);
         }
         let (tx, rx) = mpsc::channel::<Msg>();
         let mut state = Writer {
@@ -541,7 +588,7 @@ impl DraftWriter {
             .ok();
         *writer.tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
         *writer.thread.lock().unwrap_or_else(|e| e.into_inner()) = thread;
-        (writer, notice)
+        (writer, notices)
     }
 
     fn send(&self, msg: Msg) -> bool {
