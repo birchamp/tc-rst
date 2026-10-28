@@ -705,7 +705,7 @@ fn open_inner(
         gates.lock = None;
     }
     // O12.
-    let drafts = Arc::new(DraftWriter::start(
+    let (drafts, drafts_notice) = DraftWriter::start(
         vfs.clone(),
         folder.clone(),
         &project.fold,
@@ -714,7 +714,11 @@ fn open_inner(
         hooks.clone(),
         counters.clone(),
         read_only,
-    ));
+    );
+    if let Some(notice) = drafts_notice {
+        project.notice(notice, None);
+    }
+    let drafts = Arc::new(drafts);
     let seq = project.publish();
     // What O9 projected stands for the fold of this snapshot only.
     writer.prerendered_seq = seq;

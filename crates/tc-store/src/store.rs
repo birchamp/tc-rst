@@ -451,8 +451,12 @@ impl Store {
         let staged = Folder::new(&staging);
         for rel in [LOCK, DEVICE] {
             let path = staged.path(rel);
-            if self.env.vfs.metadata(&path).is_ok() {
-                let _ = remove_held(&*self.env.vfs, &path, &HeldRetry::SAVE);
+            // A copy that kept the original's device would write the same (device, seq) pairs.
+            if self.env.vfs.metadata(&path).is_ok()
+                && let Err(e) = remove_held(&*self.env.vfs, &path, &HeldRetry::SAVE)
+            {
+                let _ = remove_dir_all_held(&*self.env.vfs, &staging, &HeldRetry::SAVE);
+                return Err(StoreError::io("remove", &path, e).into());
             }
         }
         self.place(&staging, name)

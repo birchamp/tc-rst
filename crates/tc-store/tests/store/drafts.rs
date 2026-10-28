@@ -904,3 +904,143 @@ proptest::proptest! {
         assert_valid_burrito(&rig.fs, &folder);
     }
 }
+
+const DRAFTS: &str = ".tc/drafts.json";
+
+fn unreadable_notices(handle: &ProjectHandle) -> Vec<String> {
+    handle
+        .notices()
+        .into_iter()
+        .filter_map(|n| match n.notice {
+            tc_journal::fold::Notice::FileUnreadable { path, .. } => Some(path.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A drafts file the app cannot understand (damaged, cut short, a newer app's layout) is
+/// never written over: it is moved aside under a name no earlier one holds, the person is
+/// told where, and this session's drafts are written again.
+#[test]
+fn an_unreadable_drafts_file_is_moved_aside_and_the_person_is_told() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.close().unwrap();
+    let damaged: [&[u8]; 3] = [
+        b"\x00\x00garbage",
+        br#"[{"field":"words","shown":[],"text":"half a dra"#,
+        br#"{"version":9,"entries":[{"text":"newer layout"}]}"#,
+    ];
+    let mut fs = rig.fs.copy();
+    for (n, bytes) in damaged.iter().enumerate() {
+        fs.put(&folder.join(DRAFTS), bytes, None);
+        let (rig, handle) = reopen(fs, &folder);
+        let kept = format!(".tc/drafts.unreadable-{}.json", n + 1);
+        assert_eq!(unreadable_notices(&handle), [kept.as_str()]);
+        assert_eq!(rig.fs.peek(&folder.join(&kept)).as_deref(), Some(*bytes));
+        draft(&handle, DraftField::Words, &[verse(1, 2)], "typed after");
+        let fs_after = crashed_after_drafts(&rig, handle);
+        let bytes = fs_after.peek(&folder.join(DRAFTS)).unwrap();
+        let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(entries[0]["text"], "typed after", "drafts are written again");
+        for (i, earlier) in damaged[..=n].iter().enumerate() {
+            let path = folder.join(format!(".tc/drafts.unreadable-{}.json", i + 1));
+            assert_eq!(
+                fs_after.peek(&path).as_deref(),
+                Some(*earlier),
+                "an earlier kept file is never replaced"
+            );
+        }
+        fs = fs_after;
+    }
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(texts_offered(&handle), ["typed after"]);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// Another program holds the drafts file so that it can be neither read nor moved (a
+/// scanner on Windows): it is left as it is, nothing writes over it this session, and the
+/// next open, once it is free, offers the drafts in it.
+#[test]
+fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 2)], "last session's text");
+    let fs = crashed_after_drafts(&rig, handle);
+    let path = folder.join(DRAFTS);
+    let before = fs.peek(&path).unwrap();
+    fs.set_unreadable(&path, true);
+    fs.set_busy(&path, true);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(unreadable_notices(&handle), [DRAFTS]);
+    assert!(handle.offered_drafts().is_empty());
+    draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
+    handle.wait_idle();
+    assert_eq!(rig.fs.peek(&path), Some(before.clone()), "the held file is untouched");
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&path), Some(before));
+    rig.fs.set_unreadable(&path, false);
+    rig.fs.set_busy(&path, false);
+    let fs = rig.fs.copy();
+    let (rig, handle) = reopen(fs, &folder);
+    assert!(unreadable_notices(&handle).is_empty());
+    assert_eq!(texts_offered(&handle), ["last session's text"]);
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}
+
+/// A drafts file that cannot be read, though it could be moved, stays where it is: its bytes
+/// may be sound, and the next open offers them.
+#[test]
+fn a_drafts_file_that_cannot_be_read_is_not_moved_aside() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    draft(&handle, DraftField::Words, &[verse(1, 2)], "last session's text");
+    let fs = crashed_after_drafts(&rig, handle);
+    let path = folder.join(DRAFTS);
+    let before = fs.peek(&path).unwrap();
+    fs.set_unreadable(&path, true);
+    let (rig, handle) = reopen(fs, &folder);
+    assert_eq!(unreadable_notices(&handle), [DRAFTS]);
+    draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
+    handle.wait_idle();
+    handle.close().unwrap();
+    assert_eq!(rig.fs.peek(&path), Some(before), "the file is neither moved nor replaced");
+    rig.fs.set_unreadable(&path, false);
+    let (_rig, handle) = reopen(rig.fs.copy(), &folder);
+    assert_eq!(texts_offered(&handle), ["last session's text"]);
+    handle.close().unwrap();
+}
+
+/// An entry of a field this version does not know, written by a newer app, stays in the file
+/// while this version writes its own drafts beside it.
+#[test]
+fn a_newer_apps_draft_entry_is_kept_in_the_file() {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    handle.close().unwrap();
+    let newer = serde_json::json!({
+        "field": "someNewerField",
+        "shown": [],
+        "text": "typed in a newer app",
+        "at": 7,
+        "offered": true
+    });
+    let fs = rig.fs.copy();
+    fs.put(
+        &folder.join(DRAFTS),
+        &serde_json::to_vec(&[&newer]).unwrap(),
+        None,
+    );
+    let (rig, handle) = reopen(fs, &folder);
+    assert!(unreadable_notices(&handle).is_empty());
+    draft(&handle, DraftField::Words, &[verse(1, 2)], "typed here");
+    handle.wait_idle();
+    let bytes = rig.fs.peek(&folder.join(DRAFTS)).unwrap();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
+    assert!(entries.contains(&newer), "{entries:#?}");
+    assert!(entries.iter().any(|e| e["text"] == "typed here"));
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+}

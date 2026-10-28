@@ -20,11 +20,11 @@
 //! a revert. A draft whose token this installation cannot verify any more (a new installation
 //! secret) is offered as text, and *Keep* writes it with no parents (R20).
 
-use crate::atomic::{SyncDir, atomic_create_dirs, atomic_write};
+use crate::atomic::{HeldRetry, SyncDir, atomic_create_dirs, atomic_write, read_held, rename_held};
 use crate::counters::Counters;
 use crate::hooks::{Hooks, Point};
-use crate::layout::{Folder, TC};
-use crate::vfs::Vfs;
+use crate::layout::{DRAFTS, Folder, TC};
+use crate::vfs::{Vfs, is_not_found};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tc_journal::command::{Draft, DraftField};
-use tc_journal::fold::FoldState;
+use tc_journal::fold::{FoldState, Notice};
 use tc_journal::record::{CheckValue, Record, VerseValue};
 use tc_journal::{BookId, RecordKey, ShownToken, TokenKey, WallTime};
 
@@ -165,6 +165,8 @@ struct Writer {
     current: BTreeMap<String, Entry>,
     /// The texts an open offered, by number, until they are kept or discarded.
     offered: BTreeMap<u64, Entry>,
+    /// Entries of a field this version does not know (a newer app's), kept as they are.
+    foreign: Vec<Entry>,
     dirty: bool,
     last: Option<Instant>,
     hooks: Arc<Hooks>,
@@ -178,7 +180,12 @@ impl Writer {
             return true;
         }
         self.hooks.wait(Point::BeforeDraftWrite);
-        let list: Vec<&Entry> = self.offered.values().chain(self.current.values()).collect();
+        let list: Vec<&Entry> = self
+            .offered
+            .values()
+            .chain(self.current.values())
+            .chain(&self.foreign)
+            .collect();
         let bytes = serde_json::to_vec(&list).unwrap_or_default();
         let dir = self.folder.path(TC);
         let written = atomic_create_dirs(&*self.vfs, &dir).is_ok()
@@ -193,12 +200,67 @@ impl Writer {
     }
 }
 
-/// Reads `.tc/drafts.json`.
-fn read_entries(vfs: &dyn Vfs, folder: &Folder) -> Vec<Entry> {
-    vfs.read(&folder.path(crate::layout::DRAFTS))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Vec<Entry>>(&bytes).ok())
-        .unwrap_or_default()
+/// What the open found at `.tc/drafts.json`. Only `Unreadable` without `kept_at` stops this
+/// session's draft writes: the list would replace bytes nobody has read.
+enum Found {
+    Missing,
+    Loaded(Vec<Entry>),
+    /// Unreadable or not understood (held, damaged, a newer app's format). Its bytes are
+    /// never written over: moved to `kept_at`, or, when they could not be moved, left where
+    /// they are.
+    Unreadable {
+        kept_at: Option<String>,
+        reason: String,
+    },
+}
+
+impl Found {
+    fn read(vfs: &dyn Vfs, folder: &Folder) -> Self {
+        let path = folder.path(DRAFTS);
+        match read_held(vfs, &path, &HeldRetry::SAVE) {
+            Err(e) if is_not_found(&e) => Self::Missing,
+            // Bytes not read may be sound: they stay where the next open reads them again.
+            Err(e) => Self::Unreadable {
+                kept_at: None,
+                reason: e.to_string(),
+            },
+            Ok(bytes) => match serde_json::from_slice(&bytes) {
+                Ok(entries) => Self::Loaded(entries),
+                Err(e) => Self::Unreadable {
+                    kept_at: move_aside(vfs, folder),
+                    reason: e.to_string(),
+                },
+            },
+        }
+    }
+
+    /// The entries to judge, whether drafts may be written, and what the person is told.
+    fn into_parts(self) -> (Vec<Entry>, bool, Option<Notice>) {
+        match self {
+            Self::Missing => (Vec::new(), true, None),
+            Self::Loaded(entries) => (entries, true, None),
+            Self::Unreadable { kept_at, reason } => (
+                Vec::new(),
+                kept_at.is_some(),
+                Some(Notice::FileUnreadable {
+                    path: kept_at.as_deref().unwrap_or(DRAFTS).into(),
+                    reason: reason.into(),
+                }),
+            ),
+        }
+    }
+}
+
+/// Moves an unreadable `drafts.json` to a free `.tc/drafts.unreadable-N.json`; its relative
+/// path, or `None` when it stays where it is.
+fn move_aside(vfs: &dyn Vfs, folder: &Folder) -> Option<String> {
+    let rel = (1..1000)
+        .map(|n| format!("{TC}/drafts.unreadable-{n}.json"))
+        .find(|rel| matches!(vfs.metadata(&folder.path(rel)), Err(e) if is_not_found(&e)))?;
+    // No flush of its own: the first list written next flushes `.tc`, this rename with it,
+    // and until then a power cut only puts the same bytes back at `drafts.json`.
+    rename_held(vfs, &folder.path(DRAFTS), &folder.path(&rel), &HeldRetry::SAVE).ok()?;
+    Some(rel)
 }
 
 fn same_text(a: &str, b: &str) -> bool {
@@ -305,7 +367,8 @@ fn judge(entry: &Entry, fold: &FoldState, signing: &TokenKey) -> Option<(Draft, 
 impl DraftWriter {
     /// Starts the writer of a writable project. The last session's drafts that are still
     /// unsaved are offered and marked so in the file, written before the open returns: from
-    /// then on only *Keep* or *Discard* removes them.
+    /// then on only *Keep* or *Discard* removes them. The notice says the file could not be
+    /// read; the writer then writes nothing unless its bytes were moved aside first.
     #[expect(
         clippy::too_many_arguments,
         reason = "the open's parts the writer needs, each from its own step of the open"
@@ -319,32 +382,36 @@ impl DraftWriter {
         hooks: Arc<Hooks>,
         counters: Arc<Counters>,
         read_only: bool,
-    ) -> Self {
+    ) -> (Self, Option<Notice>) {
         // A read-only open offers nothing (§5.14): keeping a draft would write, and the
         // computer that holds the project may still be writing the same drafts.
-        let entries = if read_only {
-            Vec::new()
+        let found = if read_only {
+            Found::Missing
         } else {
-            read_entries(&*vfs, &folder)
+            Found::read(&*vfs, &folder)
         };
+        let (entries, writes, notice) = found.into_parts();
         let next_id = AtomicU64::new(1);
         let mut changed = false;
         let mut offered = Vec::new();
         let mut kept = BTreeMap::new();
         let mut current = BTreeMap::new();
+        let mut foreign = Vec::new();
         for mut entry in entries {
+            let Some(field) = field_of(&entry.field) else {
+                foreign.push(entry);
+                continue;
+            };
             // The same run's page typed it (a reopen in the same run): it holds that typing,
             // so the entry stays its current draft, and a later run's open judges it.
             if !entry.offered && entry.run.is_some() && entry.run == run {
-                if let Some(field) = field_of(&entry.field) {
-                    let keys: Vec<RecordKey> = entry
-                        .shown
-                        .iter()
-                        .filter_map(|t| ShownToken::parse_unverified(t).ok())
-                        .map(|t| t.key().clone())
-                        .collect();
-                    current.insert(draft_key(&field, &keys), entry);
-                }
+                let keys: Vec<RecordKey> = entry
+                    .shown
+                    .iter()
+                    .filter_map(|t| ShownToken::parse_unverified(t).ok())
+                    .map(|t| t.key().clone())
+                    .collect();
+                current.insert(draft_key(&field, &keys), entry);
                 continue;
             }
             let Some((draft, verified)) = judge(&entry, fold, signing) else {
@@ -374,8 +441,8 @@ impl DraftWriter {
             thread: Mutex::new(None),
             run,
         };
-        if read_only {
-            return writer;
+        if read_only || !writes {
+            return (writer, notice);
         }
         let (tx, rx) = mpsc::channel::<Msg>();
         let mut state = Writer {
@@ -383,6 +450,7 @@ impl DraftWriter {
             folder,
             current,
             offered: kept,
+            foreign,
             dirty: changed,
             last: None,
             hooks,
@@ -467,7 +535,7 @@ impl DraftWriter {
             .ok();
         *writer.tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
         *writer.thread.lock().unwrap_or_else(|e| e.into_inner()) = thread;
-        writer
+        (writer, notice)
     }
 
     fn send(&self, msg: Msg) -> bool {
