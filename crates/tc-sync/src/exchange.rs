@@ -278,22 +278,22 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
         .map_err(|e| ExchangeError::Damaged(e.to_string()))?;
     let mut files = BTreeMap::new();
     let mut damaged = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for entry in entries {
-        let raw = entry.name.replace('\\', "/");
+        let name = entry.name;
         let symlink = entry.unix_mode.is_some_and(|m| m & 0o170_000 == 0o120_000);
-        if !entry.enclosed
-            || raw.starts_with('/')
-            || raw.split('/').any(|p| p == "..")
-            || raw.chars().nth(1) == Some(':')
-            || symlink
+        // A name is refused, never rewritten: rewriting `a\b` to `a/b`, or keeping one of
+        // two equal names, would merge two entries into one.
+        let repeated = !seen.insert(name.clone());
+        if !entry.enclosed || symlink || repeated || tc_burrito::check_project_path(&name).is_err()
         {
-            return Err(ExchangeError::Damaged(format!("the entry {raw:?}")));
+            return Err(ExchangeError::Damaged(format!("the entry {name:?}")));
         }
         match entry.bytes {
             Ok(bytes) => {
-                files.insert(raw, bytes);
+                files.insert(name, bytes);
             }
-            Err(_) => damaged.push(raw),
+            Err(_) => damaged.push(name),
         }
     }
     Ok(ReadZip { files, damaged })
@@ -648,6 +648,75 @@ mod tests {
         clippy::panic,
         reason = "test code: a failed unwrap is a failed test"
     )]
+
+    use super::{ExchangeError, identify};
+    use std::io::Write;
+
+    /// A zip of `names`, each holding `{}`, with `rename` applied to the finished bytes: the
+    /// zip writer refuses two equal names, a file from elsewhere need not.
+    fn zip_file(
+        dir: &std::path::Path,
+        names: &[&str],
+        rename: Option<(&str, &str)>,
+    ) -> std::path::PathBuf {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for name in names {
+            writer
+                .start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(b"{}").unwrap();
+        }
+        let mut bytes = writer.finish().unwrap().into_inner();
+        if let Some((from, to)) = rename {
+            let (from, to) = (from.as_bytes(), to.as_bytes());
+            assert_eq!(from.len(), to.len());
+            let mut at = 0;
+            while let Some(found) = bytes[at..].windows(from.len()).position(|w| w == from) {
+                let start = at + found;
+                bytes[start..start + to.len()].copy_from_slice(to);
+                at = start + to.len();
+            }
+        }
+        let path = dir.join(format!("{}.zip", names.len()));
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    /// No name is rewritten or merged to fit: each refusal names the entry as it is.
+    #[test]
+    fn an_entry_name_that_does_not_fit_is_damaged_not_rewritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let entry = |name: &str| format!("the entry {name:?}");
+        for (names, rename, why) in [
+            (&["metadata.json", "a/b", "a\\b"][..], None, entry("a\\b")),
+            (
+                &["metadata.json", "x.usfm", "y.usfm"][..],
+                Some(("y.usfm", "x.usfm")),
+                "two entries have one name".to_owned(),
+            ),
+            (
+                &["metadata.json", "ingredients/book.usfm "][..],
+                None,
+                entry("ingredients/book.usfm "),
+            ),
+            (
+                &["metadata.json", "ingredients/con.usfm"][..],
+                None,
+                entry("ingredients/con.usfm"),
+            ),
+            (&["metadata.json", "ab:c"][..], None, entry("ab:c")),
+        ] {
+            let dir = dir
+                .path()
+                .join(why.replace(['/', '\\', ':', ' ', '"'], "_"));
+            std::fs::create_dir_all(&dir).unwrap();
+            let refused = identify(&zip_file(&dir, names, rename));
+            assert!(
+                matches!(&refused, Err(ExchangeError::Damaged(what)) if *what == why),
+                "{names:?}: {refused:?}"
+            );
+        }
+    }
 
     #[test]
     fn civil_dates() {

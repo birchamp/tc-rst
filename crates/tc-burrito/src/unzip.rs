@@ -32,6 +32,8 @@ pub enum ZipReadError {
     EntryTooLarge { name: String },
     #[error("the file is too large")]
     TooLarge,
+    #[error("two entries have one name")]
+    RepeatedName,
 }
 
 /// One file entry of a zip.
@@ -51,10 +53,18 @@ pub fn read_zip(
     reader: impl Read + Seek,
     limits: ZipLimits,
 ) -> Result<Vec<ZipEntry>, ZipReadError> {
-    let mut zip = zip::ZipArchive::new(reader).map_err(ZipReadError::NotAZip)?;
+    let zip = zip::ZipArchive::new(reader).map_err(ZipReadError::NotAZip)?;
     if zip.len() > limits.entries {
         return Err(ZipReadError::TooManyEntries { count: zip.len() });
     }
+    let (start, len) = (zip.central_directory_start(), zip.len());
+    let mut reader = zip.into_inner();
+    let records = tc_core::central_directory_records(&mut reader, start, len + 1)
+        .map_err(|e| ZipReadError::NotAZip(e.into()))?;
+    if records != len {
+        return Err(ZipReadError::RepeatedName);
+    }
+    let mut zip = zip::ZipArchive::new(reader).map_err(ZipReadError::NotAZip)?;
     let mut out = Vec::new();
     let mut total = 0u64;
     for index in 0..zip.len() {
@@ -132,6 +142,21 @@ mod tests {
             .map(|e| (e.name.as_str(), e.bytes.as_ref().unwrap().len()))
             .collect();
         assert_eq!(read, [("a", 100), ("b/c", 50)]);
+    }
+
+    /// The zip crate keeps one entry per name; a second entry of one name must not vanish.
+    #[test]
+    fn a_name_given_twice_is_refused() {
+        let mut zip = zip_of(&[("a", b"1"), ("b", b"2")]);
+        for at in 0..zip.len() {
+            if zip[at..].starts_with(b"PK\x01\x02") || zip[at..].starts_with(b"PK\x03\x04") {
+                let name = at + if zip[at + 2] == 1 { 46 } else { 30 };
+                if zip[name] == b'b' {
+                    zip[name] = b'a';
+                }
+            }
+        }
+        assert!(matches!(read(zip), Err(ZipReadError::RepeatedName)));
     }
 
     #[test]

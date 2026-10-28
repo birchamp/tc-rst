@@ -80,7 +80,7 @@ pub use repos::{
     StageReleases, Tag,
 };
 pub use secret::{Credentials, OneTimeCode, Password, Session, Token};
-pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names, escapes_root, unpack_zip};
+pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names, unpack_zip};
 pub use verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
 #[cfg(windows)]
 pub use winproxy::WinHttpFinder;

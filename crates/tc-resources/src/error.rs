@@ -129,6 +129,7 @@ impl From<NameProblem> for Refusal {
     /// when this crate compared names itself.
     fn from(problem: NameProblem) -> Self {
         match problem {
+            NameProblem::EscapesRoot(path) => Refusal::EscapesRoot(path),
             NameProblem::NotPortable { path, reason } => Refusal::NotPortable { path, reason },
             NameProblem::Duplicate(path) | NameProblem::Colliding { second: path, .. } => {
                 Refusal::DuplicateEntry(path)

@@ -227,6 +227,9 @@ mod tests {
             ),
             ("c:evil.usfm", tc_burrito::PathRule::ForbiddenChar(':')),
             ("aux.usfm", tc_burrito::PathRule::ReservedName),
+            ("book.usfm ", tc_burrito::PathRule::TrailingSpace),
+            ("book.usfm.", tc_burrito::PathRule::TrailingDot),
+            ("PROGRA~1", tc_burrito::PathRule::ShortName),
         ] {
             let refused = tree_files(&repo, &tree_named(&repo, name));
             assert!(

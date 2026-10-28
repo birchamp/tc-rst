@@ -6,10 +6,10 @@
 //! two entries into one path:
 //!
 //! - a name that could escape the archive's folder on any platform ([`escapes_root`]);
-//! - a name Windows cannot write, or would write under another name ([`portability_problem`]);
+//! - a name Windows cannot write, or would write under another name ([`tc_core::check_path`]);
 //! - two names that Windows or macOS would store as one file ([`collision_key`]).
 //!
-//! [`check_names`] applies the last two to any list of paths, so a crate that writes files
+//! [`check_names`] applies all three to any list of paths, so a crate that writes files
 //! from another source (an install into a store) refuses the same names.
 
 use crate::error::VerificationError;
@@ -73,8 +73,19 @@ pub(crate) fn unpack_from<R: Read + Seek>(
     layout: Layout,
     max_unpacked: u64,
 ) -> Result<Unpacked, VerificationError> {
-    let mut archive =
-        zip::ZipArchive::new(zip).map_err(|e| VerificationError::NotAZip(e.to_string()))?;
+    let not_a_zip = |e: zip::result::ZipError| VerificationError::NotAZip(e.to_string());
+    let archive = zip::ZipArchive::new(zip).map_err(not_a_zip)?;
+    // The zip reader keeps one entry per name, so a repeated name would vanish here.
+    let (start, len) = (archive.central_directory_start(), archive.len());
+    let mut zip = archive.into_inner();
+    let records = tc_core::central_directory_records(&mut zip, start, len + 1)
+        .map_err(|e| not_a_zip(e.into()))?;
+    if records != len {
+        return Err(VerificationError::NotAZip(
+            "two entries have one name".to_owned(),
+        ));
+    }
+    let mut archive = zip::ZipArchive::new(zip).map_err(not_a_zip)?;
     let comment = archive.comment().to_vec();
     let mut entries = Vec::with_capacity(archive.len());
     let mut total: u64 = 0;
@@ -199,11 +210,8 @@ fn strip_and_collect(
         if !seen.insert(relative.clone()) {
             return Err(VerificationError::DuplicateEntry(relative));
         }
-        if let Some(reason) = portability_problem(&relative) {
-            return Err(VerificationError::NotPortable {
-                path: relative,
-                reason,
-            });
+        if let Some(problem) = name_problem(&relative) {
+            return Err(problem.into());
         }
         if entry.folder {
             folders.insert(relative);
@@ -235,31 +243,19 @@ fn mode_of(unix_mode: Option<u32>) -> FileMode {
     }
 }
 
-/// Whether a zip entry name could write outside the unpacked folder on any platform.
-/// Refused: an absolute path, any drive prefix (`C:x` is relative to drive C's current
-/// folder), a NUL, a backslash (a separator on Windows), and any segment that is empty,
-/// `.`, or all dots after `..` (`..`, `...`, `.. `), since Windows strips trailing dots and
-/// spaces. A folder's one trailing `/` is allowed.
-pub fn escapes_root(name: &str) -> bool {
+/// Whether a zip entry name could write outside the unpacked folder on any platform
+/// ([`tc_core::PathProblem::leaves_folder`]). A folder's one trailing `/` is allowed.
+fn escapes_root(name: &str) -> bool {
     let body = name.strip_suffix('/').unwrap_or(name);
-    let bytes = body.as_bytes();
-    let drive_prefix = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
-    body.is_empty()
-        || body.starts_with('/')
-        || body.contains('\\')
-        || body.contains('\0')
-        || drive_prefix
-        || body.split('/').any(|segment| {
-            segment.is_empty()
-                || segment == "."
-                || (segment.starts_with("..") && segment.bytes().all(|b| b == b'.' || b == b' '))
-        })
+    tc_core::check_path(body).is_err_and(tc_core::PathProblem::leaves_folder)
 }
 
 /// The first name in a list of relative paths that cannot be written to every file system
 /// the app runs on. See [`check_names`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameProblem {
+    /// `path` could name a file outside the folder: see [`tc_core::PathProblem::leaves_folder`].
+    EscapesRoot(String),
     /// Windows cannot write `path` as it is named, or would write it under another name,
     /// or would open another file through it. `reason` says which.
     NotPortable { path: String, reason: &'static str },
@@ -276,6 +272,7 @@ pub enum NameProblem {
 impl From<NameProblem> for VerificationError {
     fn from(problem: NameProblem) -> Self {
         match problem {
+            NameProblem::EscapesRoot(path) => VerificationError::EscapesRoot(path),
             NameProblem::NotPortable { path, reason } => {
                 VerificationError::NotPortable { path, reason }
             }
@@ -299,91 +296,42 @@ impl From<NameProblem> for VerificationError {
 ///   in letter case or Unicode normalization, or a file's name is a folder's (`A` and
 ///   `a/x`). The folders a path implies are compared too.
 ///
-/// This does not look for a path that escapes the folder (`..`, a drive letter, a
-/// backslash): check that first.
+/// A path that could leave the folder (`..`, a drive letter, a backslash, a leading `/`)
+/// is [`NameProblem::EscapesRoot`]; each path is checked by [`tc_core::check_path`].
 pub fn check_names<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), NameProblem> {
     let paths: Vec<&str> = paths.into_iter().collect();
-    for path in &paths {
-        if let Some(reason) = portability_problem(path) {
-            return Err(NameProblem::NotPortable {
-                path: (*path).to_owned(),
-                reason,
-            });
-        }
+    if let Some(problem) = paths.iter().find_map(|path| name_problem(path)) {
+        return Err(problem);
     }
     find_collision(&paths, &BTreeSet::new())
 }
 
-/// Why Windows cannot write `path` as it is named, if it cannot: a character Windows
-/// forbids in a name (`:` would write an NTFS alternate stream), a segment that is nothing
-/// but dots and spaces, a segment that ends in a dot or space (Windows strips them, so the
-/// file lands under another name), a segment shaped like an 8.3 short name such as
-/// `PROGRA~1` (Windows opens another file through its short name), or a device name such
-/// as `CON` or `nul.txt`.
-pub(crate) fn portability_problem(path: &str) -> Option<&'static str> {
-    for segment in path.split('/') {
-        if segment
-            .chars()
-            .any(|c| c.is_ascii_control() || matches!(c, '<' | '>' | ':' | '"' | '|' | '?' | '*'))
-        {
-            return Some("it holds a character Windows does not allow in a name");
+/// Why `path` cannot be written as it is named into a folder ([`tc_core::check_path`]),
+/// in this crate's words.
+fn name_problem(path: &str) -> Option<NameProblem> {
+    use tc_core::PathProblem as P;
+    let reason = match tc_core::check_path(path).err()? {
+        P::Empty
+        | P::Absolute
+        | P::Backslash
+        | P::DrivePrefix
+        | P::Nul
+        | P::EmptySegment
+        | P::CurrentDir
+        | P::ParentDir => return Some(NameProblem::EscapesRoot(path.to_owned())),
+        P::Control(_) | P::ForbiddenChar(_) => {
+            "it holds a character Windows does not allow in a name"
         }
-        if segment.trim_end_matches(['.', ' ']).is_empty() {
-            return Some("a name of only dots and spaces");
+        P::TrailingDot | P::TrailingSpace => {
+            "Windows removes a trailing dot or space, so the name would change"
         }
-        if segment.ends_with(['.', ' ']) {
-            return Some("Windows removes a trailing dot or space, so the name would change");
-        }
-        if is_short_name(segment) {
-            return Some("Windows can open another file through this short name (8.3)");
-        }
-        let stem = segment.split('.').next().unwrap_or_default();
-        if is_windows_device(stem.trim_end_matches(' ')) {
-            return Some("Windows reserves this name for a device");
-        }
-    }
-    None
-}
-
-/// Whether `segment` is shaped like the 8.3 short name Windows gives a long name, as in
-/// `PROGRA~1` or `ABCDEF~1.JSN`: at most one dot; before it at most eight characters, made
-/// of one to six characters other than `~`, then `~` and digits; after it at most three
-/// characters. Only such a name can be one Windows made, so `notes~1.json` (a four-letter
-/// extension) is a long name of its own.
-fn is_short_name(segment: &str) -> bool {
-    let (stem, extension) = segment.split_once('.').unwrap_or((segment, ""));
-    let Some((base, number)) = stem.split_once('~') else {
-        return false;
+        P::ShortName => "Windows can open another file through this short name (8.3)",
+        P::ReservedName => "Windows reserves this name for a device",
     };
-    !extension.contains('.')
-        && extension.chars().count() <= 3
-        && stem.chars().count() <= 8
-        && (1..=6).contains(&base.chars().count())
-        && !number.is_empty()
-        && number.bytes().all(|b| b.is_ascii_digit())
-}
-
-/// `CON`, `PRN`, `AUX`, `NUL`, `COM0`-`COM9`, `LPT0`-`LPT9` (also with superscript ¹²³),
-/// `CONIN$` and `CONOUT$`, in any case.
-pub(crate) fn is_windows_device(stem: &str) -> bool {
-    let upper = stem.to_ascii_uppercase();
-    if matches!(
-        upper.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-    ) {
-        return true;
-    }
-    let Some(rest) = upper
-        .strip_prefix("COM")
-        .or_else(|| upper.strip_prefix("LPT"))
-    else {
-        return false;
-    };
-    let mut chars = rest.chars();
-    matches!(
-        (chars.next(), chars.next()),
-        (Some('0'..='9' | '¹' | '²' | '³'), None)
-    )
+    Some(NameProblem::NotPortable {
+        path: path.to_owned(),
+        reason,
+    })
 }
 
 /// The name a case-insensitive, normalization-insensitive file system sees: each segment in
@@ -391,7 +339,7 @@ pub(crate) fn is_windows_device(stem: &str) -> bool {
 /// character, because macOS folds `σ` and `ς`, `ſ` and `s`, `µ` and `μ` into one letter.
 /// `ı` (dotless i) stays apart from `i`: no supported file system merges them, though `ı`
 /// upper-cases to `I`. Segments ending in a dot or space never get here:
-/// [`portability_problem`] refuses them.
+/// [`tc_core::check_path`] refuses them.
 pub(crate) fn collision_key(path: &str) -> String {
     const DOTLESS_I: char = '\u{131}';
     let nfc = ComposingNormalizerBorrowed::new_nfc();
@@ -578,7 +526,7 @@ pub(crate) mod tests {
             assert!(escapes_root(name), "{name:?}");
         }
         // A colon behind more than one letter, or deeper in the path, names no drive. Such
-        // a name cannot escape, though Windows cannot write it (see `portability_problem`).
+        // a name cannot escape, though Windows cannot write it (see `tc_core::check_path`).
         for name in ["a/b", "a/", "a/b.c", "a/..b", "a/b..", "xy:z/c:d"] {
             assert!(!escapes_root(name), "{name:?}");
         }
@@ -691,8 +639,13 @@ pub(crate) mod tests {
 
     #[test]
     fn names_windows_cannot_write_are_refused() {
+        // Once the top folder is gone, `a:b` names drive A on Windows.
+        assert_eq!(
+            unpack(&wrapped(&["a:b"]), Layout::GitArchive, 1 << 20).unwrap_err(),
+            VerificationError::EscapesRoot("a:b".into())
+        );
         for name in [
-            "a:b",
+            "ab:c",
             "x/c:d",
             "a<b",
             "a>b",
@@ -719,6 +672,7 @@ pub(crate) mod tests {
             "notes/a. .",
             "notes./x",
             "x/a ",
+            "notes/book.tsv ",
             "PROGRA~1",
             "progra~1",
             "ABCDEF~1.JSN",
@@ -751,7 +705,7 @@ pub(crate) mod tests {
             "abcdefg~1",
             "~1",
         ] {
-            assert!(portability_problem(name).is_none(), "{name:?}");
+            assert!(tc_core::check_path(name).is_ok(), "{name:?}");
         }
     }
 
@@ -823,6 +777,31 @@ pub(crate) mod tests {
         assert!(unpack(&zip, Layout::GitArchive, 10_000).is_ok());
     }
 
+    /// The zip crate keeps one entry per name, so `repo/b` renamed to `repo/a` in the bytes
+    /// would vanish, or replace the first, unless the reader counts the records itself.
+    #[test]
+    fn a_name_given_twice_in_the_zip_is_refused() {
+        let mut zip = zip_of(
+            &[
+                ("repo/a", FileMode::Regular, b"1"),
+                ("repo/b", FileMode::Regular, b"2"),
+            ],
+            "",
+        );
+        for at in 0..zip.len() {
+            if zip[at..].starts_with(b"PK\x01\x02") || zip[at..].starts_with(b"PK\x03\x04") {
+                let name = at + if zip[at + 2] == 1 { 46 } else { 30 };
+                if zip[name..].starts_with(b"repo/b") {
+                    zip[name + 5] = b'a';
+                }
+            }
+        }
+        assert_eq!(
+            unpack(&zip, Layout::GitArchive, 1 << 20).unwrap_err(),
+            VerificationError::NotAZip("two entries have one name".into())
+        );
+    }
+
     #[test]
     fn duplicate_names_are_refused() {
         let zip = zip_of(
@@ -850,7 +829,7 @@ pub(crate) mod tests {
     /// paths collide and every path is portable.
     fn segment() -> impl Strategy<Value = String> {
         "[a-z0-9_][a-z0-9_.-]{0,8}".prop_filter("portable and apart", |s| {
-            !s.contains("..") && !s.ends_with('.') && portability_problem(s).is_none()
+            !s.contains("..") && !s.ends_with('.') && tc_core::check_path(s).is_ok()
         })
     }
 
