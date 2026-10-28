@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -48,38 +48,87 @@ pub struct Upload {
 
 /// The uploads of this run. Nothing survives a restart: `uploads/` is emptied at every
 /// start, so an id only ever names a file this run stored.
+///
+/// An upload is Stored here from its last byte until one of three things happens:
+/// - a job takes it ([`Uploads::take`]): it leaves this registry, so neither a drop nor a
+///   sweep can delete the file the job reads, and the job deletes the file when done;
+/// - the person's dialog has no more use for it ([`Uploads::drop_stored`], `uploads/drop`):
+///   it closed, the row was removed, or another file took its place;
+/// - it is still here after the keep time, because the page never said (it was closed, or
+///   lost its connection): [`Uploads::sweep`] forgets it and the caller deletes the file.
 pub struct Uploads {
     dir: PathBuf,
-    entries: Mutex<HashMap<UploadId, Upload>>,
+    keep: Duration,
+    entries: Mutex<HashMap<UploadId, Stored>>,
+}
+
+struct Stored {
+    upload: Upload,
+    since: Instant,
 }
 
 impl Uploads {
-    pub(crate) fn new(dir: PathBuf) -> Self {
+    pub(crate) fn new(dir: PathBuf, keep: Duration) -> Self {
         Self {
             dir,
+            keep,
             entries: Mutex::new(HashMap::new()),
         }
     }
 
-    fn entries(&self) -> MutexGuard<'_, HashMap<UploadId, Upload>> {
+    fn entries(&self) -> MutexGuard<'_, HashMap<UploadId, Stored>> {
         // The map is only inserted into and removed from, so a panic elsewhere while the
         // lock was held cannot have left it half changed.
         self.entries.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The upload with this id, if this run stored one.
+    /// The upload with this id, if this run stored one and nothing took or swept it.
     pub fn get(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().get(id).cloned()
+        self.entries().get(id).map(|stored| stored.upload.clone())
     }
 
-    /// Hands the upload over: it is no longer registered, and the caller owns its file and
-    /// deletes it when done.
+    /// Hands the upload over: it is no longer registered, no sweep touches it, and the caller
+    /// owns its file and deletes it when done.
     pub fn take(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().remove(id)
+        self.entries().remove(id).map(|stored| stored.upload)
+    }
+
+    /// Deletes the upload when it is still Stored, and says whether it was. An upload a job
+    /// took, or one swept or dropped already, is left alone: the job owns its file. Blocking:
+    /// one unlink.
+    pub fn drop_stored(&self, id: &UploadId) -> bool {
+        let Some(stored) = self.entries().remove(id) else {
+            return false;
+        };
+        // Already gone is as good as deleted; a file that cannot be removed now (held by a
+        // virus scanner) is emptied at the next start.
+        let _ = std::fs::remove_file(&stored.upload.path);
+        true
+    }
+
+    /// Forgets the uploads stored for the keep time or longer at `now`, and returns their
+    /// paths, which the caller deletes.
+    pub fn sweep(&self, now: Instant) -> Vec<PathBuf> {
+        let keep = self.keep;
+        let mut expired = Vec::new();
+        self.entries().retain(|_, stored| {
+            let old = now.saturating_duration_since(stored.since) >= keep;
+            if old {
+                expired.push(stored.upload.path.clone());
+            }
+            !old
+        });
+        expired
     }
 
     fn register(&self, upload: Upload) {
-        self.entries().insert(upload.id.clone(), upload);
+        self.entries().insert(
+            upload.id.clone(),
+            Stored {
+                upload,
+                since: Instant::now(),
+            },
+        );
     }
 }
 

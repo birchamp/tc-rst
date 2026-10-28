@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::UploadId;
+use crate::ids::{RequestId, UploadId};
 
 /// `POST`, the upload route.
 pub const UPLOADS_PATH: &str = "/api/v1/uploads";
@@ -74,4 +74,16 @@ pub struct UploadView {
     pub name: String,
     /// The bytes stored.
     pub size: u64,
+}
+
+/// `uploads/drop`: the person's dialog no longer has a use for an upload (it closed, its row
+/// was removed, or another file took its place), so the server deletes it now instead of at
+/// the sweep. An upload a job already took, or one that is gone, is left alone: the answer is
+/// the same.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DropUpload {
+    pub request: RequestId,
+    pub upload: UploadId,
 }

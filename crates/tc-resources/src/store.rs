@@ -55,7 +55,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
-use tc_door43::check_names;
+use tc_door43::{check_names, escapes_root};
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::held;
@@ -392,9 +392,9 @@ impl Installed {
 
     /// How a seeding reports this bundled install when copying it was refused.
     fn refused(&self, why: InstallError) -> StoreError {
-        StoreError::BadReceipt {
+        StoreError::Refused {
             path: self.dir.clone(),
-            problem: why.to_string(),
+            source: Box::new(why),
         }
     }
 
@@ -1087,12 +1087,8 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
     let paths: Vec<&str> = paths.into_iter().collect();
     for path in &paths {
-        let bad = path.is_empty()
-            || path.contains(['\\', ':', '\0'])
-            || path
-                .split('/')
-                .any(|segment| segment.is_empty() || segment.chars().all(|c| c == '.'));
-        if bad {
+        // `escapes_root` allows the trailing `/` a folder entry has; these are files.
+        if escapes_root(path) || path.ends_with('/') {
             return Err(Refusal::EscapesRoot((*path).to_owned()));
         }
     }
@@ -1346,6 +1342,9 @@ mod tests {
             "a\\b",
             "a//b",
             "...",
+            "a/.. /x",
+            "x/",
+            "a\0b",
             "",
         ] {
             let mut s = staged('a');
@@ -1597,6 +1596,18 @@ mod tests {
         assert!(
             report.refused[0].1.to_string().contains(escaping),
             "the refusal names the path: {}",
+            report.refused[0].1
+        );
+        // The refusal keeps its kind, not only its words.
+        assert!(
+            matches!(
+                &report.refused[0].1,
+                StoreError::Refused { source, .. } if matches!(
+                    **source,
+                    InstallError::Refused { refusal: Refusal::EscapesRoot(_), .. }
+                )
+            ),
+            "{:?}",
             report.refused[0].1
         );
         assert!(machine.installed().unwrap().installs.is_empty());

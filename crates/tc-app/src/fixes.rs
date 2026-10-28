@@ -36,6 +36,8 @@ use crate::upgrades::{Recipe, api_rung};
 /// app reads a file through this seam and owns it, and deletes it, once it has taken it.
 pub trait UploadedFiles: Send + Sync {
     fn take(&self, id: &UploadId) -> Option<UploadedFile>;
+    /// Deletes the upload when no job took it; otherwise does nothing. Blocking.
+    fn drop_stored(&self, id: &UploadId);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

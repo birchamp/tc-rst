@@ -208,6 +208,8 @@ macro_rules! endpoint_table {
             command "create/addUsfmBooks": $crate::create::AddUsfmBooks
                 => $crate::create::UsfmAdded;
 
+            command "uploads/drop": $crate::upload::DropUpload => ();
+
             query "resources/sources": $crate::resources::Sources => $crate::resources::SourcesView;
             query [Sources] "resources/catalog": $crate::resources::Catalog
                 => $crate::resources::CatalogView;

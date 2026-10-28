@@ -8,7 +8,7 @@
 use std::path::{Component, Path as FsPath, PathBuf};
 use std::sync::Arc;
 
-use crate::backend::Backend;
+use crate::backend::{Backend, MediaFile};
 use crate::state::AppState;
 use axum::extract::{Path, State};
 use axum::http::{HeaderValue, StatusCode, header};
@@ -179,22 +179,10 @@ pub(crate) async fn obs_picture<B: Backend>(
     State(state): State<AppState<B>>,
     Path((pack, path)): Path<(String, String)>,
 ) -> Response {
-    match state.backend.obs_picture(&pack, &path).await {
-        Some(file) => {
-            let mut response = file.bytes.into_response();
-            let headers = response.headers_mut();
-            headers.insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static(file.content_type),
-            );
-            headers.insert(
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("private, max-age=3600"),
-            );
-            response
-        }
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+    served(
+        state.backend.obs_picture(&pack, &path).await,
+        "private, max-age=3600",
+    )
 }
 
 /// `GET /print/{job}`: the print document of a finished print export (§5.5). It is made for
@@ -203,17 +191,19 @@ pub(crate) async fn print_page<B: Backend>(
     State(state): State<AppState<B>>,
     Path(job): Path<String>,
 ) -> Response {
-    match state.backend.print_page(&job).await {
-        Some(file) => {
-            let mut response = file.bytes.into_response();
-            let headers = response.headers_mut();
-            headers.insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static(file.content_type),
-            );
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-            response
-        }
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+    served(state.backend.print_page(&job).await, "no-store")
+}
+
+fn served(file: Option<MediaFile>, cache: &'static str) -> Response {
+    let Some(file) = file else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut response = file.bytes.into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(file.content_type),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    response
 }

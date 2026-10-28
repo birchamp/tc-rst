@@ -69,6 +69,14 @@ pub enum StoreError {
     },
     #[error("{install} holds no file {file:?}")]
     NoSuchFile { install: String, file: String },
+    /// A bundled install that could not be copied into this store: its files were refused,
+    /// or the copy failed. `source` says why.
+    #[error("the bundled install at {path} was refused: {source}")]
+    Refused {
+        path: PathBuf,
+        #[source]
+        source: Box<InstallError>,
+    },
 }
 
 impl StoreError {

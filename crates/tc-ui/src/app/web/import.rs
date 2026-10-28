@@ -19,6 +19,7 @@ use crate::app::internet::Pending;
 use crate::app::jobs::JobEnd;
 use crate::app::net::NetEnd;
 use crate::app::update_book::{UpdateBookForm, UpdateState};
+use crate::app::uploads::Slot;
 use crate::i18n::{keys, t};
 
 /// A refusal as the damaged panel and the failed step show it: every refusal through
@@ -80,9 +81,24 @@ impl Actions {
             else {
                 return;
             };
+            let opening = self.upload_opening();
             let this = self.clone();
             spawn_local(async move {
                 let upload = this.send_file(&file, &name, bytes).await;
+                if let ImportUpload::Sent(upload) = &upload {
+                    if !this.picked_upload(opening, Slot::Import(id), upload) {
+                        return;
+                    }
+                    // Its row was removed while it was sent.
+                    let listed = this.s().im_slot().with_untracked(|im| {
+                        im.as_ref()
+                            .is_some_and(|im| im.files.iter().any(|f| f.id == id))
+                    });
+                    if !listed {
+                        this.removed_upload(Slot::Import(id));
+                        return;
+                    }
+                }
                 this.patch_im(|im| im.file_sent(id, upload));
             });
         }
@@ -101,6 +117,7 @@ impl Actions {
 
     pub fn import_remove_file(&self, id: u32) {
         self.patch_im(|im| im.remove_file(id));
+        self.removed_upload(Slot::Import(id));
     }
 
     /// "Review files →" (tC4 `importReview`): the files are read on the server, which writes
@@ -259,6 +276,7 @@ impl Actions {
         else {
             return;
         };
+        self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let name = run.details.name.clone();
@@ -285,6 +303,7 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(project) => {
+                    this.uploads_finished();
                     let books = this.s().im_slot().with_untracked(|im| {
                         match im.as_ref().and_then(|im| im.reviewed.as_ref()) {
                             Some(crate::app::forms::Reviewed::Found(review)) => review
@@ -305,11 +324,14 @@ impl Actions {
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => {
+                    // An import that did not make its project keeps its files for a retry.
+                    this.uploads_given_back();
                     let failure = failure_of_error(&error);
                     this.patch_im(|im| im.run_refused(failure, js::random_request_id()));
                     this.refresh_projects();
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    this.uploads_given_back();
                     this.patch_im(|im| im.run_stopped(js::random_request_id()));
                     this.refresh_projects();
                 }
@@ -376,20 +398,42 @@ impl Actions {
             reason = "a file's size is a whole number of bytes below 2^53"
         )]
         let bytes = file.size() as u64;
-        let Some(id) = self
+        let chosen = self
             .s()
             .ub_slot()
             .try_update(|ub| {
-                ub.as_mut()
-                    .map(|ub| ub.choose_file(name.clone(), bytes, js::random_request_id()))
+                ub.as_mut().map(|ub| {
+                    let replaced = ub.file.as_ref().map(|f| f.id);
+                    (
+                        replaced,
+                        ub.choose_file(name.clone(), bytes, js::random_request_id()),
+                    )
+                })
             })
-            .flatten()
-        else {
+            .flatten();
+        let Some((replaced, id)) = chosen else {
             return;
         };
+        if let Some(replaced) = replaced {
+            self.removed_upload(Slot::UpdateBook(replaced));
+        }
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             let upload = this.send_file(&file, &name, bytes).await;
+            if let ImportUpload::Sent(upload) = &upload {
+                if !this.picked_upload(opening, Slot::UpdateBook(id), upload) {
+                    return;
+                }
+                // Another file was chosen while this one was sent.
+                let current = this.s().ub_slot().with_untracked(|ub| {
+                    ub.as_ref().and_then(|ub| ub.file.as_ref()).map(|f| f.id) == Some(id)
+                });
+                if !current {
+                    this.removed_upload(Slot::UpdateBook(id));
+                    return;
+                }
+            }
             this.patch_ub(|ub| ub.file_sent(id, upload));
         });
     }
@@ -408,6 +452,7 @@ impl Actions {
         else {
             return;
         };
+        self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let open = {
@@ -433,14 +478,19 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(report) => {
+                    this.uploads_finished();
                     this.patch_ub(|ub| ub.run_done(report));
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => {
+                    // A refusal before the job leaves the file; a job deleted it already, and
+                    // dropping it then is harmless.
+                    this.uploads_given_back();
                     let failure = failure_of_error(&error);
                     this.patch_ub(|ub| ub.run_refused(failure, js::random_request_id()));
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
+                    this.uploads_given_back();
                     this.patch_ub(|ub| ub.run_stopped(js::random_request_id()));
                 }
             }

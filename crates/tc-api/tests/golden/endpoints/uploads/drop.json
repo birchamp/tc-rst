@@ -1,0 +1,22 @@
+{
+  "path": "uploads/drop",
+  "kind": "command",
+  "net": null,
+  "request": {
+    "request": "2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
+    "upload": "00112233445566778899aabbccddeeff"
+  },
+  "reply": {
+    "type": "ok",
+    "value": null
+  },
+  "error": {
+    "type": "err",
+    "value": {
+      "type": "internal",
+      "value": {
+        "report": 9
+      }
+    }
+  }
+}
