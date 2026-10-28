@@ -299,7 +299,8 @@ impl Store {
         }
     }
 
-    /// The project folders in the projects folder.
+    /// The project folders in the projects folder. A staging folder is never one, even with a
+    /// `project.json`: one whose removal failed may still hold the original's device file.
     pub fn list(&self) -> Result<Vec<PathBuf>, StoreError> {
         let entries = self
             .env
@@ -308,7 +309,7 @@ impl Store {
             .map_err(|e| StoreError::io("list", &self.projects, e))?;
         Ok(entries
             .into_iter()
-            .filter(|e| e.kind == EntryKind::Dir)
+            .filter(|e| e.kind == EntryKind::Dir && !e.name.to_string_lossy().starts_with(STAGING))
             .map(|e| self.projects.join(&e.name))
             .filter(|p| {
                 self.env
