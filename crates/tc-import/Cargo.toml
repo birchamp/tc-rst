@@ -8,16 +8,15 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+tc-burrito = { path = "../tc-burrito" }
 tc-core = { path = "../tc-core" }
 tc-journal = { path = "../tc-journal" }
 tc-usfm = { path = "../tc-usfm" }
 serde_json.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true
-zip.workspace = true
 
 [dev-dependencies]
-tc-burrito = { path = "../tc-burrito" }
 tc-usfm = { path = "../tc-usfm" }
 zip.workspace = true
 tc-store = { path = "../tc-store", features = ["test-hooks"] }

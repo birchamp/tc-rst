@@ -7,7 +7,7 @@
 //! receiving a file again adds nothing).
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tc_journal::fold::{ConflictId, DerivedFile, PersonLabel};
 use tc_store::{CheckpointReason, IntakeReport, ProjectHandle, ReceivedPack};
@@ -18,11 +18,6 @@ const FORMAT_JSON: &str = "ingredients/tc/format.json";
 const METADATA: &str = "metadata.json";
 /// Carried files at the root and foreign entries travel under this dot path (§10.1 E2).
 const ROOT: &str = ".tc-root/";
-
-/// R1's caps.
-const MAX_ENTRY: u64 = 512 << 20;
-const MAX_TOTAL: u64 = 4 << 30;
-const MAX_ENTRIES: usize = 200_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExchangeError {
@@ -275,25 +270,14 @@ struct ReadZip {
 
 fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
     let file = std::fs::File::open(path).map_err(io)?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| ExchangeError::Damaged(e.to_string()))?;
-    if zip.len() > MAX_ENTRIES {
-        return Err(ExchangeError::Damaged(format!("{} entries", zip.len())));
-    }
+    let entries = tc_burrito::read_zip(std::io::BufReader::new(file), tc_burrito::ZIP_LIMITS)
+        .map_err(|e| ExchangeError::Damaged(e.to_string()))?;
     let mut files = BTreeMap::new();
     let mut damaged = Vec::new();
-    let mut total = 0u64;
-    for index in 0..zip.len() {
-        let mut entry = zip
-            .by_index(index)
-            .map_err(|e| ExchangeError::Damaged(e.to_string()))?;
-        if entry.is_dir() {
-            continue;
-        }
-        let raw = entry.name().replace('\\', "/");
-        let symlink = entry
-            .unix_mode()
-            .is_some_and(|m| m & 0o170_000 == 0o120_000);
-        if entry.enclosed_name().is_none()
+    for entry in entries {
+        let raw = entry.name.replace('\\', "/");
+        let symlink = entry.unix_mode.is_some_and(|m| m & 0o170_000 == 0o120_000);
+        if !entry.enclosed
             || raw.starts_with('/')
             || raw.split('/').any(|p| p == "..")
             || raw.chars().nth(1) == Some(':')
@@ -301,17 +285,8 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
         {
             return Err(ExchangeError::Damaged(format!("the entry {raw:?}")));
         }
-        if entry.size() > MAX_ENTRY {
-            return Err(ExchangeError::Damaged(format!("{raw} is too large")));
-        }
-        total += entry.size();
-        if total > MAX_TOTAL {
-            return Err(ExchangeError::Damaged("the file is too large".into()));
-        }
-        let mut bytes = Vec::with_capacity(entry.size() as usize);
-        // The zip crate checks the CRC when the entry is read to its end.
-        match entry.read_to_end(&mut bytes) {
-            Ok(_) => {
+        match entry.bytes {
+            Ok(bytes) => {
                 files.insert(raw, bytes);
             }
             Err(_) => damaged.push(raw),

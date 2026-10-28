@@ -18,7 +18,6 @@
 use crate::{ImportRefusal, SourceFile};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
 use tc_core::BookId;
 use tc_journal::decision::verse_text_md5_v1;
 use tc_journal::fold::{Writer, decode_alignment_record, decode_decisions, records_from_usfm};
@@ -133,29 +132,27 @@ fn get<'a>(files: &'a Files, name: &str) -> Option<&'a [u8]> {
 }
 
 fn unzip(file: &SourceFile) -> Result<Files, ImportRefusal> {
-    let truncated = || ImportRefusal::Truncated {
-        file: file.name.clone(),
-    };
-    let mut archive =
-        zip::ZipArchive::new(std::io::Cursor::new(&file.bytes)).map_err(|_| truncated())?;
-    let mut out = Vec::new();
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|_| truncated())?;
-        let name = entry.name().to_owned();
-        if entry.is_dir() {
-            continue;
-        }
-        let mut bytes = Vec::new();
-        // The zip reader checks each entry's CRC-32 as it ends: tC3 zips have no other check.
-        entry
-            .read_to_end(&mut bytes)
-            .map_err(|_| ImportRefusal::CorruptEntry {
+    let entries = tc_burrito::read_zip(std::io::Cursor::new(&file.bytes), tc_burrito::ZIP_LIMITS)
+        .map_err(|e| match e {
+        tc_burrito::ZipReadError::NotAZip(_) => ImportRefusal::Truncated {
+            file: file.name.clone(),
+        },
+        too_large => ImportRefusal::Unreadable {
+            file: file.name.clone(),
+            problem: too_large.to_string(),
+        },
+    })?;
+    entries
+        .into_iter()
+        .map(|entry| match entry.bytes {
+            // tC3 zips have no check but each entry's CRC-32.
+            Ok(bytes) => Ok((entry.name, bytes)),
+            Err(_) => Err(ImportRefusal::CorruptEntry {
                 file: file.name.clone(),
-                entry: name.clone(),
-            })?;
-        out.push((name, bytes));
-    }
-    Ok(out)
+                entry: entry.name,
+            }),
+        })
+        .collect()
 }
 
 /// The files under the project folder: the export is flat, a re-zipped copy may sit under
