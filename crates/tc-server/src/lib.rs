@@ -84,8 +84,8 @@ pub struct Limits {
     pub upload_cap: fn(UploadFlow) -> u64,
     /// How long a finished file stays available for download: 10 minutes.
     pub downloads_keep: Duration,
-    /// How long a stored upload no job has taken stays: an hour. A person who picks a file
-    /// and leaves the dialog open longer picks it again.
+    /// How long a stored upload that no job took and no dialog dropped stays: a day. The UI
+    /// drops an upload as soon as nothing can use it; this catches a page that never said.
     pub uploads_keep: Duration,
     /// How often expired downloads and uploads are looked for: a minute.
     pub downloads_sweep: Duration,
@@ -100,7 +100,7 @@ impl Default for Limits {
             drain_within: Duration::from_secs(1),
             upload_cap: UploadFlow::cap,
             downloads_keep: Duration::from_secs(10 * 60),
-            uploads_keep: Duration::from_secs(60 * 60),
+            uploads_keep: Duration::from_secs(24 * 60 * 60),
             downloads_sweep: Duration::from_secs(60),
         }
     }

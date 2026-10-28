@@ -227,6 +227,7 @@ unscoped!(
     crate::create::Obs,
     crate::create::AddBlankBooks,
     crate::create::AddUsfmBooks,
+    crate::upload::DropUpload,
     crate::import::Versions,
     crate::import::Run,
 );

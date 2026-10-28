@@ -1466,6 +1466,10 @@ impl tc_app::UploadedFiles for Uploaded {
     fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
         self.0.lock().unwrap().remove(id)
     }
+
+    fn drop_stored(&self, id: &tc_api::ids::UploadId) {
+        self.take(id);
+    }
 }
 
 impl Uploaded {

@@ -414,6 +414,18 @@ impl Handle<AddBlankBooks> for App {
     }
 }
 
+/// The UI's dialog has no more use for an upload: it is deleted now, unless a job took it.
+impl Handle<tc_api::upload::DropUpload> for App {
+    async fn handle(&self, req: tc_api::upload::DropUpload) -> Result<(), ApiError> {
+        let Some(uploads) = self.inner.uploads.get().cloned() else {
+            return Ok(());
+        };
+        // One unlink of a file that may be 4 GiB: off the async threads.
+        let _ = tokio::task::spawn_blocking(move || uploads.drop_stored(&req.upload)).await;
+        Ok(())
+    }
+}
+
 impl Handle<ReviewUsfm> for App {
     async fn handle(&self, req: ReviewUsfm) -> Result<UsfmVerdict, ApiError> {
         Ok(self.upload_verdict(&req.file).await?.0)

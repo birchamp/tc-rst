@@ -28,6 +28,7 @@ use crate::app::client::CallError;
 use crate::app::fix::{self, Fix, FixScreen};
 use crate::app::internet::Pending;
 use crate::app::jobs::JobEnd;
+use crate::app::uploads::Slot;
 use crate::i18n::{keys, t};
 
 thread_local! {
@@ -165,12 +166,17 @@ impl Actions {
         if self.patch_fix(id, |screen| screen.start_sideload(&name)) != Some(true) {
             return;
         }
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             let api = this.runtime().api();
             // The server refuses a file over the flow's cap before it stores it.
             let sent = match api.upload(&file, UploadFlow::GuidedFix).await {
                 Ok(upload) => {
+                    if !this.picked_upload(opening, Slot::Fix, &upload.id) {
+                        return;
+                    }
+                    this.uploads_taken();
                     let request = FixSideload {
                         request: js::random_request_id(),
                         at: asked.at.clone(),
@@ -184,8 +190,13 @@ impl Actions {
             }
             .map_err(|error| why_failed_call(&error));
             match sent {
-                Ok(()) => this.finish_fix(id, &asked.at),
+                Ok(()) => {
+                    this.uploads_finished();
+                    this.finish_fix(id, &asked.at);
+                }
                 Err(reason) => {
+                    // The server may not have taken it; the dialog's close drops it then.
+                    this.uploads_given_back();
                     this.patch_fix(id, |screen| screen.install_failed(&reason));
                 }
             }

@@ -49,12 +49,13 @@ pub struct Upload {
 /// The uploads of this run. Nothing survives a restart: `uploads/` is emptied at every
 /// start, so an id only ever names a file this run stored.
 ///
-/// An upload is Stored here from its last byte until one of two things happens:
-/// - a job takes it ([`Uploads::take`]): it leaves this registry, so no sweep can delete the
-///   file the job reads, and the job deletes the file when done;
-/// - it is still here after the keep time, because the person picked a file and never went
-///   on (closed the dialog, removed the row): [`Uploads::sweep`] forgets it and the caller
-///   deletes the file.
+/// An upload is Stored here from its last byte until one of three things happens:
+/// - a job takes it ([`Uploads::take`]): it leaves this registry, so neither a drop nor a
+///   sweep can delete the file the job reads, and the job deletes the file when done;
+/// - the person's dialog has no more use for it ([`Uploads::drop_stored`], `uploads/drop`):
+///   it closed, the row was removed, or another file took its place;
+/// - it is still here after the keep time, because the page never said (it was closed, or
+///   lost its connection): [`Uploads::sweep`] forgets it and the caller deletes the file.
 pub struct Uploads {
     dir: PathBuf,
     keep: Duration,
@@ -90,6 +91,19 @@ impl Uploads {
     /// owns its file and deletes it when done.
     pub fn take(&self, id: &UploadId) -> Option<Upload> {
         self.entries().remove(id).map(|stored| stored.upload)
+    }
+
+    /// Deletes the upload when it is still Stored, and says whether it was. An upload a job
+    /// took, or one swept or dropped already, is left alone: the job owns its file. Blocking:
+    /// one unlink.
+    pub fn drop_stored(&self, id: &UploadId) -> bool {
+        let Some(stored) = self.entries().remove(id) else {
+            return false;
+        };
+        // Already gone is as good as deleted; a file that cannot be removed now (held by a
+        // virus scanner) is emptied at the next start.
+        let _ = std::fs::remove_file(&stored.upload.path);
+        true
     }
 
     /// Forgets the uploads stored for the keep time or longer at `now`, and returns their

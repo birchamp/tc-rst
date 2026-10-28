@@ -20,7 +20,7 @@ use tc_api::account::{
 use tc_api::door43::{OpenDoor43, ShareOnDoor43, SyncProject};
 use tc_api::feedback::Compose;
 use tc_api::home::{HomeCard, LanguageSuggestion};
-use tc_api::ids::{LocaleId, ProjectRef, ReportId};
+use tc_api::ids::{LocaleId, ProjectRef, ReportId, UploadId};
 use tc_api::jobs::{Phase, Progress};
 use tc_api::net::Set as NetSet;
 use tc_api::prefs::SetLocale;
@@ -49,6 +49,7 @@ use crate::app::sources::SettingsForm;
 use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
 use crate::app::update_book::UpdateBookForm;
+use crate::app::uploads::{Opening, PickedUploads, Slot};
 use crate::i18n::show_locale;
 
 /// Which dialog shows (tC4 `s.modal`, `tC4:src/state.jsx:476`): what the modal host switches
@@ -190,6 +191,15 @@ impl Dialog {
             Self::UpdateBook(_) => DialogKind::UpdateBook,
             Self::SaveForTeammate(_) => DialogKind::SaveForTeammate,
             Self::ReceiveWork(_) => DialogKind::ReceiveWork,
+        }
+    }
+
+    /// The dialog whose files are in use: the one under a sign-in step, which shows again
+    /// after it with its form, else this one.
+    pub fn holder(&self) -> DialogKind {
+        match self {
+            Self::SignIn { under: Some(under) } => under.holder(),
+            other => other.kind(),
         }
     }
 }
@@ -553,6 +563,8 @@ struct Inner {
     /// Each project's last Sync attempt (UI-3): a press after a lost reply sends the same
     /// request, which the server's reply cache answers.
     sync_attempts: std::cell::RefCell<Vec<(ProjectRef, Submit)>>,
+    /// The files the open dialog picked, until a job takes them or they are dropped.
+    uploads: std::cell::RefCell<PickedUploads>,
 }
 
 /// tC4's `actions`, the ones the shell owns. Cheap to clone. The wrapper lets views capture
@@ -572,6 +584,7 @@ impl Actions {
             sign_in_flows: Cell::new(0),
             share_flows: Latest::new(),
             sync_attempts: std::cell::RefCell::default(),
+            uploads: std::cell::RefCell::default(),
         })))
     }
 
@@ -1158,6 +1171,62 @@ impl Actions {
                 patch(im);
             }
         });
+    }
+
+    // ---- the open dialog's uploads (review 2026-10-28 #7) --------------------------------
+
+    /// The dialog open now, for an upload about to start.
+    pub(crate) fn upload_opening(&self) -> Opening {
+        self.0.uploads.borrow().opening()
+    }
+
+    /// An upload landed for `slot`: held while its dialog is open, and whether it is.
+    pub(crate) fn picked_upload(&self, opening: Opening, slot: Slot, id: &UploadId) -> bool {
+        let dropped = self.0.uploads.borrow_mut().pick(opening, slot, id.clone());
+        let kept = !dropped.contains(id);
+        self.drop_uploads(dropped);
+        kept
+    }
+
+    pub(crate) fn removed_upload(&self, slot: Slot) {
+        let dropped = self.0.uploads.borrow_mut().remove(slot);
+        self.drop_uploads(dropped);
+    }
+
+    /// The dialog sent the request that reads its files.
+    pub(crate) fn uploads_taken(&self) {
+        self.0.uploads.borrow_mut().take();
+    }
+
+    /// The request failed; the dialog keeps its files for another try or for Close.
+    pub(crate) fn uploads_given_back(&self) {
+        self.0.uploads.borrow_mut().give_back();
+    }
+
+    /// The job ended and deleted its files.
+    pub(crate) fn uploads_finished(&self) {
+        self.0.uploads.borrow_mut().finish();
+    }
+
+    /// The one close path of every dialog's files: the shell calls it whenever the dialog
+    /// that holds them goes, or the project does.
+    pub(crate) fn close_uploads(&self) {
+        let dropped = self.0.uploads.borrow_mut().close();
+        self.drop_uploads(dropped);
+    }
+
+    /// `uploads/drop` for each: a lost answer leaves the file to the server's sweep.
+    fn drop_uploads(&self, ids: Vec<UploadId>) {
+        for upload in ids {
+            let this = self.clone();
+            spawn_local(async move {
+                let drop = tc_api::upload::DropUpload {
+                    request: js::random_request_id(),
+                    upload,
+                };
+                let _ = this.runtime().api().call(&drop).await;
+            });
+        }
     }
 
     /// Cancel, Close, the ✕ and Escape of Home's dialogs (tC4 `closeModal`), which also ends

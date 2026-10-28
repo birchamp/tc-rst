@@ -246,6 +246,10 @@ impl tc_app::UploadedFiles for Registered {
             path: PathBuf::new(),
         })
     }
+
+    fn drop_stored(&self, id: &tc_api::ids::UploadId) {
+        self.take(id);
+    }
 }
 
 /// #7 (review 2026-10-28): a receive takes its upload from the server's registry as it

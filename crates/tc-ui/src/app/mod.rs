@@ -56,6 +56,7 @@ pub mod translate;
 pub mod understand;
 pub mod update_book;
 pub mod upgrades;
+pub mod uploads;
 
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;

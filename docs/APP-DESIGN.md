@@ -847,6 +847,7 @@ has no `sync: SyncAction`: by the owner's ruling Q2 every shared project, Bible 
 | `export` | `book { at, book }`, `stories { at }` (the Community Checking preview's reads, B8 D1), `preflight`, `run` (job) |
 | `feedback` | `compose` (the shell sends the report, Q-2) |
 | `jobs` | `get`, `cancel` |
+| `uploads` | `drop { request, upload }`: the page has no more use for an upload, which the server deletes unless a job took it *(review 2026-10-28 #7)* |
 | `test` (feature `test-hooks`) | `quiet`, `echo`, `hold`, `release`, `crash`, `fieldStore`, `fieldLog`, `fieldDraft` *(A4b)*, `keychain` *(A8)*, `clock`, `script`, `door43`, `inspect`, `writeTeammate`, `counters`, `reset`, `lastEdit` *(B2)* *(B10: `script` sets how the next `door43/sync` of a project ends, replacing what was set, and queues a `door43/open` failure; teammates' changes come with a scripted sync, so `writeTeammate` is not built)* |
 
 **The endpoints of phase 0** *(A1)*, which unit A1 defined with golden JSON, are `app/hello`, `quit`,
@@ -1826,6 +1827,13 @@ in Chromium against the real `tc4`, with the request filter of AD11
   crash never reads a partial upload back. The UI checks a file's size against its flow's cap
   before it sends it (`UploadFlow::cap`), because a browser still sending when the server
   refuses may report a reset connection instead of the 413. The name is never a path. *(A2)*
+  An upload stays until a job takes it (`Uploads::take`: the job then owns and deletes the file),
+  the page drops it (`uploads/drop`, a no-op for a taken upload), or a day passes with neither
+  (the sweep beside the downloads'). The page's `tc_ui::app::uploads::PickedUploads` holds each
+  dialog's files per slot: a removed row or a file chosen again drops the one before, the
+  request that reads them takes them, a failure gives them back for another try, and the
+  dialog's going (any close, another dialog in its place, leaving the project) drops what is
+  still picked. *(review 2026-10-28 #7)*
   Caps follow
   the flow: an exchange file ("Receive work from a file" in a browser) may be 4 GiB, STORAGE's
   cap for the whole file, whose 512 MiB cap applies to each entry inside it (STORAGE:3027) and

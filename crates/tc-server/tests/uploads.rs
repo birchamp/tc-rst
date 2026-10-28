@@ -384,7 +384,7 @@ fn an_upload_is_a_post_only() {
 }
 
 #[test]
-fn an_upload_no_job_takes_is_forgotten_after_an_hour() {
+fn an_upload_no_job_takes_is_forgotten_after_a_day() {
     let server = TestServer::start(stub());
     let response = server.send(&server.upload_req(UploadFlow::Exchange, "a.tcz", b"a"));
     let stored = Instant::now();
@@ -397,7 +397,7 @@ fn an_upload_no_job_takes_is_forgotten_after_an_hour() {
         "kept for 59 min"
     );
     assert!(uploads.get(&id).is_some());
-    let removed = uploads.sweep(Instant::now() + Duration::from_secs(60 * 60));
+    let removed = uploads.sweep(Instant::now() + Duration::from_secs(24 * 60 * 60));
     assert_eq!(removed, [server.uploads_dir().join(id.as_str())]);
     assert!(uploads.get(&id).is_none());
     assert!(
@@ -431,4 +431,24 @@ fn the_sweeper_deletes_an_abandoned_upload_and_never_a_taken_one() {
     // Several sweeps past the keep time: the job that took the file still reads it.
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(std::fs::read(&taken.path).unwrap(), b"b");
+}
+
+#[test]
+fn a_dropped_upload_is_deleted_and_a_taken_one_is_left_to_its_job() {
+    let server = TestServer::start(stub());
+    let uploads = server.handle.uploads();
+    let picked = view(&server.send(&server.upload_req(UploadFlow::Usfm, "a.usfm", b"a"))).id;
+    let file = server.uploads_dir().join(picked.as_str());
+    assert!(uploads.drop_stored(&picked));
+    assert!(!file.exists(), "a dropped upload is deleted at once");
+    assert!(!uploads.drop_stored(&picked), "a second drop finds nothing");
+
+    let read = view(&server.send(&server.upload_req(UploadFlow::Exchange, "b.tcz", b"b"))).id;
+    let taken = uploads.take(&read).expect("stored");
+    assert!(!uploads.drop_stored(&read), "a taken upload is not dropped");
+    assert_eq!(
+        std::fs::read(&taken.path).unwrap(),
+        b"b",
+        "the job's file stays"
+    );
 }
