@@ -18,7 +18,7 @@
 use crate::{ImportRefusal, SourceFile};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use tc_core::BookId;
+use tc_core::{BookId, VerseSpan};
 use tc_journal::decision::verse_text_md5_v1;
 use tc_journal::fold::{Writer, decode_alignment_record, decode_decisions, records_from_usfm};
 use tc_journal::keys::ToolId;
@@ -73,8 +73,8 @@ pub struct Tc3Book {
     decisions: Vec<(ToolId, Vec<Value>)>,
     /// What the import leaves out, in words: decisions on a check this version has no check
     /// for (a translationNotes row tied to every occurrence (`-1`), which no check list
-    /// holds, `tc-check` `SkipReason::EveryOccurrence`), and alignments no verse of the text
-    /// can hold. The report lists them; the source keeps them.
+    /// holds, `tc-check` `SkipReason::EveryOccurrence`), and alignments with no place in the text.
+    /// The report lists them; the source keeps them.
     pub not_kept: Vec<String>,
 }
 
@@ -264,6 +264,45 @@ fn holds_links(data: &Value) -> bool {
         })
 }
 
+/// Where an alignment record keyed `key` lands in the text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// On the text's verse or span `text`; `exact` when the key names it as the text does.
+    At {
+        text: VerseSpan,
+        exact: bool,
+    },
+    NoVerse,
+    /// The key bridges verses the text bridges otherwise, or not at all.
+    OtherBridge,
+}
+
+/// A verse key finds the verse or span of the text that holds it, as a check decision does
+/// (`decision_text`); a span key must be the text's own span.
+fn place(parts: &BookParts, chapter: u16, key: VerseSpan) -> Place {
+    let Some(verses) = parts.chapters.get(&chapter).map(|c| &c.verses) else {
+        return Place::NoVerse;
+    };
+    let first = match verses.get(&key.start()) {
+        None => return Place::NoVerse,
+        Some(VersePart::Covered { by }) => *by,
+        Some(VersePart::Text(_)) => key.start(),
+    };
+    let Some(VersePart::Text(text)) = verses.get(&first) else {
+        return Place::NoVerse;
+    };
+    let Some(text) = VerseSpan::range(first, text.last.max(first)) else {
+        return Place::NoVerse;
+    };
+    if key == text {
+        Place::At { text, exact: true }
+    } else if key.is_span() {
+        Place::OtherBridge
+    } else {
+        Place::At { text, exact: false }
+    }
+}
+
 fn content(parts: &BookParts, chapter: u16, verse: u16) -> Option<String> {
     match parts.chapters.get(&chapter)?.verses.get(&verse)? {
         VersePart::Text(t) => Some(tc_usfm::codec::join_verse(&t.words, &t.layout)),
@@ -297,7 +336,7 @@ fn alignment(
     file: &str,
     data: &Value,
     chapter: u16,
-    verse: u16,
+    span: VerseSpan,
     content: &str,
     marked: bool,
     source_version: &str,
@@ -334,14 +373,13 @@ fn alignment(
         "targetVerseMd5": verse_text_md5_v1(content).to_hex(),
         "sourceVersion": source_version,
     }));
-    let at = format!("{chapter}:{verse}");
+    let at = format!("{chapter}:{span}");
     let (c, v, mut value) =
-        decode_alignment_record(&record, &at, chapter, verse, verse, Writer::Tc4).map_err(|e| {
-            ImportRefusal::Unreadable {
+        decode_alignment_record(&record, &at, chapter, span.start(), span.end(), Writer::Tc4)
+            .map_err(|e| ImportRefusal::Unreadable {
                 file: file.to_owned(),
                 problem: format!("the alignment of {e}"),
-            }
-        })?;
+            })?;
     let has_links = value.alignments.iter().any(|g| !g.bottom_words.is_empty());
     if has_links {
         let held = word_set(
@@ -621,37 +659,62 @@ fn read_project(file: &SourceFile) -> Result<Project, ImportRefusal> {
             ));
             continue;
         };
-        let mut numbered: Vec<(u16, &Value)> = Vec::new();
+        let mut keyed: Vec<(VerseSpan, &String, &Value)> = Vec::new();
         for (key, data) in &verses {
             match key.parse() {
-                Ok(verse) => numbered.push((verse, data)),
+                Ok(span) => keyed.push((span, key, data)),
                 Err(_) if !holds_links(data) => {}
                 Err(_) => not_kept.push(format!(
-                    "wordAlignment {code} {chapter}:{key} (no such verse in the text)"
+                    "wordAlignment {code} {chapter}:{key} (not a verse number)"
                 )),
             }
         }
-        numbered.sort_by_key(|(n, _)| *n);
-        for (verse, data) in numbered {
-            // No such verse in the text, or one a span covers: nothing to key the record to.
-            let Some(text) = content(&parts, chapter, verse) else {
-                if holds_links(data) {
-                    not_kept.push(format!(
-                        "wordAlignment {code} {chapter}:{verse} (no such verse in the text)"
-                    ));
-                }
+        keyed.sort_by_key(|(span, _, _)| (span.start(), span.end()));
+        // The text's verse or span each record lands on, by its first verse: a record keyed
+        // the way the text is wins, as tC3 shows that one; the others are reported.
+        let mut placed: BTreeMap<u16, (VerseSpan, bool, &String, &Value)> = BTreeMap::new();
+        let mut lost = |key: &String, data: &Value, why: &str| {
+            if holds_links(data) {
+                not_kept.push(format!("wordAlignment {code} {chapter}:{key} ({why})"));
+            }
+        };
+        for (span, key, data) in keyed {
+            match place(&parts, chapter, span) {
+                Place::NoVerse => lost(key, data, "no such verse in the text"),
+                Place::OtherBridge => lost(key, data, "the text bridges these verses differently"),
+                Place::At { text, exact } => match placed.get(&text.start()) {
+                    Some((_, true, _, _)) => {
+                        lost(key, data, "another alignment of this verse was kept")
+                    }
+                    Some((_, false, kept_key, kept_data)) if exact => {
+                        lost(
+                            kept_key,
+                            kept_data,
+                            "another alignment of this verse was kept",
+                        );
+                        placed.insert(text.start(), (text, exact, key, data));
+                    }
+                    Some(_) => lost(key, data, "another alignment of this verse was kept"),
+                    None => {
+                        placed.insert(text.start(), (text, exact, key, data));
+                    }
+                },
+            }
+        }
+        for (text_span, _, key, data) in placed.into_values() {
+            let Some(text) = content(&parts, chapter, text_span.start()) else {
                 continue;
             };
             let marked = get(
                 &files,
-                &format!("{APP}/tools/wordAlignment/invalid/{chapter}/{verse}.json"),
+                &format!("{APP}/tools/wordAlignment/invalid/{chapter}/{key}.json"),
             )
             .is_some();
             alignments.push(alignment(
                 &file.name,
                 data,
                 chapter,
-                verse,
+                text_span,
                 &text,
                 marked,
                 &source_version,
