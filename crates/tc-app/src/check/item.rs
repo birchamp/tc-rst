@@ -487,7 +487,7 @@ impl Handle<Item> for App {
                 },
             )
             .await?
-            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::ToolNotReady)?
             .map_err(|reason| {
                 self.internal(
                     "a check could not be shown",
@@ -589,7 +589,7 @@ impl Handle<CheckArticleRead> for App {
                 |entry, _| entry.derived.items.get(req.index as usize).map(link_of),
             )
             .await?
-            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::ToolNotReady)?
             .ok_or_else(|| ApiError::BadRequest {
                 field: "index".to_owned(),
                 reason: format!("the list has no check {}", req.index),
@@ -680,7 +680,7 @@ impl Handle<Decide> for App {
                 },
             )
             .await?
-            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::ToolNotReady)?
             // The list was derived again and no longer holds the check the detail showed.
             .ok_or(ApiError::NotSaved(NotSaved::LookAgain))?;
         let edit = edit_of(&req.edit, &session.read(), verse.as_ref(), &item)?;
@@ -713,7 +713,7 @@ impl Handle<Decide> for App {
                     )
                     .await
                     .ok()
-                    .and_then(Result::ok)
+                    .flatten()
                     .flatten()
                     .unwrap_or_default();
                 self.inner.counters.add(
@@ -769,7 +769,7 @@ impl App {
                 Some((item.clone(), entry.derived.resolution.clone()))
             })
             .await?
-            .map_err(|_| ApiError::ToolNotReady)?
+            .ok_or(ApiError::ToolNotReady)?
             .ok_or(ApiError::NotSaved(NotSaved::LookAgain))?;
         let read = session.read();
         let shown = match read.projected(shown.key()) {
