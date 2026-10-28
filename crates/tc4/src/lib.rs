@@ -200,7 +200,12 @@ fn serve(args: &Args) -> ExitCode {
     };
     let mut config = ServerConfig::new(args.app_data.clone(), args.ui.clone());
     config.handle_signals = true;
-    let server = match Server::bind(config) {
+    // Inside the runtime, so the signals are taken over before the address line goes out.
+    let bound = {
+        let _inside = runtime.enter();
+        Server::bind(config)
+    };
+    let server = match bound {
         Ok(server) => server,
         Err(error) => return start_failed(error),
     };
