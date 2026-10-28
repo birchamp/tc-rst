@@ -108,61 +108,91 @@ impl IngredientPath {
 
 /// Returns the first rule `text` breaks.
 pub(crate) fn check(text: &str) -> Result<(), PathRule> {
+    broken_rules(text).into_iter().next().map_or(Ok(()), Err)
+}
+
+/// Checks the path of any file of a project, ingredient or not (`README.md`,
+/// `.gitignore`, `LICENSE copy.md`): only the rules that keep it inside the project
+/// folder, and writable, on every platform.
+pub fn check_project_path(text: &str) -> Result<(), PathRule> {
+    broken_rules(text)
+        .into_iter()
+        .find(|rule| {
+            matches!(
+                rule,
+                PathRule::Empty
+                    | PathRule::Absolute
+                    | PathRule::Backslash
+                    | PathRule::EmptySegment
+                    | PathRule::ParentDir
+                    | PathRule::TrailingDot
+                    | PathRule::Control
+                    | PathRule::ForbiddenChar(_)
+                    | PathRule::ReservedName
+            )
+        })
+        .map_or(Ok(()), Err)
+}
+
+/// Every rule `text` breaks, in the order [`check`] reports them.
+fn broken_rules(text: &str) -> Vec<PathRule> {
     if text.is_empty() {
-        return Err(PathRule::Empty);
+        return vec![PathRule::Empty];
     }
+    let mut out = Vec::new();
     if text.contains('\\') {
-        return Err(PathRule::Backslash);
+        out.push(PathRule::Backslash);
     }
     if text.starts_with('/') {
-        return Err(PathRule::Absolute);
+        out.push(PathRule::Absolute);
     }
     for c in text.chars() {
         if c.is_control() {
-            return Err(PathRule::Control);
+            out.push(PathRule::Control);
         }
         if c.is_whitespace() {
-            return Err(PathRule::Whitespace);
+            out.push(PathRule::Whitespace);
         }
         if get_general_category(c) == GeneralCategory::Format {
-            return Err(PathRule::FormatChar);
+            out.push(PathRule::FormatChar);
         }
         if FORBIDDEN.contains(&c) {
-            return Err(PathRule::ForbiddenChar(c));
+            out.push(PathRule::ForbiddenChar(c));
         }
     }
     for segment in text.split('/') {
         if segment.is_empty() {
-            return Err(PathRule::EmptySegment);
+            out.push(PathRule::EmptySegment);
+            continue;
         }
         if segment == ".." {
-            return Err(PathRule::ParentDir);
+            out.push(PathRule::ParentDir);
         }
         if segment.starts_with('.') {
-            return Err(PathRule::Hidden);
+            out.push(PathRule::Hidden);
         }
         if segment.ends_with('.') {
-            return Err(PathRule::TrailingDot);
+            out.push(PathRule::TrailingDot);
         }
         if segment
             .as_bytes()
             .windows(2)
             .any(|pair| matches!(pair, [b'~', digit] if digit.is_ascii_digit()))
         {
-            return Err(PathRule::ShortName);
+            out.push(PathRule::ShortName);
         }
         let device = segment.split('.').next().unwrap_or(segment);
         if RESERVED
             .iter()
             .any(|name| name.eq_ignore_ascii_case(device))
         {
-            return Err(PathRule::ReservedName);
+            out.push(PathRule::ReservedName);
         }
     }
     if fold(text) == METADATA_FILE {
-        return Err(PathRule::MetadataFile);
+        out.push(PathRule::MetadataFile);
     }
-    Ok(())
+    out
 }
 
 /// The form under which Windows and macOS see two names as one file: NFC, then every
@@ -283,6 +313,35 @@ mod tests {
         ];
         for (text, rule) in cases {
             assert_eq!(check(text), Err(rule), "{text:?}");
+        }
+    }
+
+    /// A project file may be hidden, spaced or named like the metadata; it may never leave
+    /// the folder or be unwritable on Windows, even when a rule `check` reports first
+    /// (whitespace here) hides the one that matters.
+    #[test]
+    fn a_project_path_is_checked_only_for_what_keeps_it_inside_the_folder() {
+        for ok in [
+            ".gitignore",
+            "README.md",
+            "LICENSE copy.md",
+            "metadata.json",
+            "a/b~1.txt",
+        ] {
+            assert_eq!(check_project_path(ok), Ok(()), "{ok}");
+        }
+        for (text, rule) in [
+            ("a\\..\\..\\evil", PathRule::Backslash),
+            ("my file/../../evil", PathRule::ParentDir),
+            ("c:evil", PathRule::ForbiddenChar(':')),
+            ("/etc/passwd", PathRule::Absolute),
+            ("a//b", PathRule::EmptySegment),
+            ("dir./x", PathRule::TrailingDot),
+            ("con.txt", PathRule::ReservedName),
+            ("a\nb", PathRule::Control),
+            ("", PathRule::Empty),
+        ] {
+            assert_eq!(check_project_path(text), Err(rule), "{text:?}");
         }
     }
 

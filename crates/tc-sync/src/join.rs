@@ -14,6 +14,12 @@ pub enum JoinError {
     Blocked(SyncBlock),
     #[error("the repository could not be read: {0:?}")]
     Refused(SyncRefusal),
+    /// A file of the repository has a name no project file may have.
+    #[error("the repository holds a file named {path:?}: {rule}")]
+    UnsafePath {
+        path: String,
+        rule: tc_burrito::PathRule,
+    },
     #[error("{0}")]
     Io(String),
     #[error(transparent)]
@@ -110,20 +116,7 @@ fn fetch(
     if let Some(block) = crate::sync::gate_of(&repo, &tree) {
         return Err(JoinError::Blocked(block));
     }
-    let mut files = Vec::new();
-    tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
-        let path = format!("{dir}{}", entry.name().unwrap_or_default());
-        let foreign = path.split('/').any(|part| part.starts_with('.'))
-            && !matches!(path.as_str(), ".gitignore" | ".gitattributes");
-        if entry.kind() == Some(git2::ObjectType::Blob)
-            && !foreign
-            && let Ok(blob) = repo.find_blob(entry.id())
-        {
-            files.push((path, blob.content().to_vec()));
-        }
-        git2::TreeWalkResult::Ok
-    })
-    .map_err(git)?;
+    let files = tree_files(&repo, &tree)?;
     repo.reference(
         &format!("refs/heads/{branch}"),
         commit,
@@ -135,6 +128,38 @@ fn fetch(
     index.read_tree(&tree).map_err(git)?;
     index.write().map_err(git)?;
     Ok((url, files))
+}
+
+/// Every regular file of `tree` but foreign dot paths. A name that could land outside the
+/// staging folder or not be written on Windows refuses the join: libgit2 lets `\\` and `:`
+/// through on every platform.
+fn tree_files(
+    repo: &git2::Repository,
+    tree: &git2::Tree<'_>,
+) -> Result<Vec<(String, Vec<u8>)>, JoinError> {
+    let mut files = Vec::new();
+    let mut unsafe_path = None;
+    let walked = tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
+        let path = format!("{dir}{}", entry.name().unwrap_or_default());
+        let foreign = path.split('/').any(|part| part.starts_with('.'))
+            && !matches!(path.as_str(), ".gitignore" | ".gitattributes");
+        if entry.kind() != Some(git2::ObjectType::Blob) || foreign {
+            return git2::TreeWalkResult::Ok;
+        }
+        if let Err(rule) = tc_burrito::check_project_path(&path) {
+            unsafe_path = Some(JoinError::UnsafePath { path, rule });
+            return git2::TreeWalkResult::Abort;
+        }
+        if let Ok(blob) = repo.find_blob(entry.id()) {
+            files.push((path, blob.content().to_vec()));
+        }
+        git2::TreeWalkResult::Ok
+    });
+    if let Some(refusal) = unsafe_path {
+        return Err(refusal);
+    }
+    walked.map_err(|e| JoinError::Io(e.message().to_owned()))?;
+    Ok(files)
 }
 
 fn write_tree(
@@ -161,4 +186,60 @@ fn write_file(
     atomic_create_dirs(vfs, dir).map_err(|e| JoinError::Io(e.to_string()))?;
     atomic_write(vfs, dir, name, bytes, SyncDir::Now)
         .map_err(|e| JoinError::Io(e.into_inner().to_string()))
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "test code: a failed unwrap is a failed test"
+)]
+mod tests {
+    use super::*;
+
+    /// A tree of one file named `name`, written as Door43 could send it: libgit2's tree
+    /// builder refuses such names, the object database does not.
+    fn tree_named<'r>(repo: &'r git2::Repository, name: &str) -> git2::Tree<'r> {
+        let blob = repo.blob(b"text").unwrap();
+        let mut raw = format!("100644 {name}\0").into_bytes();
+        raw.extend_from_slice(blob.as_bytes());
+        let oid = repo
+            .odb()
+            .unwrap()
+            .write(git2::ObjectType::Tree, &raw)
+            .unwrap();
+        repo.find_tree(oid).unwrap()
+    }
+
+    #[test]
+    fn a_file_name_that_leaves_the_folder_on_windows_refuses_the_join() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        for (name, rule) in [
+            ("ingredients\\..\\..\\evil.usfm", tc_burrito::PathRule::Backslash),
+            ("c:evil.usfm", tc_burrito::PathRule::ForbiddenChar(':')),
+            ("aux.usfm", tc_burrito::PathRule::ReservedName),
+        ] {
+            let refused = tree_files(&repo, &tree_named(&repo, name));
+            assert!(
+                matches!(&refused, Err(JoinError::UnsafePath { path, rule: r }) if path == name && *r == rule),
+                "{name:?}: {refused:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_names_are_written_and_foreign_dot_paths_stay_in_the_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+        for (name, kept) in [
+            ("LICENSE copy.md", true),
+            (".gitignore", true),
+            (".DS_Store", false),
+            ("..", false),
+        ] {
+            let files = tree_files(&repo, &tree_named(&repo, name)).unwrap();
+            let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(names, if kept { vec![name] } else { vec![] }, "{name:?}");
+        }
+    }
 }
