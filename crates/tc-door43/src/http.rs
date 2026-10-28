@@ -183,24 +183,30 @@ impl HttpResponse {
     }
 
     /// The whole body, refused as soon as it is known to exceed `limit` bytes.
-    pub async fn body(mut self, limit: u64) -> Result<Vec<u8>, HttpError> {
-        if self
-            .response
-            .content_length()
-            .is_some_and(|len| len > limit)
-        {
+    pub async fn body(self, limit: u64) -> Result<Vec<u8>, HttpError> {
+        capped_body(self.response, &self.internet, limit).await
+    }
+}
+
+/// The whole body of `response`, refused as soon as it is known to exceed `limit` bytes,
+/// and stopped at the next chunk once the internet switch goes off.
+pub(crate) async fn capped_body(
+    mut response: reqwest::Response,
+    internet: &InternetSwitch,
+    limit: u64,
+) -> Result<Vec<u8>, HttpError> {
+    if response.content_length().is_some_and(|len| len > limit) {
+        return Err(HttpError::TooLarge { limit });
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        internet.check()?;
+        if (body.len() + chunk.len()) as u64 > limit {
             return Err(HttpError::TooLarge { limit });
         }
-        let mut body = Vec::new();
-        while let Some(chunk) = self.response.chunk().await? {
-            self.internet.check()?;
-            if (body.len() + chunk.len()) as u64 > limit {
-                return Err(HttpError::TooLarge { limit });
-            }
-            body.extend_from_slice(&chunk);
-        }
-        Ok(body)
+        body.extend_from_slice(&chunk);
     }
+    Ok(body)
 }
 
 /// A reqwest client behind the internet switch. Clones share their proxy answers.
