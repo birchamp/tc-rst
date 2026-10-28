@@ -111,6 +111,7 @@ test('INV-MERGE-QUEUE-RUNS-CI: ci, app-e2e and shell run in the merge queue', ()
   for (const name of ['ci', 'app-e2e', 'shell']) {
     const on = read(`.github/workflows/${name}.yml`).split(/^jobs:/m)[0];
     assert.match(on, /^  merge_group:$/m, `INV-MERGE-QUEUE-RUNS-CI: ${name}.yml has no merge_group trigger`);
+    assert.match(on, /^  pull_request:$/m, `INV-MERGE-QUEUE-RUNS-CI: ${name}.yml never reports on a pull request, so its required checks keep it out of the queue`);
   }
 });
 

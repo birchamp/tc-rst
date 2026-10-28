@@ -81,6 +81,12 @@ impl Watching {
         })
     }
 
+    /// Whether the thread that gathers changes still runs, so a change it heard still
+    /// reaches the writer.
+    pub(crate) fn gathering(&self) -> bool {
+        self.thread.as_ref().is_some_and(|t| !t.is_finished())
+    }
+
     /// Stops the watches and waits for the thread.
     pub(crate) fn stop(&mut self) {
         self.guards.clear();
