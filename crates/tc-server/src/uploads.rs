@@ -52,7 +52,8 @@ pub struct Upload {
 /// An upload is Stored here from its last byte. While a request reads it, it is Held
 /// ([`Uploads::take`]): neither a drop nor a sweep deletes the file then. It ends in one of
 /// three ways:
-/// - the request used it up ([`Uploads::used_up`]): the file is deleted;
+/// - the request used it up ([`Uploads::used_up`]): no request can take it again, and the file
+///   is deleted once no other request holds it;
 /// - the person's dialog has no more use for it ([`Uploads::drop_stored`], `uploads/drop`):
 ///   it closed, the row was removed, or another file took its place;
 /// - it is still Stored after the keep time, because the page never said (it was closed, or
@@ -77,6 +78,9 @@ enum Use {
     Stored(Instant),
     /// This many requests hold it: a review can read a file while a lookup job reads it too.
     Held(u32),
+    /// A request used it up while this many others still held it: none can take it now, and
+    /// the file is deleted when the last of them is done, so no reader loses it midway.
+    UsedUp(u32),
 }
 
 impl Uploads {
@@ -111,31 +115,50 @@ impl Uploads {
         stored.state = match stored.state {
             Use::Stored(_) => Use::Held(1),
             Use::Held(n) => Use::Held(n.saturating_add(1)),
+            Use::UsedUp(_) => return None,
         };
         Some(stored.upload.clone())
     }
 
     /// A request that held the upload ended without using it up: once no request holds it,
-    /// it is Stored again, from now.
+    /// it is Stored again, from now, unless another request used it up. Blocking: at most
+    /// one unlink.
     pub fn give_back(&self, id: &UploadId) {
-        if let Some(stored) = self.entries().get_mut(id)
-            && let Use::Held(n) = stored.state
-        {
-            stored.state = if n > 1 {
-                Use::Held(n - 1)
-            } else {
-                Use::Stored(Instant::now())
-            };
+        if let Some(path) = self.release(id, false) {
+            // As in `used_up`.
+            let _ = std::fs::remove_file(path);
         }
     }
 
-    /// The request used the upload up: it is forgotten and its file deleted. Blocking: one
-    /// unlink.
+    /// The request used the upload up: no request can take it again, and its file is
+    /// deleted once no other request holds it. Blocking: at most one unlink.
     pub fn used_up(&self, id: &UploadId) {
-        if let Some(stored) = self.entries().remove(id) {
+        if let Some(path) = self.release(id, true) {
             // Already gone is as good as deleted; a file that cannot be removed now (held by
             // a virus scanner) is emptied at the next start.
-            let _ = std::fs::remove_file(&stored.upload.path);
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    /// One request is done with the upload, having used it up or not. Returns the file to
+    /// delete: the upload is forgotten when it was used up and nothing holds it any more.
+    fn release(&self, id: &UploadId, used: bool) -> Option<PathBuf> {
+        let mut entries = self.entries();
+        let next = match (&entries.get(id)?.state, used) {
+            (Use::Stored(_), false) => return None,
+            (Use::Held(n), false) if *n > 1 => Some(Use::Held(n - 1)),
+            (Use::Held(_), false) => Some(Use::Stored(Instant::now())),
+            (Use::Held(n) | Use::UsedUp(n), _) if *n > 1 => Some(Use::UsedUp(n - 1)),
+            (Use::Stored(_) | Use::Held(_), true) | (Use::UsedUp(_), _) => None,
+        };
+        match next {
+            Some(state) => {
+                if let Some(stored) = entries.get_mut(id) {
+                    stored.state = state;
+                }
+                None
+            }
+            None => entries.remove(id).map(|stored| stored.upload.path),
         }
     }
 

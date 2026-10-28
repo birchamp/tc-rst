@@ -480,3 +480,42 @@ fn a_given_back_upload_can_be_taken_again_and_dropped() {
     assert!(uploads.drop_stored(&id));
     assert!(!file.exists(), "dropped once given back");
 }
+
+/// #858: a request that uses up an upload another request still holds leaves that request its
+/// file. Nothing can take the upload again, and the file goes when the last holder is done,
+/// whether it used it up too or gave it back.
+#[test]
+fn a_used_up_upload_stays_until_its_last_holder_is_done() {
+    let server = TestServer::start(stub());
+    let uploads = server.handle.uploads();
+    for second_uses_it in [false, true] {
+        let id = view(&server.send(&server.upload_req(UploadFlow::Usfm, "a.usfm", b"a"))).id;
+        assert!(uploads.take(&id).is_some(), "the job holds it");
+        let review = uploads.take(&id).expect("a review holds it too");
+        uploads.used_up(&id);
+        assert_eq!(
+            std::fs::read(&review.path).unwrap(),
+            b"a",
+            "the review still reads its file"
+        );
+        assert!(uploads.take(&id).is_none(), "a used-up upload is not taken");
+        assert!(uploads.get(&id).is_none());
+        assert!(!uploads.drop_stored(&id), "the review holds it");
+        assert!(
+            uploads
+                .sweep(Instant::now() + Duration::from_secs(48 * 60 * 60))
+                .is_empty(),
+            "a held upload is never swept"
+        );
+        if second_uses_it {
+            uploads.used_up(&id);
+        } else {
+            uploads.give_back(&id);
+        }
+        assert!(
+            !review.path.exists(),
+            "deleted when the last holder is done"
+        );
+        assert!(uploads.take(&id).is_none(), "and forgotten");
+    }
+}

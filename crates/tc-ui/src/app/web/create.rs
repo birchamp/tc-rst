@@ -190,6 +190,7 @@ impl Actions {
             }
             Some(Ok((project, (request, books)))) => (project, request, books),
         };
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             let asked = AddBlankBooks {
@@ -197,7 +198,8 @@ impl Actions {
                 project: project.clone(),
                 books,
             };
-            let mine = |ab: &AddBookForm| ab.project == project;
+            // The dialog that asked, not a newer Add Book on the same project.
+            let mine = |ab: &AddBookForm| ab.project == project && this.upload_current(opening);
             match this.runtime().api().call(&asked).await {
                 Ok(added) => {
                     let open = this
@@ -324,7 +326,9 @@ impl Actions {
                 project: project.clone(),
                 files,
             };
-            let mine = |ab: &AddBookForm| ab.project == project;
+            // The dialog that sent the files, not a newer Add Book on the same project.
+            let sent = taken.opening();
+            let mine = |ab: &AddBookForm| ab.project == project && this.upload_current(sent);
             match this.runtime().api().call(&asked).await {
                 Ok(done) => {
                     // Each file was read and deleted, added or not.

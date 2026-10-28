@@ -50,6 +50,14 @@ pub struct Sent {
     ids: Vec<UploadId>,
 }
 
+impl Sent {
+    /// The dialog that sent the request: its answer changes that dialog only, checked with
+    /// [`PickedUploads::is_current`].
+    pub fn opening(&self) -> Opening {
+        self.opening
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PickedUploads {
     opening: u32,
@@ -261,6 +269,28 @@ mod tests {
             "the newer job still holds its file"
         );
         assert!(uploads.give_back(&new).contains(&id(2)));
+    }
+
+    /// #858: a request's answer names the dialog that sent it, so the page can tell an answer
+    /// for a dialog closed and opened again from one for the dialog open now.
+    #[test]
+    fn a_requests_answer_is_current_only_while_the_dialog_that_sent_it_is_open() {
+        let mut uploads = picked(&[(Slot::Usfm(0), 1)]);
+        let sent = uploads.take();
+        assert!(uploads.is_current(sent.opening()));
+        assert!(uploads.close().is_empty());
+        assert!(!uploads.is_current(sent.opening()), "the dialog closed");
+        let opening = uploads.opening();
+        assert!(uploads.pick(opening, Slot::Usfm(0), id(2)).is_empty());
+        assert!(
+            !uploads.is_current(sent.opening()),
+            "a newer opening is not the one that sent it"
+        );
+        let request = PickedUploads::default().take();
+        assert!(
+            PickedUploads::default().is_current(request.opening()),
+            "a request with no files still names its dialog"
+        );
     }
 
     #[test]
