@@ -24,12 +24,22 @@ pub enum FileState {
     Unreadable(String),
 }
 
+/// A folder under `ingredients/` that could not be listed.
+#[derive(Debug, thiserror::Error)]
+#[error("{path}: {source}")]
+pub struct UnlistedDir {
+    /// The folder, from the project root.
+    pub path: String,
+    #[source]
+    pub source: io::Error,
+}
+
 pub trait ProjectFiles {
     fn inspect(&self, path: &IngredientPath) -> FileState;
 
     /// Every file under `ingredients/`, as `/`-separated paths from the project root,
     /// leaving out hidden entries and `*.bak` files, which tC4 and Pankosmia ignore.
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String>;
+    fn ingredient_dir_files(&self) -> Result<Vec<String>, UnlistedDir>;
 }
 
 /// Files kept out of the burrito: hidden entries (`.git`, `.DS_Store`, temporary files of
@@ -86,20 +96,24 @@ impl ProjectFiles for DirProject {
         }
     }
 
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String> {
+    fn ingredient_dir_files(&self) -> Result<Vec<String>, UnlistedDir> {
         let start = self.root.join(INGREDIENTS_DIR);
+        let unlisted = |path: &str| {
+            let path = path.to_owned();
+            move |source| UnlistedDir { path, source }
+        };
         match fs::symlink_metadata(&start) {
             Ok(metadata) if metadata.is_dir() => {}
             Ok(_) => return Ok(vec![INGREDIENTS_DIR.to_owned()]),
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(error.to_string()),
+            Err(error) => return Err(unlisted(INGREDIENTS_DIR)(error)),
         }
         let mut found = Vec::new();
         let mut pending = vec![(start, INGREDIENTS_DIR.to_owned())];
         while let Some((dir, relative)) = pending.pop() {
-            let entries = fs::read_dir(&dir).map_err(|error| error.to_string())?;
+            let entries = fs::read_dir(&dir).map_err(unlisted(&relative))?;
             for entry in entries {
-                let entry = entry.map_err(|error| error.to_string())?;
+                let entry = entry.map_err(unlisted(&relative))?;
                 let name = entry.file_name().to_string_lossy().into_owned();
                 if is_ignored(&name) {
                     continue;
@@ -107,7 +121,7 @@ impl ProjectFiles for DirProject {
                 let child = format!("{relative}/{name}");
                 // `DirEntry::file_type` does not follow links, so a linked folder is
                 // reported as an entry instead of being walked.
-                let file_type = entry.file_type().map_err(|error| error.to_string())?;
+                let file_type = entry.file_type().map_err(unlisted(&child))?;
                 if file_type.is_dir() {
                     pending.push((entry.path(), child));
                 } else {
@@ -159,7 +173,7 @@ impl ProjectFiles for MemProject {
         }
     }
 
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String> {
+    fn ingredient_dir_files(&self) -> Result<Vec<String>, UnlistedDir> {
         let prefix = format!("{INGREDIENTS_DIR}/");
         Ok(self
             .files

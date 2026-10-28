@@ -562,9 +562,9 @@ fn check_files(document: &Value, files: &(impl ProjectFiles + ?Sized), out: &mut
                 }
             }
         }
-        Err(message) => out.push(Problem::Unreadable {
-            path: crate::files::INGREDIENTS_DIR.to_owned(),
-            message,
+        Err(unlisted) => out.push(Problem::Unreadable {
+            message: unlisted.source.to_string(),
+            path: unlisted.path,
         }),
     }
 }

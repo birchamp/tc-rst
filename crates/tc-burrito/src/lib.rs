@@ -41,7 +41,7 @@ pub use build::{
     check_relationship, check_scope, is_derived_field, render_metadata_unchecked,
 };
 pub use error::{Error, ValueError};
-pub use files::{DirProject, FileState, MemProject, ProjectFiles};
+pub use files::{DirProject, FileState, MemProject, ProjectFiles, UnlistedDir};
 pub use ingredient::{FileFacts, Md5, MimeType};
 pub use json::to_canonical_json;
 pub use model::{

@@ -36,7 +36,11 @@ fn refusal(error: ExchangeError, export: bool) -> ExchangeRefusal {
         ExchangeError::PartlyReceived(reason) => ExchangeRefusal::PartlyReceived { reason },
         ExchangeError::NoHistory
         | ExchangeError::NotCommitted(_)
-        | ExchangeError::Io(_)
+        | ExchangeError::Io { .. }
+        | ExchangeError::Zip { .. }
+        | ExchangeError::Git(_)
+        | ExchangeError::Stopped(_)
+        | ExchangeError::Create(_)
         | ExchangeError::Store(_) => {
             if export {
                 ExchangeRefusal::NotWritten { reason }

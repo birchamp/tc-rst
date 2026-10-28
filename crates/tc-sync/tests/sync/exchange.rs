@@ -598,3 +598,33 @@ async fn an_export_while_a_book_file_is_undecided_is_a_valid_burrito() {
     fs.set_unreadable(&usfm, false);
     a.close().unwrap();
 }
+
+/// An export onto a stick it cannot write names the file it could not make, and a receive
+/// of a file that is gone names that file: "Permission denied" alone tells no one where.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_failed_export_or_receive_names_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let stick = usb(dir.path());
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    save(&a, 1, 1, "Paul, as Ana has it");
+    std::fs::set_permissions(&stick, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let exported = export(&a, &stick, "Ana").await;
+    std::fs::set_permissions(&stick, std::fs::Permissions::from_mode(0o755)).unwrap();
+    match exported {
+        Err(ExchangeError::Io { path, source }) => {
+            assert_eq!(path.parent(), Some(stick.as_path()), "{path:?}");
+            assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+        other => panic!("{other:?}"),
+    }
+    let gone = stick.join("gone.zip");
+    match receive(&a, &gone, "Juan").await {
+        Err(ExchangeError::Io { path, .. }) => assert_eq!(path, gone),
+        other => panic!("{other:?}"),
+    }
+    a.close().unwrap();
+}
