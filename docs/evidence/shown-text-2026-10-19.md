@@ -39,7 +39,7 @@ import keeps the markup. "Bank is not export": on the split plain text, the show
 | split refused | 4 | 4 | 39 | 39 |
 | bank is not export | 49 | 0 | 2 | 0 |
 
-The before column equals the planner's measurement at `c1bfa78` (`.audit/plans/FIX-text.md` F1).
+The before column equals the planner's measurement at `c1bfa78` (`tracker:plans/FIX-text.md` F1).
 Before, the 49 ULT verses whose bank was not the export's were all a footnote joining two words
 (1CO 5:13, 9:20, 10:9, 15:49; 1TH 2:7, 3:2, 4:9; 2CO 1:12, 7:8, 12:15; 2TH 2:13; 2TI 2:3, 2:14,
 4:1; ACT 3:22; COL 4:8; DEU 14:14; EPH 1:15; HEB 1:8, 9:14; LUK 2:33, 10:1, 18:28; MAT 5:22, 5:44,

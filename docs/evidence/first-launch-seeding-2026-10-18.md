@@ -26,7 +26,7 @@ seed. Unit A9 of `docs/APP-DESIGN.md` §10; the budgets are `docs/PERFORMANCE.md
 `AppDeps::production()` and no pacing. The bundled store is read only.
 
 - **First launch** (5 runs): a fresh app data, one process per run so that the peak resident
-  memory (`VmHWM`) is that of one run. Before each run `.audit/tools/evict-page-cache.py` drops
+  memory (`VmHWM`) is that of one run. Before each run `scripts/tools/evict-page-cache.py` drops
   the bundled files from the page cache (`posix_fadvise(DONTNEED)`), so they are read from the
   disk as at a person's first launch and not from the memory the build of the bundle left them
   in. Timed: `App::start`, which makes the plan, and the time from before `App::start` to the
@@ -141,7 +141,7 @@ on this machine:
 cargo build --release -p tc-app --example bundle_store --example seedbench -j 6
 target/release/examples/bundle_store --from bundle/en --out target/a9/bundle-full
 target/release/examples/seedbench --bundle target/a9/bundle-full --first 5 --repeat 20 \
-  --close 5 --evict .audit/tools/evict-page-cache.py --out target/a9/seedbench.json
+  --close 5 --evict scripts/tools/evict-page-cache.py --out target/a9/seedbench.json
 ```
 
 The window: `cargo build -p tc4 --features test-hooks`, build a bundle with `--only

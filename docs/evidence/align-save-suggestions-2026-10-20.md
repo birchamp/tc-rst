@@ -12,7 +12,7 @@ formatting/workspace/release/wasm Clippy checks, **3,230 Rust tests passed, 0 fa
 and fixture/app UI builds. An unrelated journal salvage property oracle was also corrected
 to recognize cancelling bit flips; production journal code is unchanged. The two transport
 browser reruns pass in `resume-c5-transport-final.log`, completing all 13 alignment journeys
-across the focused runs. `.audit/plans/C5.md` records the final proof and separate fixes.
+across the focused runs. `tracker:plans/C5.md` records the final proof and separate fixes.
 The 50 ms reference target remains open for P/G2.
 
 ## Completed focused proofs

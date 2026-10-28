@@ -1,4 +1,4 @@
-// C7b step 8, owner ruling H5 (.audit/roadmap/rulings/2026-10-24-H5.md): outside verse text, the
+// C7b step 8, owner ruling H5 (docs/rulings/2026-10-24-H5.md): outside verse text, the
 // newest version wins with no question and the older stays in History. A scripted sync brings
 // Teammates 1 and 2's changes, from one version, of the first Translation Notes decision of Titus
 // and of the first alignment (tc-app backend/memory.rs `Teammates::change_kind`), Teammate 2's

@@ -1,6 +1,6 @@
 # The workspace on Windows (2026-10-17)
 
-Task 1 of `.audit/tasks/windows-track.md`: build and test the whole workspace on the owner's
+Task 1 of `tracker:tasks/windows-track.md`: build and test the whole workspace on the owner's
 Windows laptop (`windows-machine-2026-10-17.md`: Windows 10 22H2, i5-8350U, 4 cores, 8 GB, SATA
 SSD, Defender on, no exclusions), and fix what fails on Windows at its root.
 

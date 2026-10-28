@@ -1,6 +1,6 @@
 # How much memory other programs use with Psalms open (Windows, 2026-10-19)
 
-Task 5 of `.audit/tasks/windows-track.md`. The owner accepted new memory limits in
+Task 5 of `tracker:tasks/windows-track.md`. The owner accepted new memory limits in
 `docs/PERFORMANCE.md`: the whole app at 1 GiB steady (1.25 GiB peak with a side session), and
 the project store at 400 MiB steady. This file sets those limits beside programs a translator
 already runs, on the reference laptop.
@@ -79,7 +79,7 @@ them are in `spikes/memory-compare-windows/`, in the order the steps below give.
 | Microsoft Word 2016 (16.0.4266.1001) | The Psalms `.docx` (137 pages). Closed, opened again by double-click, scrolled to the end and back. 1 process | **52.6 MiB** |
 | Microsoft Edge 155.0.4283.62 | The Psalms page in one window, one tab, in the owner's normal profile, scrolled to the end and back. 9 processes | **129.2 MiB** |
 | Microsoft Edge, no window | Right after that window was closed. Startup boost keeps Edge running. 7 processes | 151.7 MiB |
-| Electronite 37.1.0 (the rebuild's window) | The G0 spike's shell with its Home page, idle (filter mode, as in part 1 of `.audit/tasks/g0-windows.md`). 4 processes | **83.3 MiB** |
+| Electronite 37.1.0 (the rebuild's window) | The G0 spike's shell with its Home page, idle (filter mode, as in part 1 of `tracker:tasks/g0-windows.md`). 4 processes | **83.3 MiB** |
 | The G0 stand-in server (`tc4-standin`) | Beside that window. It is a stub, not `tc4 serve` | 0.8 MiB |
 | tC4 4.0.0-rc.2 (signed release/4.0 build of 2026-10-17) | A throwaway project with the whole of Psalms, aligned (below), open in the Translation Words check on item 1 of 7,683 (Psalms 1:1). 4 `electron` processes and `server.exe` | **709.3 MiB** |
 | Paratext 9.5.110.1 | Not measured: on first start it asks for a registration (below), which the owner does not have. Installed, then uninstalled | — |

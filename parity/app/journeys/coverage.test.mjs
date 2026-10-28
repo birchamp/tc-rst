@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { states, titlesOf } from '../../../.audit/tools/claims.mjs';
+import { states, titlesOf } from '../../../scripts/tools/claims.mjs';
 
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const coverage = JSON.parse(fs.readFileSync(path.join(REPO, 'parity/app/journeys/coverage.json'), 'utf8'));

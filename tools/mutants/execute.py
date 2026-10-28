@@ -493,7 +493,7 @@ def invoke(command, source, destination, environment):
 
 
 def gate(command, source, output, environment):
-    result = invoke(["node", ".audit/tools/run-gates.mjs", "--fresh", "--jobs", "6", "--", *command],
+    result = invoke(["node", "scripts/tools/run-gates.mjs", "--fresh", "--jobs", "6", "--", *command],
                     source, output, environment)
     text = output.read_text()
     events = []
@@ -596,7 +596,7 @@ def main():
         raise RuntimeError("isolated source is not clean at exact GO revision; preserve it for inspection")
     if source.resolve() == owner or target.resolve() == (owner / "target").resolve():
         raise RuntimeError("source or target isolation failed")
-    if not (source / ".audit/tools/run-gates.mjs").is_file():
+    if not (source / "scripts/tools/run-gates.mjs").is_file():
         raise RuntimeError("GO revision lacks adopted gate tools")
     report = {"sha": args.base, "summary": "S2 mutation proof in progress; incomplete evidence is not a pass.",
               "startedAt": now(), "executorPid": os.getpid(), "cases": [], "evidence": str(evidence)}
@@ -606,9 +606,9 @@ def main():
         stage = "mutation-" + case.lower()
         folder = evidence / case
         folder.mkdir()
-        invoke(["node", ".audit/tools/lane-state.mjs", "read", str(source), "S2", stage],
+        invoke(["node", "scripts/tools/lane-state.mjs", "read", str(source), "S2", stage],
                source, folder / "stage-read.log", environment)
-        beginning = invoke(["node", ".audit/tools/lane-state.mjs", "begin", str(source), "S2", stage],
+        beginning = invoke(["node", "scripts/tools/lane-state.mjs", "begin", str(source), "S2", stage],
                            source, folder / "stage-begin.log", environment)
         if beginning["exitCode"]:
             raise RuntimeError("could not begin mutation stage")
@@ -688,7 +688,7 @@ def main():
         document = {"sha": args.base, "summary": f"{case}: " + ("detected and restored clean" if case_report["detected"] else "proof incomplete or mutant survived"),
                     **case_report}
         write_json(folder / "report.json", document)
-        saved = invoke(["node", ".audit/tools/lane-state.mjs", "save", str(source), "S2", stage, str(folder / "report.json")],
+        saved = invoke(["node", "scripts/tools/lane-state.mjs", "save", str(source), "S2", stage, str(folder / "report.json")],
                        source, folder / "stage-save.log", environment)
         case_report["stageSave"] = saved
         report["cases"].append(case_report)

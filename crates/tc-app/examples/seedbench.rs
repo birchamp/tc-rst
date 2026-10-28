@@ -4,7 +4,7 @@
 //! ```text
 //! cargo run --release -p tc-app --example bundle_store -- --from bundle/en --out target/a9/bundle-full
 //! cargo run --release -p tc-app --example seedbench -- --bundle target/a9/bundle-full \
-//!   --first 5 --repeat 20 --close 5 --evict .audit/tools/evict-page-cache.py \
+//!   --first 5 --repeat 20 --close 5 --evict scripts/tools/evict-page-cache.py \
 //!   --out target/a9/seedbench.json
 //! ```
 //!

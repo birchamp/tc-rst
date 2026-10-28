@@ -2,7 +2,7 @@
 
 Measured on the owner's Linux PC (docs/evidence/linux-machine-2026-10-18.md): 20 threads,
 shared with up to three other agents building at the same time, so each timing gives the load
-(`uptime`) beside it. Plan: `.audit/plans/A6b.md`.
+(`uptime`) beside it. Plan: `tracker:plans/A6b.md`.
 
 ## M1, M2: the tC4 baseline on this PC
 

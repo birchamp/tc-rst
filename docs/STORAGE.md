@@ -4,7 +4,7 @@ Status: normative. This is the design that `tc-journal`, `tc-store`, `tc-sync`, 
 in `tc-door43` and `tc-import` implement. A change to anything in this document is a change to the
 project format and follows §12.
 
-Sources: the research in the decision log (`.audit/rebuild.tsv`), the three candidate designs and
+Sources: the research in the decision log (`docs/rebuild.tsv`), the three candidate designs and
 the three judge reports of the storage design panel. Appendix A says which part came from where.
 Words used here: a **change** is one immutable version of one record (tC4 called the unit an
 "event"); a **pack** is an immutable file of changes (tC4 had one "segment" per action); the
@@ -3182,7 +3182,7 @@ outside it (tC4 D8, D18), and `recompose(decompose(x)) == x` for every book the 
 
 ### 7.6 Books
 
-*Owner ruling H5 (2026-10-24, `.audit/roadmap/rulings/2026-10-24-H5.md`), over the rest of this section:* a removal that is the newest of the book's presence heads and of the edits its remover had not seen removes the book, and those edits stay in History; a newer edit keeps the book with its edits; neither is a conflict. A removal that would leave a Bible project with no book loses to the others, with no conflict. Only *Restore the text* against *Start empty* stays a conflict, because one of them empties verse text.
+*Owner ruling H5 (2026-10-24, `docs/rulings/2026-10-24-H5.md`), over the rest of this section:* a removal that is the newest of the book's presence heads and of the edits its remover had not seen removes the book, and those edits stay in History; a newer edit keeps the book with its edits; neither is a conflict. A removal that would leave a Bible project with no book loses to the others, with no conflict. Only *Restore the text* against *Start empty* stays a conflict, because one of them empties verse text.
 
 **Presence.** If any head of `BookPresence(b)` is `Present`, the book projects as present, with
 the scope of the `Present` head that has the largest `(at, id)`. A `Present` against a `Removed`
@@ -5487,7 +5487,7 @@ and `vendored-openssl` on Linux, only in `tc-door43`, for its fetch and push), `
 `sysinfo`, `uuid`, `unicode-normalization`, `caseless` or an equivalent default case folding
 (path collisions, §3.3), `rustix` (cache-bypassing reads, §10.1 E5), `similar` (display-only
 word diffs). Shared versions
-go in `[workspace.dependencies]`. No CRDT library and no git content merge (`.audit/rebuild.tsv`,
+go in `[workspace.dependencies]`. No CRDT library and no git content merge (`docs/rebuild.tsv`,
 2026-10-14).
 
 ---
