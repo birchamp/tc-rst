@@ -30,7 +30,8 @@ use super::app_ctx::Actions;
 use super::js;
 use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
-    EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, refresh_for, same_verse,
+    Closed, EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, closed, refresh_for,
+    same_verse,
 };
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
@@ -269,14 +270,14 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => {
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => {
                         view.save = unsaved;
                         this.align_view(*view);
                         return;
                     }
-                    Err(_) => {
+                    Closed::Unanswered | Closed::Gone => {
                         // An unanswered close is not proof that the links were saved.
                         this.s().a.screen.try_set(Screen::Ready(view));
                         this.refresh_align();
@@ -304,9 +305,10 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) | Err(_) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => this.runtime().align_save(aligner, unsaved),
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved | Closed::Gone => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => this.runtime().align_save(aligner, unsaved),
+                    Closed::Unanswered => {}
                 }
             });
         }
