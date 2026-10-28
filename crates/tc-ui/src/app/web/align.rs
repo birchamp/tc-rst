@@ -300,6 +300,7 @@ impl Actions {
     /// aligner the server holds is closed, so its links are saved and it does not wait for the
     /// project to be left (at Home the server's own leave saves it).
     pub(super) fn reset_align(&self) {
+        self.s().a.suggest_error.try_set(None);
         if let Some((at, aligner, _)) = self.s().a.open.try_update(Option::take).flatten() {
             let this = self.clone();
             spawn_local(async move {
@@ -560,9 +561,6 @@ impl Actions {
                 rows.patch(view.place, view.status);
             }
         });
-        if a.suggest_error.get_untracked().is_some() {
-            a.suggest_error.try_set(None);
-        }
         a.screen.try_set(Screen::Ready(Box::new(view)));
     }
 
@@ -797,6 +795,9 @@ impl Actions {
         let Some((at, _)) = self.align_scope() else {
             return;
         };
+        // A failure stays shown until the person tries again or leaves the screen: the refresh
+        // that follows it must not clear it.
+        self.s().a.suggest_error.try_set(None);
         let this = self.clone();
         spawn_local(async move {
             let request = SetAlignSuggestions {
