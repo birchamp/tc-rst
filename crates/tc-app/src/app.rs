@@ -241,8 +241,8 @@ pub(crate) struct Inner {
     /// The offers and plans a test or a parity capture scripted (C8).
     #[cfg(feature = "test-hooks")]
     pub(crate) scripted_resources: crate::upgrades::ScriptedResources,
-    /// The server's uploads, which the guided fix's file install reads (C8). Given once, by the
-    /// binary that runs the server.
+    /// The server's uploads, which every request that reads a file the person chose holds
+    /// while it reads (C8, #858). Given once, by the binary that runs the server.
     pub(crate) uploads: std::sync::OnceLock<crate::fixes::Uploads>,
     /// The server's downloads, where an export's file goes (D2). Given once, as `uploads`.
     pub(crate) downloads: std::sync::OnceLock<crate::export::Downloads>,
@@ -629,8 +629,8 @@ impl App {
         self.inner.counters.read()
     }
 
-    /// Gives the app the server's uploaded files: the guided fix installs a file the person
-    /// chose. Once; the first call wins.
+    /// Gives the app the server's uploaded files, which import, Add USFM, Update Book, the
+    /// guided fix and exchange read. Once; the first call wins.
     pub fn provide_uploads(&self, uploads: crate::fixes::Uploads) {
         let _ = self.inner.uploads.set(uploads);
     }

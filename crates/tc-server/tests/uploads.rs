@@ -106,8 +106,10 @@ fn an_upload_streams_into_uploads_and_answers_its_view() {
     assert_eq!(upload.flow, UploadFlow::Usfm);
     assert_eq!(upload.path, dir.join(view.id.as_str()));
     assert!(server.handle.uploads().take(&view.id).is_some());
+    assert!(server.handle.uploads().get(&view.id).is_none(), "held");
+    server.handle.uploads().used_up(&view.id);
     assert!(server.handle.uploads().take(&view.id).is_none());
-    assert!(server.handle.uploads().get(&view.id).is_none());
+    assert_eq!(files_in(&dir), Vec::<String>::new(), "used up, so deleted");
 }
 
 #[test]
@@ -451,4 +453,30 @@ fn a_dropped_upload_is_deleted_and_a_taken_one_is_left_to_its_job() {
         b"b",
         "the job's file stays"
     );
+}
+
+/// #858: a request that ends without using its upload gives it back, so the person can try
+/// again with the same file; a drop then deletes it. Two requests can hold one upload (a
+/// review while a lookup reads): it is Stored again only when both gave it back.
+#[test]
+fn a_given_back_upload_can_be_taken_again_and_dropped() {
+    let server = TestServer::start(stub());
+    let uploads = server.handle.uploads();
+    let id = view(&server.send(&server.upload_req(UploadFlow::Import, "a.zip", b"a"))).id;
+    let file = server.uploads_dir().join(id.as_str());
+    assert!(uploads.take(&id).is_some());
+    assert!(uploads.take(&id).is_some(), "a second reader holds it too");
+    uploads.give_back(&id);
+    assert!(!uploads.drop_stored(&id), "still held by the second reader");
+    assert!(
+        uploads
+            .sweep(Instant::now() + Duration::from_secs(48 * 60 * 60))
+            .is_empty(),
+        "a held upload is never swept"
+    );
+    uploads.give_back(&id);
+    assert!(uploads.take(&id).is_some(), "a retry takes it again");
+    uploads.give_back(&id);
+    assert!(uploads.drop_stored(&id));
+    assert!(!file.exists(), "dropped once given back");
 }

@@ -231,27 +231,6 @@ fn rewrite_entry(from: &Path, to: &Path, name: &str, edit: impl Fn(&str) -> Stri
     out.finish().unwrap();
 }
 
-/// The server's uploads as a test keeps them: what is still registered, so swept when
-/// abandoned.
-#[derive(Default)]
-struct Registered(std::sync::Mutex<Vec<tc_api::ids::UploadId>>);
-
-impl tc_app::UploadedFiles for Registered {
-    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
-        let mut ids = self.0.lock().unwrap();
-        let at = ids.iter().position(|held| held == id)?;
-        ids.remove(at);
-        Some(tc_app::UploadedFile {
-            name: "juan.zip".to_owned(),
-            path: PathBuf::new(),
-        })
-    }
-
-    fn drop_stored(&self, id: &tc_api::ids::UploadId) {
-        self.take(id);
-    }
-}
-
 /// #7 (review 2026-10-28): a receive takes its upload from the server's registry as it
 /// starts, so the sweep of abandoned uploads cannot delete the file it reads, and deletes
 /// the file when done.
@@ -269,9 +248,6 @@ async fn a_receive_takes_its_upload_from_the_sweep_and_deletes_it() {
     let uploads = w.disk.app_data().join("uploads");
     std::fs::create_dir_all(&uploads).unwrap();
     std::fs::copy(&exported, uploads.join(id.as_str())).unwrap();
-    let registry = Arc::new(Registered::default());
-    registry.0.lock().unwrap().push(id.clone());
-    w.t.app.provide_uploads(registry.clone());
     let job = post(
         &w.t.app,
         &tc_api::exchange::Receive {
@@ -286,10 +262,6 @@ async fn a_receive_takes_its_upload_from_the_sweep_and_deletes_it() {
         ended(&w.t.app, job).await,
         JobState::Done(JobOutcome::Received(_))
     ));
-    assert!(
-        registry.0.lock().unwrap().is_empty(),
-        "taken, so never swept"
-    );
     assert!(
         !uploads.join(id.as_str()).exists(),
         "the receive deleted it"

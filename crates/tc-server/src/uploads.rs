@@ -49,13 +49,18 @@ pub struct Upload {
 /// The uploads of this run. Nothing survives a restart: `uploads/` is emptied at every
 /// start, so an id only ever names a file this run stored.
 ///
-/// An upload is Stored here from its last byte until one of three things happens:
-/// - a job takes it ([`Uploads::take`]): it leaves this registry, so neither a drop nor a
-///   sweep can delete the file the job reads, and the job deletes the file when done;
+/// An upload is Stored here from its last byte. While a request reads it, it is Held
+/// ([`Uploads::take`]): neither a drop nor a sweep deletes the file then. It ends in one of
+/// three ways:
+/// - the request used it up ([`Uploads::used_up`]): the file is deleted;
 /// - the person's dialog has no more use for it ([`Uploads::drop_stored`], `uploads/drop`):
 ///   it closed, the row was removed, or another file took its place;
-/// - it is still here after the keep time, because the page never said (it was closed, or
+/// - it is still Stored after the keep time, because the page never said (it was closed, or
 ///   lost its connection): [`Uploads::sweep`] forgets it and the caller deletes the file.
+///
+/// A request that ends without using its upload gives it back ([`Uploads::give_back`]): it is
+/// Stored again, so the person can try again with the same file, and the keep time starts
+/// again.
 pub struct Uploads {
     dir: PathBuf,
     keep: Duration,
@@ -64,7 +69,14 @@ pub struct Uploads {
 
 struct Stored {
     upload: Upload,
-    since: Instant,
+    state: Use,
+}
+
+enum Use {
+    /// No request holds it; the keep time runs from this instant.
+    Stored(Instant),
+    /// This many requests hold it: a review can read a file while a lookup job reads it too.
+    Held(u32),
 }
 
 impl Uploads {
@@ -77,42 +89,84 @@ impl Uploads {
     }
 
     fn entries(&self) -> MutexGuard<'_, HashMap<UploadId, Stored>> {
-        // The map is only inserted into and removed from, so a panic elsewhere while the
-        // lock was held cannot have left it half changed.
+        // Every change under the lock is one insert, remove or field write, so a panic
+        // elsewhere while the lock was held cannot have left it half changed.
         self.entries.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The upload with this id, if this run stored one and nothing took or swept it.
+    /// The upload with this id, if this run stored one, no request holds it, and nothing
+    /// dropped or swept it.
     pub fn get(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().get(id).map(|stored| stored.upload.clone())
+        self.entries()
+            .get(id)
+            .filter(|stored| matches!(stored.state, Use::Stored(_)))
+            .map(|stored| stored.upload.clone())
     }
 
-    /// Hands the upload over: it is no longer registered, no sweep touches it, and the caller
-    /// owns its file and deletes it when done.
+    /// Holds the upload for a request that reads it: no drop or sweep deletes it until the
+    /// request gives it back. None when it was dropped, swept or used up.
     pub fn take(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().remove(id).map(|stored| stored.upload)
+        let mut entries = self.entries();
+        let stored = entries.get_mut(id)?;
+        stored.state = match stored.state {
+            Use::Stored(_) => Use::Held(1),
+            Use::Held(n) => Use::Held(n.saturating_add(1)),
+        };
+        Some(stored.upload.clone())
     }
 
-    /// Deletes the upload when it is still Stored, and says whether it was. An upload a job
-    /// took, or one swept or dropped already, is left alone: the job owns its file. Blocking:
-    /// one unlink.
+    /// A request that held the upload ended without using it up: once no request holds it,
+    /// it is Stored again, from now.
+    pub fn give_back(&self, id: &UploadId) {
+        if let Some(stored) = self.entries().get_mut(id)
+            && let Use::Held(n) = stored.state
+        {
+            stored.state = if n > 1 {
+                Use::Held(n - 1)
+            } else {
+                Use::Stored(Instant::now())
+            };
+        }
+    }
+
+    /// The request used the upload up: it is forgotten and its file deleted. Blocking: one
+    /// unlink.
+    pub fn used_up(&self, id: &UploadId) {
+        if let Some(stored) = self.entries().remove(id) {
+            // Already gone is as good as deleted; a file that cannot be removed now (held by
+            // a virus scanner) is emptied at the next start.
+            let _ = std::fs::remove_file(&stored.upload.path);
+        }
+    }
+
+    /// Deletes the upload when it is Stored, and says whether it was. One a request holds, or
+    /// one swept, dropped or used up already, is left alone. Blocking: one unlink.
     pub fn drop_stored(&self, id: &UploadId) -> bool {
-        let Some(stored) = self.entries().remove(id) else {
+        let mut entries = self.entries();
+        if !matches!(
+            entries.get(id),
+            Some(Stored {
+                state: Use::Stored(_),
+                ..
+            })
+        ) {
             return false;
-        };
-        // Already gone is as good as deleted; a file that cannot be removed now (held by a
-        // virus scanner) is emptied at the next start.
-        let _ = std::fs::remove_file(&stored.upload.path);
+        }
+        let path = entries.remove(id).map(|stored| stored.upload.path);
+        drop(entries);
+        // As in `used_up`.
+        let _ = path.map(std::fs::remove_file);
         true
     }
 
-    /// Forgets the uploads stored for the keep time or longer at `now`, and returns their
-    /// paths, which the caller deletes.
+    /// Forgets the uploads Stored for the keep time or longer at `now`, and returns their
+    /// paths, which the caller deletes. A held upload is never swept.
     pub fn sweep(&self, now: Instant) -> Vec<PathBuf> {
         let keep = self.keep;
         let mut expired = Vec::new();
         self.entries().retain(|_, stored| {
-            let old = now.saturating_duration_since(stored.since) >= keep;
+            let old = matches!(stored.state,
+                Use::Stored(since) if now.saturating_duration_since(since) >= keep);
             if old {
                 expired.push(stored.upload.path.clone());
             }
@@ -126,7 +180,7 @@ impl Uploads {
             upload.id.clone(),
             Stored {
                 upload,
-                since: Instant::now(),
+                state: Use::Stored(Instant::now()),
             },
         );
     }

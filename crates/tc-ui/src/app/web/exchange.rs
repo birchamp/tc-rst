@@ -249,7 +249,7 @@ impl Actions {
             return;
         };
         // The job deletes the file whatever comes of it.
-        self.uploads_taken();
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             match press {
@@ -281,7 +281,7 @@ impl Actions {
                         }
                         Err(error) => JobEnd::Failed(api_error(error)),
                     };
-                    this.uploads_finished();
+                    this.uploads_finished(&taken);
                     this.patch_rx_or_last(|rx| rx.ended(attempt, ended, js::random_request_id()));
                     js::session_remove(RECEIVE_JOB_KEY);
                 }
@@ -313,7 +313,7 @@ impl Actions {
                         }
                         Err(error) => JobEnd::Failed(api_error(error)),
                     };
-                    this.uploads_finished();
+                    this.uploads_finished(&taken);
                     this.patch_rx_or_last(|rx| rx.added(attempt, ended, js::random_request_id()));
                     js::session_remove(RECEIVE_JOB_KEY);
                 }

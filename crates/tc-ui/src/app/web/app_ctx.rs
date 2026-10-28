@@ -49,7 +49,7 @@ use crate::app::sources::SettingsForm;
 use crate::app::submit::Submit;
 use crate::app::sync::{SyncEnd, SyncToast};
 use crate::app::update_book::UpdateBookForm;
-use crate::app::uploads::{Opening, PickedUploads, Slot};
+use crate::app::uploads::{Opening, PickedUploads, Sent, Slot};
 use crate::i18n::show_locale;
 
 /// Which dialog shows (tC4 `s.modal`, `tC4:src/state.jsx:476`): what the modal host switches
@@ -1193,19 +1193,27 @@ impl Actions {
         self.drop_uploads(dropped);
     }
 
-    /// The dialog sent the request that reads its files.
-    pub(crate) fn uploads_taken(&self) {
-        self.0.uploads.borrow_mut().take();
+    /// Whether `opening` is the dialog open now: a late answer for another changes nothing.
+    pub(crate) fn upload_current(&self, opening: Opening) -> bool {
+        self.0.uploads.borrow().is_current(opening)
     }
 
-    /// The request failed; the dialog keeps its files for another try or for Close.
-    pub(crate) fn uploads_given_back(&self) {
-        self.0.uploads.borrow_mut().give_back();
+    /// The dialog sent the request that reads its files; its answer passes back what this
+    /// returns.
+    pub(crate) fn uploads_taken(&self) -> Sent {
+        self.0.uploads.borrow_mut().take()
+    }
+
+    /// The request failed; the dialog that sent it keeps its files for another try or for
+    /// Close, and a closed one's files are dropped.
+    pub(crate) fn uploads_given_back(&self, sent: &Sent) {
+        let dropped = self.0.uploads.borrow_mut().give_back(sent);
+        self.drop_uploads(dropped);
     }
 
     /// The job ended and deleted its files.
-    pub(crate) fn uploads_finished(&self) {
-        self.0.uploads.borrow_mut().finish();
+    pub(crate) fn uploads_finished(&self, sent: &Sent) {
+        self.0.uploads.borrow_mut().finish(sent);
     }
 
     /// The one close path of every dialog's files: the shell calls it whenever the dialog

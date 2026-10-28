@@ -17,6 +17,7 @@ use super::ExchangePort;
 use crate::app::App;
 use crate::backend::BoxFuture;
 use crate::jobs::{JobEnd, ProgressSink};
+use crate::uploads::HeldUpload;
 
 pub struct UsbExchange;
 
@@ -60,11 +61,18 @@ fn unavailable() -> JobEnd {
 }
 
 impl App {
-    /// The file on this computer an [`ExchangeFile`] names.
-    fn exchange_path(&self, file: &ExchangeFile) -> PathBuf {
+    /// The file on this computer an [`ExchangeFile`] names, and the upload held while it is
+    /// read. A file the shell chose stays where it is.
+    fn exchange_file(
+        &self,
+        file: &ExchangeFile,
+    ) -> Result<(PathBuf, Option<HeldUpload>), ApiError> {
         match file {
-            ExchangeFile::Path(path) => PathBuf::from(path),
-            ExchangeFile::Upload(id) => self.upload_path(id),
+            ExchangeFile::Path(path) => Ok((PathBuf::from(path), None)),
+            ExchangeFile::Upload(id) => {
+                let held = self.hold_upload(id)?;
+                Ok((held.path().to_owned(), Some(held)))
+            }
         }
     }
 
@@ -111,7 +119,7 @@ impl ExchangePort for UsbExchange {
 
     fn identify(&self, app: App, file: ExchangeFile) -> BoxFuture<Result<IdentifyView, ApiError>> {
         Box::pin(async move {
-            let path = app.exchange_path(&file);
+            let (path, _held) = app.exchange_file(&file)?;
             let found = tokio::task::spawn_blocking(move || tc_sync::exchange::identify(&path))
                 .await
                 .map_err(|e| {
@@ -145,14 +153,11 @@ impl ExchangePort for UsbExchange {
         file: ExchangeFile,
     ) -> BoxFuture<Result<ReceivedView, JobEnd>> {
         Box::pin(async move {
-            if let ExchangeFile::Upload(id) = &file {
-                app.take_upload(id);
-            }
-            let path = app.exchange_path(&file);
+            let (path, held) = app.exchange_file(&file).map_err(JobEnd::Failed)?;
             let result = receive_into(&app, &project, &path).await;
-            // The upload is read once, whatever came of it; a file the shell chose stays.
-            if let ExchangeFile::Upload(id) = &file {
-                app.drop_upload(id);
+            // The upload is read once, whatever came of it.
+            if let Some(held) = held {
+                held.used_up();
             }
             result
         })
@@ -165,17 +170,14 @@ impl ExchangePort for UsbExchange {
         name: ProjectName,
     ) -> BoxFuture<Result<ProjectRef, JobEnd>> {
         Box::pin(async move {
-            if let ExchangeFile::Upload(id) = &file {
-                app.take_upload(id);
-            }
-            let path = app.exchange_path(&file);
+            let (path, held) = app.exchange_file(&file).map_err(JobEnd::Failed)?;
             let folder = name.as_str().to_owned();
             let made = app
                 .with_store(move |store| store.receive_new(&path, &folder))
                 .await
                 .map_err(JobEnd::Failed);
-            if let ExchangeFile::Upload(id) = &file {
-                app.drop_upload(id);
+            if let Some(held) = held {
+                held.used_up();
             }
             match made? {
                 // No project.json in the file: nothing for this computer to become.

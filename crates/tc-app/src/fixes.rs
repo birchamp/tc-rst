@@ -32,11 +32,17 @@ use crate::resources::JobWatch;
 use crate::session::ProjectSession;
 use crate::upgrades::{Recipe, api_rung};
 
-/// A file the person chose, stored by the server. The registry of uploads is the server's; the
-/// app reads a file through this seam and owns it, and deletes it, once it has taken it.
+/// A file the person chose, stored by the server. The registry of uploads is the server's; a
+/// request reads a file only while it holds it ([`crate::uploads::HeldUpload`]), so no drop or
+/// sweep deletes it mid-read.
 pub trait UploadedFiles: Send + Sync {
+    /// Holds the upload for a request; None when it was dropped, swept or used up.
     fn take(&self, id: &UploadId) -> Option<UploadedFile>;
-    /// Deletes the upload when no job took it; otherwise does nothing. Blocking.
+    /// The request ended without using the upload: the person may try again with it.
+    fn give_back(&self, id: &UploadId);
+    /// The request used the upload up: it is forgotten and its file deleted. Blocking.
+    fn used_up(&self, id: &UploadId);
+    /// Deletes the upload when no request holds it; otherwise does nothing. Blocking.
     fn drop_stored(&self, id: &UploadId);
 }
 
@@ -230,26 +236,21 @@ impl Handle<FixSideload> for App {
             .ok_or_else(|| fix_failed("there is nothing to get for this tool"))?;
         let pin = pin_to_get(&found).ok_or_else(|| fix_failed("the pin names no repository"))?;
         let file = self
-            .inner
-            .uploads
-            .get()
-            .and_then(|uploads| uploads.take(&req.upload))
-            .ok_or_else(|| fix_failed("the file is not here any more; choose it again"))?;
+            .hold_upload(&req.upload)
+            .map_err(|_| fix_failed("the file is not here any more; choose it again"))?;
         let store = self.inner.resources.clone();
-        let path = file.path.clone();
+        let path = file.path().to_owned();
         let installed = tokio::task::spawn_blocking(move || {
             let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
             // Installed only when the file declares exactly the pinned commit (tC4
             // `verifySideload`, D58); anything else installs nothing.
-            let result =
-                install_dcs_zip(&store, &pin, &bytes, MAX_UNPACKED).map_err(|e| e.to_string());
-            // The file is the app's to delete once taken.
-            let _ = std::fs::remove_file(&path);
-            result.map(|_| ())
+            install_dcs_zip(&store, &pin, &bytes, MAX_UNPACKED).map_err(|e| e.to_string())
         })
         .await
-        .map_err(|stopped| fix_failed(crate::jobs::stop_reason(stopped)))?;
-        installed.map_err(fix_failed)?;
+        .map_err(|stopped| fix_failed(crate::jobs::stop_reason(stopped)));
+        // Read once, whatever came of it: the page sends a new file for another try.
+        file.used_up();
+        installed?.map_err(fix_failed)?;
         session.books().forget().await;
         Ok(())
     }
