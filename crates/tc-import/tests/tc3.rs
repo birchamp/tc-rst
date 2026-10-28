@@ -236,6 +236,108 @@ fn a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid() {
     );
 }
 
+/// `original` with each `(name, bytes)` written over the entry of that name, or added.
+fn with_entries(original: &SourceFile, entries: &[(&str, &[u8])]) -> SourceFile {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&original.bytes)).unwrap();
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).unwrap();
+        let name = entry.name().to_owned();
+        if entry.is_dir() || entries.iter().any(|(n, _)| *n == name) {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        writer.start_file(name, options).unwrap();
+        writer.write_all(&bytes).unwrap();
+    }
+    for (name, bytes) in entries {
+        writer.start_file(*name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    SourceFile {
+        name: original.name.clone(),
+        bytes: writer.finish().unwrap().into_inner(),
+    }
+}
+
+/// A tC3 alignment that holds links but no verse of the text can hold is named in the
+/// book's report, never dropped without a word; tC4 skips each of these silently (a
+/// declared difference). tC3's own empty records, such as `front`, are no loss.
+#[test]
+fn a_tc3_alignment_with_no_verse_to_hold_it_is_reported() {
+    let original = source("tc3/multi/en_kjv_luk_book.zip");
+    let chapter_one = "apps/translationCore/alignmentData/luk/1.json";
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&original.bytes)).unwrap();
+    let mut verses: Value = {
+        let mut bytes = Vec::new();
+        archive
+            .by_name(chapter_one)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    };
+    let linked = verses
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|r| {
+            r["alignments"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|g| !g["bottomWords"].as_array().unwrap().is_empty())
+        })
+        .unwrap()
+        .clone();
+    let empty = serde_json::json!({ "alignments": [], "wordBank": [] });
+    verses["999"] = linked.clone();
+    verses["front"] = empty.clone();
+    verses["1a"] = linked.clone();
+    verses["998"] = empty;
+    let chapter_one_bytes = serde_json::to_vec(&verses).unwrap();
+    let far_chapter = serde_json::to_vec(&serde_json::json!({ "1": linked })).unwrap();
+    let before = read(std::slice::from_ref(&original)).unwrap().books[0]
+        .alignments()
+        .len();
+    let edited = with_entries(
+        &original,
+        &[
+            (chapter_one, &chapter_one_bytes),
+            (
+                "apps/translationCore/alignmentData/luk/70000.json",
+                &far_chapter,
+            ),
+            ("apps/translationCore/alignmentData/luk/30.json", b"[]"),
+        ],
+    );
+    let import = read(&[edited]).unwrap();
+    let luke = &import.books[0];
+    assert_eq!(
+        luke.alignments().len(),
+        before,
+        "the verses the text holds still import"
+    );
+    let mut not_kept: Vec<&str> = luke
+        .not_kept
+        .iter()
+        .map(String::as_str)
+        .filter(|n| n.starts_with("wordAlignment"))
+        .collect();
+    not_kept.sort_unstable();
+    assert_eq!(
+        not_kept,
+        [
+            "wordAlignment LUK 1:1a (no such verse in the text)",
+            "wordAlignment LUK 1:999 (no such verse in the text)",
+            "wordAlignment LUK 30 (not a chapter of verses)",
+            "wordAlignment LUK 70000 (no such chapter)",
+        ]
+    );
+}
+
 fn store(fs: &FaultFs) -> Store {
     let store = Store::start(StoreConfig {
         app_data: PathBuf::from("/app"),

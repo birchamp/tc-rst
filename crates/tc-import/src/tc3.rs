@@ -72,9 +72,10 @@ pub struct Tc3Book {
     alignments: Vec<(ChapterNo, VerseNo, AlignmentValue)>,
     /// tC4's §5.2 decision records, by tool, before the resource is known.
     decisions: Vec<(ToolId, Vec<Value>)>,
-    /// Decisions on a check this version has no check for, in words: a translationNotes row
-    /// tied to every occurrence (`-1`), which no check list holds (`tc-check`
-    /// `SkipReason::EveryOccurrence`). The report lists them; the source keeps them.
+    /// What the import leaves out, in words: decisions on a check this version has no check
+    /// for (a translationNotes row tied to every occurrence (`-1`), which no check list
+    /// holds, `tc-check` `SkipReason::EveryOccurrence`), and alignments no verse of the text
+    /// can hold. The report lists them; the source keeps them.
     pub not_kept: Vec<String>,
 }
 
@@ -252,6 +253,20 @@ fn nfc(value: Value) -> Value {
 }
 
 /// The verse content (`words + layout`) the book's codec gives for `chapter:verse`.
+/// Whether a tC3 alignment record holds a link the translator made. tC3 writes a record
+/// with none for every verse it shows, and one keyed `front` for each chapter.
+fn holds_links(data: &Value) -> bool {
+    data.get("alignments")
+        .and_then(Value::as_array)
+        .is_some_and(|groups| {
+            groups.iter().any(|g| {
+                g.get("bottomWords")
+                    .and_then(Value::as_array)
+                    .is_some_and(|w| !w.is_empty())
+            })
+        })
+}
+
 fn content(parts: &BookParts, chapter: u16, verse: u16) -> Option<String> {
     match parts.chapters.get(&chapter)?.verses.get(&verse)? {
         VersePart::Text(t) => Some(tc_usfm::codec::join_verse(&t.words, &t.layout)),
@@ -596,21 +611,38 @@ fn read_project(file: &SourceFile) -> Result<Project, ImportRefusal> {
         .collect();
     chapter_files.sort_by_key(|(n, _)| *n);
     let mut alignments = Vec::new();
+    let mut not_kept = Vec::new();
+    let code = book.to_uppercase();
     for (chapter, (name, bytes)) in chapter_files {
         let Ok(chapter) = u16::try_from(chapter) else {
+            not_kept.push(format!("wordAlignment {code} {chapter} (no such chapter)"));
             continue;
         };
         let Value::Object(verses) = parse_json(&file.name, name, bytes)? else {
+            not_kept.push(format!(
+                "wordAlignment {code} {chapter} (not a chapter of verses)"
+            ));
             continue;
         };
-        let mut verses: Vec<(u16, &Value)> = verses
-            .iter()
-            .filter_map(|(k, v)| Some((k.parse().ok()?, v)))
-            .collect();
-        verses.sort_by_key(|(n, _)| *n);
-        for (verse, data) in verses {
-            // No such verse in the text: nothing to key the record to.
+        let mut numbered: Vec<(u16, &Value)> = Vec::new();
+        for (key, data) in &verses {
+            match key.parse() {
+                Ok(verse) => numbered.push((verse, data)),
+                Err(_) if !holds_links(data) => {}
+                Err(_) => not_kept.push(format!(
+                    "wordAlignment {code} {chapter}:{key} (no such verse in the text)"
+                )),
+            }
+        }
+        numbered.sort_by_key(|(n, _)| *n);
+        for (verse, data) in numbered {
+            // No such verse in the text, or one a span covers: nothing to key the record to.
             let Some(text) = content(&parts, chapter, verse) else {
+                if holds_links(data) {
+                    not_kept.push(format!(
+                        "wordAlignment {code} {chapter}:{verse} (no such verse in the text)"
+                    ));
+                }
                 continue;
             };
             let marked = get(
@@ -629,7 +661,6 @@ fn read_project(file: &SourceFile) -> Result<Project, ImportRefusal> {
             )?);
         }
     }
-    let mut not_kept = Vec::new();
     let decisions = decisions(&file.name, &files, &book, &parts, &mut not_kept)?;
     let tools: Vec<ToolId> = decisions.iter().map(|(t, _)| *t).collect();
     let versions = version_requests(&manifest, book_id, &tools);
