@@ -2315,6 +2315,13 @@ section command carries parsed values rather than that raw buffer. The fields:
 
 An entry of `drafts.json` is `{field, shown: [token text], text, at}`.
 
+Only a missing `drafts.json` means no drafts. One the open cannot read or understand (held by
+another program past the retries, damaged, cut short, a newer app's layout) is never written
+over: it is moved to `.tc/drafts.unreadable-N.json` under the first free N, and the person sees
+`FileUnreadable` with that path; when it cannot be moved either, it stays as it is, the notice
+names `.tc/drafts.json`, and this session writes no drafts. An entry whose field this version
+does not know stays in the file as it is.
+
 Cancelling an open section card drains its pending draft calls, then calls
 `discard_current_draft` with that exact field, displayed tokens, text and original keystroke
 time (APP-DESIGN C2). The draft writer removes only a matching current entry and atomically
