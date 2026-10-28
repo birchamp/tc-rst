@@ -43,6 +43,7 @@ test checks it.
    pushes the tag: `git tag v4.1.0-preview && git push origin v4.1.0-preview`. Nobody else pushes release tags.
 2. The tag runs `release`. It builds nothing for a tag while any interface string is untranslated
    (job `translations`, `cargo test --release -p tc-api --test refusals`; rulings/2026-10-22-H10.md).
+   A `-preview` tag skips that one check, so testers see any pending string in English (#848).
 3. Each platform is built, installed on a fresh runner of its own system and smoke-tested there.
    Only when every job passed does `publish` make a **draft** GitHub release with the installers
    and manifests.
