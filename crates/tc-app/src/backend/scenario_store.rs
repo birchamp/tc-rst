@@ -507,7 +507,7 @@ impl ProjectStore for ScenarioStore {
         session: Option<tc_door43::Session>,
         repo: tc_door43::RepoRef,
         name: String,
-    ) -> super::BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+    ) -> super::BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
         super::store::join_on(self, |s| s.backend.store(), client, session, repo, name)
     }
 

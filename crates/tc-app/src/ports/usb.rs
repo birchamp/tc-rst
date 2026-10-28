@@ -185,7 +185,12 @@ impl ExchangePort for UsbExchange {
                     Refusal::Exchange(ExchangeRefusal::NotTranslationCore),
                 ))),
                 Err(e) => Err(refused(e, false)),
-                Ok(()) => {
+                Ok(not_written) => {
+                    app.report_not_written(
+                        crate::reports::ReportOp::Import,
+                        Path::new(name.as_str()),
+                        &not_written,
+                    );
                     let project = ProjectRef::parse(name.as_str()).map_err(|_| {
                         JobEnd::Failed(ApiError::BadRequest {
                             field: "name".to_owned(),

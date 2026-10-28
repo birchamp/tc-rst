@@ -764,7 +764,7 @@ impl ProjectStore for StoreBackend {
         session: Option<tc_door43::Session>,
         repo: tc_door43::RepoRef,
         name: String,
-    ) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+    ) -> BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
         join_on(self, |backend| &backend.store, client, session, repo, name)
     }
 
@@ -815,8 +815,8 @@ impl ProjectStore for StoreBackend {
         &self,
         file: &std::path::Path,
         name: &str,
-    ) -> Result<(), tc_sync::exchange::ExchangeError> {
-        tc_sync::exchange::receive_new(&self.store, file, name).map(|_| ())
+    ) -> Result<Vec<String>, tc_sync::exchange::ExchangeError> {
+        tc_sync::exchange::receive_new(&self.store, file, name).map(|made| made.not_written)
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
@@ -1912,7 +1912,7 @@ pub(crate) fn join_on<S: Send + Sync + 'static>(
     session: Option<tc_door43::Session>,
     repo: tc_door43::RepoRef,
     name: String,
-) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+) -> BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
     let runtime = tokio::runtime::Handle::current();
     let work = tokio::task::spawn_blocking(move || {
         runtime.block_on(tc_sync::join(

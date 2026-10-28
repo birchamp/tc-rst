@@ -312,7 +312,9 @@ async fn a_newcomer_creates_the_project_from_a_file() {
     save(&a, 1, 1, "Paul, as Ana has it");
     let exported = export(&a, &stick, "Ana").await.unwrap();
     let juan = computer(dir.path(), "juan");
-    let folder_b = tc_sync::exchange::receive_new(&juan.store, &exported, "Titus").unwrap();
+    let folder_b = tc_sync::exchange::receive_new(&juan.store, &exported, "Titus")
+        .unwrap()
+        .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul, as Ana has it"));
     assert_ne!(b.facts().device, a.facts().device);

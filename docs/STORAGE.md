@@ -1072,7 +1072,12 @@ no file: the open does it after O9 classified, the window focus does it, and the
 a new path does it for that path (§11.1). A file another program holds is left, and the next look
 tries again.
 Such entries arriving from Door43 or in an exchange file are **foreign entries**: they are kept
-in every commit tree, not dropped (§9.4).
+in every commit tree, not dropped (§9.4). A foreign entry whose name Windows cannot write as named (a device
+name, a trailing dot or space, a forbidden character, an 8.3 short name), or that Windows or
+macOS would store as one file with another, is carried byte for byte in commits and exchange
+files but written to disk by no join and no new project from a file, on every OS alike; the
+report log lists it (owner ruling "carry, skip on disk", 2026-10-28). A name that could leave
+the folder refuses the whole join or file, and so does such a name on a file the app owns.
 
 | Path | Class | mimeType | role | scope |
 |---|---|---|---|---|

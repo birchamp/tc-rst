@@ -1,6 +1,7 @@
 //! Syncs against `tc-door43-fake`: two computers, each with a store on a real folder, and one
 //! Door43 repository.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tc_door43::{
@@ -566,7 +567,8 @@ async fn a_joined_project_holds_the_teams_work_and_syncs_both_ways() {
         "Titus",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul, as Ana has it"));
     assert_ne!(b.facts().device, a.facts().device, "a device of its own");
@@ -842,7 +844,8 @@ async fn three_devices_converge_with_byte_identical_derived_files() {
             "Titus",
         )
         .await
-        .unwrap();
+        .unwrap()
+        .folder;
         others.push((computer, folder));
     }
     let b = open(&others[0].0, &others[0].1);
@@ -965,6 +968,92 @@ async fn a_file_the_app_does_not_own_follows_door43() {
         "the file deleted on Door43 stays deleted"
     );
     a.close().unwrap();
+}
+
+/// Owner ruling "carry, skip on disk": foreign files whose names Windows cannot write, or
+/// that Windows or macOS would store as one, travel in the exchange file byte for byte, and
+/// a project made from the file writes none of them and lists them all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn foreign_files_windows_cannot_write_are_carried_and_not_written() {
+    let door43 = door43("titus-foreign").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder = titus(&ana);
+    let a = open(&ana, &folder);
+    connect(&a, &door43, "titus-foreign");
+    synced(&sync(&a, &door43).await);
+    for (path, bytes) in [
+        (".gitea/con.txt", &b"device name"[..]),
+        ("A.md", b"upper"),
+        ("a.md", b"lower"),
+        ("README.md", b"# Titus\n"),
+    ] {
+        door43_commit(&door43, "titus-foreign", path, Some(bytes));
+    }
+    save(&a, 1, 1, "Paul");
+    synced(&sync(&a, &door43).await);
+    let stick = dir.path().join("stick");
+    std::fs::create_dir_all(&stick).unwrap();
+    let exported = tc_sync::exchange::export(&a, &stick, "Ana").await.unwrap();
+    a.close().unwrap();
+
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+    let mut carried = Vec::new();
+    zip.by_name(".tc-root/.gitea/con.txt")
+        .unwrap()
+        .read_to_end(&mut carried)
+        .unwrap();
+    assert_eq!(carried, b"device name", "the bytes travel as they are");
+    assert!(zip.by_name(".tc-root/A.md").is_ok() && zip.by_name(".tc-root/a.md").is_ok());
+
+    let juan = computer(dir.path(), "juan");
+    let made = tc_sync::exchange::receive_new(&juan.store, &exported, "Titus").unwrap();
+    assert_eq!(made.not_written, [".gitea/con.txt", "A.md", "a.md"]);
+    for path in made.not_written.iter() {
+        assert!(!made.folder.join(path).exists(), "{path}");
+    }
+    assert!(made.folder.join("README.md").is_file());
+    let b = open(&juan, &made.folder);
+    assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul"));
+    b.close().unwrap();
+}
+
+/// Owner ruling "carry, skip on disk": a join writes no foreign file whose name Windows
+/// cannot write, lists it, and the file is no deletion: the next sync leaves it on Door43.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_join_skips_a_foreign_file_and_the_next_sync_keeps_it() {
+    let door43 = door43("titus-skip").await;
+    let dir = tempfile::tempdir().unwrap();
+    let ana = computer(dir.path(), "ana");
+    let folder_a = titus(&ana);
+    let a = open(&ana, &folder_a);
+    connect(&a, &door43, "titus-skip");
+    synced(&sync(&a, &door43).await);
+    a.close().unwrap();
+    door43_commit(&door43, "titus-skip", "notes~1.md", Some(b"short name"));
+
+    let juan = computer(dir.path(), "juan");
+    let repo: tc_door43::RepoRef = format!("{}/titus-skip", seeded::USER).parse().unwrap();
+    let joined = tc_sync::join(
+        &juan.store,
+        &door43.client,
+        Some(&door43.session),
+        &repo,
+        "Titus",
+    )
+    .await
+    .unwrap();
+    assert_eq!(joined.not_written, ["notes~1.md"]);
+    assert!(!joined.folder.join("notes~1.md").exists());
+    let b = open(&juan, &joined.folder);
+    save(&b, 1, 1, "Paul, as Juan has it");
+    synced(&sync(&b, &door43).await);
+    b.close().unwrap();
+    assert_eq!(
+        on_door43(&door43, "titus-skip", "notes~1.md").as_deref(),
+        Some(&b"short name"[..]),
+        "a file not written is not a deletion"
+    );
 }
 
 /// PLAN Q8: the merge fails after the teammate's work was taken in (here, before the branch
@@ -1262,7 +1351,8 @@ async fn sync_master_branch() {
         "Titus",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(b.sync_file().await.unwrap().unwrap().branch, "master");
     save(&b, 1, 2, "in hope, as Juan has it");
@@ -1309,7 +1399,8 @@ async fn sync_private_repository() {
         "Titus",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul, as Ana has it"));
     save(&b, 1, 2, "in hope, as Juan has it");
@@ -1444,7 +1535,8 @@ async fn loss_f14_edits_during_sync_kept() {
         "Titus",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(words(&b, 1, 2).as_deref(), Some("saved while the sync ran"));
     assert_eq!(
@@ -1504,7 +1596,8 @@ async fn loss_carried_file_travels() {
         "Titus",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(std::fs::read(folder_b.join(song)).unwrap(), bytes);
     a.close().unwrap();
@@ -1590,7 +1683,8 @@ async fn team_sync_obs_project() {
         "Stories",
     )
     .await
-    .unwrap();
+    .unwrap()
+    .folder;
     let b = open(&juan, &folder_b);
     assert_eq!(b.facts().kind, ProjectKind::Stories);
     assert_eq!(frame_text(&b, 1, 1), frame_text(&a, 1, 1));
@@ -1716,7 +1810,8 @@ async fn sync_contention_three_devices_converge() {
             "Titus",
         )
         .await
-        .unwrap();
+        .unwrap()
+        .folder;
         others.push((computer, folder));
     }
     let b = open(&others[0].0, &others[0].1);

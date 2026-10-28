@@ -270,6 +270,14 @@ fn verify(path: &Path, id: tc_journal::ProjectId) -> Result<(), ExchangeError> {
 struct ReadZip {
     files: BTreeMap<String, Vec<u8>>,
     damaged: Vec<String>,
+    /// Foreign files, by their path in the project, that are carried but never written on
+    /// disk ([`crate::names::not_written`]).
+    not_written: std::collections::BTreeSet<String>,
+}
+
+/// The entry's path in the project: carried root files travel under [`ROOT`].
+fn project_path(entry: &str) -> &str {
+    entry.strip_prefix(ROOT).unwrap_or(entry)
 }
 
 fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
@@ -283,10 +291,9 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
         let name = entry.name;
         let symlink = entry.unix_mode.is_some_and(|m| m & 0o170_000 == 0o120_000);
         // A name is refused, never rewritten: rewriting `a\b` to `a/b`, or keeping one of
-        // two equal names, would merge two entries into one.
-        let repeated = !seen.insert(name.clone());
-        if !entry.enclosed || symlink || repeated || tc_burrito::check_project_path(&name).is_err()
-        {
+        // two names of one project path (`x` and `.tc-root/x` too), would merge two entries.
+        let repeated = !seen.insert(project_path(&name).to_owned());
+        if !entry.enclosed || symlink || repeated {
             return Err(ExchangeError::Damaged(format!("the entry {name:?}")));
         }
         match entry.bytes {
@@ -296,7 +303,23 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
             Err(_) => damaged.push(name),
         }
     }
-    Ok(ReadZip { files, damaged })
+    let not_written =
+        crate::names::not_written(files.keys().chain(&damaged).map(|name| project_path(name)))
+            .map_err(|refusal| {
+                ExchangeError::Damaged(match refusal {
+                    crate::names::NameRefusal::Unsafe { path, .. } => format!("the entry {path:?}"),
+                    crate::names::NameRefusal::Colliding { first, second } => {
+                        format!(
+                            "the entries {first:?} and {second:?} are one file on Windows or macOS"
+                        )
+                    }
+                })
+            })?;
+    Ok(ReadZip {
+        files,
+        damaged,
+        not_written,
+    })
 }
 
 /// What receiving a file did (§10.2 R8).
@@ -591,6 +614,16 @@ fn unique(destination: &Path, name: &str) -> Result<String, ExchangeError> {
         })
 }
 
+/// A project built from an exchange file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceivedNew {
+    pub folder: PathBuf,
+    /// Foreign files of the file that were not written, by their path in the project: Windows
+    /// cannot write the name as it is, or Windows or macOS would store two of them as one
+    /// file. The history keeps them, on every computer alike.
+    pub not_written: Vec<String>,
+}
+
 /// R2 "Create the project from this file": a newcomer builds the project in a staging folder
 /// from the file's entries (`.tc-root/` back at the root), written with the store's atomic
 /// writes, and places it as `name`. The first open folds the packs and makes the history.
@@ -598,7 +631,7 @@ pub fn receive_new(
     store: &tc_store::Store,
     path: &Path,
     name: &str,
-) -> Result<PathBuf, ExchangeError> {
+) -> Result<ReceivedNew, ExchangeError> {
     let zip = read_zip(path)?;
     if !zip.damaged.is_empty() {
         return Err(ExchangeError::Damaged(zip.damaged.join(", ")));
@@ -616,12 +649,17 @@ pub fn receive_new(
     }
     let staging = store.staging(tc_store::StagingKind::Import);
     let vfs = store.vfs().clone();
+    let mut not_written = Vec::new();
     let written = (|| -> Result<(), ExchangeError> {
         for (entry, bytes) in &zip.files {
-            let rel = entry.strip_prefix(ROOT).unwrap_or(entry);
+            let rel = project_path(entry);
             // The file's own `.git/` and `.tc/` never shape the new project: a hand-made zip
             // could connect it to a stranger's repository (join filters the same, Q10).
             if rel.starts_with(".git/") || rel.starts_with(".tc/") {
+                continue;
+            }
+            if zip.not_written.contains(rel) {
+                not_written.push(rel.to_owned());
                 continue;
             }
             let full = staging.join(rel);
@@ -637,7 +675,11 @@ pub fn receive_new(
         Ok(())
     })();
     written?;
-    Ok(store.place(&staging, name)?)
+    let folder = store.place(&staging, name)?;
+    Ok(ReceivedNew {
+        folder,
+        not_written,
+    })
 }
 
 #[cfg(test)]
@@ -704,7 +746,12 @@ mod tests {
                 None,
                 entry("ingredients/con.usfm"),
             ),
-            (&["metadata.json", "ab:c"][..], None, entry("ab:c")),
+            (
+                &["metadata.json", "ingredients/ab:c"][..],
+                None,
+                entry("ingredients/ab:c"),
+            ),
+            (&["metadata.json", ".tc-root/../x"][..], None, entry("../x")),
         ] {
             let dir = dir
                 .path()

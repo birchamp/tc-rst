@@ -307,8 +307,8 @@ pub fn check_names<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), N
 }
 
 /// Why `path` cannot be written as it is named into a folder ([`tc_core::check_path`]),
-/// in this crate's words.
-fn name_problem(path: &str) -> Option<NameProblem> {
+/// in this crate's words: [`NameProblem::EscapesRoot`] or [`NameProblem::NotPortable`].
+pub fn name_problem(path: &str) -> Option<NameProblem> {
     use tc_core::PathProblem as P;
     let reason = match tc_core::check_path(path).err()? {
         P::Empty
@@ -340,7 +340,7 @@ fn name_problem(path: &str) -> Option<NameProblem> {
 /// `ı` (dotless i) stays apart from `i`: no supported file system merges them, though `ı`
 /// upper-cases to `I`. Segments ending in a dot or space never get here:
 /// [`tc_core::check_path`] refuses them.
-pub(crate) fn collision_key(path: &str) -> String {
+pub fn collision_key(path: &str) -> String {
     const DOTLESS_I: char = '\u{131}';
     let nfc = ComposingNormalizerBorrowed::new_nfc();
     path.split('/')
