@@ -244,11 +244,7 @@ impl Handle<SaveVerse> for App {
     /// announced as this request's own save (AD37). No lock is held across the wait: the
     /// write's lease keeps the session open.
     async fn handle(&self, req: SaveVerse) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
         let me = handle.facts().device;
@@ -290,11 +286,7 @@ impl Handle<SaveVerse> for App {
 
 impl Handle<SaveLayout> for App {
     async fn handle(&self, req: SaveLayout) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
         let me = handle.facts().device;
@@ -413,11 +405,7 @@ impl Handle<Draft> for App {
                     .into(),
             });
         }
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let (field, shown) = draft_target(handle.as_ref(), &session.read(), req.field, &req.shown)?;
         let first = shown.first().cloned();
@@ -542,11 +530,7 @@ impl Handle<DiscardDraft> for App {
                 reason: "Cancel cannot discard another server run's draft".into(),
             });
         }
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         if let tc_api::event::SessionMode::ReadOnly(reason) = handle.facts().mode {
             return Err(ApiError::NotSaved(NotSaved::ReadOnly(reason)));

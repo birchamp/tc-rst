@@ -655,11 +655,7 @@ impl Handle<Decide> for App {
     /// One act on a check, saved through the session's store as this request's own save
     /// (AD37). No lock is held across the wait: the write's lease keeps the session open.
     async fn handle(&self, req: Decide) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let installed = installed(self)?;
         let shown = wire::token::edit_token(handle.as_ref(), &req.decision)?;
