@@ -145,6 +145,12 @@ impl MemProject {
     }
 }
 
+impl From<BTreeMap<String, Vec<u8>>> for MemProject {
+    fn from(files: BTreeMap<String, Vec<u8>>) -> Self {
+        Self { files }
+    }
+}
+
 impl ProjectFiles for MemProject {
     fn inspect(&self, path: &IngredientPath) -> FileState {
         match self.files.get(path.as_str()) {

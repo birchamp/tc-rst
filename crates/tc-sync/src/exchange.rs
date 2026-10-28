@@ -211,54 +211,30 @@ fn write_export(
 /// ingredients, and every pack verifies.
 fn verify(path: &Path, id: tc_journal::ProjectId) -> Result<(), ExchangeError> {
     let zip = read_zip(path)?;
-    let metadata = zip
+    let unverified_pack = zip
         .files
+        .iter()
+        .find(|(name, bytes)| {
+            name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid
+        })
+        .map(|(name, _)| name.clone());
+    let files = tc_burrito::MemProject::from(zip.files);
+    let metadata = files
         .get(METADATA)
         .ok_or_else(|| ExchangeError::NotVerified("no metadata.json".into()))?;
-    let problems = tc_burrito::validate_project(metadata, &ZipFiles(&zip.files));
+    let problems = tc_burrito::validate_project(metadata, &files);
     if let Some(first) = problems.first() {
         return Err(ExchangeError::NotVerified(format!("{first:?}")));
     }
-    for (name, bytes) in &zip.files {
-        if name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid {
-            return Err(ExchangeError::NotVerified(format!(
-                "{name} does not verify"
-            )));
-        }
+    if let Some(name) = unverified_pack {
+        return Err(ExchangeError::NotVerified(format!(
+            "{name} does not verify"
+        )));
     }
     if !zip.damaged.is_empty() {
         return Err(ExchangeError::NotVerified(zip.damaged.join(", ")));
     }
     Ok(())
-}
-
-struct ZipFiles<'a>(&'a BTreeMap<String, Vec<u8>>);
-
-impl tc_burrito::ProjectFiles for ZipFiles<'_> {
-    fn inspect(&self, path: &tc_burrito::IngredientPath) -> tc_burrito::FileState {
-        match self.0.get(path.as_str()) {
-            Some(bytes) => tc_burrito::FileState::Present(tc_burrito::FileFacts {
-                md5: tc_burrito::Md5::of(bytes),
-                size: bytes.len() as u64,
-            }),
-            None => tc_burrito::FileState::Missing,
-        }
-    }
-
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String> {
-        Ok(self
-            .0
-            .keys()
-            .filter(|p| {
-                p.strip_prefix("ingredients/").is_some_and(|rest| {
-                    !rest
-                        .split('/')
-                        .any(|part| part.starts_with('.') || part.ends_with(".bak"))
-                })
-            })
-            .cloned()
-            .collect())
-    }
 }
 
 /// A zip read under R1's rules: its files by name, and the entries that did not inflate to
