@@ -15,7 +15,7 @@
 use crate::error::VerificationError;
 use icu_normalizer::ComposingNormalizerBorrowed;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Seek};
+use std::io::{Cursor, Read, Seek};
 
 /// How a file is stored in git: the zip's unix mode, as `git archive` writes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -134,6 +134,16 @@ pub(crate) fn unpack_from<R: Read + Seek>(
     strip_and_collect(entries, layout, comment)
 }
 
+/// Unzips a zip held in memory whose files sit at its root or under one top folder, as a
+/// burrito or a resource release does, with every check [`unpack_from`] makes. Debris
+/// ([`is_burrito_debris`]) is dropped; the top folder is removed when every entry shares
+/// one and the root holds no `metadata.json`. Files come back sorted by path. A symbolic
+/// link comes back as a file with [`FileMode::Symlink`]: a caller that refuses links
+/// checks the mode.
+pub fn unpack_zip(bytes: &[u8], max_unpacked: u64) -> Result<Vec<UnpackedFile>, VerificationError> {
+    Ok(unpack_from(Cursor::new(bytes), Layout::Burrito, max_unpacked)?.files)
+}
+
 /// Entries that are never part of a burrito: the `.git/` folder and `.DS_Store` files the
 /// DCS export ships, and what macOS Finder adds to a zip it makes (a `__MACOSX/` folder of
 /// AppleDouble `._*` files).
@@ -230,7 +240,7 @@ fn mode_of(unix_mode: Option<u32>) -> FileMode {
 /// folder), a NUL, a backslash (a separator on Windows), and any segment that is empty,
 /// `.`, or all dots after `..` (`..`, `...`, `.. `), since Windows strips trailing dots and
 /// spaces. A folder's one trailing `/` is allowed.
-pub(crate) fn escapes_root(name: &str) -> bool {
+pub fn escapes_root(name: &str) -> bool {
     let body = name.strip_suffix('/').unwrap_or(name);
     let bytes = body.as_bytes();
     let drive_prefix = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';

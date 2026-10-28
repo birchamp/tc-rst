@@ -55,7 +55,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
-use tc_door43::check_names;
+use tc_door43::{check_names, escapes_root};
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::held;
@@ -1087,12 +1087,8 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
     let paths: Vec<&str> = paths.into_iter().collect();
     for path in &paths {
-        let bad = path.is_empty()
-            || path.contains(['\\', ':', '\0'])
-            || path
-                .split('/')
-                .any(|segment| segment.is_empty() || segment.chars().all(|c| c == '.'));
-        if bad {
+        // `escapes_root` allows the trailing `/` a folder entry has; these are files.
+        if escapes_root(path) || path.ends_with('/') {
             return Err(Refusal::EscapesRoot((*path).to_owned()));
         }
     }
@@ -1346,6 +1342,9 @@ mod tests {
             "a\\b",
             "a//b",
             "...",
+            "a/.. /x",
+            "x/",
+            "a\0b",
             "",
         ] {
             let mut s = staged('a');
