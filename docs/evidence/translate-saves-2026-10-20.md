@@ -4,7 +4,7 @@ C2 promotes the existing real-store verse and section saves into the production 
 service and adds layout saves, drafts and durable current-draft Cancel. The code snapshot
 is `b661bfb1b71ebe37463085ddd327528325ca1dc3` on `resume-build-lane`, based on
 `07445751bd90a4bcc07a172bc3fbcf9e050f34bd`.
-`.audit/plans/C2.md` records implementation, no-loss proof and final gates.
+`tracker:plans/C2.md` records implementation, no-loss proof and final gates.
 
 ## Release save measurement
 

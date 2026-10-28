@@ -3,14 +3,14 @@
 Status: Applied to `docs/STORAGE.md` by the S2 merge.
 
 Line numbers written `S2:n` point into the copy of `docs/STORAGE.md` from the S2 branch at
-3b075d7: `.audit/roadmap/evidence/2026-10-21/STORAGE-s2-3b075d7.md` (5,517 lines). Code paths
+3b075d7: `tracker:roadmap/evidence/2026-10-21/STORAGE-s2-3b075d7.md` (5,517 lines). Code paths
 are on the branch `s2-proof-executor` at 3b075d7. A sentence marked **(inference)** is my
 reading. It is not in the rulings or the code.
 
 The authority is the two rulings:
 
-- `.audit/roadmap/rulings/2026-10-21-outside-edits.md` (called "OE" below, with its rule number);
-- `.audit/roadmap/rulings/2026-10-21-carried-files.md` (called "CF" below, with its rule number).
+- `docs/rulings/2026-10-21-outside-edits.md` (called "OE" below, with its rule number);
+- `docs/rulings/2026-10-21-carried-files.md` (called "CF" below, with its rule number).
 
 ---
 
@@ -777,7 +777,7 @@ because it lives only in the S2 worktree.
 
 ## 6. Effect on the remaining work
 
-All sizes are **estimates**. Each is inferred from the card sizes in `.audit/roadmap/units/`.
+All sizes are **estimates**. Each is inferred from the card sizes in `tracker:roadmap/units/`.
 
 | Card | Effect | Size effect (estimate) |
 |---|---|---|
@@ -799,7 +799,7 @@ path, the store side of the question adds to S3 step 9.
 
 ## 7. Open questions
 
-All answered on 2026-10-22: H18 option B, H19 (Q3) option A, H20 (Q5) option A with no conflict for an empty verse, H21 (Q8) option A, H22: Q2 option A, Q4 `jon_01-Juan.wav`, Q6 the notice-only choice, Q7 as listed. The rulings are in `.audit/roadmap/rulings/2026-10-22-H18.md` to `-H22.md` and override anything below.
+All answered on 2026-10-22: H18 option B, H19 (Q3) option A, H20 (Q5) option A with no conflict for an empty verse, H21 (Q8) option A, H22: Q2 option A, Q4 `jon_01-Juan.wav`, Q6 the notice-only choice, Q7 as listed. The rulings are in `docs/rulings/2026-10-22-H18.md` to `-H22.md` and override anything below.
 
 ### H18. Edits made with Door43's own tools (gatewayEdit, tcCreate, the web editor)
 
@@ -961,7 +961,7 @@ and L118 match the S2 copy. The code references checked and right: `ledger.rs:35
 `carried.rs:428`; `checkpoint.rs:173-191`; `fold.rs:671`; `handle.rs:824`, `:848`;
 `focus.rs:61`, `:285`; `writer.rs:499`; the nine Writer maps (S3 step 8);
 `tc-journal/src/outside.rs:676`; `tc-store/src/outside.rs:314`, `:344`, `:711`. L134 outside
-REACH is confirmed by `.audit/roadmap/evidence/2026-10-21/verification.md:169`. Two rows were
+REACH is confirmed by `tracker:roadmap/evidence/2026-10-21/verification.md:169`. Two rows were
 wrong, L112 and L115 (R7 and R3 above); the totals stand at 11 retired, 14 changed, 8 added.
 
 ### For the owner

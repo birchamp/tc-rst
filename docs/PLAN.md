@@ -2,7 +2,10 @@
 
 This document frames the rebuild of translationCore 4 (tC4) in Rust. It states what
 done means, how big the work is, how much rigor each part gets, and the order of work.
-The decision log is `.audit/rebuild.tsv`. The research behind each claim is cited there.
+The decision log is `docs/rebuild.tsv`. The research behind each claim is cited there.
+The owner's rulings are in `docs/rulings/`. A path written `tracker:<path>` names a file of the
+retired work tracker (cards, plans, tasks, research, evidence). It was removed on 2026-10-28,
+when work moved to GitHub issues, and is in the history of `main` at commit 9249a60d.
 
 ## The goal
 

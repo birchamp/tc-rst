@@ -3,7 +3,7 @@
 This is the run in the build container, not on the reference laptop: Electronite's Linux build
 under Xvfb as root with `--no-sandbox`, software rendering, on a shared 4-vCPU VM with a load
 average of 2 to 3 from other agents' work. It tests the driver end to end and gives a Linux
-baseline; the Windows numbers come from `.audit/tasks/g0-windows.md`.
+baseline; the Windows numbers come from `tracker:tasks/g0-windows.md`.
 
 This file was written by `spikes/electronite/run-spike.ps1`. The spike is throwaway and never
 shipped (docs/APP-DESIGN.md section 10, unit G0). **The server is a stand-in**: `tc4-standin`

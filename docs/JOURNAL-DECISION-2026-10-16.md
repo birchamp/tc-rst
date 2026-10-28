@@ -534,7 +534,7 @@ until the next save *(RT-4)*.
   the storage worktree at 6e8adac (`crates/tc-journal/tests/loss.rs`,
   68 tests; `crates/tc-journal/src/pack.rs` `read_pack`) and its uncommitted
   `crates/tc-journal/src/index.rs` and STORAGE.md working copy (§14 cold open row, 14:27 UTC);
-  `.audit/rebuild.tsv`.
+  `docs/rebuild.tsv`.
 - Head-to-head benchmark:
   `docs/evidence/journal-decision-2026-10-16/results/all-combined.md`,
   `docs/evidence/journal-decision-2026-10-16/results/extras-summary.md`, `docs/evidence/journal-decision-2026-10-16/results/rounds2-summary.md`, `docs/evidence/journal-decision-2026-10-16/results/cold/`,

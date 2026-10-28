@@ -1,9 +1,19 @@
 # Working in this repository
 
 This repository is a Rust rebuild of translationCore 4 (tC4), a desktop app for Bible
-translation. Read `docs/PLAN.md` first. Plan and live state: `.audit/roadmap/README.md`; record
-your work as `.audit/roadmap/TRACKING.md` says. Read `docs/STORAGE.md` before you touch
-anything that writes project data.
+translation. Read `docs/PLAN.md` first. Read `docs/STORAGE.md` before you touch anything that
+writes project data. The owner's rulings are in `docs/rulings/`, the decision log is
+`docs/rebuild.tsv`.
+
+## How work lands
+
+- Work is tracked in GitHub issues on unfoldingWord/translationCore4. Name the issue a change
+  closes in its pull request.
+- Every change lands on `main` by pull request through the merge queue. Never push to `main`.
+  A pull request needs one approving review and the required checks: `lint-linux`,
+  `lint-windows`, `lint-wasm`, `test`, `test-app`, `alignment-budget`, `parity-baseline`,
+  `unit`, `builds`, `e2e-linux` and `journeys`. A pull request runs only the lints; the merge
+  queue runs the full list.
 
 ## The rules that protect translators' work
 
@@ -11,7 +21,7 @@ anything that writes project data.
   comment. If two versions of verse text disagree, keep both and show the conflict. For
   everything else (checks, alignments, comments, settings, books), the newest version wins, the
   older one stays in History where the translator can restore it, and the Received sheet says
-  what was replaced (owner ruling H5, `.audit/roadmap/rulings/2026-10-24-H5.md`).
+  what was replaced (owner ruling H5, `docs/rulings/2026-10-24-H5.md`).
 - Every project on disk and every project that leaves the app is a valid Scripture
   Burrito. Code that writes a project validates it in tests.
 - Write files atomically: write a temporary file in the same directory, fsync it, rename
@@ -47,10 +57,9 @@ anything that writes project data.
   fail if the behavior it names breaks.
 - Parsers get round-trip property tests (`proptest`). Merge and storage code gets
   property tests for convergence and no-loss, plus crash-injection tests.
-- While you build, run the tests of the crates and journeys you touched. `scripts/gates.sh`
-  (`--list` prints its steps) is the list CI runs on every batch; every step must pass, and main
-  moves only to a commit `scripts/gates.sh --check-receipt` accepts. How a card gets ready:
-  `.audit/roadmap/TRACKING.md` "Checklist: merge an item".
+- While you build, run the tests of the crates and journeys you touched. Before you open a
+  pull request, run `scripts/gates.sh --touched`. `scripts/gates.sh` (`--list` prints its
+  steps) is the list CI runs; `--step <name>` runs one step.
 
 ## Performance
 
@@ -59,7 +68,7 @@ anything that writes project data.
 - An interactive action costs what it touches (a verse, a chapter, a check, a book), never
   the size of the project or its history. Prove it with operation-count tests on the Psalms
   corpus and on a corpus ten times larger. Measure the budgets in release builds on the reference laptop and record them in
-  `docs/evidence/`; a row that misses becomes a card (ruling H17).
+  `docs/evidence/`; a row that misses becomes an issue (ruling H17).
 
 ## Commits
 

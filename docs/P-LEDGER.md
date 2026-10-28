@@ -2,7 +2,7 @@
 
 Read a row as: `docs/PLAN.md`'s promise, the GitHub CI job that runs its checks, and the tests
 that show it today; `(pending: <ID>)` names each card that is not done and still owes a part.
-`.audit/tools/claims.test.mjs` checks every row: each named test exists, each job is a job of a
+`scripts/tools/claims.test.mjs` checks every row: each named test exists, each job is a job of a
 workflow, and each pending card is not done.
 
 | P | What it promises | CI job | Tests |

@@ -2,7 +2,7 @@
 
 Measured on the owner's Linux PC (docs/evidence/linux-machine-2026-10-18.md): 20 threads,
 shared with up to three other agents, so each timing gives the load (`uptime`) beside it. Plan:
-`.audit/plans/A7.md`.
+`tracker:plans/A7.md`.
 
 tC4 `d310bf3` in a fresh clone (`git clone --no-checkout`, `git checkout d310bf3`), its
 `node_modules` copied from another `d310bf3` clone with the same `package-lock.json` and its help

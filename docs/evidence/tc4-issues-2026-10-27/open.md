@@ -3,7 +3,7 @@
 - Rebuild: main 58e8e10b, branch `tc4-issues-2026-10-27`. Report only: no product code changed.
 - Issues: unfoldingWord/translationCore4 #840, 839, 837, 836, 835, 833, 832, 831, 830, 829, 825,
   822, 821, 802, 764, read with `gh issue view` on 2026-10-27.
-- Scope: 4.1.0 as ruled in `.audit/roadmap/rulings/2026-10-24-H3-H4-H7-fast-release.md` (tC3 import
+- Scope: 4.1.0 as ruled in `docs/rulings/2026-10-24-H3-H4-H7-fast-release.md` (tC3 import
   and Update a book kept; tC4 4.0, outside USFM and outside Burrito imports cut), H14 for #837,
   Q39 for #840.
 - Method: each reachable issue was driven in the real app (`tc4 serve` built with

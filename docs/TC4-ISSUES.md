@@ -18,7 +18,7 @@ Swept: tC4 main 24188928bff9c3fc9c7a8f143fb80d645d66f1d1, release/4.0 d25b787190
   d25b7871 (PR #841) and holds the tag v4.0.0-rc.2 (a5ce0307); there is no v4.0.0 tag. The
   newest issue is #840. Pull requests #785, #799 and #800 have merged. The 2026-10-23 rows
   were classified by reading code and checking each test name with `git grep`; the Align and
-  USFM tests they name were run and pass (`.audit/roadmap/evidence/2026-10-23-sweep/`).
+  USFM tests they name were run and pass (`tracker:roadmap/evidence/2026-10-23-sweep/`).
 - Test names are the names the rebuild would use. A name in backticks with no note exists
   and passes today; "to add" or a unit name means it must be written.
 
@@ -319,7 +319,7 @@ the rebuild fixed it or does as tC4 does:
 | Issue | Title | Status | Unit or crate | Regression test | Action |
 |---|---|---|---|---|---|
 | #801 | After a sync, show the plain refusal and let the user go Home | covered | E1a, A4b, X; FIX-R | `a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text` (tc-ui); `stale_scope_save_keeps_text_and_home_leaves_in_one_click` (tc-ui, E1a) | The rebuild has no "old store": a sync joins the open session. Fixed by FIX-R: a refusal that can never succeed lets the person go Home and keeps the text. E1a still ports J1b's one-window route and tC4's 646-line `e2e/sync-refusal.spec.ts` (#803). X holds each sync step, OBS frames included. See §6 for refusals that can never succeed. |
-| #761 | Sync story projects with teammates | covered | X, E1a, E1b | `team_sync_obs_project` (tc-sync: an Open Bible Stories project shares, joins and syncs both ways); `a_story_project_syncs_like_a_bible` (tc-app, both ports) | The owner ruled that stories sync (Q2). The planned frame-level tests (two devices' frames, one frame changed two ways, front matter as a carried file) were not written; they are a minor in `.audit/minors.tsv`. |
+| #761 | Sync story projects with teammates | covered | X, E1a, E1b | `team_sync_obs_project` (tc-sync: an Open Bible Stories project shares, joins and syncs both ways); `a_story_project_syncs_like_a_bible` (tc-app, both ports) | The owner ruled that stories sync (Q2). The planned frame-level tests (two devices' frames, one frame changed two ways, front matter as a carried file) were not written; they are a minor in `tracker:minors.tsv`. |
 | #748 | Door43 journey uses committed journals | not applicable | E1b | — | tC4 rig. Seed the fake from a committed project. |
 | #747 | Keep backup files out of syncs | covered | S2, X | `a_file_that_cannot_be_an_ingredient_is_moved_out_and_kept` (with TIT.usfm.bak, notes.txt~ and draft.tmp, and the next checkpoint's tree) | It fails with the `.bak` rule deleted (T step 4). `scan.rs` keeps `.bak` out, not `checkpoint.rs`. X: a `.bak` from Door43 stays a foreign entry. |
 | #746 | Test that startup recovery runs before projects open | covered | tc-store (S1); C1a | `an_import_started_while_the_start_cleanup_runs_keeps_its_staging_folder_and_finishes` | C1a moves tc-app onto the store and creates, imports and joins only through `Store`. |
