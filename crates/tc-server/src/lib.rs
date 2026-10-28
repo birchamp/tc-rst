@@ -112,7 +112,8 @@ pub struct ServerConfig {
     /// The folder `--ui` names: `index.html`, `ui/`, `help/`, `prepare.html`.
     pub ui_dir: PathBuf,
     pub limits: Limits,
-    /// End the run on Ctrl+C and SIGTERM. A test run leaves it off and keeps its Ctrl+C.
+    /// End the run on Ctrl+C and SIGTERM. A test run leaves it off and keeps its Ctrl+C. When
+    /// on, [`Server::bind`] must run inside a Tokio runtime.
     pub handle_signals: bool,
     /// How a test crash after a reply ends the process: [`ExitProcess`], or a test's recorder.
     #[cfg(feature = "test-hooks")]
@@ -148,13 +149,15 @@ pub enum ServerError {
     Random,
     #[error("the server stopped: {0}")]
     Serve(#[source] io::Error),
+    #[error("cannot take over Ctrl+C and SIGTERM: {0}")]
+    Signals(#[source] io::Error),
 }
 
 /// A server that is listening and has not served a request yet.
 pub struct Server {
     listener: std::net::TcpListener,
     shared: Arc<Shared>,
-    handle_signals: bool,
+    signals: lifecycle::Signals,
     address: AddressLine,
 }
 
@@ -203,6 +206,7 @@ impl Server {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(ServerError::Bind)?;
         let port = listener.local_addr().map_err(ServerError::Bind)?.port();
         let token = LaunchToken::new()?;
+        let signals = lifecycle::Signals::listen(handle_signals).map_err(ServerError::Signals)?;
         let address = AddressLine {
             url: format!("http://127.0.0.1:{port}/"),
             token: token.as_str().to_owned(),
@@ -227,7 +231,7 @@ impl Server {
         Ok(Server {
             listener,
             shared,
-            handle_signals,
+            signals,
             address,
         })
     }
@@ -279,7 +283,7 @@ impl Server {
         let Server {
             listener,
             shared,
-            handle_signals,
+            signals,
             address: _,
         } = self;
         listener.set_nonblocking(true).map_err(ServerError::Serve)?;
@@ -300,7 +304,7 @@ impl Server {
         let cause = tokio::select! {
             exit = lifecycle::watch_stdin(input) => exit,
             () = backend.quitting() => Exit::AppQuit,
-            exit = lifecycle::watch_signals(handle_signals) => exit,
+            exit = signals.recv() => exit,
             ended = &mut serving => {
                 sweeper.abort();
                 return Err(ServerError::Serve(match ended {

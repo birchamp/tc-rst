@@ -58,30 +58,64 @@ where
     }
 }
 
-/// Resolves when the process is asked to end. With `enabled` false it never resolves, so a
-/// test run keeps Ctrl+C.
-pub(crate) async fn watch_signals(enabled: bool) -> Exit {
-    if !enabled {
-        return std::future::pending().await;
-    }
+/// The signals that end the run, taken over from the operating system's default when the
+/// server is bound: a signal sent as soon as the address line is read then quits like the
+/// quit message, where one that came before a listener existed killed the process outright.
+pub(crate) enum Signals {
+    /// A test run keeps Ctrl+C.
+    Off,
     #[cfg(unix)]
-    {
-        use tokio::signal::unix::{SignalKind, signal};
-        let Ok(mut terminate) = signal(SignalKind::terminate()) else {
-            return std::future::pending().await;
-        };
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = terminate.recv() => {}
+    On {
+        interrupt: tokio::signal::unix::Signal,
+        terminate: tokio::signal::unix::Signal,
+    },
+    #[cfg(windows)]
+    On(tokio::signal::windows::CtrlC),
+}
+
+impl Signals {
+    /// Must run inside a Tokio runtime when `enabled`.
+    pub(crate) fn listen(enabled: bool) -> std::io::Result<Self> {
+        if !enabled {
+            return Ok(Self::Off);
+        }
+        // Tokio's listeners panic outside a runtime.
+        tokio::runtime::Handle::try_current().map_err(std::io::Error::other)?;
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            Ok(Self::On {
+                interrupt: signal(SignalKind::interrupt())?,
+                terminate: signal(SignalKind::terminate())?,
+            })
+        }
+        #[cfg(windows)]
+        {
+            Ok(Self::On(tokio::signal::windows::ctrl_c()?))
         }
     }
-    #[cfg(not(unix))]
-    {
-        if tokio::signal::ctrl_c().await.is_err() {
-            return std::future::pending().await;
+
+    /// Resolves when the process is asked to end; never when off.
+    pub(crate) async fn recv(self) -> Exit {
+        match self {
+            Self::Off => std::future::pending().await,
+            #[cfg(unix)]
+            Self::On {
+                mut interrupt,
+                mut terminate,
+            } => {
+                tokio::select! {
+                    _ = interrupt.recv() => {}
+                    _ = terminate.recv() => {}
+                }
+            }
+            #[cfg(windows)]
+            Self::On(mut ctrl_c) => {
+                ctrl_c.recv().await;
+            }
         }
+        Exit::Signal
     }
-    Exit::Signal
 }
 
 /// The layer under the security guard: once the quit sequence began, a request gets 503, so a
