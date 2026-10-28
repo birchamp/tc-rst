@@ -437,7 +437,9 @@ impl Writer {
         let packs = self.packs.clone();
         let complete = self.complete;
         self.begin(&snapshot, packs, complete);
-        let _ = self.materialize_now();
+        if let Err(e) = self.materialize_now() {
+            self.job_failed(&e);
+        }
     }
 
     /// O14's results: equal bytes settle an entry, different bytes are classified again
@@ -462,8 +464,11 @@ impl Writer {
             );
         }
         // What the check found is written now, within this job, so `wait_idle` covers it.
-        if !was_dirty && !self.dirty.is_empty() {
-            let _ = self.materialize_now();
+        if !was_dirty
+            && !self.dirty.is_empty()
+            && let Err(e) = self.materialize_now()
+        {
+            self.job_failed(&e);
         }
     }
 
