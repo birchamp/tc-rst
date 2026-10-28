@@ -833,7 +833,7 @@ fn comments_decode_what_they_render() {
     let bytes = state
         .render(&DerivedFile::Comments(BOOK))
         .expect("comments");
-    let got = decode_comments(Some(BOOK), &bytes).expect("decodes");
+    let got = decode_comments(&bytes).expect("decodes");
     assert_eq!(got.len(), 2);
     for decoded in &got {
         let want = changes

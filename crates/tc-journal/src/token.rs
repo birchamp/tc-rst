@@ -159,28 +159,34 @@ impl ShownToken {
 
     /// Reads a token the UI sent back, refusing one this key did not sign.
     pub fn parse(signing: &TokenKey, text: &str) -> Result<Self, TokenError> {
-        let bytes = unbase64url(text).ok_or(TokenError::NotBase64)?;
-        if bytes.len() <= MAC_LEN {
-            return Err(TokenError::TooShort);
-        }
-        let (payload, mac) = bytes.split_at(bytes.len() - MAC_LEN);
-        let mut check = mac_with(&signing.0);
-        check.update(payload);
-        check
-            .verify_truncated_left(mac)
-            .map_err(|_| TokenError::BadMac)?;
-        Self::read_payload(payload, mac)
+        Self::decode(text, |payload, mac| {
+            let mut check = mac_with(&signing.0);
+            check.update(payload);
+            check
+                .verify_truncated_left(mac)
+                .map_err(|_| TokenError::BadMac)
+        })
     }
 
     /// What a token says, without checking its MAC: the record and heads of a draft whose
     /// token this installation can no longer verify (a new installation secret, R20), so its
     /// text is offered and kept as a change with no parents, never trusted as a base.
     pub fn parse_unverified(text: &str) -> Result<Self, TokenError> {
+        Self::decode(text, |_, _| Ok(()))
+    }
+
+    /// Splits the token's text into payload and MAC, runs `check` on them, then reads the
+    /// payload.
+    fn decode(
+        text: &str,
+        check: impl FnOnce(&[u8], &[u8]) -> Result<(), TokenError>,
+    ) -> Result<Self, TokenError> {
         let bytes = unbase64url(text).ok_or(TokenError::NotBase64)?;
         if bytes.len() <= MAC_LEN {
             return Err(TokenError::TooShort);
         }
         let (payload, mac) = bytes.split_at(bytes.len() - MAC_LEN);
+        check(payload, mac)?;
         Self::read_payload(payload, mac)
     }
 

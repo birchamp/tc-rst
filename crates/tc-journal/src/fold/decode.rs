@@ -17,7 +17,6 @@ use crate::keys::{
 use crate::record::{PinGroupValue, Record, SlotValue, VersificationValue};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
-use tc_core::BookId;
 
 fn json(v: &Value, at: &str) -> Result<Json, SidecarError> {
     Json::try_from(v).map_err(|e| fail(at, e.to_string()))
@@ -158,13 +157,9 @@ pub struct DecodedComment {
     pub text: String,
 }
 
-/// The comments of `tc/comments/<BOOK>.json` (`book` is `None` for `OBS.json`). `placed`,
-/// `author` and `at` are computed and ignored.
-pub fn decode_comments(
-    book: Option<BookId>,
-    bytes: &[u8],
-) -> Result<Vec<DecodedComment>, SidecarError> {
-    let _ = book;
+/// The comments of `tc/comments/<BOOK>.json` or `OBS.json`. `placed`, `author` and `at` are
+/// computed and ignored.
+pub fn decode_comments(bytes: &[u8]) -> Result<Vec<DecodedComment>, SidecarError> {
     let doc = document(bytes)?;
     let list = doc
         .get("comments")

@@ -276,7 +276,7 @@ pub fn decode_file(file: &OutsideFile, bytes: &[u8], path: &RepoPath) -> Result<
             decoded.records = decode_decisions(*tool, None, bytes).map_err(problem)?;
         }
         DerivedFile::Comments(_) | DerivedFile::StoryComments => {
-            let comments = decode_comments(derived.book(), bytes).map_err(problem)?;
+            let comments = decode_comments(bytes).map_err(problem)?;
             let mut seen = BTreeSet::new();
             for c in comments {
                 let id =
