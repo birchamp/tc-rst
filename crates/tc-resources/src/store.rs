@@ -392,9 +392,9 @@ impl Installed {
 
     /// How a seeding reports this bundled install when copying it was refused.
     fn refused(&self, why: InstallError) -> StoreError {
-        StoreError::BadReceipt {
+        StoreError::Refused {
             path: self.dir.clone(),
-            problem: why.to_string(),
+            source: Box::new(why),
         }
     }
 
@@ -1596,6 +1596,18 @@ mod tests {
         assert!(
             report.refused[0].1.to_string().contains(escaping),
             "the refusal names the path: {}",
+            report.refused[0].1
+        );
+        // The refusal keeps its kind, not only its words.
+        assert!(
+            matches!(
+                &report.refused[0].1,
+                StoreError::Refused { source, .. } if matches!(
+                    **source,
+                    InstallError::Refused { refusal: Refusal::EscapesRoot(_), .. }
+                )
+            ),
+            "{:?}",
             report.refused[0].1
         );
         assert!(machine.installed().unwrap().installs.is_empty());
