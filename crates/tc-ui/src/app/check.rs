@@ -12,6 +12,7 @@
 //!   view, at offsets computed from two fixed heights, and keeps the tab-stop row mounted
 //!   wherever it is. tC4 draws every row; a Psalms rail has 8,212.
 
+use crate::roving::{Axis, Move, roving};
 use std::ops::Range;
 
 use tc_api::check::{AlignProgress, CardCount, CheckPlace, CheckProgress, Tool};
@@ -176,17 +177,12 @@ pub fn min_fill(done: u32) -> Option<f64> {
 /// is not the list's. `order` is the rail's order of check indices; `current` the selected one,
 /// which a filter may hide: Up and Down then select the first row shown.
 pub fn rail_key(order: &[u32], current: Option<u32>, key: &str) -> Option<u32> {
-    if order.is_empty() {
-        return None;
-    }
-    let last = order.len() - 1;
+    let step = Move::of_key(key, Axis::Vertical)?;
     let at = current.and_then(|c| order.iter().position(|&i| i == c));
-    let next = match key {
-        "Home" => 0,
-        "End" => last,
-        "ArrowDown" => at.map_or(0, |p| if p == last { 0 } else { p + 1 }),
-        "ArrowUp" => at.map_or(0, |p| if p == 0 { last } else { p - 1 }),
-        _ => return None,
+    // tC4's rail, unlike its menus, sends Up with the selected row hidden to the first row.
+    let next = match (at, step) {
+        (None, Move::Prev) => 0,
+        _ => roving(order.len(), at, step)?,
     };
     order.get(next).copied()
 }

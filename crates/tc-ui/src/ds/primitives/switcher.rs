@@ -9,6 +9,7 @@ use wasm_bindgen::JsCast;
 use crate::ds::{
     Attrs, Css, Indicator, Size, Tag, Text, TextRole, TextTone, Tone, element, spread,
 };
+use crate::roving::{Axis, Move, roving};
 
 /// One option of a Switcher.
 #[derive(Debug, Clone, PartialEq)]
@@ -71,24 +72,11 @@ pub fn Switcher(
     };
     let on_key_down = move |e: KeyboardEvent| {
         let n = options.with_value(Vec::len);
-        let step: i64 = match e.key().as_str() {
-            "ArrowRight" | "ArrowDown" => 1,
-            "ArrowLeft" | "ArrowUp" => -1,
-            "Home" => i64::MIN,
-            "End" => i64::MAX,
-            _ => 0,
-        };
-        if step == 0 || n == 0 {
+        let Some(next) = Move::of_key(&e.key(), Axis::Both).and_then(|step| roving(n, idx(), step))
+        else {
             return;
-        }
+        };
         e.prevent_default();
-        let n = n as i64;
-        let at = idx().map_or(-1, |i| i as i64);
-        let next = match step {
-            i64::MIN => 0,
-            i64::MAX => n - 1,
-            s => (at + s + n).rem_euclid(n),
-        } as usize;
         let Some(opt) = options.with_value(|o| o.get(next).cloned()) else {
             return;
         };
