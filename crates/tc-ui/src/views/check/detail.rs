@@ -14,7 +14,7 @@ use leptos::html;
 use leptos::prelude::*;
 use tc_api::check::{
     CheckNotice, CheckSources, CheckUnit, DecideEdit, DecisionStatus, GatewayText, GatewayView,
-    OriginalVerse, OriginalView, Testament, Tool,
+    OriginalVerse, OriginalView, Testament,
 };
 use tc_api::helps::ArticleView;
 use tc_api::shown::Direction as TextDir;
@@ -58,7 +58,7 @@ enum Shown {
 }
 
 /// The detail column of the open tool.
-pub fn check_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> AnyView {
+pub fn check_detail(s: &AppState, actions: &Actions, unit: CheckUnit) -> AnyView {
     let detail = s.c.detail.clone();
     let shown = Memo::new(move |_| {
         detail.with(|d| match d {
@@ -79,7 +79,7 @@ pub fn check_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool
             };
             view! { <p data-testid="check-error" style=p.to_style()>{error}</p> }.into_any()
         }
-        Shown::Check(_) => item_detail(&s, &actions, unit, tool),
+        Shown::Check(_) => item_detail(&s, &actions, unit),
     })
     .into_any()
 }
@@ -525,7 +525,7 @@ fn target_words(s: &AppState, words: Vec<String>, direction: TextDir) -> AnyView
 }
 
 /// The check's detail, once a check is shown.
-fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> AnyView {
+fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit) -> AnyView {
     let c = s.c.clone();
     let detail = c.detail.clone();
     let session = c.session.clone();
@@ -931,7 +931,7 @@ fn item_detail(s: &AppState, actions: &Actions, unit: CheckUnit, tool: Tool) -> 
     };
 
     // ---- the bookmark and the comment
-    let marks = check_marks(s, actions, tool);
+    let marks = check_marks(s, actions);
 
     let page = crate::css! { "padding": "28px 32px 60px" };
     view! {
@@ -981,7 +981,7 @@ fn mark_chip(active: bool) -> Css {
 /// tC4's `CheckMarks`: the bookmark on the left, the check comment's button right-aligned, and
 /// the inline comment editor. Both write the decision's record like a triage click; neither
 /// moves progress.
-fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
+fn check_marks(s: &AppState, actions: &Actions) -> AnyView {
     let detail = s.c.detail.clone();
     let open = s.c.comment_open.clone();
     let bookmarked = Memo::new({
@@ -1056,11 +1056,8 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
         }
     };
     let editor = {
-        let (s, actions) = (s.clone(), actions.clone());
-        move || {
-            open.get()
-                .then(|| comment_editor(&s, &actions, tool, toggle))
-        }
+        let actions = actions.clone();
+        move || open.get().then(|| comment_editor(&actions, toggle))
     };
     view! {
         <div data-testid="check-marks" style=wrap.to_style()>
@@ -1078,13 +1075,7 @@ fn check_marks(s: &AppState, actions: &Actions, tool: Tool) -> AnyView {
 /// The inline comment editor. Its text is a field of the save machine: it saves on Done and on
 /// leaving the check while the editor is open (A-10), and a draft of it is kept in the buffer
 /// between. Done and Delete give the focus back to the button that opened it (#42).
-fn comment_editor(
-    s: &AppState,
-    actions: &Actions,
-    tool: Tool,
-    toggle: NodeRef<html::Button>,
-) -> AnyView {
-    let _ = tool;
+fn comment_editor(actions: &Actions, toggle: NodeRef<html::Button>) -> AnyView {
     let Some((key, pair, scope)) = actions.comment_field() else {
         return ().into_any();
     };
@@ -1097,7 +1088,6 @@ fn comment_editor(
         let (saves, key) = (saves.clone(), key.clone());
         on_cleanup(move || saves.close(&key));
     }
-    let _ = s;
     // What is in the box now, for the Delete button; the machine's own text follows the reads.
     let draft = ArcRwSignal::new(text.get_untracked());
     {
