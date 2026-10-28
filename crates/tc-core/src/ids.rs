@@ -13,6 +13,20 @@ pub struct ChapterNo(NonZeroU16);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct VerseNo(NonZeroU16);
 
+/// Plain decimal digits as a `u16`: no sign, no space, at least one digit, leading zeros
+/// allowed. `u16::from_str` alone would also take `+1`.
+pub fn digits(s: &str) -> Option<u16> {
+    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok()
+}
+
+/// Text that is not a chapter or verse number: [`digits`] from 1 to 65535.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("not a number from 1 to 65535")]
+pub struct NotANumber;
+
 macro_rules! nonzero_number {
     ($name:ident) => {
         impl $name {
@@ -29,6 +43,14 @@ macro_rules! nonzero_number {
         impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{}", self.0)
+            }
+        }
+
+        impl std::str::FromStr for $name {
+            type Err = NotANumber;
+
+            fn from_str(s: &str) -> Result<Self, NotANumber> {
+                digits(s).and_then(Self::new).ok_or(NotANumber)
             }
         }
     };
