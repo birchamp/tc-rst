@@ -1042,7 +1042,7 @@ pub fn check_session(
                 }
             };
             // Row patches update the rail without remounting the detail or its comment field.
-            let detail = super::detail::check_detail(&s, &actions, unit, tool);
+            let detail = super::detail::check_detail(&s, &actions, unit);
             let academy = super::detail::academy_drawer(&s, &actions);
             view! {
                 <div data-testid="check-session" style=root.to_style()>

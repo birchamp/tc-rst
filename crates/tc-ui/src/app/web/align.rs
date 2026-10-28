@@ -30,7 +30,8 @@ use super::app_ctx::Actions;
 use super::js;
 use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
-    EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, refresh_for, same_verse,
+    Closed, EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, closed, refresh_for,
+    same_verse,
 };
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
@@ -127,6 +128,8 @@ pub struct AlignState {
     pub asking: ArcRwSignal<bool>,
     /// A queued edit failed; the workspace stays mounted with its pending actions retained.
     pub edit_error: ArcRwSignal<Option<String>>,
+    /// The suggestions switch was not set; it shows its saved state again until the next view.
+    pub suggest_error: ArcRwSignal<Option<String>>,
     /// The aligner the server holds for this page, the open it belongs to and its verse: what
     /// the tool asks the server to close when it is left for another book, and the verse shown
     /// again when the server refuses to leave it.
@@ -154,6 +157,7 @@ impl AlignState {
             how: ArcRwSignal::new(false),
             asking: ArcRwSignal::new(false),
             edit_error: ArcRwSignal::new(None),
+            suggest_error: ArcRwSignal::new(None),
             open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
             history_open: ArcRwSignal::new(false),
@@ -269,14 +273,14 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => {
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => {
                         view.save = unsaved;
                         this.align_view(*view);
                         return;
                     }
-                    Err(_) => {
+                    Closed::Unanswered | Closed::Gone => {
                         // An unanswered close is not proof that the links were saved.
                         this.s().a.screen.try_set(Screen::Ready(view));
                         this.refresh_align();
@@ -304,9 +308,10 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) | Err(_) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => this.runtime().align_save(aligner, unsaved),
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved | Closed::Gone => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => this.runtime().align_save(aligner, unsaved),
+                    Closed::Unanswered => {}
                 }
             });
         }
@@ -555,6 +560,9 @@ impl Actions {
                 rows.patch(view.place, view.status);
             }
         });
+        if a.suggest_error.get_untracked().is_some() {
+            a.suggest_error.try_set(None);
+        }
         a.screen.try_set(Screen::Ready(Box::new(view)));
     }
 
@@ -796,7 +804,13 @@ impl Actions {
                 request: js::random_request_id(),
                 on,
             };
-            let _ = this.runtime().api().call(&request).await;
+            match this.runtime().api().call(&request).await {
+                // The tool is being left: nothing to say on it.
+                Ok(()) | Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
+                Err(error) => {
+                    this.s().a.suggest_error.try_set(Some(error.to_string()));
+                }
+            }
             this.refresh_align();
         });
     }

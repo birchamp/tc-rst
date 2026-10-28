@@ -188,7 +188,7 @@ pub fn HelpsPanel(
                     (HelpsTab::Comments, Some(comments)) => {
                         comments_tab(&s, comments, chapter, focus_verses).into_any()
                     }
-                    _ => helps_tab(&s, &actions, tab, view, chapter, focus_verses, &pane, story.as_ref())
+                    _ => helps_tab(&s, &actions, tab, view, focus_verses, &pane, story.as_ref())
                         .into_any(),
                 },
             })
@@ -306,16 +306,11 @@ fn helps_divider(actions: &Actions, panel: NodeRef<html::Aside>) -> impl IntoVie
 }
 
 /// tC4's `HelpsTab`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a view's inputs: the state, handles and signals it reads"
-)]
 fn helps_tab(
     s: &crate::app::web::AppState,
     actions: &Actions,
     tab: HelpsTab,
     view: &PassageView,
-    chapter: u16,
     focus_verses: Memo<Option<Vec<String>>>,
     pane: &str,
     story: Option<&StoryPanel>,
@@ -338,7 +333,7 @@ fn helps_tab(
     let focus = focus.as_deref();
     let frame = story.map(|s| s.focus_frame);
     match tab {
-        HelpsTab::Notes => notes_tab(s, actions, &view.notes, chapter, focus, pane, frame),
+        HelpsTab::Notes => notes_tab(s, actions, &view.notes, focus, pane, frame),
         HelpsTab::Words => words_tab(s, actions, &view.words, focus, pane, frame),
         HelpsTab::Questions => questions_tab(s, &view.questions, focus, frame),
         HelpsTab::Simplified => simplified_tab(&view.simplified, focus),
@@ -535,7 +530,6 @@ fn notes_tab(
     s: &crate::app::web::AppState,
     actions: &Actions,
     slot: &Slot<tc_api::helps::NoteCard>,
-    chapter: u16,
     focus: Option<&[String]>,
     pane: &str,
     frame: Option<Memo<Option<u16>>>,
@@ -543,7 +537,6 @@ fn notes_tab(
     let Slot::Ready(ready) = slot else {
         return slot_status(actions, slot);
     };
-    let _ = chapter;
     let notes: Vec<_> = ready
         .items
         .iter()

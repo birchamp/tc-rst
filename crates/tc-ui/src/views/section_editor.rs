@@ -366,7 +366,7 @@ pub fn SectionEditor(
                 } else { t(keys::draft::CANCEL_VERSE, &[]) }
             }}</Button>
             {move || cancel_state.with(|state| match state {
-                CancelState::Error(error) => Some(view! { <span role="alert" data-testid="section-cancel-error">{error.clone()}</span> }),
+                CancelState::Error(error) => Some(view! { <span role="alert" data-testid="section-cancel-error">{error.message()}</span> }),
                 CancelState::Idle | CancelState::Pending => None,
             })}
         }
