@@ -236,6 +236,226 @@ fn a_tc3_alignment_whose_words_do_not_fit_the_verse_is_marked_invalid() {
     );
 }
 
+/// `original` with each `(name, bytes)` written over the entry of that name, or added.
+fn with_entries(original: &SourceFile, entries: &[(&str, &[u8])]) -> SourceFile {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&original.bytes)).unwrap();
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).unwrap();
+        let name = entry.name().to_owned();
+        if entry.is_dir() || entries.iter().any(|(n, _)| *n == name) {
+            continue;
+        }
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).unwrap();
+        writer.start_file(name, options).unwrap();
+        writer.write_all(&bytes).unwrap();
+    }
+    for (name, bytes) in entries {
+        writer.start_file(*name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    SourceFile {
+        name: original.name.clone(),
+        bytes: writer.finish().unwrap().into_inner(),
+    }
+}
+
+/// tC3's Luke with 1:1 and 1:2 bridged as `1-2` in the text and in the alignment data
+/// (`fixtures/tc3/make_bridged.py`).
+fn bridged_luke() -> SourceFile {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/tc3/en_kjv_luk_bridged.zip");
+    SourceFile {
+        name: "en_kjv_luk_bridged.zip".to_owned(),
+        bytes: std::fs::read(path).unwrap(),
+    }
+}
+
+const LUKE_ONE: &str = "apps/translationCore/alignmentData/luk/1.json";
+
+/// The alignment data of `entry` in `zip`.
+fn entry_json(zip: &SourceFile, entry: &str) -> serde_json::Map<String, Value> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&zip.bytes)).unwrap();
+    let mut bytes = Vec::new();
+    archive
+        .by_name(entry)
+        .unwrap()
+        .read_to_end(&mut bytes)
+        .unwrap();
+    serde_json::from_slice::<Value>(&bytes)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone()
+}
+
+/// `zip` with Luke 1's alignment data edited by `edit`.
+fn with_luke_one(
+    zip: &SourceFile,
+    edit: impl FnOnce(&mut serde_json::Map<String, Value>),
+) -> SourceFile {
+    let mut verses = entry_json(zip, LUKE_ONE);
+    edit(&mut verses);
+    with_entries(zip, &[(LUKE_ONE, &serde_json::to_vec(&verses).unwrap())])
+}
+
+/// Luke 1:1's record in tC3's own fixture: the one record of Luke 1 with links.
+fn luke_one_one() -> Value {
+    entry_json(&source("tc3/multi/en_kjv_luk_book.zip"), LUKE_ONE)["1"].clone()
+}
+
+/// The import's alignment lines of its report, sorted.
+fn alignment_report(import: &tc_import::tc3::Tc3Import) -> Vec<String> {
+    let mut lines: Vec<String> = import.books[0]
+        .not_kept
+        .iter()
+        .filter(|n| n.starts_with("wordAlignment"))
+        .cloned()
+        .collect();
+    lines.sort_unstable();
+    lines
+}
+
+/// The record imported for Luke 1:1, with the verse its span ends at.
+fn luke_one_one_imported(
+    import: &tc_import::tc3::Tc3Import,
+) -> (u16, &tc_journal::record::AlignmentValue) {
+    let (_, _, value) = import.books[0]
+        .alignments()
+        .iter()
+        .find(|(c, v, _)| c.get() == 1 && v.get() == 1)
+        .expect("Luke 1:1 holds an alignment");
+    (value.span_end.get(), value)
+}
+
+/// tC3 keys a bridge's alignment by the span, as the text: it imports onto the span, its
+/// words fitting the span's.
+#[test]
+fn a_bridged_alignment_imports_onto_the_texts_span() {
+    let import = read(&[bridged_luke()]).unwrap();
+    let (end, value) = luke_one_one_imported(&import);
+    assert_eq!(end, 2);
+    assert!(!value.marked_invalid, "the span's words fit");
+    assert!(value.alignments.iter().any(|g| !g.bottom_words.is_empty()));
+    assert_eq!(alignment_report(&import), Vec::<String>::new());
+    import.records(&pins()).unwrap();
+}
+
+/// A record keyed by a verse the text's span covers lands on the span, as a check decision
+/// does; its words are one verse's, so it is marked for review, never dropped.
+#[test]
+fn an_alignment_of_a_verse_inside_a_bridge_lands_on_the_span_for_review() {
+    let zip = with_luke_one(&bridged_luke(), |verses| {
+        verses.remove("1-2");
+        verses.insert("2".to_owned(), luke_one_one());
+    });
+    let import = read(&[zip]).unwrap();
+    let (end, value) = luke_one_one_imported(&import);
+    assert_eq!(end, 2);
+    assert!(
+        value.marked_invalid,
+        "one verse's words do not fit the span"
+    );
+    assert_eq!(alignment_report(&import), Vec::<String>::new());
+}
+
+/// Two records for one span: the one keyed as the text is, which tC3 shows, is kept; the
+/// other is reported.
+#[test]
+fn a_second_alignment_of_a_bridge_is_reported() {
+    let zip = with_luke_one(&bridged_luke(), |verses| {
+        verses.insert("1".to_owned(), luke_one_one());
+    });
+    let import = read(&[zip]).unwrap();
+    let (end, value) = luke_one_one_imported(&import);
+    assert_eq!(end, 2);
+    assert!(!value.marked_invalid, "the span's own record was kept");
+    assert_eq!(
+        alignment_report(&import),
+        ["wordAlignment LUK 1:1 (another alignment of this verse was kept)"]
+    );
+}
+
+/// A bridge the text does not have (the text keeps 1:1 and 1:2 apart) has no place.
+#[test]
+fn a_bridge_the_text_does_not_have_is_reported() {
+    let span = entry_json(&bridged_luke(), LUKE_ONE)["1-2"].clone();
+    let zip = with_luke_one(&source("tc3/multi/en_kjv_luk_book.zip"), |verses| {
+        verses.insert("1-2".to_owned(), span);
+    });
+    let import = read(&[zip]).unwrap();
+    assert_eq!(
+        luke_one_one_imported(&import).0,
+        1,
+        "the text's own verses still import"
+    );
+    assert_eq!(
+        alignment_report(&import),
+        ["wordAlignment LUK 1:1-2 (the text bridges these verses differently)"]
+    );
+}
+
+/// A verse the text lacks has no place; the bridge beside it still imports.
+#[test]
+fn an_alignment_of_a_verse_the_text_lacks_is_reported() {
+    let zip = with_luke_one(&bridged_luke(), |verses| {
+        verses.insert("999".to_owned(), luke_one_one());
+        verses.insert(
+            "998".to_owned(),
+            serde_json::json!({ "alignments": [], "wordBank": [] }),
+        );
+    });
+    let import = read(&[zip]).unwrap();
+    assert_eq!(luke_one_one_imported(&import).0, 2);
+    assert_eq!(
+        alignment_report(&import),
+        ["wordAlignment LUK 1:999 (no such verse in the text)"],
+        "a record with no links is no loss"
+    );
+}
+
+/// A key that is not a verse number has no place; tC3's empty `front` records are no loss.
+#[test]
+fn an_alignment_keyed_by_no_verse_number_is_reported() {
+    let zip = with_luke_one(&bridged_luke(), |verses| {
+        verses.insert("1a".to_owned(), luke_one_one());
+        verses.insert(
+            "front".to_owned(),
+            serde_json::json!({ "alignments": [], "wordBank": [] }),
+        );
+    });
+    let import = read(&[zip]).unwrap();
+    assert_eq!(luke_one_one_imported(&import).0, 2);
+    assert_eq!(
+        alignment_report(&import),
+        ["wordAlignment LUK 1:1a (not a verse number)"]
+    );
+}
+
+/// A chapter past 65535, or a chapter file that is no list of verses, has no place.
+#[test]
+fn an_alignment_chapter_with_no_place_is_reported() {
+    let far = serde_json::to_vec(&serde_json::json!({ "1": luke_one_one() })).unwrap();
+    let zip = with_entries(
+        &bridged_luke(),
+        &[
+            ("apps/translationCore/alignmentData/luk/70000.json", &far),
+            ("apps/translationCore/alignmentData/luk/30.json", b"[]"),
+        ],
+    );
+    let import = read(&[zip]).unwrap();
+    assert_eq!(luke_one_one_imported(&import).0, 2);
+    assert_eq!(
+        alignment_report(&import),
+        [
+            "wordAlignment LUK 30 (not a chapter of verses)",
+            "wordAlignment LUK 70000 (no such chapter)",
+        ]
+    );
+}
+
 fn store(fs: &FaultFs) -> Store {
     let store = Store::start(StoreConfig {
         app_data: PathBuf::from("/app"),

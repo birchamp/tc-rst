@@ -7,7 +7,7 @@
 //! receiving a file again adds nothing).
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tc_journal::fold::{ConflictId, DerivedFile, PersonLabel};
 use tc_store::{CheckpointReason, IntakeReport, ProjectHandle, ReceivedPack};
@@ -18,11 +18,6 @@ const FORMAT_JSON: &str = "ingredients/tc/format.json";
 const METADATA: &str = "metadata.json";
 /// Carried files at the root and foreign entries travel under this dot path (§10.1 E2).
 const ROOT: &str = ".tc-root/";
-
-/// R1's caps.
-const MAX_ENTRY: u64 = 512 << 20;
-const MAX_TOTAL: u64 = 4 << 30;
-const MAX_ENTRIES: usize = 200_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExchangeError {
@@ -47,8 +42,24 @@ pub enum ExchangeError {
     /// in the project, so the person is never told nothing changed (PLAN Q8).
     #[error("the file was taken in only partly, and what was received was kept: {0}")]
     PartlyReceived(String),
-    #[error("{0}")]
-    Io(String),
+    #[error("{}: {source}", path.display())]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{}: {source}", path.display())]
+    Zip {
+        path: PathBuf,
+        #[source]
+        source: zip::result::ZipError,
+    },
+    #[error("the project history could not be read: {0}")]
+    Git(#[from] git2::Error),
+    #[error("the work stopped before it finished: {0}")]
+    Stopped(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Create(#[from] tc_store::CreateError),
     #[error(transparent)]
     Store(#[from] tc_store::StoreError),
 }
@@ -65,8 +76,18 @@ fn skip_words(why: tc_store::CheckpointSkip) -> String {
     }
 }
 
-fn io(e: impl std::fmt::Display) -> ExchangeError {
-    ExchangeError::Io(e.to_string())
+fn io(path: &Path) -> impl FnOnce(std::io::Error) -> ExchangeError + '_ {
+    move |source| ExchangeError::Io {
+        path: path.to_owned(),
+        source,
+    }
+}
+
+fn zip_error(path: &Path) -> impl FnOnce(zip::result::ZipError) -> ExchangeError + '_ {
+    move |source| ExchangeError::Zip {
+        path: path.to_owned(),
+        source,
+    }
 }
 
 /// §10.1: checkpoints, then writes HEAD's tree to `<destination>/<abbreviation>-<date>-<person>.zip`,
@@ -92,8 +113,7 @@ pub async fn export(
     let device = facts.device.to_string();
     let id = facts.id;
     tokio::task::spawn_blocking(move || write_export(&git_dir, &destination, &person, &device, id))
-        .await
-        .map_err(io)?
+        .await?
 }
 
 fn write_export(
@@ -105,16 +125,14 @@ fn write_export(
 ) -> Result<PathBuf, ExchangeError> {
     let project = id.to_string();
     let project = project.as_str();
-    let git = |e: git2::Error| ExchangeError::Io(e.message().to_owned());
-    let repo = git2::Repository::open(git_dir).map_err(git)?;
+    let repo = git2::Repository::open(git_dir)?;
     let head = repo
         .head()
         .ok()
         .and_then(|h| h.peel_to_commit().ok())
         .ok_or(ExchangeError::NoHistory)?;
     let mut entries: Vec<(String, git2::Oid)> = Vec::new();
-    head.tree()
-        .map_err(git)?
+    head.tree()?
         .walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
             if entry.kind() != Some(git2::ObjectType::Blob) {
                 return git2::TreeWalkResult::Ok;
@@ -133,8 +151,7 @@ fn write_export(
             };
             entries.push((name, entry.id()));
             git2::TreeWalkResult::Ok
-        })
-        .map_err(git)?;
+        })?;
     // metadata.json first, then the rest in path order.
     entries.sort_by(|a, b| (a.0 != METADATA, &a.0).cmp(&(b.0 != METADATA, &b.0)));
     let metadata = entries
@@ -149,7 +166,7 @@ fn write_export(
         tc_store::random::hex::<8>()
     ));
     let written = (|| -> Result<(), ExchangeError> {
-        let file = std::fs::File::create(&temp).map_err(io)?;
+        let file = std::fs::File::create(&temp).map_err(io(&temp))?;
         let mut zip = zip::ZipWriter::new(file);
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
@@ -166,12 +183,14 @@ fn write_export(
                 prefix.push_str(part);
                 prefix.push('/');
                 if dirs.insert(prefix.clone()) {
-                    zip.add_directory(prefix.as_str(), options).map_err(io)?;
+                    zip.add_directory(prefix.as_str(), options)
+                        .map_err(zip_error(&temp))?;
                 }
             }
-            let blob = repo.find_blob(*oid).map_err(git)?;
-            zip.start_file(name.as_str(), options).map_err(io)?;
-            zip.write_all(blob.content()).map_err(io)?;
+            let blob = repo.find_blob(*oid)?;
+            zip.start_file(name.as_str(), options)
+                .map_err(zip_error(&temp))?;
+            zip.write_all(blob.content()).map_err(io(&temp))?;
         }
         let created = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -185,9 +204,9 @@ fn write_export(
                 "created": created,
             })
         ))
-        .map_err(io)?;
-        let file = zip.finish().map_err(io)?;
-        file.sync_all().map_err(io)?;
+        .map_err(zip_error(&temp))?;
+        let file = zip.finish().map_err(zip_error(&temp))?;
+        file.sync_all().map_err(io(&temp))?;
         Ok(())
     })();
     if let Err(e) = written {
@@ -197,11 +216,15 @@ fn write_export(
     let path = destination.join(&file_name);
     if path.exists() {
         let _ = std::fs::remove_file(&temp);
-        return Err(ExchangeError::Io(format!(
-            "{file_name} appeared while it was written"
-        )));
+        return Err(ExchangeError::Io {
+            path,
+            source: std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "the file appeared while it was written",
+            ),
+        });
     }
-    std::fs::rename(&temp, &path).map_err(io)?;
+    std::fs::rename(&temp, &path).map_err(io(&path))?;
     if let Ok(dir) = std::fs::File::open(destination) {
         let _ = dir.sync_all();
     }
@@ -216,54 +239,30 @@ fn write_export(
 /// ingredients, and every pack verifies.
 fn verify(path: &Path, id: tc_journal::ProjectId) -> Result<(), ExchangeError> {
     let zip = read_zip(path)?;
-    let metadata = zip
+    let unverified_pack = zip
         .files
+        .iter()
+        .find(|(name, bytes)| {
+            name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid
+        })
+        .map(|(name, _)| name.clone());
+    let files = tc_burrito::MemProject::from(zip.files);
+    let metadata = files
         .get(METADATA)
         .ok_or_else(|| ExchangeError::NotVerified("no metadata.json".into()))?;
-    let problems = tc_burrito::validate_project(metadata, &ZipFiles(&zip.files));
+    let problems = tc_burrito::validate_project(metadata, &files);
     if let Some(first) = problems.first() {
         return Err(ExchangeError::NotVerified(format!("{first:?}")));
     }
-    for (name, bytes) in &zip.files {
-        if name.starts_with(PACKS) && !tc_store::read_received_pack(name, bytes, id).valid {
-            return Err(ExchangeError::NotVerified(format!(
-                "{name} does not verify"
-            )));
-        }
+    if let Some(name) = unverified_pack {
+        return Err(ExchangeError::NotVerified(format!(
+            "{name} does not verify"
+        )));
     }
     if !zip.damaged.is_empty() {
         return Err(ExchangeError::NotVerified(zip.damaged.join(", ")));
     }
     Ok(())
-}
-
-struct ZipFiles<'a>(&'a BTreeMap<String, Vec<u8>>);
-
-impl tc_burrito::ProjectFiles for ZipFiles<'_> {
-    fn inspect(&self, path: &tc_burrito::IngredientPath) -> tc_burrito::FileState {
-        match self.0.get(path.as_str()) {
-            Some(bytes) => tc_burrito::FileState::Present(tc_burrito::FileFacts {
-                md5: tc_burrito::Md5::of(bytes),
-                size: bytes.len() as u64,
-            }),
-            None => tc_burrito::FileState::Missing,
-        }
-    }
-
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String> {
-        Ok(self
-            .0
-            .keys()
-            .filter(|p| {
-                p.strip_prefix("ingredients/").is_some_and(|rest| {
-                    !rest
-                        .split('/')
-                        .any(|part| part.starts_with('.') || part.ends_with(".bak"))
-                })
-            })
-            .cloned()
-            .collect())
-    }
 }
 
 /// A zip read under R1's rules: its files by name, and the entries that did not inflate to
@@ -274,26 +273,15 @@ struct ReadZip {
 }
 
 fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
-    let file = std::fs::File::open(path).map_err(io)?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| ExchangeError::Damaged(e.to_string()))?;
-    if zip.len() > MAX_ENTRIES {
-        return Err(ExchangeError::Damaged(format!("{} entries", zip.len())));
-    }
+    let file = std::fs::File::open(path).map_err(io(path))?;
+    let entries = tc_burrito::read_zip(std::io::BufReader::new(file), tc_burrito::ZIP_LIMITS)
+        .map_err(|e| ExchangeError::Damaged(e.to_string()))?;
     let mut files = BTreeMap::new();
     let mut damaged = Vec::new();
-    let mut total = 0u64;
-    for index in 0..zip.len() {
-        let mut entry = zip
-            .by_index(index)
-            .map_err(|e| ExchangeError::Damaged(e.to_string()))?;
-        if entry.is_dir() {
-            continue;
-        }
-        let raw = entry.name().replace('\\', "/");
-        let symlink = entry
-            .unix_mode()
-            .is_some_and(|m| m & 0o170_000 == 0o120_000);
-        if entry.enclosed_name().is_none()
+    for entry in entries {
+        let raw = entry.name.replace('\\', "/");
+        let symlink = entry.unix_mode.is_some_and(|m| m & 0o170_000 == 0o120_000);
+        if !entry.enclosed
             || raw.starts_with('/')
             || raw.split('/').any(|p| p == "..")
             || raw.chars().nth(1) == Some(':')
@@ -301,17 +289,8 @@ fn read_zip(path: &Path) -> Result<ReadZip, ExchangeError> {
         {
             return Err(ExchangeError::Damaged(format!("the entry {raw:?}")));
         }
-        if entry.size() > MAX_ENTRY {
-            return Err(ExchangeError::Damaged(format!("{raw} is too large")));
-        }
-        total += entry.size();
-        if total > MAX_TOTAL {
-            return Err(ExchangeError::Damaged("the file is too large".into()));
-        }
-        let mut bytes = Vec::with_capacity(entry.size() as usize);
-        // The zip crate checks the CRC when the entry is read to its end.
-        match entry.read_to_end(&mut bytes) {
-            Ok(_) => {
+        match entry.bytes {
+            Ok(bytes) => {
                 files.insert(raw, bytes);
             }
             Err(_) => damaged.push(raw),
@@ -386,9 +365,7 @@ pub async fn receive(
     let kind = facts.kind;
     let path = path.to_owned();
     let (packs, damaged, hand_edited, changes) =
-        tokio::task::spawn_blocking(move || read_received(&path, &git_dir, id, kind))
-            .await
-            .map_err(io)??;
+        tokio::task::spawn_blocking(move || read_received(&path, &git_dir, id, kind)).await??;
     let held = project.snapshot();
     let before: std::collections::BTreeSet<ConflictId> =
         held.fold().conflicts().map(|c| c.id).collect();
@@ -492,12 +469,9 @@ fn read_received(
             major: major.to_string(),
         });
     }
-    let repo =
-        git2::Repository::open(git_dir).map_err(|e| ExchangeError::Io(e.message().to_owned()))?;
+    let repo = git2::Repository::open(git_dir)?;
     let blob = |bytes: &[u8]| -> Result<tc_journal::GitOid, ExchangeError> {
-        let oid = repo
-            .blob(bytes)
-            .map_err(|e| ExchangeError::Io(e.message().to_owned()))?;
+        let oid = repo.blob(bytes)?;
         Ok(tc_journal::GitOid::from_bytes(
             oid.as_bytes().try_into().unwrap_or([0; 20]),
         ))
@@ -611,7 +585,10 @@ fn unique(destination: &Path, name: &str) -> Result<String, ExchangeError> {
     (2..10_000)
         .map(|n| format!("{stem}-{n}.zip"))
         .find(|candidate| !destination.join(candidate).exists())
-        .ok_or_else(|| ExchangeError::Io("no free file name".into()))
+        .ok_or_else(|| ExchangeError::Io {
+            path: destination.join(name),
+            source: std::io::Error::new(std::io::ErrorKind::AlreadyExists, "no free file name"),
+        })
 }
 
 /// R2 "Create the project from this file": a newcomer builds the project in a staging folder
@@ -653,14 +630,14 @@ pub fn receive_new(
             else {
                 continue;
             };
-            tc_store::atomic_create_dirs(&*vfs, dir).map_err(io)?;
+            tc_store::atomic_create_dirs(&*vfs, dir)?;
             tc_store::atomic_write(&*vfs, dir, file, bytes, tc_store::SyncDir::Now)
-                .map_err(|e| io(e.into_inner()))?;
+                .map_err(tc_store::WriteError::into_inner)?;
         }
         Ok(())
     })();
     written?;
-    store.place(&staging, name).map_err(io)
+    Ok(store.place(&staging, name)?)
 }
 
 #[cfg(test)]

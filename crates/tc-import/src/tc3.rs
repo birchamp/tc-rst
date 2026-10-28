@@ -18,8 +18,7 @@
 use crate::{ImportRefusal, SourceFile};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
-use tc_core::BookId;
+use tc_core::{BookId, VerseSpan};
 use tc_journal::decision::verse_text_md5_v1;
 use tc_journal::fold::{Writer, decode_alignment_record, decode_decisions, records_from_usfm};
 use tc_journal::keys::ToolId;
@@ -72,9 +71,10 @@ pub struct Tc3Book {
     alignments: Vec<(ChapterNo, VerseNo, AlignmentValue)>,
     /// tC4's §5.2 decision records, by tool, before the resource is known.
     decisions: Vec<(ToolId, Vec<Value>)>,
-    /// Decisions on a check this version has no check for, in words: a translationNotes row
-    /// tied to every occurrence (`-1`), which no check list holds (`tc-check`
-    /// `SkipReason::EveryOccurrence`). The report lists them; the source keeps them.
+    /// What the import leaves out, in words: decisions on a check this version has no check
+    /// for (a translationNotes row tied to every occurrence (`-1`), which no check list
+    /// holds, `tc-check` `SkipReason::EveryOccurrence`), and alignments with no place in the text.
+    /// The report lists them; the source keeps them.
     pub not_kept: Vec<String>,
 }
 
@@ -132,29 +132,27 @@ fn get<'a>(files: &'a Files, name: &str) -> Option<&'a [u8]> {
 }
 
 fn unzip(file: &SourceFile) -> Result<Files, ImportRefusal> {
-    let truncated = || ImportRefusal::Truncated {
-        file: file.name.clone(),
-    };
-    let mut archive =
-        zip::ZipArchive::new(std::io::Cursor::new(&file.bytes)).map_err(|_| truncated())?;
-    let mut out = Vec::new();
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|_| truncated())?;
-        let name = entry.name().to_owned();
-        if entry.is_dir() {
-            continue;
-        }
-        let mut bytes = Vec::new();
-        // The zip reader checks each entry's CRC-32 as it ends: tC3 zips have no other check.
-        entry
-            .read_to_end(&mut bytes)
-            .map_err(|_| ImportRefusal::CorruptEntry {
+    let entries = tc_burrito::read_zip(std::io::Cursor::new(&file.bytes), tc_burrito::ZIP_LIMITS)
+        .map_err(|e| match e {
+        tc_burrito::ZipReadError::NotAZip(_) => ImportRefusal::Truncated {
+            file: file.name.clone(),
+        },
+        too_large => ImportRefusal::Unreadable {
+            file: file.name.clone(),
+            problem: too_large.to_string(),
+        },
+    })?;
+    entries
+        .into_iter()
+        .map(|entry| match entry.bytes {
+            // tC3 zips have no check but each entry's CRC-32.
+            Ok(bytes) => Ok((entry.name, bytes)),
+            Err(_) => Err(ImportRefusal::CorruptEntry {
                 file: file.name.clone(),
-                entry: name.clone(),
-            })?;
-        out.push((name, bytes));
-    }
-    Ok(out)
+                entry: entry.name,
+            }),
+        })
+        .collect()
 }
 
 /// The files under the project folder: the export is flat, a re-zipped copy may sit under
@@ -252,6 +250,59 @@ fn nfc(value: Value) -> Value {
 }
 
 /// The verse content (`words + layout`) the book's codec gives for `chapter:verse`.
+/// Whether a tC3 alignment record holds a link the translator made. tC3 writes a record
+/// with none for every verse it shows, and one keyed `front` for each chapter.
+fn holds_links(data: &Value) -> bool {
+    data.get("alignments")
+        .and_then(Value::as_array)
+        .is_some_and(|groups| {
+            groups.iter().any(|g| {
+                g.get("bottomWords")
+                    .and_then(Value::as_array)
+                    .is_some_and(|w| !w.is_empty())
+            })
+        })
+}
+
+/// Where an alignment record keyed `key` lands in the text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    /// On the text's verse or span `text`; `exact` when the key names it as the text does.
+    At {
+        text: VerseSpan,
+        exact: bool,
+    },
+    NoVerse,
+    /// The key bridges verses the text bridges otherwise, or not at all.
+    OtherBridge,
+}
+
+/// A verse key finds the verse or span of the text that holds it, as a check decision does
+/// (`decision_text`); a span key must be the text's own span.
+fn place(parts: &BookParts, chapter: u16, key: VerseSpan) -> Place {
+    let Some(verses) = parts.chapters.get(&chapter).map(|c| &c.verses) else {
+        return Place::NoVerse;
+    };
+    let first = match verses.get(&key.start()) {
+        None => return Place::NoVerse,
+        Some(VersePart::Covered { by }) => *by,
+        Some(VersePart::Text(_)) => key.start(),
+    };
+    let Some(VersePart::Text(text)) = verses.get(&first) else {
+        return Place::NoVerse;
+    };
+    let Some(text) = VerseSpan::range(first, text.last.max(first)) else {
+        return Place::NoVerse;
+    };
+    if key == text {
+        Place::At { text, exact: true }
+    } else if key.is_span() {
+        Place::OtherBridge
+    } else {
+        Place::At { text, exact: false }
+    }
+}
+
 fn content(parts: &BookParts, chapter: u16, verse: u16) -> Option<String> {
     match parts.chapters.get(&chapter)?.verses.get(&verse)? {
         VersePart::Text(t) => Some(tc_usfm::codec::join_verse(&t.words, &t.layout)),
@@ -285,7 +336,7 @@ fn alignment(
     file: &str,
     data: &Value,
     chapter: u16,
-    verse: u16,
+    span: VerseSpan,
     content: &str,
     marked: bool,
     source_version: &str,
@@ -322,14 +373,13 @@ fn alignment(
         "targetVerseMd5": verse_text_md5_v1(content).to_hex(),
         "sourceVersion": source_version,
     }));
-    let at = format!("{chapter}:{verse}");
+    let at = format!("{chapter}:{span}");
     let (c, v, mut value) =
-        decode_alignment_record(&record, &at, chapter, verse, verse, Writer::Tc4).map_err(|e| {
-            ImportRefusal::Unreadable {
+        decode_alignment_record(&record, &at, chapter, span.start(), span.end(), Writer::Tc4)
+            .map_err(|e| ImportRefusal::Unreadable {
                 file: file.to_owned(),
                 problem: format!("the alignment of {e}"),
-            }
-        })?;
+            })?;
     let has_links = value.alignments.iter().any(|g| !g.bottom_words.is_empty());
     if has_links {
         let held = word_set(
@@ -596,40 +646,81 @@ fn read_project(file: &SourceFile) -> Result<Project, ImportRefusal> {
         .collect();
     chapter_files.sort_by_key(|(n, _)| *n);
     let mut alignments = Vec::new();
+    let mut not_kept = Vec::new();
+    let code = book.to_uppercase();
     for (chapter, (name, bytes)) in chapter_files {
         let Ok(chapter) = u16::try_from(chapter) else {
+            not_kept.push(format!("wordAlignment {code} {chapter} (no such chapter)"));
             continue;
         };
         let Value::Object(verses) = parse_json(&file.name, name, bytes)? else {
+            not_kept.push(format!(
+                "wordAlignment {code} {chapter} (not a chapter of verses)"
+            ));
             continue;
         };
-        let mut verses: Vec<(u16, &Value)> = verses
-            .iter()
-            .filter_map(|(k, v)| Some((k.parse().ok()?, v)))
-            .collect();
-        verses.sort_by_key(|(n, _)| *n);
-        for (verse, data) in verses {
-            // No such verse in the text: nothing to key the record to.
-            let Some(text) = content(&parts, chapter, verse) else {
+        let mut keyed: Vec<(VerseSpan, &String, &Value)> = Vec::new();
+        for (key, data) in &verses {
+            match key.parse() {
+                Ok(span) => keyed.push((span, key, data)),
+                Err(_) if !holds_links(data) => {}
+                Err(_) => not_kept.push(format!(
+                    "wordAlignment {code} {chapter}:{key} (not a verse number)"
+                )),
+            }
+        }
+        keyed.sort_by_key(|(span, _, _)| (span.start(), span.end()));
+        // The text's verse or span each record lands on, by its first verse: a record keyed
+        // the way the text is wins, as tC3 shows that one; the others are reported.
+        let mut placed: BTreeMap<u16, (VerseSpan, bool, &String, &Value)> = BTreeMap::new();
+        let mut lost = |key: &String, data: &Value, why: &str| {
+            if holds_links(data) {
+                not_kept.push(format!("wordAlignment {code} {chapter}:{key} ({why})"));
+            }
+        };
+        for (span, key, data) in keyed {
+            match place(&parts, chapter, span) {
+                Place::NoVerse => lost(key, data, "no such verse in the text"),
+                Place::OtherBridge => lost(key, data, "the text bridges these verses differently"),
+                Place::At { text, exact } => match placed.get(&text.start()) {
+                    Some((_, true, _, _)) => {
+                        lost(key, data, "another alignment of this verse was kept")
+                    }
+                    Some((_, false, kept_key, kept_data)) if exact => {
+                        lost(
+                            kept_key,
+                            kept_data,
+                            "another alignment of this verse was kept",
+                        );
+                        placed.insert(text.start(), (text, exact, key, data));
+                    }
+                    Some(_) => lost(key, data, "another alignment of this verse was kept"),
+                    None => {
+                        placed.insert(text.start(), (text, exact, key, data));
+                    }
+                },
+            }
+        }
+        for (text_span, _, key, data) in placed.into_values() {
+            let Some(text) = content(&parts, chapter, text_span.start()) else {
                 continue;
             };
             let marked = get(
                 &files,
-                &format!("{APP}/tools/wordAlignment/invalid/{chapter}/{verse}.json"),
+                &format!("{APP}/tools/wordAlignment/invalid/{chapter}/{key}.json"),
             )
             .is_some();
             alignments.push(alignment(
                 &file.name,
                 data,
                 chapter,
-                verse,
+                text_span,
                 &text,
                 marked,
                 &source_version,
             )?);
         }
     }
-    let mut not_kept = Vec::new();
     let decisions = decisions(&file.name, &files, &book, &parts, &mut not_kept)?;
     let tools: Vec<ToolId> = decisions.iter().map(|(t, _)| *t).collect();
     let versions = version_requests(&manifest, book_id, &tools);

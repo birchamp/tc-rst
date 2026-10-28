@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use tc_align::{SourceBook, SourceVerse};
 use tc_core::{BookId, Reference, VerseSpan};
 use tc_export::{
-    BookInput, ExportFacts, ExportInput, Produced, Producer, SkipReason, SkippedVerse,
-    VerseAlignment, produce,
+    BookInput, ExportFacts, ExportInput, Produced, SkipReason, SkippedVerse, VerseAlignment,
+    produce,
 };
 use tc_journal::fold::{Writer, decode_alignment_record};
 use tc_journal::ids::{ChapterNo, VerseNo};
@@ -63,8 +63,8 @@ fn aligned(value: AlignmentValue, verse: u16, pin: Option<SourceVerse>) -> Verse
     }
 }
 
-fn input(parts: BookParts, alignments: Vec<((u16, u16), VerseAlignment)>) -> ExportInput<'static> {
-    ExportInput::Book(BookInput {
+fn input(parts: BookParts, alignments: Vec<((u16, u16), VerseAlignment)>) -> BookInput {
+    BookInput {
         book: BookId::Titus,
         parts,
         alignments: alignments
@@ -72,11 +72,11 @@ fn input(parts: BookParts, alignments: Vec<((u16, u16), VerseAlignment)>) -> Exp
             .map(|((c, v), a)| (at(c, v), a))
             .collect::<BTreeMap<_, _>>(),
         source_sha: None,
-    })
+    }
 }
 
-fn export(input: &ExportInput<'_>) -> (String, ExportFacts) {
-    let (out, facts) = produce(Producer::AlignedUsfm, input).unwrap();
+fn export(input: &BookInput) -> (String, ExportFacts) {
+    let (out, facts) = produce(&ExportInput::AlignedUsfm(input)).unwrap();
     let Produced::File(bytes) = out else {
         panic!("aligned USFM is one file")
     };
@@ -274,8 +274,8 @@ fn a_verse_the_weave_refuses_keeps_its_bytes_and_is_named() {
     );
 }
 
-fn plain(input: &ExportInput<'_>) -> (String, ExportFacts) {
-    let (out, facts) = produce(Producer::PlainUsfm, input).unwrap();
+fn plain(input: &BookInput) -> (String, ExportFacts) {
+    let (out, facts) = produce(&ExportInput::PlainUsfm(input)).unwrap();
     let Produced::File(bytes) = out else {
         panic!("plain USFM is one file")
     };

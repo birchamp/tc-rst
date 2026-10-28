@@ -411,7 +411,7 @@ proptest! {
     fn an_aligned_export_reads_back_to_its_records(
         cuts in prop::collection::vec(prop::collection::vec((1usize..4, any::<bool>()), 0..30), 5),
     ) {
-        use tc_export::{BookInput, ExportInput, Produced, Producer, VerseAlignment, produce};
+        use tc_export::{BookInput, ExportInput, Produced, VerseAlignment, produce};
         use tc_journal::ids::{ChapterNo, VerseNo};
         let parts = titus();
         let records: Vec<(u16, tc_journal::record::AlignmentValue)> = ALIGNED_VERSES
@@ -419,7 +419,7 @@ proptest! {
             .zip(&cuts)
             .map(|(&v, cuts)| (v, record_of(&content(&parts, 1, v), v, cuts)))
             .collect();
-        let input = ExportInput::Book(BookInput {
+        let input = BookInput {
             book: tc_core::BookId::Titus,
             parts: parts.clone(),
             alignments: records
@@ -430,12 +430,12 @@ proptest! {
                 })
                 .collect(),
             source_sha: None,
-        });
-        let file = |producer| match produce(producer, &input).unwrap() {
+        };
+        let file = |input| match produce(&input).unwrap() {
             (Produced::File(bytes), facts) => (String::from_utf8(bytes).unwrap(), facts),
             (other, _) => panic!("{other:?}"),
         };
-        let (aligned, facts) = file(Producer::AlignedUsfm);
+        let (aligned, facts) = file(ExportInput::AlignedUsfm(&input));
         prop_assert_eq!(facts, tc_export::ExportFacts::default());
 
         let read = tc_usfm::codec::decompose(&aligned).unwrap();
@@ -452,7 +452,7 @@ proptest! {
             prop_assert_eq!(back.usfm_groups(), value.usfm_groups());
         }
 
-        let (plain, _) = file(Producer::PlainUsfm);
+        let (plain, _) = file(ExportInput::PlainUsfm(&input));
         prop_assert_eq!(&plain, &tc_usfm::strip_alignment(&aligned).unwrap());
         prop_assert_eq!(plain, tc_usfm::codec::recompose(&parts).usfm);
     }
