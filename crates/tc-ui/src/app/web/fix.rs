@@ -171,12 +171,12 @@ impl Actions {
         spawn_local(async move {
             let api = this.runtime().api();
             // The server refuses a file over the flow's cap before it stores it.
-            let sent = match api.upload(&file, UploadFlow::GuidedFix).await {
+            let (taken, answer) = match api.upload(&file, UploadFlow::GuidedFix).await {
                 Ok(upload) => {
                     if !this.picked_upload(opening, Slot::Fix, &upload.id) {
                         return;
                     }
-                    this.uploads_taken();
+                    let taken = this.uploads_taken();
                     let request = FixSideload {
                         request: js::random_request_id(),
                         at: asked.at.clone(),
@@ -184,19 +184,22 @@ impl Actions {
                         unit: asked.unit,
                         upload: upload.id,
                     };
-                    api.call(&request).await
+                    (Some(taken), api.call(&request).await)
                 }
-                Err(error) => Err(error),
-            }
-            .map_err(|error| why_failed_call(&error));
-            match sent {
+                Err(error) => (None, Err(error)),
+            };
+            match answer.map_err(|error| why_failed_call(&error)) {
                 Ok(()) => {
-                    this.uploads_finished();
+                    if let Some(taken) = &taken {
+                        this.uploads_finished(taken);
+                    }
                     this.finish_fix(id, &asked.at);
                 }
                 Err(reason) => {
                     // The server may not have taken it; the dialog's close drops it then.
-                    this.uploads_given_back();
+                    if let Some(taken) = &taken {
+                        this.uploads_given_back(taken);
+                    }
                     this.patch_fix(id, |screen| screen.install_failed(&reason));
                 }
             }

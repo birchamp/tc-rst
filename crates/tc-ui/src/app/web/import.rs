@@ -276,7 +276,7 @@ impl Actions {
         else {
             return;
         };
-        self.uploads_taken();
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let name = run.details.name.clone();
@@ -303,7 +303,7 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(project) => {
-                    this.uploads_finished();
+                    this.uploads_finished(&taken);
                     let books = this.s().im_slot().with_untracked(|im| {
                         match im.as_ref().and_then(|im| im.reviewed.as_ref()) {
                             Some(crate::app::forms::Reviewed::Found(review)) => review
@@ -325,13 +325,13 @@ impl Actions {
                 }
                 JobEnd::Failed(error) => {
                     // An import that did not make its project keeps its files for a retry.
-                    this.uploads_given_back();
+                    this.uploads_given_back(&taken);
                     let failure = failure_of_error(&error);
                     this.patch_im(|im| im.run_refused(failure, js::random_request_id()));
                     this.refresh_projects();
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
-                    this.uploads_given_back();
+                    this.uploads_given_back(&taken);
                     this.patch_im(|im| im.run_stopped(js::random_request_id()));
                     this.refresh_projects();
                 }
@@ -452,7 +452,7 @@ impl Actions {
         else {
             return;
         };
-        self.uploads_taken();
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let open = {
@@ -478,19 +478,18 @@ impl Actions {
             };
             match ended {
                 JobEnd::Done(report) => {
-                    this.uploads_finished();
+                    this.uploads_finished(&taken);
                     this.patch_ub(|ub| ub.run_done(report));
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => {
-                    // A refusal before the job leaves the file; a job deleted it already, and
-                    // dropping it then is harmless.
-                    this.uploads_given_back();
+                    // The server gives the file back for another try.
+                    this.uploads_given_back(&taken);
                     let failure = failure_of_error(&error);
                     this.patch_ub(|ub| ub.run_refused(failure, js::random_request_id()));
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
-                    this.uploads_given_back();
+                    this.uploads_given_back(&taken);
                     this.patch_ub(|ub| ub.run_stopped(js::random_request_id()));
                 }
             }

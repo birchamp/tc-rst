@@ -7,14 +7,12 @@
 //! open of the folder (AD38), so a card clicked meanwhile shares the session; a blank book is
 //! one `AddBook`, a book from a file is one `AddBookText`, whole or absent (tC4 #767).
 
-use std::path::PathBuf;
-
 use serde_json::{Value, json};
 use tc_api::create::{
     AddBlankBooks, AddUsfmBooks, Bible, BooksAdded, Claims, Created, Details, Obs, ReviewUsfm,
-    UsfmAdded, UsfmFile, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
+    UsfmAdded, UsfmOutcome, UsfmProblem, UsfmRow, UsfmVerdict,
 };
-use tc_api::ids::{ProjectRef, UploadId, WallMs};
+use tc_api::ids::{ProjectRef, WallMs};
 use tc_api::jobs::{OpenPhase, Phase};
 use tc_api::refusal::CreateRefusal;
 use tc_api::shown::Direction;
@@ -34,10 +32,8 @@ use crate::feedback::iso_utc_millis;
 use crate::jobs::ProgressSink;
 use crate::language_search::{LanguageIndex, language_name};
 use crate::session::ProjectSession;
+use crate::uploads::HeldUpload;
 use crate::wire;
-
-/// The folder inside app data that the server stores uploads in (`POST /api/v1/uploads`).
-const UPLOADS: &str = "uploads";
 
 fn json(value: Value) -> Result<Json, String> {
     tc_journal::json::parse(value.to_string().as_bytes()).map_err(|e| e.to_string())
@@ -295,17 +291,13 @@ impl App {
         });
     }
 
-    pub(crate) fn upload_path(&self, id: &UploadId) -> PathBuf {
-        self.inner.config.app_data.join(UPLOADS).join(id.as_str())
-    }
-
     /// What an uploaded file is, and its text when it is a book. The file is read and parsed on
     /// the blocking pool: a book of several megabytes is not a job for the async threads.
     async fn upload_verdict(
         &self,
-        file: &UsfmFile,
+        file: &HeldUpload,
     ) -> Result<(UsfmVerdict, Option<String>), ApiError> {
-        let path = self.upload_path(&file.upload);
+        let path = file.path().to_owned();
         let read = tokio::task::spawn_blocking(move || std::fs::read(path).map(classify_usfm))
             .await
             .map_err(|e| create_failed(e.to_string()))?;
@@ -313,21 +305,6 @@ impl App {
             field: "upload".to_owned(),
             reason: "no such upload".to_owned(),
         })
-    }
-
-    /// Takes the upload from the server's registry before a job reads it over time, so the
-    /// sweep of abandoned uploads never deletes it mid-read; the job then owns the file and
-    /// deletes it with [`App::drop_upload`]. Without a server (tests) there is nothing to
-    /// take.
-    pub(crate) fn take_upload(&self, upload: &UploadId) {
-        if let Some(uploads) = self.inner.uploads.get() {
-            let _ = uploads.take(upload);
-        }
-    }
-
-    pub(crate) fn drop_upload(&self, upload: &UploadId) {
-        // A file that is already gone, or cannot be removed now, is emptied at the next start.
-        let _ = std::fs::remove_file(self.upload_path(upload));
     }
 }
 
@@ -428,7 +405,8 @@ impl Handle<tc_api::upload::DropUpload> for App {
 
 impl Handle<ReviewUsfm> for App {
     async fn handle(&self, req: ReviewUsfm) -> Result<UsfmVerdict, ApiError> {
-        Ok(self.upload_verdict(&req.file).await?.0)
+        let file = self.hold_upload(&req.file.upload)?;
+        Ok(self.upload_verdict(&file).await?.0)
     }
 }
 
@@ -436,12 +414,13 @@ impl Handle<AddUsfmBooks> for App {
     /// Each file is its own row. A file that cannot be added is refused in its row and the
     /// rest still add; a file the store did not write leaves no trace of its book (#767).
     async fn handle(&self, req: AddUsfmBooks) -> Result<UsfmAdded, ApiError> {
+        let held = self.hold_uploads(req.files.iter().map(|file| &file.upload))?;
         let lease = self.books_session(&req.project).await?;
         let session = lease.session().clone();
         let mut claims = Claims::default();
         let mut rows = Vec::new();
-        for file in &req.files {
-            let (verdict, text) = match self.upload_verdict(file).await {
+        for (file, held) in req.files.iter().zip(held) {
+            let (verdict, text) = match self.upload_verdict(&held).await {
                 Ok(read) => read,
                 Err(error) => {
                     self.books_added(lease, &req.project).await;
@@ -472,7 +451,7 @@ impl Handle<AddUsfmBooks> for App {
                     }
                 }
             };
-            self.drop_upload(&file.upload);
+            held.used_up();
             rows.push(UsfmRow {
                 name: file.name.clone(),
                 outcome,

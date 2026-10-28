@@ -58,6 +58,7 @@ pub mod sync;
 mod translate;
 mod understand;
 mod upgrades;
+mod uploads;
 pub mod wire;
 
 pub use app::{Answer, App, AppDeps, CallFailure, FilesChoice, StartError, StoreChoice, Then};

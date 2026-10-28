@@ -213,7 +213,6 @@ impl Actions {
                     }
                 }
                 Err(error) => {
-                    this.uploads_given_back();
                     this.patch_ab(|ab| {
                         if mine(ab) {
                             match said(error) {
@@ -243,7 +242,11 @@ impl Actions {
             let this = self.clone();
             spawn_local(async move {
                 let state = this.review_file(&file, &name, opening, id).await;
-                this.patch_ab(|ab| ab.file_read(id, state));
+                // Row ids start again in each opening: an answer for a closed dialog would
+                // mark the new dialog's row with the same id.
+                if this.upload_current(opening) {
+                    this.patch_ab(|ab| ab.file_read(id, state));
+                }
             });
         }
     }
@@ -313,7 +316,7 @@ impl Actions {
         let Some((project, request, files)) = pressed else {
             return;
         };
-        self.uploads_taken();
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let asked = AddUsfmBooks {
@@ -325,7 +328,7 @@ impl Actions {
             match this.runtime().api().call(&asked).await {
                 Ok(done) => {
                     // Each file was read and deleted, added or not.
-                    this.uploads_finished();
+                    this.uploads_finished(&taken);
                     this.refresh_projects();
                     let mut added = Vec::new();
                     let mut problems = Vec::new();
@@ -361,14 +364,18 @@ impl Actions {
                         });
                     }
                 }
-                Err(error) => this.patch_ab(|ab| {
-                    if mine(ab) {
-                        match said(error) {
-                            Said::Answered(error) => ab.added(&[], Some(error)),
-                            Said::Lost(error) => ab.lost(error),
+                Err(error) => {
+                    // The server gives back the files it did not read.
+                    this.uploads_given_back(&taken);
+                    this.patch_ab(|ab| {
+                        if mine(ab) {
+                            match said(error) {
+                                Said::Answered(error) => ab.added(&[], Some(error)),
+                                Said::Lost(error) => ab.lost(error),
+                            }
                         }
-                    }
-                }),
+                    });
+                }
             }
         });
     }

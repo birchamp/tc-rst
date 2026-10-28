@@ -1827,13 +1827,20 @@ in Chromium against the real `tc4`, with the request filter of AD11
   crash never reads a partial upload back. The UI checks a file's size against its flow's cap
   before it sends it (`UploadFlow::cap`), because a browser still sending when the server
   refuses may report a reset connection instead of the 413. The name is never a path. *(A2)*
-  An upload stays until a job takes it (`Uploads::take`: the job then owns and deletes the file),
-  the page drops it (`uploads/drop`, a no-op for a taken upload), or a day passes with neither
-  (the sweep beside the downloads'). The page's `tc_ui::app::uploads::PickedUploads` holds each
-  dialog's files per slot: a removed row or a file chosen again drops the one before, the
-  request that reads them takes them, a failure gives them back for another try, and the
-  dialog's going (any close, another dialog in its place, leaving the project) drops what is
-  still picked. *(review 2026-10-28 #7)*
+  Every request that reads an upload (import, its review and lookup, Add USFM, Update Book, the
+  guided fix, exchange) holds it before its first read (`HeldUpload`, `Uploads::take`); a drop or
+  a sweep leaves a held upload alone. A request that used the file deletes it; one that failed,
+  was refused or was cancelled gives it back, so the person can try again with the same file
+  (re-sending a file of up to 4 GiB would cost a second upload). An upload stays until it is
+  used up, the page drops it (`uploads/drop`), or a day passes unheld (the sweep beside the
+  downloads'). The page's `tc_ui::app::uploads::PickedUploads` holds each dialog's files per
+  slot: a removed row or a file chosen again drops the one before, the request that reads them
+  takes them, a failure gives them back for another try, and the dialog's going (any close,
+  another dialog in its place, leaving the project) drops what is still picked. A request's
+  answer acts only on the files it was sent with and only in the opening that sent it
+  (`PickedUploads::is_current`, also Add Book's late upload answers): an answer for a closed
+  dialog changes no newer one, and the files it gives back are dropped. *(review 2026-10-28
+  #7, #858)*
   Caps follow
   the flow: an exchange file ("Receive work from a file" in a browser) may be 4 GiB, STORAGE's
   cap for the whole file, whose 512 MiB cap applies to each entry inside it (STORAGE:3027) and
