@@ -705,7 +705,7 @@ fn open_inner(
         gates.lock = None;
     }
     // O12.
-    let (drafts, drafts_notice) = DraftWriter::start(
+    let (drafts, drafts_notices) = DraftWriter::start(
         vfs.clone(),
         folder.clone(),
         &project.fold,
@@ -715,7 +715,9 @@ fn open_inner(
         counters.clone(),
         read_only,
     );
-    if let Some(notice) = drafts_notice {
+    // No copy: dismissing hides a notice for this session and never removes a drafts file
+    // (§5.14).
+    for notice in drafts_notices {
         project.notice(notice, None);
     }
     let drafts = Arc::new(drafts);
