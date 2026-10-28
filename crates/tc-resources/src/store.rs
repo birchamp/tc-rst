@@ -55,7 +55,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tc_core::BookId;
-use tc_door43::{check_names, escapes_root};
+use tc_door43::check_names;
 
 use crate::error::{InstallError, Refusal, StoreError};
 use crate::held;
@@ -1085,13 +1085,6 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 /// another name, or that a case-insensitive file system would merge with another.
 /// Downloads were checked already; this guards every write, whatever its source.
 fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
-    let paths: Vec<&str> = paths.into_iter().collect();
-    for path in &paths {
-        // `escapes_root` allows the trailing `/` a folder entry has; these are files.
-        if escapes_root(path) || path.ends_with('/') {
-            return Err(Refusal::EscapesRoot((*path).to_owned()));
-        }
-    }
     Ok(check_names(paths)?)
 }
 
@@ -1242,6 +1235,25 @@ mod tests {
             // The interrupted install can be done again.
             reopened.install(staged('a')).unwrap().verify().unwrap();
         }
+    }
+
+    /// Every write's names go through the shared check: what leaves the folder is
+    /// `EscapesRoot`, what Windows would rename or refuse is `NotPortable`.
+    #[test]
+    fn a_written_name_is_checked_for_leaving_the_folder_and_for_windows() {
+        for path in ["../x", "a/", "a\\b", "c:x", "a/.. /b"] {
+            assert!(
+                matches!(check_paths([path]), Err(Refusal::EscapesRoot(p)) if p == path),
+                "{path:?}"
+            );
+        }
+        for path in ["book.tsv ", "book.tsv.", "con.json", "ab:c"] {
+            assert!(
+                matches!(check_paths([path]), Err(Refusal::NotPortable { path: p, .. }) if p == path),
+                "{path:?}"
+            );
+        }
+        assert!(check_paths(["notes/TIT.tsv", "LICENSE.md"]).is_ok());
     }
 
     /// A name the store accepts. `[a-z]{1,6}` alone makes `prn`, `con`, `aux` and `nul` now

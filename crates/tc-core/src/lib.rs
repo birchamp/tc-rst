@@ -10,10 +10,14 @@ mod books;
 mod digest;
 mod ids;
 pub mod js;
+mod path;
+mod zipdir;
 
 pub use books::{BookId, Testament};
 pub use digest::{DigestError, GitOid, Md5, Md5Stream};
 pub use ids::{ChapterNo, FrameNo, NotANumber, NotAStory, StoryNo, VerseNo, digits};
+pub use path::{PathProblem, check_path};
+pub use zipdir::central_directory_records;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {

@@ -121,7 +121,9 @@ pub struct DecisionPins {
     pub translation_words: ResourceRef,
 }
 
-/// The files of one zip, in the zip's order.
+/// The files of one zip, in the zip's order. A name is only ever a key to look a file up
+/// by: no file is written under it, so it is not checked by [`tc_core::check_path`], and a
+/// name tC3 never writes (`a\b`, a second `manifest.json`) is never found or never used.
 type Files = Vec<(String, Vec<u8>)>;
 
 fn get<'a>(files: &'a Files, name: &str) -> Option<&'a [u8]> {
