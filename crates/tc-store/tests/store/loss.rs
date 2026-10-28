@@ -903,10 +903,7 @@ fn a_copy_that_cannot_drop_the_device_file_fails_and_leaves_nothing() {
     let probe_rig = rig_as(probe.clone(), APP, "host-1");
     probe.clear_log();
     let start = probe.ops();
-    probe_rig
-        .store
-        .copy_project(&folder, "Titus copy")
-        .unwrap();
+    probe_rig.store.copy_project(&folder, "Titus copy").unwrap();
     let removal = probe
         .log()
         .into_iter()

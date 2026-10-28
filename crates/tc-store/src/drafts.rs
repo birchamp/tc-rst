@@ -259,7 +259,13 @@ fn move_aside(vfs: &dyn Vfs, folder: &Folder) -> Option<String> {
         .find(|rel| matches!(vfs.metadata(&folder.path(rel)), Err(e) if is_not_found(&e)))?;
     // No flush of its own: the first list written next flushes `.tc`, this rename with it,
     // and until then a power cut only puts the same bytes back at `drafts.json`.
-    rename_held(vfs, &folder.path(DRAFTS), &folder.path(&rel), &HeldRetry::SAVE).ok()?;
+    rename_held(
+        vfs,
+        &folder.path(DRAFTS),
+        &folder.path(&rel),
+        &HeldRetry::SAVE,
+    )
+    .ok()?;
     Some(rel)
 }
 

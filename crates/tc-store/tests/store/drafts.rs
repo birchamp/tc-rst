@@ -942,7 +942,10 @@ fn an_unreadable_drafts_file_is_moved_aside_and_the_person_is_told() {
         let fs_after = crashed_after_drafts(&rig, handle);
         let bytes = fs_after.peek(&folder.join(DRAFTS)).unwrap();
         let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(entries[0]["text"], "typed after", "drafts are written again");
+        assert_eq!(
+            entries[0]["text"], "typed after",
+            "drafts are written again"
+        );
         for (i, earlier) in damaged[..=n].iter().enumerate() {
             let path = folder.join(format!(".tc/drafts.unreadable-{}.json", i + 1));
             assert_eq!(
@@ -966,7 +969,12 @@ fn an_unreadable_drafts_file_is_moved_aside_and_the_person_is_told() {
 fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    draft(&handle, DraftField::Words, &[verse(1, 2)], "last session's text");
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 2)],
+        "last session's text",
+    );
     let fs = crashed_after_drafts(&rig, handle);
     let path = folder.join(DRAFTS);
     let before = fs.peek(&path).unwrap();
@@ -975,9 +983,18 @@ fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
     let (rig, handle) = reopen(fs, &folder);
     assert_eq!(unreadable_notices(&handle), [DRAFTS]);
     assert!(handle.offered_drafts().is_empty());
-    draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 3)],
+        "this session's text",
+    );
     handle.wait_idle();
-    assert_eq!(rig.fs.peek(&path), Some(before.clone()), "the held file is untouched");
+    assert_eq!(
+        rig.fs.peek(&path),
+        Some(before.clone()),
+        "the held file is untouched"
+    );
     handle.close().unwrap();
     assert_eq!(rig.fs.peek(&path), Some(before));
     rig.fs.set_unreadable(&path, false);
@@ -996,17 +1013,31 @@ fn a_held_drafts_file_is_left_untouched_and_offered_at_the_next_open() {
 fn a_drafts_file_that_cannot_be_read_is_not_moved_aside() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    draft(&handle, DraftField::Words, &[verse(1, 2)], "last session's text");
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 2)],
+        "last session's text",
+    );
     let fs = crashed_after_drafts(&rig, handle);
     let path = folder.join(DRAFTS);
     let before = fs.peek(&path).unwrap();
     fs.set_unreadable(&path, true);
     let (rig, handle) = reopen(fs, &folder);
     assert_eq!(unreadable_notices(&handle), [DRAFTS]);
-    draft(&handle, DraftField::Words, &[verse(1, 3)], "this session's text");
+    draft(
+        &handle,
+        DraftField::Words,
+        &[verse(1, 3)],
+        "this session's text",
+    );
     handle.wait_idle();
     handle.close().unwrap();
-    assert_eq!(rig.fs.peek(&path), Some(before), "the file is neither moved nor replaced");
+    assert_eq!(
+        rig.fs.peek(&path),
+        Some(before),
+        "the file is neither moved nor replaced"
+    );
     rig.fs.set_unreadable(&path, false);
     let (_rig, handle) = reopen(rig.fs.copy(), &folder);
     assert_eq!(texts_offered(&handle), ["last session's text"]);
