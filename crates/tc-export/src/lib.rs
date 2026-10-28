@@ -41,22 +41,14 @@ pub use usfm::{BookInput, VerseAlignment};
 
 use tc_core::Reference;
 
-/// An export's producer (tC4 `src/data/export/producers.ts`; the Burrito zip is the app's,
-/// since it reads the project folder).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Producer {
-    AlignedUsfm,
-    PlainUsfm,
-    StoryMarkdown,
-    PrintHtml,
-}
-
-/// What a producer reads. USFM reads a book, Story Markdown an OBS project's files, the print
-/// HTML a book's or a story project's print.
+/// An export's producer with what it reads (tC4 `src/data/export/producers.ts`; the Burrito
+/// zip is the app's, since it reads the project folder). USFM reads a book, Story Markdown an
+/// OBS project's files, the print HTML a book's or a story project's print.
 pub enum ExportInput<'a> {
-    Book(BookInput),
+    AlignedUsfm(&'a BookInput),
+    PlainUsfm(&'a BookInput),
     /// The project's files as `(path from the project folder, bytes)`.
-    StoryFiles(Vec<(String, Vec<u8>)>),
+    StoryMarkdown(&'a [(String, Vec<u8>)]),
     PrintBook(PrintBookInput<'a>),
     PrintStories(PrintStoriesInput<'a>),
 }
@@ -113,40 +105,34 @@ impl ExportFacts {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExportError {
-    #[error("the {producer:?} export does not read this input")]
-    WrongInput { producer: Producer },
     /// tC4's `export.nothing-drafted`: a book with no drafted verse prints nothing.
     #[error("the book has no drafted verse, so the print has nothing to show")]
     NothingDrafted,
 }
 
-/// Run `producer` on `input`.
-pub fn produce(
-    producer: Producer,
-    input: &ExportInput<'_>,
-) -> Result<(Produced, ExportFacts), ExportError> {
-    match (producer, input) {
-        (Producer::AlignedUsfm, ExportInput::Book(book)) => {
+/// Run the producer `input` names.
+pub fn produce(input: &ExportInput<'_>) -> Result<(Produced, ExportFacts), ExportError> {
+    match input {
+        ExportInput::AlignedUsfm(book) => {
             let (usfm, facts) = usfm::aligned(book);
             Ok((Produced::File(usfm.into_bytes()), facts))
         }
-        (Producer::PlainUsfm, ExportInput::Book(book)) => {
+        ExportInput::PlainUsfm(book) => {
             let (usfm, facts) = usfm::plain(book);
             Ok((Produced::File(usfm.into_bytes()), facts))
         }
-        (Producer::StoryMarkdown, ExportInput::StoryFiles(files)) => Ok((
+        ExportInput::StoryMarkdown(files) => Ok((
             Produced::Files(markdown::content_files(files)),
             ExportFacts::default(),
         )),
-        (Producer::PrintHtml, ExportInput::PrintBook(print)) => Ok((
+        ExportInput::PrintBook(print) => Ok((
             Produced::File(html::book_document(print)?.into_bytes()),
             ExportFacts::default(),
         )),
-        (Producer::PrintHtml, ExportInput::PrintStories(print)) => Ok((
+        ExportInput::PrintStories(print) => Ok((
             Produced::File(html::stories_document(print).into_bytes()),
             ExportFacts::default(),
         )),
-        (producer, _) => Err(ExportError::WrongInput { producer }),
     }
 }
 
