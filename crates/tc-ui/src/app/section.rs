@@ -3,6 +3,7 @@
 //! on, and whether Save is on. Pure, so they are tested on the host. The rules of the typed
 //! text itself are `tc_api::model::section`, which the server runs too.
 
+use crate::app::client::CallError;
 use crate::i18n::{keys, t};
 
 /// tC4's `wordTitle`: the hover title and name of a word while a verse number is in hand, saying
@@ -58,5 +59,32 @@ pub enum CancelState {
     #[default]
     Idle,
     Pending,
-    Error(String),
+    Error(DiscardError),
+}
+
+/// Why Cancel could not discard the section's draft; the draft and the card stay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiscardError {
+    /// The field has no writer that can discard its draft.
+    NoWriter,
+    NotOpen,
+    /// The draft changed while Cancel waited.
+    Changed,
+    /// The server ran again since the draft was sent.
+    Restarted,
+    /// A call failed; it says why in the words the server or the transport gave.
+    Call(CallError),
+}
+
+impl DiscardError {
+    /// What the card says, in the shown language.
+    pub fn message(&self) -> String {
+        match self {
+            Self::NoWriter => t(keys::draft::discard::CANNOT, &[]),
+            Self::NotOpen => t(keys::draft::discard::NOT_OPEN, &[]),
+            Self::Changed => t(keys::draft::discard::CHANGED, &[]),
+            Self::Restarted => t(keys::draft::discard::RESTARTED, &[]),
+            Self::Call(error) => error.to_string(),
+        }
+    }
 }
