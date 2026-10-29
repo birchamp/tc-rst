@@ -77,6 +77,7 @@
   "export.markupKept": "These verses are in the file as stored, with their alignment markup, because the app could not take it out: {refs}",
   "export.review": "Review",
   "export.skipped": "Your alignment of these verses is not in the file. Check them in Align: {refs}",
+  "feedback.attachmentEnglish": "This attachment is in English so the help desk can read it.",
   "feedback.attachmentFailed": "translationCore could not gather these details ({reason}), so Send stays off. Close this window and open it again to try again.",
   "home.importRemoved": "An import did not finish, so the app removed the part copy. Import the files again.",
   "home.lastSyncReplacedMany": "Last sync: {n} versions replaced",

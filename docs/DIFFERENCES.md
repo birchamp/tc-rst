@@ -212,6 +212,9 @@ Owner rulings in the issues, made before 4.1.0:
   either (#496, owner ruling 2026-09-30). tC4 shows "Stay signed in is not available on this
   computer, so your sign-in lasts for this app session." (`signIn.notKept`), which no screen of
   the rebuild shows. The key stays in the vendored tC4 catalogs, which are tC4's bytes.
+- The Report a problem dialog says under the attachment, in the app's language, that the
+  attachment is in English so the help desk can read it (`feedback.attachmentEnglish`, #731).
+  The attachment stays English in every language, as in tC4, which shows it with no word why.
 
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:

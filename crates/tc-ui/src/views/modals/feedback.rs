@@ -14,7 +14,8 @@ use tc_api::refusal::{FeedbackRefusal, Message};
 use crate::app::feedback::{Attachment, FeedbackForm, FeedbackResult, can_send};
 use crate::app::web::{AppCtx, use_app};
 use crate::ds::{
-    Attrs, Button, ButtonVariant, Callout, CalloutTone, Select, SelectOption, TextArea, TextField,
+    Attrs, Button, ButtonVariant, Callout, CalloutTone, Select, SelectOption, Text, TextArea,
+    TextField, TextRole, TextTone,
 };
 use crate::i18n::{keys, t, t_dyn};
 
@@ -280,6 +281,16 @@ fn form(
         <div>
             <p style=note()>{move || t(keys::feedback::ATTACHMENT, &[])}</p>
             <pre data-testid="feedback-attachment" style=pre.to_style()>{attachment}</pre>
+            // The attachment stays English for the help desk (A5 D8); this says so in the app's
+            // language, so the box is not an unexplained English line (tC4 #731).
+            <Text
+                role=TextRole::Caption
+                tone=TextTone::Muted
+                style=crate::css! { "margin-top": 6 }
+                attrs=Attrs::from([("data-testid", "feedback-attachment-english")])
+            >
+                {move || t(keys::feedback::ATTACHMENT_ENGLISH, &[])}
+            </Text>
         </div>
         {result}
     }

@@ -73,6 +73,7 @@
   "export.markupKept": "Ces versets figurent dans le fichier tels qu’enregistrés, avec leur balisage d’alignement, car l’application n’a pas pu le retirer : {refs}",
   "export.review": "Examiner",
   "export.skipped": "Votre alignement pour ces versets ne figure pas dans le fichier. Vérifiez-les dans Aligner : {refs}",
+  "feedback.attachmentEnglish": "Cette pièce jointe est en anglais pour que le service d’assistance puisse la lire.",
   "feedback.attachmentFailed": "translationCore n’a pas pu rassembler ces détails ({reason}), le bouton Envoyer reste donc désactivé. Fermez cette fenêtre et rouvrez-la pour réessayer.",
   "home.importRemoved": "Une importation ne s’est pas terminée, l’application a donc supprimé la copie partielle. Importez à nouveau les fichiers.",
   "home.lastSyncReplacedMany": "Dernière synchro : {n} versions remplacées",
