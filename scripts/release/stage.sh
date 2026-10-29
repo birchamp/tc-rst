@@ -8,7 +8,8 @@
 # <platform> is linux-x64, windows-x64 or macos-arm64. TC4_BUILD_COMMIT must be the commit tc4
 # and the UI were built from. TC_HELP_DESK_TOKEN and TC_HELP_DESK_EMAIL, when both are set, become
 # the shell's help-desk key (docs/contracts/SHELL.md item 11); without them the app cannot send
-# feedback, and says so.
+# feedback, and says so. On windows-x64, TC4_RCEDIT must name rcedit-x64.exe v2.0.0, which puts
+# the translationCore icon into electron.exe (#871).
 set -euo pipefail
 
 ELECTRONITE=v37.1.0-graphite
@@ -24,8 +25,14 @@ case "$platform" in
   *) echo "stage.sh: no platform $platform" >&2; exit 2 ;;
 esac
 # Read from stdin: given a path with backslashes (Windows), sha256sum puts a backslash before the hash.
-if command -v sha256sum > /dev/null; then got=$(sha256sum < "$zip" | cut -d' ' -f1); else got=$(shasum -a 256 < "$zip" | cut -d' ' -f1); fi
+sha256() { if command -v sha256sum > /dev/null; then sha256sum < "$1" | cut -d' ' -f1; else shasum -a 256 < "$1" | cut -d' ' -f1; fi; }
+got=$(sha256 "$zip")
 [ "$got" = "$want" ] || { echo "stage.sh: $zip has sha256 $got, not the pinned $want" >&2; exit 1; }
+if [ "$platform" = windows-x64 ]; then
+  rcedit_want=3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a
+  got=$(sha256 "${TC4_RCEDIT:?TC4_RCEDIT must name rcedit-x64.exe}")
+  [ "$got" = "$rcedit_want" ] || { echo "stage.sh: $TC4_RCEDIT has sha256 $got, not the pinned $rcedit_want" >&2; exit 1; }
+fi
 
 rm -rf "$out"
 mkdir -p "$out"
@@ -40,16 +47,24 @@ if [ "$platform" = macos-arm64 ]; then
   /usr/libexec/PlistBuddy -c 'Set :CFBundleName translationCore' -c 'Set :CFBundleDisplayName translationCore 4' \
     -c 'Set :CFBundleIdentifier org.unfoldingword.translationcore4' "$plist" 2> /dev/null \
     || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string translationCore 4' "$plist"
+  # The bundle's CFBundleIconFile is electron.icns: Finder, Launchpad and the Dock show it.
+  cp "$repo/branding/icon.icns" "$resources/electron.icns"
 else
   root="$out/translationCore 4"
   mkdir -p "$root"
   unzip -q "$zip" -d "$root"
   resources="$root/resources"
 fi
+if [ "$platform" = windows-x64 ]; then
+  # Explorer and the taskbar take the icon inside the exe; the installer and shortcuts, icon.ico.
+  cp "$repo/branding/icon.ico" "$root/icon.ico"
+  "$TC4_RCEDIT" "$(np "$root/electron.exe")" --set-icon "$(np "$root/icon.ico")"
+fi
 
 app="$resources/app"
-mkdir -p "$app/shell" "$resources/tc4"
+mkdir -p "$app/shell" "$app/branding" "$resources/tc4"
 cp "$repo"/shell/*.cjs "$app/shell/"
+cp "$repo/branding/icon.ico" "$repo/branding/icon-1024.png" "$app/branding/"
 cp "$repo/scripts/release/launch.cjs" "$app/launch.cjs"
 version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' "$repo/Cargo.toml")
 printf '{\n  "name": "translationCore4",\n  "productName": "translationCore4",\n  "version": "%s",\n  "private": true,\n  "main": "launch.cjs"\n}\n' \

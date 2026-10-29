@@ -197,6 +197,19 @@ test('navigation_outside_the_app_origin_is_refused', () => {
   assert.match(main, /setWindowOpenHandler\(\(\{ url \}\) => \{\n\s+const where = lib\.linkTarget\(url, origin\(\)\);/);
 });
 
+test('every_window_shows_the_translationcore_icon', () => {
+  // #871: the main window and every window a link opens (main.cjs openInApp and the window-open
+  // handler) carry the mark, not Electron's, as main.cjs calls windowOptions for each.
+  for (const [platform, file] of [['win32', 'icon.ico'], ['linux', 'icon-1024.png']]) {
+    for (const options of [lib.windowOptions({ platform, preload: '/p.cjs', show: false }), lib.windowOptions({ platform })]) {
+      assert.equal(path.basename(options.icon), file, platform);
+      assert.ok(fs.existsSync(options.icon), options.icon);
+    }
+  }
+  // macOS takes the bundle's electron.icns (stage.sh).
+  assert.equal(lib.windowOptions({ platform: 'darwin' }).icon, undefined);
+});
+
 test('windows_frames_and_the_menu_keys_follow_tc4', () => {
   for (const platform of ['linux', 'win32']) {
     assert.equal(lib.windowOptions({ platform }).titleBarStyle, 'hidden');

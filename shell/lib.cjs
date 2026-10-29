@@ -4,6 +4,11 @@
 // test them: the lifecycle machine, the arguments, the address line, the token filter and the
 // redaction of log lines.
 
+const path = require('node:path');
+
+// branding/ sits beside shell/ both in the repository and in the staged app (stage.sh).
+const BRANDING = path.join(__dirname, '..', 'branding');
+
 // ---- The lifecycle (INV-LIFECYCLE-HAS-ONE-STATE) ----
 
 const State = Object.freeze({
@@ -315,6 +320,9 @@ function windowOptions({ platform, preload, show = true, print = false }) {
     platform === 'darwin'
       ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 20, y: 21 } }
       : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#014263', symbolColor: '#FFFFFF', height: 56 } };
+  // macOS takes the icon from the app bundle (stage.sh); Windows and Linux from the window. Every
+  // window gets it, so a link opened in the app shows the translationCore mark too (#871).
+  const icon = platform === 'darwin' ? {} : { icon: path.join(BRANDING, platform === 'win32' ? 'icon.ico' : 'icon-1024.png') };
   return {
     width: 1024,
     height: 768,
@@ -325,6 +333,7 @@ function windowOptions({ platform, preload, show = true, print = false }) {
     backgroundColor: '#F7FAFC',
     title: 'translationCore4',
     ...frame,
+    ...icon,
     webPreferences: { ...webPreferences, preload },
   };
 }

@@ -20,7 +20,7 @@ on:
     # do not filter tag pushes.
     # A gate push is a merge's test; a release builds from main or a tag.
     branches: ['**', '!gate/**']
-    paths: ['.github/workflows/release.yml', 'scripts/release/**']
+    paths: ['.github/workflows/release.yml', 'scripts/release/**', 'branding/**', 'shell/**']
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -146,8 +146,12 @@ jobs:
           path: release
       - name: Electronite
         run: curl -sSfL -o "$RUNNER_TEMP/${{ matrix.electronite }}" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/${{ matrix.electronite }}"
+      - if: matrix.platform == 'windows-x64'
+        name: rcedit
+        run: curl -sSfL -o "$RUNNER_TEMP/rcedit-x64.exe" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
       - name: stage
         env:
+          TC4_RCEDIT: ${{ runner.temp }}/rcedit-x64.exe
           TC_HELP_DESK_TOKEN: ${{ secrets.TC_HELP_DESK_TOKEN }}
           TC_HELP_DESK_EMAIL: ${{ secrets.TC_HELP_DESK_EMAIL }}
         run: |
@@ -200,7 +204,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: scripts/release
+          sparse-checkout: |
+            scripts/release
+            branding
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -44,6 +44,29 @@ case "$platform" in
   *) echo "smoke-installed.sh: no platform $platform" >&2; exit 2 ;;
 esac
 
+# #871: the translationCore mark, not Electron's, wherever the system shows the app's icon.
+repo=$(cd "$here/../.." && pwd)
+icon_is() { cmp -s "$1" "$repo/branding/$2" || { echo "FAIL the_app_icon_is_translationcore_s: $1 is not branding/$2"; exit 1; }; }
+case "$platform" in
+  linux-x64) icon_is "$resources/app/branding/icon-1024.png" icon-1024.png ;;
+  windows-x64)
+    icon_is "$root/icon.ico" icon.ico
+    icon_is "$resources/app/branding/icon.ico" icon.ico
+    # rcedit stores each of the .ico's images as an exe resource, byte for byte.
+    node -e '
+      const fs = require("fs");
+      const [ico, exe] = process.argv.slice(1).map((f) => fs.readFileSync(f));
+      for (let i = 0; i < ico.readUInt16LE(4); i++) {
+        const at = 6 + 16 * i;
+        const image = ico.subarray(ico.readUInt32LE(at + 12), ico.readUInt32LE(at + 12) + ico.readUInt32LE(at + 8));
+        if (exe.indexOf(image) < 0) { console.log("FAIL the_app_icon_is_translationcore_s: electron.exe lacks image " + i); process.exit(1); }
+      }
+    ' "$(np "$repo/branding/icon.ico")" "$(np "$root/electron.exe")"
+    ;;
+  macos-arm64) icon_is "$resources/electron.icns" icon.icns ;;
+esac
+echo "ok the_app_icon_is_translationcore_s"
+
 # The installed files are the ones the build recorded.
 node -e '
   const [m, r] = process.argv.slice(1);
