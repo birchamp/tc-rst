@@ -54,12 +54,10 @@ land. A promise that is not proven yet says so, with its issue.
   Aquifer resources, pinned and offline, using recorded real data as fixtures (J30).
   **Not proven yet:** the work is epic #711.
 - **P7. tC4's design system.** Every screen, new or old, is built from tC4's design system:
-  its tokens, CSS, fonts and components (`crates/tc-ui/src/ds/`, vendored as
-  `crates/tc-ui/vendored-from-tc4.txt` records). Each component is compared with tC4's in
-  `parity/ds-gallery/`. The screens that came from tC4 are screenshotted and compared with tC4's
-  at the reference version (`parity/tc4-baseline/`), with the interface in English (`en`) and in
-  Arabic (`ar`). Every difference cites an entry of `docs/DIFFERENCES.md`, and a human reviews
-  the differences.
+  its tokens, CSS, fonts and components (`crates/tc-ui/src/ds/`). The design system's CSS, fonts,
+  images and interface catalogs are tC4's byte for byte, as `crates/tc-ui/vendored-from-tc4.txt`
+  records. The comparison of the app's screens with tC4's was done for 4.1.0
+  (`docs/rulings/2026-10-27-p7-review.md`) and is history.
 - **P8. Scripts.** Arabic and Hebrew text renders right-to-left and edits correctly in
   the browser engine used by tests. The app's own interface is right-to-left in Arabic,
   as in tC4 4.0, not only the scripture text. Graphite rendering is checked by a probe that
