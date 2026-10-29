@@ -6,7 +6,12 @@ name: shell
 permissions:
   contents: read
 on:
+  # As in ci.yml: main and gate/* only, so a pull request's branch does not run twice.
   push:
+    branches: [main, 'gate/**']
+  # A pull request runs the unit tests; it only reports the builds and end-to-end jobs as skipped
+  # (they are required checks), as app-e2e does. In 48 runs they never failed, and each run held
+  # a macOS and a Windows runner; they gate the merge queue and main.
   pull_request:
   workflow_dispatch:
   merge_group:
@@ -29,6 +34,7 @@ jobs:
 
   # The two UI folders and the bundle are the same files on every system: built once.
   builds:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
