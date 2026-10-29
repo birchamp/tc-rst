@@ -4,7 +4,7 @@
 use std::fmt;
 
 use tc_api::API_VERSION;
-use tc_api::app::BUILD_COMMIT;
+use tc_api::app::{BUILD_COMMIT, BUILD_VERSION, BuildInfo};
 
 use super::client::CallError;
 
@@ -51,6 +51,22 @@ pub fn token_from(fragment: &str, kept: Option<&str>) -> Option<Token> {
         .filter_map(|pair| pair.strip_prefix("t="))
         .find_map(Token::parse)
         .or_else(|| kept.and_then(Token::parse))
+}
+
+/// The line the page logs to the console at start, so a QA report can quote the running build
+/// without a click (tC4 #278): this page's version and short commit, and the server's.
+pub fn build_line(server: &BuildInfo) -> String {
+    format!(
+        "translationCore {BUILD_VERSION} ({}) \u{b7} server {} ({})",
+        short_commit(BUILD_COMMIT),
+        server.version,
+        short_commit(&server.commit)
+    )
+}
+
+/// The first 8 characters of a commit hash, as `git rev-parse --short` shows it; `dev` as it is.
+fn short_commit(commit: &str) -> &str {
+    commit.get(..8).unwrap_or(commit)
 }
 
 /// Whether this page and the server are one build.

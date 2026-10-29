@@ -399,7 +399,7 @@ the rebuild fixed it or does as tC4 does:
 | #763 | The rc.2 help pages | reference change | REF1 | help case b; `help_home_shows_no_rc1_build_text_offline` (Q31) | Q31 for the banner and install sentences. Also triage #476 (§7). |
 | #686 | Bundle Noto Sans Arabic | covered | tc-ui; A5 | port tC4 app-language case j, with a check that the font file answers 200 | None in tc-ui. |
 | #657 | Mirror the interface for a right-to-left language | covered | A5, B3, C6 (B4a's half done) | tC4 app-language cases h and i; B4a `app_language_i_scripture_follows_the_project_under_an_arabic_interface` | Window-control room stays on the physical side. B4a: under Arabic the page reads right to left and a left-to-right project's source, translation and verse card read left to right; a right-to-left project under English needs C6's create. |
-| #642 | Remove the Linux native title bar | covered | G1 | `linux_window_keeps_native_frame` | Match 4.0. |
+| #642 | Remove the Linux native title bar | covered | G1 | `linux_window_has_no_native_bar_and_keeps_zoom_and_reload` | As on Windows; owner ruling 2026-10-29 (`docs/DIFFERENCES.md`). |
 | #613 | Bundle a Devanagari interface font | unit todo | G2 | `hindi_label_renders_in_the_bundled_face_offline` | No Devanagari face is vendored yet (neither G1 nor G4 bundles one; it waits with G2, whose P7 review covers how each script looks). Declared difference; note that it also changes Hindi's look on Windows and macOS; add the OFL text to the notices. |
 | #606 | Third-party licenses in About | unit todo | REL-1 (G3 ships them) | `every_crate_in_cargo_lock_has_a_notice`, `every_bundled_resource_has_an_attribution` | G3 ships THIRD-PARTY-NOTICES.txt beside LICENSE in every installer (crates, NOTICE files, fonts' OFL texts, Electronite, each bundled resource's attribution); About does not list it yet. |
 | #569 | Keyboard shortcuts for Understand, Translate and Check | not applicable | later, if tC4 adds them | — | Outside tC4 4.0, which has no such shortcuts; the rebuild matches it (FIX-R reconciled). Port tC4's if it adds them. |
@@ -448,7 +448,7 @@ the rebuild fixed it or does as tC4 does:
 | #746 | Startup recovery before opens | covered | tc-store | `the_start_cleanup_reports_a_join_it_removed_and_hands_out_no_staging_folder_before_it_ends` | None. |
 | #708 | Ops-log record stays open | not applicable | — | — | tC4 machinery; duplicate of #707. |
 | #801 | Let the user go Home after a refused save | covered | A4b; FIX-R | `a_save_refused_for_good_lets_the_person_go_home_and_keeps_the_text` (tc-ui) | Fixed by FIX-R step 2: a refusal that can never succeed lets Home proceed and keeps the text as a draft (tC4 drops it; declared difference). |
-| #702 | Text zoom | covered | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload`; `linux_window_keeps_native_frame`; `macos_window_hides_the_frame_and_centres_the_traffic_lights` | Keep Ctrl or Cmd with +, - and 0 working. |
+| #702 | Text zoom | covered | G1 | `windows_window_has_no_native_bar_and_keeps_zoom_and_reload`; `linux_window_has_no_native_bar_and_keeps_zoom_and_reload`; `macos_window_hides_the_frame_and_centres_the_traffic_lights` | Keep Ctrl or Cmd with +, - and 0 working. |
 | #46 | Rollback plan | unit todo | V, G1 | `older_build_starts_on_newer_app_data` | As in §5. |
 | #658 | Arabic epic | not applicable | — | — | Children triaged. |
 | #543 | Account menu epic | not applicable | — | — | Child #476 is not triaged (§7). |

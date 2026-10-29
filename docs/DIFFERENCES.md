@@ -383,6 +383,11 @@ And these (unit D2):
   weaves the rest, so a link leaves the file without a word to the person; the rebuild weaves
   none of that verse until it is aligned again
   (`the_export_weaves_no_link_to_a_source_word_the_pin_lacks`).
+- On Linux the window has no native title bar and no menu row, as on Windows and macOS: the
+  app's header is the top, it moves the window, and the minimize, maximize and close buttons
+  draw over its right end. The menu's keys (zoom, reload) still work. tC4 4.0 kept the native
+  frame and menu row on Linux; the owner ruled on 2026-10-29 that this is fixed before 4.1.0
+  (`linux_window_has_no_native_bar_and_keeps_zoom_and_reload`) (#642).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

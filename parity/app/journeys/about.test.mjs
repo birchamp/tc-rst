@@ -137,3 +137,15 @@ browserTest('about_closed_by_mouse_right_after_license_ends_its_focus_hold', asy
     assert.equal(loads(), 0, 'no panic reloaded the page');
   });
 });
+
+// tC4 #278: a QA report quotes the running build from the console, with no click: the page logs
+// one line at start naming its own version and short commit and the server's (app/hello).
+browserTest('the_console_names_the_running_build_at_start', async () => {
+  const lines = [];
+  await withApp(async ({ env }) => {
+    const { build } = await env.call('app/hello', {});
+    const short = build.commit.slice(0, 8);
+    const expected = `translationCore ${build.version} (${short}) · server ${build.version} (${short})`;
+    assert.deepEqual(lines.filter((line) => line.startsWith('translationCore ')), [expected]);
+  }, { init: (context) => context.on('console', (m) => { if (m.type() === 'info') lines.push(m.text()); }) });
+});

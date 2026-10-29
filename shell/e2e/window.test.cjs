@@ -53,36 +53,24 @@ function assertKeys(got) {
   assert.equal(got.reloaded, true, 'reload');
 }
 
-if (process.platform === 'linux') {
-  h.shellTest('linux_window_keeps_native_frame', async () => {
-    const dir = h.appDataDir('frame');
-    const app = await h.launch(dir);
-    try {
-      const page = await h.home(app);
-      const got = await frame(app, page);
-      assert.deepEqual({ titleBar: got.titleBar, overlay: got.overlay, menuBar: got.menuBar }, { titleBar: null, overlay: false, menuBar: true });
-      assertKeys(await menuKeys(app));
-    } finally {
-      await h.finish(app);
-    }
-  });
+// Windows and Linux alike: the controls draw over the header, and no menu row shows (#639, #642).
+async function noNativeBar() {
+  const dir = h.appDataDir('frame');
+  const app = await h.launch(dir);
+  try {
+    const page = await h.home(app);
+    const got = await frame(app, page);
+    assert.equal(got.titleBar, 'overlay');
+    assert.equal(got.overlay, true, 'the window controls draw over the header');
+    if (process.platform === 'linux') assert.equal(got.menuBar, false, 'no menu row');
+    assertKeys(await menuKeys(app));
+  } finally {
+    await h.finish(app);
+  }
 }
 
-if (process.platform === 'win32') {
-  h.shellTest('windows_window_has_no_native_bar_and_keeps_zoom_and_reload', async () => {
-    const dir = h.appDataDir('frame');
-    const app = await h.launch(dir);
-    try {
-      const page = await h.home(app);
-      const got = await frame(app, page);
-      assert.equal(got.titleBar, 'overlay');
-      assert.equal(got.overlay, true, 'the window controls draw over the header');
-      assertKeys(await menuKeys(app));
-    } finally {
-      await h.finish(app);
-    }
-  });
-}
+if (process.platform === 'win32') h.shellTest('windows_window_has_no_native_bar_and_keeps_zoom_and_reload', noNativeBar);
+if (process.platform === 'linux') h.shellTest('linux_window_has_no_native_bar_and_keeps_zoom_and_reload', noNativeBar);
 
 if (process.platform === 'darwin') {
   h.shellTest('macos_window_hides_the_frame_and_centres_the_traffic_lights', async () => {
