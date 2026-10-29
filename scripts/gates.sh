@@ -141,6 +141,8 @@ touched() {
     touched_lint "$step" "${crates[@]}" || { echo "gates: step $step failed" >&2; code=1; }
   done
   cargo nextest run --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
+  # tc-arch reads the whole tree and no crate depends on it, so no change ever picks it.
+  cargo nextest run --locked --no-fail-fast -p tc-arch || code=1
   if (( ${#crates[@]} )); then
     cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
     cargo test --locked --no-fail-fast --doc "${crates[@]/#/--package=}" || code=1
