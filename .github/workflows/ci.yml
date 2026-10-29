@@ -2,7 +2,10 @@ name: ci
 permissions:
   contents: read
 on:
+  # Main and gate/* only: a branch with a pull request gets its run from pull_request, and a push
+  # there too ran every lint twice.
   push:
+    branches: [main, 'gate/**']
   # A pull request runs the lints only: the full tests run where they gate a merge (main, gate/*,
   # the merge queue).
   pull_request:
@@ -39,6 +42,12 @@ jobs:
       # tc-app's library without test hooks, as a release build has it; every other build
       # has them through the self dev-dependency.
       - run: scripts/gates.sh --step clippy-release-app
+      # The architecture rules take seconds. Run only in the merge queue's test job, each failure
+      # cost a 35-minute round trip (pull request 857, three times).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.149
+      - run: scripts/gates.sh --step arch
 
   lint-windows:
     runs-on: ubuntu-latest

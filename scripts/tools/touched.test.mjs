@@ -78,7 +78,7 @@ test('INV-TOUCHED-LINTS-WHAT-A-CHANGE-REACHES: lint steps are narrowed to the pi
     assert.equal(out.status, 0, out.stderr);
     return out.stdout.trim().split('\n');
   };
-  assert.deepEqual(run([]), ['step fmt'], 'a change to no crate runs fmt alone');
+  assert.deepEqual(run([]), ['step fmt', 'step arch'], 'a change to no crate runs fmt and the architecture rules alone');
   const store = run(['tc-store']);
   assert.ok(store.includes('cargo clippy --locked --package=tc-store --all-targets -- -D warnings'));
   assert.ok(store.some((l) => l.includes('--package=tc-store') && l.includes('x86_64-pc-windows-gnu')));
