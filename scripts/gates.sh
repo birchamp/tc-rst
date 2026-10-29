@@ -36,6 +36,9 @@ NIGHTLY=(
   # The scale tests at ten times Psalms (rulings/2026-10-26-test-scale.md); pushes and gates run 2.
   "scale-long|TC_SCALE_FACTOR=10 cargo test --locked --no-fail-fast -p tc-journal --test operation_counts -p tc-store --test store -p tc-app --test op_counts"
   "sync-model-long|cargo test --locked -p tc-sync --test sync model::random_syncs_lose_no_work_long -- --ignored --exact"
+  # tc-store's full crash sweeps and property counts; the gate runs a cheaper test that catches
+  # the same bug (each `_nightly` test's ignore reason names it).
+  "store-nightly|cargo test --locked -p tc-store --test store _nightly -- --ignored"
   # tc-api's round-trip property tests at 128 values per type; pushes and gates run 16.
   "roundtrip-long|TC_ROUNDTRIP_CASES=128 cargo test --locked -p tc-api --test roundtrip"
 )
