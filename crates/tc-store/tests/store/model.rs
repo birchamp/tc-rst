@@ -2465,14 +2465,9 @@ fn histories(cases: u32, chunks: usize, every_row: bool) {
     // The histories the reviews found, on every run.
     held_metadata_retries_keep_the_same_copies_and_notices();
     for (name, history) in named_histories() {
-        let before = terminal_boundaries();
-        if let Err(lost) = Run::run(&history) {
+        if let Err(lost) = run_to_a_validated_end(&history) {
             panic!("{name}: {lost}");
         }
-        // Each ends with every block released and a repair that can read what it writes:
-        // an aggregate count would let one blocked witness hide behind another's success.
-        let ready = terminal_boundaries()[0] - before[0];
-        assert_eq!(ready, 1, "{name}: its terminal Burrito was never validated");
     }
     let config = ProptestConfig {
         cases,
@@ -3374,15 +3369,29 @@ fn oracle_independence_false_adoption() {
     assert_kept(&false_adoption_witness());
 }
 
+/// [`Run::run`] for a history that must end with every block released and a repair that can
+/// read what it writes: a run whose end is blocked never validates its terminal Burrito, so it
+/// would pass without that check.
+fn run_to_a_validated_end(steps: &[Step]) -> Result<(), String> {
+    let before = terminal_boundaries()[0];
+    Run::run(steps)?;
+    match terminal_boundaries()[0] - before {
+        1 => Ok(()),
+        _ => Err("its terminal Burrito was never validated".into()),
+    }
+}
+
 fn assert_kept(steps: &[Step]) {
-    if let Err(lost) = Run::run(steps) {
+    if let Err(lost) = run_to_a_validated_end(steps) {
         panic!("INV-NO-EXCUSED-LOSS: {lost}");
     }
 }
 
 #[test]
 fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
-    if let Err(lost) = Run::run(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book()) {
+    if let Err(lost) =
+        run_to_a_validated_end(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book())
+    {
         panic!("INV-PACK-RESTORE: {lost}");
     }
 }
