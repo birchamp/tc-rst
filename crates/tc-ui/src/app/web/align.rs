@@ -300,7 +300,7 @@ impl Actions {
     /// aligner the server holds is closed, so its links are saved and it does not wait for the
     /// project to be left (at Home the server's own leave saves it).
     pub(super) fn reset_align(&self) {
-        self.s().a.suggest_error.try_set(None);
+        self.clear_suggest_error();
         if let Some((at, aligner, _)) = self.s().a.open.try_update(Option::take).flatten() {
             let this = self.clone();
             spawn_local(async move {
@@ -789,6 +789,15 @@ impl Actions {
         });
     }
 
+    /// Only a shown failure is cleared: the suggestions row reads this signal, and a set that
+    /// changes nothing would still draw the row again in the middle of the switch's click.
+    fn clear_suggest_error(&self) {
+        let error = &self.s().a.suggest_error;
+        if error.with_untracked(Option::is_some) {
+            error.try_set(None);
+        }
+    }
+
     /// The suggestions switch (tC4 `setAlignSuggestions`): the project's, kept on this computer;
     /// the aligner's view carries it, so the view is read again.
     pub fn set_align_suggestions(&self, on: bool) {
@@ -797,7 +806,7 @@ impl Actions {
         };
         // A failure stays shown until the person tries again or leaves the screen: the refresh
         // that follows it must not clear it.
-        self.s().a.suggest_error.try_set(None);
+        self.clear_suggest_error();
         let this = self.clone();
         spawn_local(async move {
             let request = SetAlignSuggestions {
