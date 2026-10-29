@@ -19,7 +19,7 @@
 //!    reference, a figure, a marker usfm-js keeps no text for) is skipped.
 //!
 //! The rebuild differs from tC4 where tC4 hides words the export counts, so that Check cannot
-//! reach them (#796); each is a declared difference (`docs/PLAN.md`). The Align bank holds
+//! reach them (#796); each is a declared difference (`docs/DIFFERENCES.md`). The Align bank holds
 //! them whatever this text shows: it is [`crate::target_words`].
 //!
 //! - tC4 does not walk the children in rule 4, so it hides every word of a character span
@@ -72,7 +72,7 @@
 //! punctuation (`siervo\f …\f*, de`). tC4, PR #800 too, joins them.
 //!
 //! A joined word cannot be checked, and the export splits words at every marker, so both
-//! additions beyond PR #800 are a declared difference (`docs/PLAN.md`). On the ULT and UST
+//! additions beyond PR #800 are a declared difference (`docs/DIFFERENCES.md`). On the ULT and UST
 //! v91 they change one verse from tC4's text:
 //! ULT 2SA 23:8 as written, where usfm-js makes an object of an unbalanced `\zaln-e\*` that
 //! keeps the line break after it, and tC4 shows "spearagainst". Words still join where usfm-js

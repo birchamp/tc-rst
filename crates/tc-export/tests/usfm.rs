@@ -199,7 +199,7 @@ fn export_judges_validity_with_needs_review() {
 #[test]
 fn the_export_weaves_no_link_to_a_source_word_the_pin_lacks() {
     // tC4 #816 fits the cards to the pin and weaves the rest; the rebuild weaves none of the
-    // verse and names it, so no link leaves the app without a word (docs/PLAN.md, D2).
+    // verse and names it, so no link leaves the app without a word (docs/DIFFERENCES.md, D2).
     let pin = pin_1_1();
     let missing = pin.words()[0].word.clone();
     let without_first = SourceVerse::new(pin.words()[1..].to_vec());

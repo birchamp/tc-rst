@@ -204,7 +204,7 @@ jobs:
       - run: scripts/gates.sh --step alignment-budget
 
   # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
-  # and the owner's rulings in docs/PLAN.md must agree, the mock server must answer the sync
+  # and the owner's rulings in docs/DIFFERENCES.md must agree, the mock server must answer the sync
   # transport as the platform does, the parity state built from this repository's copies of
   # tC4's fixtures must equal the one recorded from tC4, and the capture's request tracking and
   # settle must hold, as must the pure parts of the Rust environment (its browser tests skip

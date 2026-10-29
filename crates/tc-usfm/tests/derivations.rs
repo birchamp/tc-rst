@@ -312,7 +312,7 @@ fn a_verse_of_several_megabytes_takes_seconds() {
 }
 
 /// The verses whose `\li1` list items the rebuild shows and tC4 hides, though the export
-/// counts their words (a declared difference, `docs/PLAN.md`), as (book, chapter, verse).
+/// counts their words (a declared difference, `docs/DIFFERENCES.md`), as (book, chapter, verse).
 const LISTED: &[(&str, &str, &str)] = &[
     (
         "fixtures/tc4/test-fixtures/usfm-corpus/exotic-poetry-footnotes.usfm",

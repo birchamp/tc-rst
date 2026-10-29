@@ -131,7 +131,7 @@ touched_lint() {
 
 touched() {
   local base="${1:-origin/HEAD}" picked crates=() files=() code=0 step
-  node --test scripts/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs scripts/tools/touched.test.mjs
+  node --test scripts/tools/claims.test.mjs scripts/tools/docs.test.mjs parity/app/journeys/coverage.test.mjs scripts/tools/touched.test.mjs
   picked="$(node scripts/tools/touched.mjs "$base")"
   mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
   mapfile -t files < <(node -e 'for (const f of JSON.parse(process.argv[1]).journeys) console.log(f)' "$picked")

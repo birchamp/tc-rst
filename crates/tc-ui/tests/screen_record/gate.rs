@@ -580,7 +580,7 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
                 None,
                 Rule::MaskRuling,
                 format!(
-                    "mask {} cites {}, which docs/PLAN.md does not list as a difference on purpose",
+                    "mask {} cites {}, which docs/DIFFERENCES.md does not list as a difference on purpose",
                     mask.id, mask.ruling
                 ),
             );
@@ -597,7 +597,7 @@ pub fn check(record: &Record, design: &Design, committed: &str, now: &Report) ->
                 manifest.screens.iter().find(|s| &s.name == screen_name)
             {
                 // The baseline marks the screens of the owner's answers (Q) in `rebuildDiffers`.
-                // A tC4 issue (#) came after the capture, so PLAN's entry and the mask's `why`
+                // A tC4 issue (#) came after the capture, so DIFFERENCES' entry and the mask's `why`
                 // alone say where it applies, and the row's own difference demands its mask.
                 if mask.ruling.starts_with('Q')
                     && screen.rebuild_differs.as_ref().map(|r| &r.ruling) != Some(&mask.ruling)

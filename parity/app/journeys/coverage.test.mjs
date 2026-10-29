@@ -51,6 +51,23 @@ test('INV-P1-COVERED: every live journey is mapped', () => {
   assert.deepEqual(Object.entries(coverage.journeys).flatMap(([id, m]) => problems(id, m)), []);
 });
 
+test('INV-P1-COVERED: every rebuild journey is mapped', () => {
+  assert.deepEqual(Object.entries(coverage.rebuildJourneys).flatMap(([id, m]) => problems(id, m)), []);
+});
+
+test('INV-JOURNEYS-ONE-LIST: docs/JOURNEYS.md lists and describes exactly the mapped journeys', () => {
+  const text = fs.readFileSync(path.join(REPO, 'docs/JOURNEYS.md'), 'utf8');
+  const rows = [...text.matchAll(/^\| (J\d+[a-z]?) \|.*\| (tC4|rebuild|Phase 2) \|$/gm)];
+  const listed = (kind) => rows.filter((m) => m[2] === kind).map((m) => m[1]).sort();
+  assert.deepEqual(listed('tC4'), [...coverage.tc4.liveJourneys].sort(), 'index rows of kind tC4');
+  assert.deepEqual(listed('rebuild'), Object.keys(coverage.rebuildJourneys).sort(), 'index rows of kind rebuild');
+  // One heading may name several ids ("### J9a, J9c, J9d Import as a new project").
+  const described = new Set(
+    [...text.matchAll(/^### ((?:J\d+[a-z]?(?:, )?)+)/gm)].flatMap((m) => m[1].split(', ')),
+  );
+  assert.deepEqual(rows.map((m) => m[1]).filter((id) => !described.has(id)), [], 'index ids with no entry');
+});
+
 test('INV-P1-COVERED: every tC4 spec is mapped', () => {
   assert.equal(coverage.tc4.specs.length, 39, 'tC4 has 39 e2e specs at d25b7871');
   assert.deepEqual(keyProblems('spec', Object.keys(coverage.specs), coverage.tc4.specs), []);

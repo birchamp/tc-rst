@@ -244,7 +244,7 @@ pub const GATEWAYS: [Gateway; 18] = [
         )
     },
     // tC4 lists ur-deva as right to left and names it اردو, in Arabic script. Devanagari reads
-    // left to right, and the language's name in it is उर्दू (tC4 #701; docs/PLAN.md).
+    // left to right, and the language's name in it is उर्दू (tC4 #701; docs/DIFFERENCES.md).
     Gateway {
         has_twl: false,
         has_simplified: false,

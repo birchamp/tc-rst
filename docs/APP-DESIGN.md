@@ -2999,7 +2999,7 @@ or another case. *(A7)*
 - a row is still `memory+scripted` after the unit named in `pending_until` has landed;
 - a row is captured on the memory backend after C1a has landed (`MemoryAfterStore`): from then on
   the parity environment runs on the store *(C1a, D9)*;
-- a mask cites a ruling docs/PLAN.md does not list (other than `build`), a screen where the
+- a mask cites a ruling docs/DIFFERENCES.md does not list (other than `build`), a screen where the
   rebuild differs on purpose has no mask citing its ruling, or the rebuild's masked element lies
   outside the mask's rectangle;
 - a mask's element is missing on a side, unless the mask says why the rebuild has none yet

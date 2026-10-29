@@ -179,7 +179,7 @@ const NOT_PICTURE_FOLDERS: [&str; 3] = ["checking", "tc", "content"];
 /// drops roles (tC4 BURRITO-SPEC S-2: paths are authoritative). tC4 takes a project picture
 /// only with the role `x-obsimages` (`projectImageIngredients`, `src/data/obsStory.ts:147-159`),
 /// so a picture a project carries never shows there (tC4 #549; a declared difference,
-/// docs/PLAN.md).
+/// docs/DIFFERENCES.md).
 pub fn is_project_picture(key: &str) -> bool {
     let Some(ipath) = key.strip_prefix("ingredients/") else {
         return false;

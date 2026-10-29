@@ -932,7 +932,7 @@ fn every_screen_the_rebuild_differs_on_has_a_mask_citing_its_ruling() {
     assert!(p.run().global().iter().any(|f| f.rule == Rule::MaskRuling));
 }
 
-/// B9a masks the Urdu row of `source-texts` under tC4 #701, which docs/PLAN.md lists among the
+/// B9a masks the Urdu row of `source-texts` under tC4 #701, which docs/DIFFERENCES.md lists among the
 /// differences on purpose, as the gallery's residuals cite #552.
 #[test]
 fn a_mask_may_cite_a_tc4_issue_that_plan_lists() {
@@ -952,7 +952,7 @@ fn a_mask_may_cite_a_tc4_issue_that_plan_lists() {
         m["masks"].as_array_mut().unwrap().push(mask("#701"))
     });
     p.run().assert_clean(&["source-texts"]);
-    // An issue PLAN does not list is refused as an owner's answer it does not list is.
+    // An issue DIFFERENCES does not list is refused as an owner's answer it does not list is.
     p.edit_json("masks.json", |m| {
         *m["masks"].as_array_mut().unwrap().last_mut().unwrap() = mask("#7010")
     });
