@@ -1,5 +1,9 @@
 # The app parity harness
 
+> **Retired 2026-10-29.** The screenshot comparison with tC4 was done for 4.1.0 and no longer
+> gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). This folder is kept for what
+> other checks still use from it; the rest is a record.
+
 P7 (docs/DIFFERENCES.md) asks that the Rust app's screens be compared with tC4's and that every
 difference be listed. This folder holds the harness that captures both apps the same way and
 the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 side's record is

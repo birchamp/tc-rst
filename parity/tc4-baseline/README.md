@@ -1,5 +1,9 @@
 # tC4 visual-parity baseline
 
+> **Retired 2026-10-29.** The screenshot comparison with tC4 was done for 4.1.0 and no longer
+> gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). This folder is kept for what
+> other checks still use from it; the rest is a record.
+
 Reproducible screenshots of translationCore 4 (tC4), the React client that the Rust rebuild must
 look like. tC4 normally runs against a Pankosmia server on `127.0.0.1:19998`. That server is not
 available here, so this directory holds a Node mock of the Pankosmia HTTP API, backed by

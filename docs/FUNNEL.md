@@ -120,7 +120,7 @@ write product code; a reviewer reads it first.
 | Operation count | Interactive actions cost what they touch (`docs/PERFORMANCE.md`) | `crates/tc-app/tests/op_counts/` |
 | Contract test | A seam with two implementations (fake and real) | `crates/tc-app/tests/store_contract.rs` |
 | Journey | A journey end to end in the real app (P1) | `parity/app/journeys/*.test.mjs`, mapped in `coverage.json` |
-| Parity gate | The same look as tC4 (P7) | `crates/tc-ui/tests/screen_record.rs` |
+| Design-system test | tC4's design system is the app's, byte for byte (P7) | `crates/tc-ui/tests/vendored_assets.rs` |
 | Lint | How code is written | `clippy.toml`, `[workspace.lints]` |
 | Architecture test | Crate edges, I/O and network boundaries | `crates/tc-arch` |
 | Claim test | A document's claim that a test or a file exists | `scripts/tools/claims.test.mjs`, `scripts/tools/docs.test.mjs` |
@@ -146,7 +146,7 @@ write product code; a reviewer reads it first.
 Rigor is highest wherever a mistake loses a translator's work or locks in a format: the journal
 and the merge; storage and crash recovery; sync and USB exchange; import; the Burrito writer.
 These parts get property tests, crash-injection tests and an adversarial review by several
-models before they merge. Screens get end-to-end journeys and the screenshot comparison (P7).
+models before they merge. Screens get end-to-end journeys, and the design system is checked against tC4's files (P7).
 Resource parsers get tests against real fixtures from tC4, Door43 and Aquifer.
 
 ## 6. The Prose layer

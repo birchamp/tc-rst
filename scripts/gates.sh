@@ -27,7 +27,7 @@ STEPS=(
   "wasm-ui-hooks|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features test-hooks -- -D warnings"
   "wasm-api|cargo clippy --locked -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings"
   # --test-timeout bounds each file, which node runs as one test (CHK-8).
-  "node|node --test --test-timeout=120000 parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs scripts/tools/*.test.mjs"
+  "node|node --test --test-timeout=120000 parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs scripts/tools/*.test.mjs"
 )
 NIGHTLY=(
   "model-long|TC_MODEL_ROWS=1 cargo test --locked -p tc-store --test store model::random_histories_lose_no_work_long -- --ignored --exact --nocapture"

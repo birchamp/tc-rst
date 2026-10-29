@@ -4,16 +4,15 @@
 rulings and `docs/VISION.md` decide, and this file records the result. **Does not cover:** new
 features, which tC4 never had (`docs/JOURNEYS.md`).
 
-tC4 4.0 is history (ruling `docs/rulings/2026-10-29-tc4-is-history.md`). It still matters in two
-ways. The journeys J1 to J26 and the screens came from it, and the screenshot checks compare the
-app with tC4's screens at the reference version so that tC4's design system carries over. Each
-entry below is a place where the app chose otherwise.
+tC4 4.0 is history (ruling `docs/rulings/2026-10-29-tc4-is-history.md`). The journeys J1 to J26
+and the screens came from it, and for 4.1.0 the app's screens were compared with tC4's at the
+reference version (`docs/rulings/2026-10-27-p7-review.md`). That comparison is retired. Each entry
+below is a place where the app chose otherwise than tC4, so a person who knows tC4 can find what
+changed and why.
 
 When you change a screen or a behavior that came from tC4, add an entry here in the same pull
 request. End it with the issue or the owner's answer in parentheses, for example `(#701)` or
-`(Q3)`. The screenshot checks read those ids: a mask (`parity/app/masks.json`) or a residual
-(`parity/ds-gallery/residuals.json`) may cite only an id listed here
-(`crates/tc-ui/tests/support/plan_rulings.rs`, `parity/tc4-baseline/baseline.test.mjs`).
+`(Q3)`.
 
 ## The reference version
 
