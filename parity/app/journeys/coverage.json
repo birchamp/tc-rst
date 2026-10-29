@@ -71,12 +71,22 @@
     ]
   },
   "journeys": {
-    "J1": {
-      "file": "parity/app/journeys/create.test.mjs",
-      "tests": [
-        "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
-      ]
-    },
+    "J1": [
+      {
+        "file": "parity/app/journeys/create.test.mjs",
+        "tests": [
+          "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/dropdown.test.mjs",
+        "tests": [
+          "tC4 #552: a press on the label of the open book list keeps the list and its search",
+          "tC4 #552: two quick presses on the scrim with the book list open close the list, then the dialog",
+          "tC4 #552: a list that turns off while it is open closes and takes no choice"
+        ]
+      }
+    ],
     "J2": [
       {
         "file": "parity/app/journeys/translate.test.mjs",
