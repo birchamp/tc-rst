@@ -120,6 +120,15 @@ fn app_quit_from_the_ui_quits_like_the_quit_message() {
 #[cfg(unix)]
 #[test]
 fn sigterm_quits_like_the_quit_message() {
+    // The shell may end tc4 the moment it reads the address line. A signal there once met the
+    // operating system's default and killed tc4 without its quit sequence, one start in a few.
+    for _ in 0..20 {
+        sigterm_right_after_the_address_line();
+    }
+}
+
+#[cfg(unix)]
+fn sigterm_right_after_the_address_line() {
     let dirs = dirs();
     let mut tc4 = start(&dirs);
     let killed = std::process::Command::new("kill")

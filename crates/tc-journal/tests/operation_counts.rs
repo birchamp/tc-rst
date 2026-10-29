@@ -21,7 +21,7 @@
 mod support;
 
 use std::sync::OnceLock;
-use support::Dev;
+use support::{Dev, fold, on, seed_book, text, verse, verse_key};
 use tc_corpus::{Corpus, Spec};
 use tc_journal::command::Choice;
 use tc_journal::fold::{Counters, FoldInput, FoldState, Placement, ProjectKind, Resolved};
@@ -439,4 +439,38 @@ fn a_book_lists_its_files_from_its_own_records() {
             counts.records_listed
         );
     }
+}
+
+/// One verse edited `history` times on one device, then once from the tip on each of two
+/// others: the work of adding the second, conflicting edit.
+fn conflict_after(history: usize) -> Counters {
+    let mut dev = Dev::new(1);
+    let mut changes = seed_book(&mut dev, &[1]);
+    let mut tip = on(&changes, &verse_key(1, 1)).id();
+    for i in 0..history {
+        let edit = dev.one(verse(1, 1, text(&format!("words {i}"), 1)), vec![tip]);
+        tip = edit.id();
+        changes.push(edit);
+    }
+    changes.push(Dev::new(2).one(verse(1, 1, text("Maria's words", 1)), vec![tip]));
+    let juans = Dev::new(3).one(verse(1, 1, text("Juan's words", 1)), vec![tip]);
+    let mut state = fold(&changes);
+    let counts = step(&mut state, vec![juans]);
+    assert_eq!(state.conflicts().count(), 1, "the two edits conflict");
+    counts
+}
+
+/// The merge-base search walks a key's history once, not once per common ancestor: ten
+/// times the history costs about ten times the walk, never a hundred.
+#[test]
+fn a_conflict_walks_its_key_history_once() {
+    let short = conflict_after(40);
+    let long = conflict_after(400);
+    eprintln!("40 edits: {short:?}\n400 edits: {long:?}");
+    assert!(
+        long.changes_visited <= 12 * short.changes_visited,
+        "{} changes visited after 40 edits, {} after 400",
+        short.changes_visited,
+        long.changes_visited
+    );
 }

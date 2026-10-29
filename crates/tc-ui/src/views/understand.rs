@@ -330,7 +330,7 @@ fn chapter_view(
         })
     };
     let unit_views = {
-        let (s, actions, at) = (s.clone(), actions.clone(), open.at.clone());
+        let (s, at) = (s.clone(), open.at.clone());
         move || {
             let pane = chosen.get().unwrap_or_default();
             chapter_text.with(|text| {
@@ -341,7 +341,6 @@ fn chapter_view(
                             .map(|unit| {
                                 understand_unit(
                                     &s,
-                                    &actions,
                                     chapter,
                                     unit,
                                     text,
@@ -586,7 +585,6 @@ fn first_help_in(helps: Option<&PassageView>, unit: &Unit) -> Option<HelpFocus> 
 )]
 fn understand_unit(
     s: &AppState,
-    actions: &Actions,
     chapter: u16,
     unit: &Unit,
     text: &PaneChapter,
@@ -751,7 +749,6 @@ fn understand_unit(
             .with(|shown| shown.any)
             .then(|| view! { <StatusDot status=Status::Valid size=7.0 /> })
     };
-    let _ = actions;
     view! {
         <div
             data-testid=test_id

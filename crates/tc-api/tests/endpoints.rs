@@ -118,6 +118,8 @@ const PHASE_0: &[&str] = &[
     "create/addBlankBooks",
     "create/reviewUsfm",
     "create/addUsfmBooks",
+    // Review 2026-10-28 #7: a dialog's upload goes when nothing can use it any more.
+    "uploads/drop",
     // C8: release upgrades, the gateway change and the guided fix.
     "resources/checkUpdates",
     "resources/planUpgrade",

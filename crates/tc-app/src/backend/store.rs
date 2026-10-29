@@ -25,10 +25,11 @@
 //!   create, copy, join or import cut short left; each goes into the report log
 //!   (`report_removed_staging`), for "Ask for help" and for the units that tell the person.
 
+use crate::app::lock;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError, RwLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock};
 
 use serde::Deserialize;
 use tc_api::event::{CheckpointOutcome, SessionMode};
@@ -92,11 +93,6 @@ fn absent(error: &std::io::Error) -> bool {
         error.kind(),
         std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
     )
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    // Every change made under these locks is a store of a whole value.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 fn store_error(error: impl std::fmt::Display) -> StoreError {
@@ -768,7 +764,7 @@ impl ProjectStore for StoreBackend {
         session: Option<tc_door43::Session>,
         repo: tc_door43::RepoRef,
         name: String,
-    ) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+    ) -> BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
         join_on(self, |backend| &backend.store, client, session, repo, name)
     }
 
@@ -819,8 +815,8 @@ impl ProjectStore for StoreBackend {
         &self,
         file: &std::path::Path,
         name: &str,
-    ) -> Result<(), tc_sync::exchange::ExchangeError> {
-        tc_sync::exchange::receive_new(&self.store, file, name).map(|_| ())
+    ) -> Result<Vec<String>, tc_sync::exchange::ExchangeError> {
+        tc_sync::exchange::receive_new(&self.store, file, name).map(|made| made.not_written)
     }
 
     fn trust_lock(&self, folder: &ProjectRef) {
@@ -1916,7 +1912,7 @@ pub(crate) fn join_on<S: Send + Sync + 'static>(
     session: Option<tc_door43::Session>,
     repo: tc_door43::RepoRef,
     name: String,
-) -> BoxFuture<Option<Result<PathBuf, tc_sync::JoinError>>> {
+) -> BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
     let runtime = tokio::runtime::Handle::current();
     let work = tokio::task::spawn_blocking(move || {
         runtime.block_on(tc_sync::join(

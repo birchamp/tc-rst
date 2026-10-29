@@ -90,6 +90,18 @@ impl tc_app::UploadedFiles for ServerUploads {
             path: upload.path,
         })
     }
+
+    fn give_back(&self, id: &tc_api::ids::UploadId) {
+        self.0.give_back(id);
+    }
+
+    fn used_up(&self, id: &tc_api::ids::UploadId) {
+        self.0.used_up(id);
+    }
+
+    fn drop_stored(&self, id: &tc_api::ids::UploadId) {
+        self.0.drop_stored(id);
+    }
 }
 
 /// The server's downloads, as the application registers an export's file there.

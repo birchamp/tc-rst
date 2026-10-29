@@ -25,6 +25,8 @@ unicode-normalization.workspace = true
 # Invisible format characters (General Category Cf) are refused in ingredient paths: HFS+
 # ignores several of them when it compares names, and direction overrides disguise names.
 unicode-general-category.workspace = true
+# Every zip a person hands the app is read through one capped reader (src/unzip.rs).
+zip.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

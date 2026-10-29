@@ -118,11 +118,7 @@ impl App {
 
 impl Handle<AddComment> for App {
     async fn handle(&self, req: AddComment) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle();
         let target = target(req.target)?;
         let shown = req

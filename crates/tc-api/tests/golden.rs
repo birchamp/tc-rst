@@ -127,7 +127,7 @@ use tc_api::test::{
     QuietView, Release, Reset, Script, Scripted, ScriptedSync, StoredDraft, StoredText,
     TeammatesEdit, TeammatesJoin, TeammatesKind, TokenBase,
 };
-use tc_api::upload::{UploadFlow, UploadView};
+use tc_api::upload::{DropUpload, UploadFlow, UploadView};
 use tc_api::write::{
     Ack, ConflictBrief, DroppedLinks, NotSaved, ReadOnlyReason, SaveRefusal, SavedValue, Stored,
     TokenUpdate,
@@ -799,6 +799,15 @@ fn usfm_file(name: &str) -> UsfmFile {
     UsfmFile {
         upload: UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
         name: name.into(),
+    }
+}
+
+impl Example for DropUpload {
+    fn example() -> Self {
+        DropUpload {
+            request: request(45),
+            upload: UploadId::parse("00112233445566778899aabbccddeeff").unwrap(),
+        }
     }
 }
 

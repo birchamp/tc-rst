@@ -3,7 +3,9 @@ use crate::download::{
     DownloadTo, DownloadWatch, DownloadedZip, STOP_CHECK_INTERVAL, Writing, disk,
 };
 use crate::error::{AuthStatus, Door43Error, UnreachableCause, VerificationError};
-use crate::http::{Http, HttpError, HttpSpec, ProxyFinder, RedirectRule, system_proxy_finder};
+use crate::http::{
+    Http, HttpError, HttpSpec, ProxyFinder, RedirectRule, capped_body, system_proxy_finder,
+};
 use crate::internet::InternetSwitch;
 use crate::listing::Listing;
 use crate::names::{
@@ -749,33 +751,12 @@ impl Door43Client {
     async fn read_body(
         &self,
         route: &str,
-        mut response: reqwest::Response,
+        response: reqwest::Response,
         limit: u64,
     ) -> Result<Vec<u8>, Door43Error> {
-        let too_large = || Door43Error::TooLarge {
-            route: route.to_owned(),
-            limit,
-        };
-        if response.content_length().is_some_and(|len| len > limit) {
-            return Err(too_large());
-        }
-        let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
+        capped_body(response, &self.internet, limit)
             .await
-            .map_err(|e| transport_error(route, e))?
-        {
-            if self.internet.check().is_err() {
-                return Err(Door43Error::Offline {
-                    route: route.to_owned(),
-                });
-            }
-            if (body.len() + chunk.len()) as u64 > limit {
-                return Err(too_large());
-            }
-            body.extend_from_slice(&chunk);
-        }
-        Ok(body)
+            .map_err(|e| http_error(route, e))
     }
 }
 
@@ -823,7 +804,22 @@ fn unexpected(route: &str, reason: impl Into<String>) -> Door43Error {
 }
 
 fn transport_error(route: &str, error: reqwest::Error) -> Door43Error {
-    let cause = match HttpError::from(error) {
+    http_error(route, error.into())
+}
+
+fn http_error(route: &str, error: HttpError) -> Door43Error {
+    let cause = match error {
+        HttpError::Offline => {
+            return Door43Error::Offline {
+                route: route.to_owned(),
+            };
+        }
+        HttpError::TooLarge { limit } => {
+            return Door43Error::TooLarge {
+                route: route.to_owned(),
+                limit,
+            };
+        }
         HttpError::Redirect => {
             return unexpected(
                 route,

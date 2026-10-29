@@ -747,7 +747,15 @@ fn suggestions_row(
         "flex": 1,
         "min-width": 160,
     };
-    let (status_id, text) = match (&suggest.status, suggest.on) {
+    // Read here, the screen draws again when the switch fails: it shows its saved state.
+    let switch_failed =
+        s.a.suggest_error
+            .get()
+            .map(|reason| SuggestStatus::Error { reason });
+    let (status_id, text) = match (
+        switch_failed.as_ref().unwrap_or(&suggest.status),
+        suggest.on || switch_failed.is_some(),
+    ) {
         (_, false) | (SuggestStatus::Off, _) => ("off", t(keys::align::suggest::OFF, &[])),
         (SuggestStatus::Reading, true) => ("reading", t(keys::align::suggest::READING, &[])),
         (SuggestStatus::None, true) => ("none", t(keys::align::suggest::NONE, &[])),

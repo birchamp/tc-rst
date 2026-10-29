@@ -27,6 +27,8 @@ pub enum PathRule {
     Hidden,
     #[error("a segment ends with '.', which Windows drops")]
     TrailingDot,
+    #[error("a segment ends with a space, which Windows drops")]
+    TrailingSpace,
     #[error("the path contains whitespace, which Pankosmia and tC4 refuse")]
     Whitespace,
     #[error("the path contains a control character")]
@@ -56,16 +58,6 @@ pub enum PathRule {
 /// the validator reports such pairs.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IngredientPath(String);
-
-const FORBIDDEN: [char; 7] = [':', '?', '*', '"', '<', '>', '|'];
-
-/// Windows device names. Windows reads the superscript digits ¹ ² ³ as digits in `COM` and
-/// `LPT` names, and Microsoft's naming rules also list `COM0` and `LPT0`.
-const RESERVED: [&str; 32] = [
-    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "COM0", "COM1", "COM2", "COM3", "COM4",
-    "COM5", "COM6", "COM7", "COM8", "COM9", "COM¹", "COM²", "COM³", "LPT0", "LPT1", "LPT2", "LPT3",
-    "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
-];
 
 pub(crate) const METADATA_FILE: &str = "metadata.json";
 
@@ -106,44 +98,23 @@ impl IngredientPath {
     }
 }
 
-/// Returns the first rule `text` breaks.
+/// Returns the first rule `text` breaks: first the rules every file joined to a folder
+/// keeps ([`tc_core::check_path`]), then the stricter ones an ingredient keeps.
 pub(crate) fn check(text: &str) -> Result<(), PathRule> {
-    if text.is_empty() {
-        return Err(PathRule::Empty);
-    }
-    if text.contains('\\') {
-        return Err(PathRule::Backslash);
-    }
-    if text.starts_with('/') {
-        return Err(PathRule::Absolute);
-    }
+    check_project_path(text)?;
     for c in text.chars() {
-        if c.is_control() {
-            return Err(PathRule::Control);
-        }
         if c.is_whitespace() {
             return Err(PathRule::Whitespace);
         }
         if get_general_category(c) == GeneralCategory::Format {
             return Err(PathRule::FormatChar);
         }
-        if FORBIDDEN.contains(&c) {
-            return Err(PathRule::ForbiddenChar(c));
-        }
     }
     for segment in text.split('/') {
-        if segment.is_empty() {
-            return Err(PathRule::EmptySegment);
-        }
-        if segment == ".." {
-            return Err(PathRule::ParentDir);
-        }
         if segment.starts_with('.') {
             return Err(PathRule::Hidden);
         }
-        if segment.ends_with('.') {
-            return Err(PathRule::TrailingDot);
-        }
+        // Stricter than the 8.3 shape the shared check refuses.
         if segment
             .as_bytes()
             .windows(2)
@@ -151,18 +122,33 @@ pub(crate) fn check(text: &str) -> Result<(), PathRule> {
         {
             return Err(PathRule::ShortName);
         }
-        let device = segment.split('.').next().unwrap_or(segment);
-        if RESERVED
-            .iter()
-            .any(|name| name.eq_ignore_ascii_case(device))
-        {
-            return Err(PathRule::ReservedName);
-        }
     }
     if fold(text) == METADATA_FILE {
         return Err(PathRule::MetadataFile);
     }
     Ok(())
+}
+
+/// Checks the path of any file of a project, ingredient or not (`README.md`,
+/// `.gitignore`, `LICENSE copy.md`): only the rules that keep it inside the project
+/// folder, and writable as itself, on every platform ([`tc_core::check_path`]).
+pub fn check_project_path(text: &str) -> Result<(), PathRule> {
+    use tc_core::PathProblem as P;
+    tc_core::check_path(text).map_err(|problem| match problem {
+        P::Empty => PathRule::Empty,
+        P::Absolute => PathRule::Absolute,
+        P::Backslash => PathRule::Backslash,
+        P::DrivePrefix => PathRule::ForbiddenChar(':'),
+        P::Nul | P::Control(_) => PathRule::Control,
+        P::EmptySegment => PathRule::EmptySegment,
+        P::CurrentDir => PathRule::Hidden,
+        P::ParentDir => PathRule::ParentDir,
+        P::ForbiddenChar(c) => PathRule::ForbiddenChar(c),
+        P::TrailingDot => PathRule::TrailingDot,
+        P::TrailingSpace => PathRule::TrailingSpace,
+        P::ReservedName => PathRule::ReservedName,
+        P::ShortName => PathRule::ShortName,
+    })
 }
 
 /// The form under which Windows and macOS see two names as one file: NFC, then every
@@ -283,6 +269,39 @@ mod tests {
         ];
         for (text, rule) in cases {
             assert_eq!(check(text), Err(rule), "{text:?}");
+        }
+    }
+
+    /// A project file may be hidden, spaced or named like the metadata; it may never leave
+    /// the folder or be unwritable on Windows, even when a rule `check` reports first
+    /// (whitespace here) hides the one that matters.
+    #[test]
+    fn a_project_path_is_checked_only_for_what_keeps_it_inside_the_folder() {
+        for ok in [
+            ".gitignore",
+            "README.md",
+            "LICENSE copy.md",
+            "metadata.json",
+            "a/notes~1.json",
+        ] {
+            assert_eq!(check_project_path(ok), Ok(()), "{ok}");
+        }
+        for (text, rule) in [
+            ("a\\..\\..\\evil", PathRule::Backslash),
+            ("my file/../../evil", PathRule::ParentDir),
+            ("c:evil", PathRule::ForbiddenChar(':')),
+            ("/etc/passwd", PathRule::Absolute),
+            ("a//b", PathRule::EmptySegment),
+            ("dir./x", PathRule::TrailingDot),
+            ("ingredients/book.usfm ", PathRule::TrailingSpace),
+            ("a/.. /evil", PathRule::ParentDir),
+            ("a/b~1.txt", PathRule::ShortName),
+            ("a\0b", PathRule::Control),
+            ("con.txt", PathRule::ReservedName),
+            ("a\nb", PathRule::Control),
+            ("", PathRule::Empty),
+        ] {
+            assert_eq!(check_project_path(text), Err(rule), "{text:?}");
         }
     }
 

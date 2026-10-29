@@ -11,11 +11,14 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 use tc_api::align::{
-    AlignEdit, AlignPlace, AlignerView, BankClick, BankSelection, Edit, IndexItem, RailState, Word,
+    AlignEdit, AlignPlace, AlignSave, AlignerView, BankClick, BankSelection, Edit, IndexItem,
+    RailState, Word,
 };
 use tc_api::event::{ChangeCause, Event, SessionEvent};
 use tc_api::query::QueryKey;
 use tc_core::BookId;
+
+use crate::app::client::CallError;
 
 /// tC4's `mode`: the gateway lens or the original-language words (`align-mode-gw`, `-orig`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -465,6 +468,30 @@ impl EditQueue {
     }
 }
 
+/// What the answer to an aligner's `Close` means for its save state (B6, 5.4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Closed {
+    /// Every link is saved and the server let the aligner go.
+    Saved,
+    /// The server keeps the aligner open: its links are not saved yet, or their save failed.
+    Kept(AlignSave),
+    /// No answer: the aligner may still be open with links not saved. Its state stays as its
+    /// latest view or event said, and its events keep it true.
+    Unanswered,
+    /// The server answered that the session or the aligner is gone: leaving the project saved
+    /// the links, or reported that it could not.
+    Gone,
+}
+
+pub fn closed(answer: Result<AlignSave, CallError>) -> Closed {
+    match answer {
+        Ok(AlignSave::Saved) => Closed::Saved,
+        Ok(kept) => Closed::Kept(kept),
+        Err(CallError::Transport(_)) => Closed::Unanswered,
+        Err(CallError::Api(_) | CallError::Dropped) => Closed::Gone,
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -475,7 +502,33 @@ impl EditQueue {
 mod tests {
     use tc_api::align::{RailState, RailStatus};
 
+    use crate::app::client::Transport;
+
     use super::*;
+
+    #[test]
+    fn a_close_without_an_answer_keeps_the_aligners_save_state() {
+        let unreachable = Err(CallError::Transport(Transport::Unreachable(
+            "offline".into(),
+        )));
+        assert_eq!(closed(unreachable), Closed::Unanswered);
+        assert_eq!(
+            closed(Err(CallError::Transport(Transport::Status(503)))),
+            Closed::Unanswered
+        );
+    }
+
+    #[test]
+    fn a_close_the_server_answers_says_what_happened_to_the_links() {
+        assert_eq!(closed(Ok(AlignSave::Saved)), Closed::Saved);
+        assert_eq!(
+            closed(Ok(AlignSave::Unsaved)),
+            Closed::Kept(AlignSave::Unsaved)
+        );
+        let stale = Err(CallError::Api(tc_api::ApiError::StaleSession));
+        assert_eq!(closed(stale), Closed::Gone);
+        assert_eq!(closed(Err(CallError::Dropped)), Closed::Gone);
+    }
 
     fn place(chapter: u16, verse: u16) -> AlignPlace {
         AlignPlace {

@@ -935,12 +935,11 @@ impl ProjectHandle {
             }));
         }
         let (pending, resolver) = pending(|| Err(CommandError::Closed));
-        let sent = self.send(Msg::Command {
+        self.send(Msg::Command {
             command: Box::new(command),
             reply: resolver,
             sent: Instant::now(),
         });
-        let _ = sent;
         pending
     }
 

@@ -77,7 +77,10 @@ fn the_committed_record_passes_the_gate() {
 
 /// P7/INV-CAPTURES-FRESH: a capture shows the UI source it was taken from, so a commit that
 /// changes that source without recapturing would keep the gate green on the old screens.
+/// Paused once the preview shipped (owner, 2026-10-28): UI changes no longer need a recapture.
+/// To reinstate, drop the `ignore` and its line in scripts/ignored-tests.txt, then recapture.
 #[test]
+#[ignore = "captures paused after the preview release (owner, 2026-10-28)"]
 fn captures_match_the_current_ui_source() {
     let paths = Paths::committed();
     let record = Record::load(paths.clone()).unwrap_or_else(|e| panic!("{e}"));

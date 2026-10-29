@@ -26,6 +26,7 @@ use crate::ds::{
     LayerAlign, LayerPlacement, Level, Rule, Select, SelectOption, Shadow, Surface, Weight, fixed,
 };
 use crate::i18n::{LOCALES, keys, locale_of, t, t_dyn};
+use crate::roving::{Axis, Move, roving};
 
 /// tC4's LICENSE as tC4 ships it (vendor-tc4.sh); its line that starts with "Copyright" is
 /// About's copyright line (`tC4:src/data/about.ts`).
@@ -495,31 +496,22 @@ fn menu_layer<L: Fn() -> String + Clone + Send + Sync + 'static>(parts: MenuPart
         };
         let list = menu_rows(&panel);
         let active = document().active_element();
-        let at = list
-            .iter()
-            .position(|row| {
-                active
-                    .as_ref()
-                    .is_some_and(|a| a == row.unchecked_ref::<web_sys::Element>())
-            })
-            .map_or(-1, |i| i as i64);
+        let at = list.iter().position(|row| {
+            active
+                .as_ref()
+                .is_some_and(|a| a == row.unchecked_ref::<web_sys::Element>())
+        });
         let key = e.key();
         if key == "Tab" {
             open.set(false);
         }
-        let n = list.len() as i64;
-        if n == 0 {
+        let Some(target) =
+            Move::of_key(&key, Axis::Vertical).and_then(|step| roving(list.len(), at, step))
+        else {
             return;
-        }
-        let target = match key.as_str() {
-            "ArrowDown" => (at + 1).rem_euclid(n),
-            "ArrowUp" => (at - 1 + n).rem_euclid(n),
-            "Home" => 0,
-            "End" => n - 1,
-            _ => return,
         };
         e.prevent_default();
-        if let Some(row) = usize::try_from(target).ok().and_then(|i| list.get(i)) {
+        if let Some(row) = list.get(target) {
             let _ = row.focus();
         }
     };

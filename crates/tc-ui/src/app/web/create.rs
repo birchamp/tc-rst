@@ -20,6 +20,7 @@ use super::app_ctx::{Actions, Dialog, OpenTarget};
 use super::js;
 use crate::app::client::CallError;
 use crate::app::forms::{AddBookForm, AddBookStep, NewKind, UsfmState};
+use crate::app::uploads::{Opening, Slot};
 use crate::i18n::{keys, t, t_dyn};
 
 /// What a refusal says: its sentence, with the diagnosis after it where it has one. A create
@@ -189,6 +190,7 @@ impl Actions {
             }
             Some(Ok((project, (request, books)))) => (project, request, books),
         };
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             let asked = AddBlankBooks {
@@ -196,7 +198,8 @@ impl Actions {
                 project: project.clone(),
                 books,
             };
-            let mine = |ab: &AddBookForm| ab.project == project;
+            // The dialog that asked, not a newer Add Book on the same project.
+            let mine = |ab: &AddBookForm| ab.project == project && this.upload_current(opening);
             match this.runtime().api().call(&asked).await {
                 Ok(added) => {
                     let open = this
@@ -211,14 +214,16 @@ impl Actions {
                         }
                     }
                 }
-                Err(error) => this.patch_ab(|ab| {
-                    if mine(ab) {
-                        match said(error) {
-                            Said::Answered(error) => ab.added(&[], Some(error)),
-                            Said::Lost(error) => ab.lost(error),
+                Err(error) => {
+                    this.patch_ab(|ab| {
+                        if mine(ab) {
+                            match said(error) {
+                                Said::Answered(error) => ab.added(&[], Some(error)),
+                                Said::Lost(error) => ab.lost(error),
+                            }
                         }
-                    }
-                }),
+                    });
+                }
             }
         });
     }
@@ -235,16 +240,27 @@ impl Actions {
                 .try_update(|ab| ab.as_mut().map(|ab| ab.add_file(name.clone())))
                 .flatten();
             let Some(id) = added else { return };
+            let opening = self.upload_opening();
             let this = self.clone();
             spawn_local(async move {
-                let state = this.review_file(&file, &name).await;
-                this.patch_ab(|ab| ab.file_read(id, state));
+                let state = this.review_file(&file, &name, opening, id).await;
+                // Row ids start again in each opening: an answer for a closed dialog would
+                // mark the new dialog's row with the same id.
+                if this.upload_current(opening) {
+                    this.patch_ab(|ab| ab.file_read(id, state));
+                }
             });
         }
     }
 
     /// Sends one file and asks the server what it is.
-    async fn review_file(&self, file: &web_sys::File, name: &str) -> UsfmState {
+    async fn review_file(
+        &self,
+        file: &web_sys::File,
+        name: &str,
+        opening: Opening,
+        row: u32,
+    ) -> UsfmState {
         let api = self.runtime().api();
         if file.size() > UploadFlow::Usfm.cap() as f64 {
             return UsfmState::Unreadable(t(keys::wizard::ERROR, &[]));
@@ -253,6 +269,18 @@ impl Actions {
             Ok(upload) => upload,
             Err(error) => return UsfmState::Unreadable(unreadable(error)),
         };
+        if !self.picked_upload(opening, Slot::Usfm(row), &upload.id) {
+            return UsfmState::Unreadable(String::new());
+        }
+        // Its row was removed while it was sent.
+        let listed = self.s().ab_slot().with_untracked(|ab| {
+            ab.as_ref()
+                .is_some_and(|ab| ab.files.iter().any(|f| f.id == row))
+        });
+        if !listed {
+            self.removed_upload(Slot::Usfm(row));
+            return UsfmState::Unreadable(String::new());
+        }
         let asked = ReviewUsfm {
             file: UsfmFile {
                 upload: upload.id.clone(),
@@ -271,6 +299,7 @@ impl Actions {
     /// The ✕ of a row (tC4 `abRemoveUsfmFile`).
     pub fn ab_remove_file(&self, id: u32) {
         self.patch_ab(|ab| ab.remove_file(id));
+        self.removed_upload(Slot::Usfm(id));
     }
 
     /// "Add book" and "Add n books" (tC4 `addUsfmBooks`): the valid files are added, each as
@@ -289,6 +318,7 @@ impl Actions {
         let Some((project, request, files)) = pressed else {
             return;
         };
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let asked = AddUsfmBooks {
@@ -296,9 +326,13 @@ impl Actions {
                 project: project.clone(),
                 files,
             };
-            let mine = |ab: &AddBookForm| ab.project == project;
+            // The dialog that sent the files, not a newer Add Book on the same project.
+            let sent = taken.opening();
+            let mine = |ab: &AddBookForm| ab.project == project && this.upload_current(sent);
             match this.runtime().api().call(&asked).await {
                 Ok(done) => {
+                    // Each file was read and deleted, added or not.
+                    this.uploads_finished(&taken);
                     this.refresh_projects();
                     let mut added = Vec::new();
                     let mut problems = Vec::new();
@@ -334,14 +368,18 @@ impl Actions {
                         });
                     }
                 }
-                Err(error) => this.patch_ab(|ab| {
-                    if mine(ab) {
-                        match said(error) {
-                            Said::Answered(error) => ab.added(&[], Some(error)),
-                            Said::Lost(error) => ab.lost(error),
+                Err(error) => {
+                    // The server gives back the files it did not read.
+                    this.uploads_given_back(&taken);
+                    this.patch_ab(|ab| {
+                        if mine(ab) {
+                            match said(error) {
+                                Said::Answered(error) => ab.added(&[], Some(error)),
+                                Said::Lost(error) => ab.lost(error),
+                            }
                         }
-                    }
-                }),
+                    });
+                }
             }
         });
     }

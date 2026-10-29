@@ -90,7 +90,7 @@ impl ProjectFiles for TreeFiles<'_> {
         }
     }
 
-    fn ingredient_dir_files(&self) -> Result<Vec<String>, String> {
+    fn ingredient_dir_files(&self) -> Result<Vec<String>, tc_burrito::UnlistedDir> {
         Ok(self
             .0
             .keys()

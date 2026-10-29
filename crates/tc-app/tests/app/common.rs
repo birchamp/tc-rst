@@ -512,7 +512,60 @@ pub async fn try_start(
         test_keychain: Some(parts.keychain.clone()),
     };
     edit(&mut config, &mut deps);
-    App::start(config, deps).await
+    let app = App::start(config, deps).await?;
+    app.provide_uploads(Arc::new(DiskUploads::new(dir.join("app-data/uploads"))));
+    Ok(app)
+}
+
+/// The server's uploads as tests keep them: a file a test put in `app-data/uploads` is
+/// Stored until a request holds it, as the server's registry keeps it.
+pub struct DiskUploads {
+    dir: PathBuf,
+    holds: std::sync::Mutex<BTreeMap<tc_api::ids::UploadId, u32>>,
+}
+
+impl DiskUploads {
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            holds: std::sync::Mutex::default(),
+        }
+    }
+}
+
+impl tc_app::UploadedFiles for DiskUploads {
+    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
+        let path = self.dir.join(id.as_str());
+        if !path.exists() {
+            return None;
+        }
+        *self.holds.lock().unwrap().entry(id.clone()).or_default() += 1;
+        Some(tc_app::UploadedFile {
+            name: id.as_str().to_owned(),
+            path,
+        })
+    }
+
+    fn give_back(&self, id: &tc_api::ids::UploadId) {
+        let mut holds = self.holds.lock().unwrap();
+        if let Some(n) = holds.get_mut(id) {
+            *n -= 1;
+            if *n == 0 {
+                holds.remove(id);
+            }
+        }
+    }
+
+    fn used_up(&self, id: &tc_api::ids::UploadId) {
+        self.holds.lock().unwrap().remove(id);
+        let _ = std::fs::remove_file(self.dir.join(id.as_str()));
+    }
+
+    fn drop_stored(&self, id: &tc_api::ids::UploadId) {
+        if !self.holds.lock().unwrap().contains_key(id) {
+            let _ = std::fs::remove_file(self.dir.join(id.as_str()));
+        }
+    }
 }
 
 // ---- Projects of the memory backend -------------------------------------------------------

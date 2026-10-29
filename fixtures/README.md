@@ -24,6 +24,13 @@ Licenses: the content licenses are in `tc4/LICENSE-CONTENT.md`. unfoldingWord re
 (ULT, UST, UHB, UGNT, tN, tW, tA, tQ, TWL, OBS) are CC BY-SA 4.0, © unfoldingWord. The
 `.mjs` generator scripts are tC4 code, MIT since tC4 #838, kept for provenance.
 
+## `tc3/`
+
+`en_kjv_luk_bridged.zip`: `tc4/conformance-fixtures/import/tc3/multi/en_kjv_luk_book.zip` with
+Luke 1:1 and 1:2 bridged as `1-2` in the text and in the alignment data, as tC3 files a bridge
+(translationCore `src/js/helpers/WordAlignmentHelpers.js`, `convertAlignmentDataToUSFM`, reads
+the alignment and the verse by one key, `1-2`). Made by `make_bridged.py` in that folder.
+
 ## `obs/`
 
 What tC4's own OBS code answers, for `tc-obs`. Read `obs/README.md`.

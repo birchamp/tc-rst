@@ -435,7 +435,8 @@ impl ServerUrl {
     }
 }
 
-fn is_loopback_host(url: &Url) -> bool {
+/// Whether `url` names this machine: `localhost` or a loopback address.
+pub fn is_loopback_host(url: &Url) -> bool {
     match url.host() {
         Some(url::Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
         Some(url::Host::Ipv4(ip)) => IpAddr::V4(ip).is_loopback(),

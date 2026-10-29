@@ -392,9 +392,9 @@ impl Installed {
 
     /// How a seeding reports this bundled install when copying it was refused.
     fn refused(&self, why: InstallError) -> StoreError {
-        StoreError::BadReceipt {
+        StoreError::Refused {
             path: self.dir.clone(),
-            problem: why.to_string(),
+            source: Box::new(why),
         }
     }
 
@@ -1085,17 +1085,6 @@ fn dirs_at_depth(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> Result<(),
 /// another name, or that a case-insensitive file system would merge with another.
 /// Downloads were checked already; this guards every write, whatever its source.
 fn check_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Result<(), Refusal> {
-    let paths: Vec<&str> = paths.into_iter().collect();
-    for path in &paths {
-        let bad = path.is_empty()
-            || path.contains(['\\', ':', '\0'])
-            || path
-                .split('/')
-                .any(|segment| segment.is_empty() || segment.chars().all(|c| c == '.'));
-        if bad {
-            return Err(Refusal::EscapesRoot((*path).to_owned()));
-        }
-    }
     Ok(check_names(paths)?)
 }
 
@@ -1248,6 +1237,25 @@ mod tests {
         }
     }
 
+    /// Every write's names go through the shared check: what leaves the folder is
+    /// `EscapesRoot`, what Windows would rename or refuse is `NotPortable`.
+    #[test]
+    fn a_written_name_is_checked_for_leaving_the_folder_and_for_windows() {
+        for path in ["../x", "a/", "a\\b", "c:x", "a/.. /b"] {
+            assert!(
+                matches!(check_paths([path]), Err(Refusal::EscapesRoot(p)) if p == path),
+                "{path:?}"
+            );
+        }
+        for path in ["book.tsv ", "book.tsv.", "con.json", "ab:c"] {
+            assert!(
+                matches!(check_paths([path]), Err(Refusal::NotPortable { path: p, .. }) if p == path),
+                "{path:?}"
+            );
+        }
+        assert!(check_paths(["notes/TIT.tsv", "LICENSE.md"]).is_ok());
+    }
+
     /// A name the store accepts. `[a-z]{1,6}` alone makes `prn`, `con`, `aux` and `nul` now
     /// and then, which are device names on Windows, and the store refuses them.
     fn portable_name() -> impl proptest::strategy::Strategy<Value = String> {
@@ -1346,6 +1354,9 @@ mod tests {
             "a\\b",
             "a//b",
             "...",
+            "a/.. /x",
+            "x/",
+            "a\0b",
             "",
         ] {
             let mut s = staged('a');
@@ -1597,6 +1608,18 @@ mod tests {
         assert!(
             report.refused[0].1.to_string().contains(escaping),
             "the refusal names the path: {}",
+            report.refused[0].1
+        );
+        // The refusal keeps its kind, not only its words.
+        assert!(
+            matches!(
+                &report.refused[0].1,
+                StoreError::Refused { source, .. } if matches!(
+                    **source,
+                    InstallError::Refused { refusal: Refusal::EscapesRoot(_), .. }
+                )
+            ),
+            "{:?}",
             report.refused[0].1
         );
         assert!(machine.installed().unwrap().installs.is_empty());

@@ -705,7 +705,7 @@ fn open_inner(
         gates.lock = None;
     }
     // O12.
-    let drafts = Arc::new(DraftWriter::start(
+    let (drafts, drafts_notices) = DraftWriter::start(
         vfs.clone(),
         folder.clone(),
         &project.fold,
@@ -714,7 +714,13 @@ fn open_inner(
         hooks.clone(),
         counters.clone(),
         read_only,
-    ));
+    );
+    // No copy: dismissing hides a notice for this session and never removes a drafts file
+    // (§5.14).
+    for notice in drafts_notices {
+        project.notice(notice, None);
+    }
+    let drafts = Arc::new(drafts);
     let seq = project.publish();
     // What O9 projected stands for the fold of this snapshot only.
     writer.prerendered_seq = seq;

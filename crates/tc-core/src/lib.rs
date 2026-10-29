@@ -10,10 +10,14 @@ mod books;
 mod digest;
 mod ids;
 pub mod js;
+mod path;
+mod zipdir;
 
 pub use books::{BookId, Testament};
 pub use digest::{DigestError, GitOid, Md5, Md5Stream};
-pub use ids::{ChapterNo, FrameNo, NotAStory, StoryNo, VerseNo};
+pub use ids::{ChapterNo, FrameNo, NotANumber, NotAStory, StoryNo, VerseNo, digits};
+pub use path::{PathProblem, check_path};
+pub use zipdir::central_directory_records;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
@@ -81,12 +85,7 @@ impl FromStr for VerseSpan {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bad = || ParseError::InvalidVerse(s.to_owned());
-        let number = |part: &str| -> Result<u16, ParseError> {
-            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(bad());
-            }
-            part.parse().map_err(|_| bad())
-        };
+        let number = |part: &str| digits(part).ok_or_else(bad);
         match s.split_once('-') {
             None => {
                 let v = number(s)?;
@@ -153,15 +152,7 @@ impl FromStr for Reference {
         let bad = || ParseError::InvalidReference(s.to_owned());
         let (book, rest) = s.split_once(' ').ok_or_else(bad)?;
         let (chapter, verses) = rest.split_once(':').ok_or_else(bad)?;
-        // Digits only, as `VerseSpan` reads them: `u16::parse` alone would take `+1`.
-        if chapter.is_empty() || !chapter.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(bad());
-        }
-        let chapter = chapter
-            .parse()
-            .ok()
-            .and_then(ChapterNo::new)
-            .ok_or_else(bad)?;
+        let chapter: ChapterNo = chapter.parse().map_err(|_| bad())?;
         Ok(Self {
             book: book.parse()?,
             chapter,
@@ -205,6 +196,22 @@ mod tests {
     }
 
     #[test]
+    fn chapter_and_verse_numbers_are_plain_nonzero_digits() {
+        for (text, n) in [("1", 1), ("007", 7), ("65535", 65535)] {
+            assert_eq!(text.parse::<ChapterNo>().map(ChapterNo::get), Ok(n));
+            assert_eq!(text.parse::<VerseNo>().map(VerseNo::get), Ok(n));
+        }
+        for bad in [
+            "", "0", "000", "+1", "-1", " 1", "1 ", "1a", "65536", "\u{661}",
+        ] {
+            assert_eq!(bad.parse::<ChapterNo>(), Err(NotANumber), "{bad:?}");
+            assert_eq!(bad.parse::<VerseNo>(), Err(NotANumber), "{bad:?}");
+        }
+        assert_eq!(digits("000"), Some(0));
+        assert_eq!(digits("0065535"), Some(65535));
+    }
+
+    #[test]
     fn references_round_trip_through_text_and_json() {
         for text in ["TIT 1:1", "JON 2:9-10", "3JN 1:15"] {
             let r: Reference = text.parse().unwrap();
@@ -212,7 +219,13 @@ mod tests {
             let json = serde_json::to_string(&r).unwrap();
             assert_eq!(serde_json::from_str::<Reference>(&json).unwrap(), r);
         }
-        assert!("TIT 0:1".parse::<Reference>().is_err());
+        assert_eq!(
+            "TIT 01:1".parse::<Reference>().unwrap().to_string(),
+            "TIT 1:1"
+        );
+        for bad in ["TIT 0:1", "TIT +1:1", "TIT  1:1", "TIT 65536:1", "TIT :1"] {
+            assert!(bad.parse::<Reference>().is_err(), "{bad:?}");
+        }
         assert!("XYZ 1:1".parse::<Reference>().is_err());
     }
 }

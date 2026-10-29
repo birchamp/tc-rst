@@ -30,7 +30,8 @@ use super::app_ctx::Actions;
 use super::js;
 use super::saves::{GateHookId, WriteCap};
 use crate::app::align::{
-    EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, refresh_for, same_verse,
+    Closed, EditFailure, EditQueue, LeaveWait, Lens, RailFilter, SentEdit, closed, refresh_for,
+    same_verse,
 };
 use crate::app::check::CheckView;
 use crate::app::client::CallError;
@@ -127,6 +128,8 @@ pub struct AlignState {
     pub asking: ArcRwSignal<bool>,
     /// A queued edit failed; the workspace stays mounted with its pending actions retained.
     pub edit_error: ArcRwSignal<Option<String>>,
+    /// The suggestions switch was not set; it shows its saved state again until the next view.
+    pub suggest_error: ArcRwSignal<Option<String>>,
     /// The aligner the server holds for this page, the open it belongs to and its verse: what
     /// the tool asks the server to close when it is left for another book, and the verse shown
     /// again when the server refuses to leave it.
@@ -154,6 +157,7 @@ impl AlignState {
             how: ArcRwSignal::new(false),
             asking: ArcRwSignal::new(false),
             edit_error: ArcRwSignal::new(None),
+            suggest_error: ArcRwSignal::new(None),
             open: ArcRwSignal::new(None),
             remembered: ArcRwSignal::new(Vec::new()),
             history_open: ArcRwSignal::new(false),
@@ -269,14 +273,14 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => {
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => {
                         view.save = unsaved;
                         this.align_view(*view);
                         return;
                     }
-                    Err(_) => {
+                    Closed::Unanswered | Closed::Gone => {
                         // An unanswered close is not proof that the links were saved.
                         this.s().a.screen.try_set(Screen::Ready(view));
                         this.refresh_align();
@@ -296,6 +300,7 @@ impl Actions {
     /// aligner the server holds is closed, so its links are saved and it does not wait for the
     /// project to be left (at Home the server's own leave saves it).
     pub(super) fn reset_align(&self) {
+        self.clear_suggest_error();
         if let Some((at, aligner, _)) = self.s().a.open.try_update(Option::take).flatten() {
             let this = self.clone();
             spawn_local(async move {
@@ -304,9 +309,10 @@ impl Actions {
                     request: js::random_request_id(),
                     aligner,
                 };
-                match this.runtime().api().call(&close).await {
-                    Ok(AlignSave::Saved) | Err(_) => this.runtime().align_forget(aligner),
-                    Ok(unsaved) => this.runtime().align_save(aligner, unsaved),
+                match closed(this.runtime().api().call(&close).await) {
+                    Closed::Saved | Closed::Gone => this.runtime().align_forget(aligner),
+                    Closed::Kept(unsaved) => this.runtime().align_save(aligner, unsaved),
+                    Closed::Unanswered => {}
                 }
             });
         }
@@ -783,12 +789,24 @@ impl Actions {
         });
     }
 
+    /// Only a shown failure is cleared: the suggestions row reads this signal, and a set that
+    /// changes nothing would still draw the row again in the middle of the switch's click.
+    fn clear_suggest_error(&self) {
+        let error = &self.s().a.suggest_error;
+        if error.with_untracked(Option::is_some) {
+            error.try_set(None);
+        }
+    }
+
     /// The suggestions switch (tC4 `setAlignSuggestions`): the project's, kept on this computer;
     /// the aligner's view carries it, so the view is read again.
     pub fn set_align_suggestions(&self, on: bool) {
         let Some((at, _)) = self.align_scope() else {
             return;
         };
+        // A failure stays shown until the person tries again or leaves the screen: the refresh
+        // that follows it must not clear it.
+        self.clear_suggest_error();
         let this = self.clone();
         spawn_local(async move {
             let request = SetAlignSuggestions {
@@ -796,7 +814,13 @@ impl Actions {
                 request: js::random_request_id(),
                 on,
             };
-            let _ = this.runtime().api().call(&request).await;
+            match this.runtime().api().call(&request).await {
+                // The tool is being left: nothing to say on it.
+                Ok(()) | Err(CallError::Api(ApiError::StaleScope { .. }) | CallError::Dropped) => {}
+                Err(error) => {
+                    this.s().a.suggest_error.try_set(Some(error.to_string()));
+                }
+            }
             this.refresh_align();
         });
     }

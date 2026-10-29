@@ -58,6 +58,11 @@ pub fn rename_held(vfs: &dyn Vfs, from: &Path, to: &Path, retry: &HeldRetry) -> 
     retry_held(vfs, retry, || vfs.rename(from, to))
 }
 
+/// `Vfs::read`, retried while another program holds the file.
+pub fn read_held(vfs: &dyn Vfs, path: &Path, retry: &HeldRetry) -> io::Result<Vec<u8>> {
+    retry_held(vfs, retry, || vfs.read(path))
+}
+
 /// `Vfs::remove_file`, retried while another program holds the file.
 pub fn remove_held(vfs: &dyn Vfs, path: &Path, retry: &HeldRetry) -> io::Result<()> {
     retry_held(vfs, retry, || vfs.remove_file(path))
