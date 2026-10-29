@@ -1,0 +1,30 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:36253/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3364275-1793291168589/sample/projects, Door43: http://127.0.0.1:9)
+# \#582 {"door43":"ug","codeBox":"ug","offer":null,"alert":null,"folder":"uyghur_bible","tag":"ug","name":{"en":"Uyghur"},"dir":"ltr","door43Language":null}
+# \#582 {"door43":"bal","codeBox":"bal","offer":null,"alert":null,"folder":"balochi_bible","tag":"bal","name":{"en":"Balochi"},"dir":"ltr","door43Language":null}
+# \#582 {"door43":"kas","codeBox":"kas","offer":null,"alert":null,"folder":"kashmiri_bible","tag":"kas","name":{"en":"Kashmiri"},"dir":"rtl","door43Language":null}
+# \#582 {"door43":"ajp","codeBox":"ajp","offer":null,"alert":null,"folder":"levantine_bible","tag":"ajp","name":{"en":"Arabic, South Levantine Spoken"},"dir":"rtl","door43Language":null}
+# \#582 {"door43":"acm-x-lebarabic","codeBox":"acm-x-lebarabi-c","offer":"Door43 lists this language as acm-x-lebarabic, a code a project cannot hold. The project uses acm-x-lebarabi-c and keeps acm-x-lebarabic as its Door43 code.","alert":null,"folder":"lebanese_bible","tag":"acm-x-lebarabi-c","name":{"en":"Lebanese Arabic"},"dir":"rtl","door43Language":{"code":"acm-x-lebarabic","name":"Lebanese Arabic"}}
+# \#582 {"door43":"alk-alakatapue","codeBox":"alk-x-alakatap-ue","offer":"Door43 lists this language as alk-alakatapue, a code a project cannot hold. The project uses alk-x-alakatap-ue and keeps alk-alakatapue as its Door43 code.","alert":null,"folder":"alak_bible","tag":"alk-x-alakatap-ue","name":{"en":"Alak Atapue"},"dir":"ltr","door43Language":{"code":"alk-alakatapue","name":"Alak Atapue"}}
+# \#582 {"door43":"bnx-tz-bangubangu","codeBox":"bnx-x-tzbangub-angu","offer":"Door43 lists this language as bnx-tz-bangubangu, a code a project cannot hold. The project uses bnx-x-tzbangub-angu and keeps bnx-tz-bangubangu as its Door43 code.","alert":null,"folder":"bangubangu_bible","tag":"bnx-x-tzbangub-angu","name":{"en":"Bangubangu"},"dir":"ltr","door43Language":{"code":"bnx-tz-bangubangu","name":"Bangubangu"}}
+# \#582 {"door43":"ug","codeBox":"ug","offer":null,"alert":null,"folder":"uyghur_stories","tag":"ug","name":{"en":"Uyghur"},"dir":"ltr","door43Language":null}
+# Subtest: 582_every_group_of_refused_door43_codes_creates_a_project
+ok 1 - 582_every_group_of_refused_door43_codes_creates_a_project
+  ---
+  duration_ms: 28062.448513
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 38206.618045
+exit 0

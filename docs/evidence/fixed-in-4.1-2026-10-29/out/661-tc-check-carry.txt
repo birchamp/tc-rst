@@ -1,0 +1,9 @@
+$ tc-heavy cargo test -p tc-check --test carry a_tw_only_change -- --nocapture  (at 597a234e)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.47s
+     Running tests/carry.rs (target/debug/deps/carry-08b989bb2352d217)
+
+running 1 test
+test a_tw_only_change_that_drops_a_decided_article_is_counted ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.10s
+

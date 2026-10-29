@@ -1,0 +1,30 @@
+    Blocking waiting for file lock on build directory
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.2
+   Compiling hashlink v0.12.2
+   Compiling yaml-rust2 v0.13.0
+   Compiling serde_json v1.0.154
+   Compiling zip v8.6.0
+   Compiling tc-helps v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-helps)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 31.36s
+     Running tests/repro_628.rs (target/debug/deps/repro_628-a61aba5b69f86418)
+
+running 2 tests
+test repro_628_marks_left_as_text ... en_ta_v91.sb.zip: 245 articles; articles with a mark left as text: {"'|' row": 1, "<br>": 17, "<sup>": 11, "<u>": 2, "__": 1}; articles with a Markdown link (shown as its label, not clickable): 124
+en_tw_v91.sb.zip: 957 articles; articles with a mark left as text: {"__": 1}; articles with a Markdown link (shown as its label, not clickable): 944
+ok
+test repro_628_named_articles ... TABLE grammar-connect-time-background: rows 11, header rows 1, cells in first row 2, text lines starting with '|': 0
+HTML writing-proverbs: blocks with <br> as text: 14
+  e.g. "A good name is to be chosen over great riches,<br>"
+HTML translate-names: blocks with <sup> as text: 4
+  e.g. "<sup>[1]</sup> Most versions say “Saul” here, but most of the time in the Bible he is called “Paul.”"
+IMAGE figs-exclusive: blocks with image Markdown as text: 2
+  e.g. "!we/us (inclusive) people diagram"
+LIST figs-pronouns: item depths [0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+LINK: "See Pronouns and God." (spans 1)
+NUMBERED: en_ta articles with a numbered item block: 48
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.31s
+
+exit 0

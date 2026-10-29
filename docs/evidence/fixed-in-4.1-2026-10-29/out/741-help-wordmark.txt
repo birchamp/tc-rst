@@ -1,0 +1,33 @@
+$ TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_DOOR43_FAKE=target/debug/tc-door43-fake tc-heavy node --test --test-timeout=180000 docs/evidence/fixed-in-4.1-2026-10-29/repro/741-help-wordmark.test.mjs
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:42695/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3326666-1793291101656/sample/projects, Door43: http://127.0.0.1:9)
+# wordmark: {
+#  "fontFamily": "Mulish, \\"Avenir Next\\", Avenir, -apple-system, BlinkMacSystemFont, \\"Segoe UI\\", sans-serif",
+#  "fontWeight": "600",
+#  "fontSize": "15.5px",
+#  "letterSpacing": "-0.1395px",
+#  "smoothing": "antialiased",
+#  "bundledFaces": [],
+#  "mulishAvailable": true
+# }
+# requests to another host: []
+# Subtest: 741_help_wordmark_is_drawn_light_and_smooth
+ok 1 - 741_help_wordmark_is_drawn_light_and_smooth
+  ---
+  duration_ms: 7936.92541
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18072.74581
+exit 0

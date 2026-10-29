@@ -1,0 +1,22 @@
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-sync)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.67s
+     Running tests/repro_761.rs (target/debug/deps/repro_761-2700d94222df2518)
+
+running 1 test
+#761 a new story project has front matter on disk: false
+#761 Juan's sync: new_conflicts=[ConflictId(f62b702b681412457f4145eb6929dd1459cdee0daed584667118ab7878f3a2f7)]
+#761 Ana's second sync: new_conflicts=[ConflictId(f62b702b681412457f4145eb6929dd1459cdee0daed584667118ab7878f3a2f7)]
+#761 Ana 1:3 = "Frame 3, as Ana has it."
+#761 Ana 1:4 = "Frame 4, as Juan has it."
+#761 Ana 1:5 = "Frame 5, as Ana has it."
+#761 Ana open conflicts: ["Frame Frame(StoryNo(1), FrameNo(5)) candidates=2"]
+#761 Juan 1:3 = "Frame 3, as Ana has it."
+#761 Juan 1:4 = "Frame 4, as Juan has it."
+#761 Juan 1:5 = "Frame 5, as Ana has it."
+#761 Juan open conflicts: ["Frame Frame(StoryNo(1), FrameNo(5)) candidates=2"]
+#761 content files: 51 on Ana, 51 on Juan, 51 on Carla; differing: []
+test repro_761_obs_team_sync_round_2 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 1.73s
+
+exit 0

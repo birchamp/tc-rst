@@ -1,0 +1,57 @@
+    Blocking waiting for file lock on build directory
+   Compiling tokio v1.53.3
+   Compiling ahash v0.8.12
+   Compiling icu_normalizer v2.3.0
+   Compiling jsonschema-value v0.58.6
+   Compiling referencing v0.58.6
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling jsonschema v0.58.6
+   Compiling git2 v0.21.0
+   Compiling hyper v1.12.0
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.6
+   Compiling tower-http v0.6.11
+   Compiling hyper-util v0.1.21
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.13.5
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43)
+   Compiling tc-burrito v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-burrito)
+   Compiling tc-journal v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-journal)
+   Compiling tc-resources v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-resources)
+   Compiling tc-check v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-check)
+   Compiling tc-align v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-align)
+   Compiling tc-corpus v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-corpus)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 54.44s
+     Running tests/repro_179.rs (target/debug/deps/repro_179-423a4b278f0a2f2f)
+
+running 2 tests
+test repro_179_orphan_newer_than_the_standing_text ... --- orphan edit newer than 'nuevo'
+heads of 1:1: 2
+projected 1:1: Some("Juan's edit")
+conflict kind VerseText incomplete_history true candidates 2
+USFM verse 1 line: "\\v 1 Juan's edit"
+
+thread 'repro_179_orphan_newer_than_the_standing_text' (2717799) panicked at crates/tc-journal/tests/repro_179.rs:71:5:
+assertion `left == right` failed: the standing text was displaced
+  left: Some("Juan's edit")
+ right: Some("nuevo")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test repro_179_orphan_older_than_the_standing_text ... --- orphan edit older than 'nuevo'
+heads of 1:1: 2
+projected 1:1: Some("nuevo")
+conflict kind VerseText incomplete_history true candidates 2
+USFM verse 1 line: "\\v 1 nuevo"
+ok
+
+failures:
+
+failures:
+    repro_179_orphan_newer_than_the_standing_text
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p tc-journal --test repro_179`
+exit 101

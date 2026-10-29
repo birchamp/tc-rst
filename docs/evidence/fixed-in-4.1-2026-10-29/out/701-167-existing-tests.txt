@@ -1,0 +1,61 @@
+   Compiling hyper v1.12.0
+   Compiling hyper-util v0.1.21
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.6
+   Compiling tower-http v0.6.11
+   Compiling hyper-rustls v0.27.10
+   Compiling reqwest v0.13.5
+   Compiling axum v0.8.9
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43)
+   Compiling tc-burrito v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-burrito)
+   Compiling tc-door43-fake v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43-fake)
+   Compiling tc-journal v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-journal)
+   Compiling tc-resources v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-resources)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 32.34s
+     Running unittests src/lib.rs (target/debug/deps/tc_resources-f84d3556afd8dd97)
+
+running 10 tests
+test gateways::tests::every_gateway_reads_in_the_direction_of_its_script ... ok
+test gateways::tests::gateway_bibles_take_the_registry_literal_name_first ... ok
+test gateways::tests::every_registry_name_parses_and_keys_are_unique ... ok
+test gateways::tests::an_owner_without_twl_pins_the_bundled_english_links ... ok
+test gateways::tests::a_set_from_installed_matches_full_names_and_never_mixes_languages ... ok
+test gateways::tests::inv_source_card_names_installed_the_projects_release_first ... ok
+test gateways::tests::owner_for_repo_name_is_unique_or_none ... ok
+test gateways::tests::registry_flags_never_hide_what_is_installed ... ok
+test gateways::tests::ur_deva_helps_read_left_to_right_and_are_named_in_devanagari ... ok
+test gateways::tests::registry_quirks_match_tc4 ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 111 filtered out; finished in 0.00s
+
+   Compiling syn v3.0.9
+   Compiling indexmap v2.14.2
+   Compiling serde_core v1.0.229
+   Compiling aho-corasick v1.1.5
+   Compiling sha2 v0.11.1
+   Compiling serde_json v1.0.154
+   Compiling regex-automata v0.4.18
+   Compiling regex v1.13.1
+   Compiling tc-ui v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-ui)
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling proptest-derive v0.9.0
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-core)
+   Compiling tc-api v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.64s
+     Running tests/i18n_catalogs.rs (target/debug/deps/i18n_catalogs-ef39d64a26e65c64)
+
+running 7 tests
+test every_entry_is_nonempty_text ... ok
+test the_exemption_counts_words_as_tc4_does_where_combining_marks_split_them ... ok
+test the_exemption_from_translation_is_for_names_and_single_words_only ... ok
+test the_registry_names_the_ten_decided_locales_each_with_a_catalog ... ok
+test every_target_covers_every_english_key_and_no_other ... ok
+test every_entry_keeps_its_english_placeholders_by_name_and_count ... ok
+test no_target_passes_an_english_sentence_off_as_translated ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+exit 0

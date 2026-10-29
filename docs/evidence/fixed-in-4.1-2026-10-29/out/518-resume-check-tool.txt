@@ -1,0 +1,26 @@
+$ TC4_BIN=... tc-heavy node --test --test-timeout=180000 docs/evidence/fixed-in-4.1-2026-10-29/repro/518-resume-check-tool.test.mjs  (at 597a234e)
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:40525/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3483614-1793291409237/en-pins/projects, Door43: http://127.0.0.1:9)
+# part 1: resumed rail resource git.door43.org/unfoldingWord/en_tn | picker drawn while opening: 0
+# part 2: Translate selected 3 s after clicking it during the resume: true | check rail shown: 0
+# part 3: quit answered in 49 ms; project prefs on disk: [{"places":{"TIT":{"mode":"check","chapter":1,"verse":null,"tool":"translationWords","at":1793291420594}},"schemaVersion":1}]
+# after the body: the kit's project validation found the server quit (expected)
+# Subtest: 518_resume_check_tool_three_parts
+ok 1 - 518_resume_check_tool_three_parts
+  ---
+  duration_ms: 11750.451883
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21893.945197
