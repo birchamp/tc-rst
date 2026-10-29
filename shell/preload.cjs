@@ -8,13 +8,11 @@ const invoke = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
 const send = (channel) => (...args) => ipcRenderer.send(channel, ...args);
 
 // The titleBar mark lets the page's header move the window where it has no native bar
-// (tC4 #214, #639); Linux keeps the native frame (#642).
-const titleBar = { darwin: 'hidden', win32: 'overlay' }[process.platform];
-if (titleBar) {
-  window.addEventListener('DOMContentLoaded', () => {
-    document.documentElement.dataset.titleBar = titleBar;
-  });
-}
+// (tC4 #214, #639, #642).
+const titleBar = process.platform === 'darwin' ? 'hidden' : 'overlay';
+window.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.dataset.titleBar = titleBar;
+});
 
 contextBridge.exposeInMainWorld('tc4Shell', {
   bufferChanged: send('shell:bufferChanged'),

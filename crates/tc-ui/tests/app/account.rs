@@ -5,9 +5,7 @@ use tc_api::account::{AccountView, KeepState, KeychainState};
 use tc_api::endpoint::NetKind;
 use tc_api::ids::RequestId;
 use tc_api::refusal::{Refusal, SignInRefusal};
-use tc_ui::app::account::{
-    SignInFlow, SignInForm, SignInNext, SignInProblem, SignInRows, sign_in_rows,
-};
+use tc_ui::app::account::{SignInFlow, SignInForm, SignInNext, SignInProblem};
 use tc_ui::app::client::{CallError, Transport};
 use tc_ui::app::internet::{InternetFlow, NetStep, Pending};
 
@@ -185,24 +183,6 @@ fn needs_internet_asks_again() {
     assert!(!step.busy());
     assert_eq!(error(&step), None);
     assert_eq!(form(&step).password, " a pass-word ", "kept for the resend");
-}
-
-#[test]
-fn the_stay_box_shows_only_when_the_keychain_works() {
-    assert_eq!(
-        sign_in_rows(KeychainState::Works),
-        SignInRows {
-            stay: true,
-            reason_key: "signIn.sessionNote"
-        }
-    );
-    assert_eq!(
-        sign_in_rows(KeychainState::Missing),
-        SignInRows {
-            stay: false,
-            reason_key: "signIn.notKept"
-        }
-    );
 }
 
 #[test]

@@ -211,9 +211,10 @@ test('every_window_shows_the_translationcore_icon', () => {
 });
 
 test('windows_frames_and_the_menu_keys_follow_tc4', () => {
-  assert.equal(lib.windowOptions({ platform: 'linux' }).titleBarStyle, undefined);
-  assert.equal(lib.windowOptions({ platform: 'win32' }).titleBarStyle, 'hidden');
-  assert.equal(lib.windowOptions({ platform: 'win32' }).titleBarOverlay.height, 56);
+  for (const platform of ['linux', 'win32']) {
+    assert.equal(lib.windowOptions({ platform }).titleBarStyle, 'hidden');
+    assert.equal(lib.windowOptions({ platform }).titleBarOverlay.height, 56);
+  }
   assert.deepEqual(lib.windowOptions({ platform: 'darwin' }).trafficLightPosition, { x: 20, y: 21 });
   const keys = (platform) => lib.menuTemplate(platform).flatMap((m) => m.submenu).map((i) => i.accelerator || i.role).filter(Boolean);
   assert.deepEqual(keys('win32').filter((k) => /zoom|Ctrl\+(0|R)/.test(k)), ['Ctrl+0', 'zoomIn', 'zoomOut', 'Ctrl+R']);

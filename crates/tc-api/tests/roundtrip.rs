@@ -20,15 +20,28 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tc_api::Endpoint;
 
+/// Generated values per type: `TC_ROUNDTRIP_CASES`, 16 by default; the nightly job sets 128. At
+/// 128 the two tests took 13 of the gate's test minutes (CI run 40924020433), and the golden
+/// examples and the journeys read every endpoint as well.
+fn config() -> Config {
+    let cases = match std::env::var("TC_ROUNDTRIP_CASES") {
+        Err(_) => 16,
+        Ok(s) => s
+            .parse()
+            .unwrap_or_else(|_| panic!("TC_ROUNDTRIP_CASES={s}: a whole number")),
+    };
+    Config {
+        cases,
+        failure_persistence: None,
+        ..Config::default()
+    }
+}
+
 fn round_trip<T>() -> Result<(), String>
 where
     T: Arbitrary + Serialize + DeserializeOwned + PartialEq + Debug,
 {
-    let mut runner = TestRunner::new(Config {
-        cases: 128,
-        failure_persistence: None,
-        ..Config::default()
-    });
+    let mut runner = TestRunner::new(config());
     runner
         .run(&any::<T>(), |value| {
             let text = serde_json::to_string(&value)
@@ -323,11 +336,7 @@ fn refuses_unknown_keys<E>() -> Result<(), String>
 where
     E: Endpoint + Arbitrary,
 {
-    let mut runner = TestRunner::new(Config {
-        cases: 128,
-        failure_persistence: None,
-        ..Config::default()
-    });
+    let mut runner = TestRunner::new(config());
     runner
         .run(&any::<E>(), |request| {
             let text = serde_json::to_value(&request).unwrap();

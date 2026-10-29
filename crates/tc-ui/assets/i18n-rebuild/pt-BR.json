@@ -73,6 +73,7 @@
   "export.markupKept": "Estes versículos estão no arquivo como foram gravados, com a marcação de alinhamento, porque o aplicativo não pôde removê-la: {refs}",
   "export.review": "Revisar",
   "export.skipped": "Seu alinhamento destes versículos não está no arquivo. Verifique-os em Alinhar: {refs}",
+  "feedback.attachmentEnglish": "Este anexo está em inglês para que a central de ajuda possa lê-lo.",
   "feedback.attachmentFailed": "O translationCore não pôde coletar estes detalhes ({reason}), portanto o envio permanece desativado. Feche esta janela e abra-a novamente para tentar de novo.",
   "home.importRemoved": "Uma importação não terminou, por isso o aplicativo removeu a cópia parcial. Importe os arquivos novamente.",
   "home.lastSyncReplacedMany": "Última sincronização: {n} versões substituídas",

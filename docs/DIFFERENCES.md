@@ -205,6 +205,17 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
   nothing. The Translate list lives in the page: a crash between a save's write and its reply
   loses the notice, while the old link stays in History.
 
+Owner rulings in the issues, made before 4.1.0:
+
+- On a computer with no keychain that keeps a sign-in, the sign-in step has no "Stay signed in
+  on this computer" box and no line in its place, and the Share dialog has no line about it
+  either (#496, owner ruling 2026-09-30). tC4 shows "Stay signed in is not available on this
+  computer, so your sign-in lasts for this app session." (`signIn.notKept`), which no screen of
+  the rebuild shows. The key stays in the vendored tC4 catalogs, which are tC4's bytes.
+- The Report a problem dialog says under the attachment, in the app's language, that the
+  attachment is in English so the help desk can read it (`feedback.attachmentEnglish`, #731).
+  The attachment stays English in every language, as in tC4, which shows it with no word why.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 
@@ -219,9 +230,10 @@ owner is told of each:
   Pankosmia's rescan drops, so a project's own pictures would never show.
 - A Select that turns disabled while its list is open closes the list, and a choice made then
   changes nothing (#552). tC4 4.0 keeps the list open, and a row click still changes the value.
-  The gallery's three `Select/disabled-while-open` cases differ from tC4 on purpose
-  (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
-  switch-off, before the list can close.
+  `parity/app/journeys/dropdown.test.mjs` proves it on Report a problem.
+- A press on the label of an open Select keeps the list open with its search text (#552). tC4
+  4.0 closes the list, opens it again and clears the search. `dropdown.test.mjs` proves it on Add
+  a blank book.
 
 The owner's answers of 2026-10-19 (`docs/TC4-DELTA-2026-10-19.md` §5) and the rebuild's own
 rule that no one's work disappears without a word add these (unit B2):
@@ -372,6 +384,11 @@ And these (unit D2):
   weaves the rest, so a link leaves the file without a word to the person; the rebuild weaves
   none of that verse until it is aligned again
   (`the_export_weaves_no_link_to_a_source_word_the_pin_lacks`).
+- On Linux the window has no native title bar and no menu row, as on Windows and macOS: the
+  app's header is the top, it moves the window, and the minimize, maximize and close buttons
+  draw over its right end. The menu's keys (zoom, reload) still work. tC4 4.0 kept the native
+  frame and menu row on Linux; the owner ruled on 2026-10-29 that this is fixed before 4.1.0
+  (`linux_window_has_no_native_bar_and_keeps_zoom_and_reload`) (#642).
 
 The rebuild does not port tC4's sync mechanism: the scratch copy, the apply marker, the
 ops log, `recoverySettled`, `unreadableSettings` and the sync generation. STORAGE §6 and §9

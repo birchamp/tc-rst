@@ -189,6 +189,8 @@ budget in `docs/PERFORMANCE.md`). Their tC4 tests stay mapped under `specs` in `
   cannot be reached; the sign-in failed; the server refused the create.
 - Must not: force-push; put the token anywhere but the password store, or in a URL or a log;
   store the password.
+- **Differs from tC4:** on a computer with no password store, the sign-in step has no "Stay
+  signed in" box and no line about it (#496).
 
 ### J12 Upgrade the pinned resources
 
