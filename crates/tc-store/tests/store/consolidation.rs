@@ -307,12 +307,19 @@ fn run(steps: &[Step], model: PowerLoss, census: &Census) {
 
 #[test]
 fn consolidation_loses_nothing() {
+    histories(8);
+}
+
+#[test]
+#[ignore = "nightly: more histories; consolidation_loses_nothing runs the same property on 8 in the gate"]
+fn consolidation_loses_nothing_nightly() {
+    histories(32);
+}
+
+fn histories(cases: u32) {
     let census = Census::default();
     let config = ProptestConfig {
-        cases: std::env::var("PROPTEST_CASES")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(32),
+        cases,
         max_shrink_iters: 200,
         failure_persistence: None,
         ..ProptestConfig::default()

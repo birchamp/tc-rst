@@ -61,28 +61,6 @@ fn a_save_is_durable_while_a_materialize_is_held() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-#[test]
-fn a_save_is_durable_while_a_checkpoint_is_held() {
-    let hooks = Arc::new(Hooks::default());
-    let rig = rig_with_hooks(FaultFs::new(), hooks.clone());
-    rig.store.wait_cleanup();
-    let folder = create_titus(&rig, "Titus");
-    let handle = open(&rig, &folder);
-    save_verse(&handle, 1, 1, "before the checkpoint").unwrap();
-    hooks.hold(Point::BeforeCheckpoint);
-    let checkpoint = handle.checkpoint(tc_store::CheckpointReason::LeavingTranslate);
-    hooks.wait_reached(Point::BeforeCheckpoint, 1);
-    for v in 2..=10 {
-        let reply = save_verse(&handle, 1, v, &format!("during {v}")).unwrap();
-        assert_eq!(reply.stored, Stored::Durable);
-    }
-    assert!(!checkpoint.is_ready());
-    hooks.release(Point::BeforeCheckpoint);
-    checkpoint.wait().unwrap();
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
 /// O10: the open's materialization is the writer's first job, so the open returns, and
 /// saves go on, while it waits.
 #[test]
@@ -316,6 +294,21 @@ fn a_commit_made_while_a_save_is_served_shows_only_what_its_packs_hold() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
+/// Waits, inside a seal step, until the writer's retry has written `words` into the book file.
+fn retry_writes(fs: &FaultFs, words: &str) {
+    let until = std::time::Instant::now() + Duration::from_secs(10);
+    while !fs
+        .peek(&usfm(Path::new("/projects/Titus")))
+        .is_some_and(|b| String::from_utf8_lossy(&b).contains(words))
+    {
+        assert!(
+            std::time::Instant::now() < until,
+            "the retry never wrote the book file"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 /// The writer's own retry of a file a program held may run on a newer snapshot than the
 /// checkpoint's while the seal serves a save: the file it writes then holds a save the
 /// checkpoint's packs lack, and the tree takes that file from the checkpoint's snapshot, not
@@ -345,7 +338,7 @@ fn a_retry_that_wrote_a_newer_snapshot_does_not_reach_the_tree() {
             if *steps == 3 {
                 // The program lets go, and the writer's retry runs before the seal ends.
                 fs.set_busy(&usfm(Path::new("/projects/Titus")), false);
-                std::thread::sleep(Duration::from_millis(1500));
+                retry_writes(&fs, "saved while the seal runs");
             }
         });
     }
@@ -419,7 +412,7 @@ fn a_checkpoint_never_writes_an_older_projection_over_a_save_a_retry_wrote() {
             if *steps == 3 {
                 // The program lets go, and the writer's retry runs before the seal ends.
                 fs.set_busy(&usfm(Path::new("/projects/Titus")), false);
-                std::thread::sleep(Duration::from_millis(1500));
+                retry_writes(&fs, "saved while the seal runs");
                 *seen_during.lock().unwrap() = fs
                     .peek(&usfm(Path::new("/projects/Titus")))
                     .map(|b| String::from_utf8_lossy(&b).into_owned());

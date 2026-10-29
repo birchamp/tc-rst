@@ -264,6 +264,7 @@ jobs:
       - run: scripts/gates.sh --step scale-long 2>&1 | tee -a nightly.log
       - run: scripts/gates.sh --step sync-model-long 2>&1 | tee -a nightly.log
       - run: scripts/gates.sh --step roundtrip-long 2>&1 | tee -a nightly.log
+      - run: scripts/gates.sh --step store-nightly 2>&1 | tee -a nightly.log
       - if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}

@@ -260,10 +260,19 @@ fn a_held_draft_write_never_delays_a_save() {
         .wait()
         .unwrap();
     hooks.wait_reached(Point::BeforeDraftWrite, 1);
-    let started = std::time::Instant::now();
-    save_verse(&handle, 1, 2, "saved while a draft write waits").unwrap();
-    assert!(started.elapsed() < Duration::from_secs(2));
+    let saving = handle.submit(Command::SaveVerse {
+        shown: handle.mint(&verse(1, 2), None).unwrap(),
+        words: "saved while a draft write waits".into(),
+    });
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    while !saving.is_ready() && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    // Read before the release, so a save that waits behind the draft write fails, not hangs.
+    let served = saving.is_ready();
     hooks.release(Point::BeforeDraftWrite);
+    assert!(served, "the save waited behind the held draft write");
+    saving.wait().unwrap();
     handle.close().unwrap();
 }
 

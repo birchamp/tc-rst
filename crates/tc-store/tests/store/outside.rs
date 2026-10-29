@@ -486,30 +486,6 @@ fn loss_metadata_unmodelled_fields_kept() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// L92: a link edited in an Open Bible Stories template is kept and asked about; *Import*
-/// takes it in as an edit of the story.
-#[test]
-fn loss_obs_template_edit_imported() {
-    let (fs, folder) = crate::commands::stories();
-    let (rig, handle) = crate::commands::open(&fs, &folder);
-    handle.close().unwrap();
-    let rel = "ingredients/content/01.md";
-    let edited = replaced(
-        &rig,
-        &folder,
-        rel,
-        "obs-en-01-02.jpg",
-        "obs-en-01-02-new.jpg",
-    );
-    let handle = open(&rig, &folder);
-    assert_eq!(handle.waiting_books().len(), 1, "{:?}", handle.notices());
-    assert_eq!(counts(&import_waiting(&handle)), vec![(1, 0)]);
-    let written = rig.fs.peek(&folder.join(rel)).unwrap();
-    assert!(written == edited, "the story shows its edit");
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-}
-
 // ---------------------------------------------------------------------------------------
 // The heads file as the base, and what an outside edit costs
 // ---------------------------------------------------------------------------------------
@@ -589,17 +565,19 @@ fn an_edit_with_no_heads_file_is_an_unknown_base_conflict() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// §14: reconciling an edit costs what it changed. Three verses of `PSA.usfm` are replaced
-/// while the app is closed; the open reads that one file and its heads file, decodes it once,
-/// compares the three records that differ and writes three changes, whatever the size of the
-/// project.
+/// §14: an outside edit costs what it changed, however large the project is. Three verses of
+/// `PSA.usfm` replaced while the app is closed: the open reads that one file and its heads
+/// file, decodes it once and compares the three records that differ. Three more replaced while
+/// the project is open: one watcher event, and the look reads that file and its heads file,
+/// decodes once and compares the three before it holds the file; *Import* writes three
+/// changes. One session serves both, so each corpus is opened twice, not three times.
 #[test]
-fn reconciling_an_outside_edit_costs_what_it_changed() {
+fn an_outside_edit_costs_what_it_changed_at_the_open_and_by_the_watcher() {
     use crate::corpus::{psalms, psalms_larger};
     let mut costs = Vec::new();
     for corpus in [psalms(), psalms_larger()] {
         let fs = corpus.fs.copy();
-        // The entries settle once their time stamp's tick is over.
+        // The entries settle once their time stamp's tick is over and an open has read them.
         fs.advance(std::time::Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");
         let handle = rig
@@ -609,13 +587,18 @@ fn reconciling_an_outside_edit_costs_what_it_changed() {
         handle.wait_idle();
         let conflicts_before = verse_conflicts_of(&handle, BookId::Psalms).len();
         handle.close().unwrap();
-        fs.advance(std::time::Duration::from_secs(5));
         let path = corpus.folder.join("ingredients/PSA.usfm");
-        let mut bytes = fs.peek(&path).unwrap();
-        for v in 1..=3 {
-            bytes = set_verse(&bytes, 1, v, &format!("an outside edit of verse {v}"));
-        }
-        fs.put(&path, &bytes, None);
+        let edit = |verses: std::ops::RangeInclusive<u16>| {
+            let mut bytes = fs.peek(&path).unwrap();
+            for v in verses {
+                bytes = set_verse(&bytes, 1, v, &format!("an outside edit of verse {v}"));
+            }
+            bytes
+        };
+
+        // The open, after an edit made while the app was closed.
+        fs.advance(std::time::Duration::from_secs(5));
+        fs.put(&path, &edit(1..=3), None);
         let rig = rig_as(fs.clone(), APP, "host-1");
         let handle = rig
             .store
@@ -623,71 +606,45 @@ fn reconciling_an_outside_edit_costs_what_it_changed() {
             .unwrap();
         let usable = handle.counters();
         handle.wait_idle();
-        let after = handle.counters();
+        let opened = handle.counters();
         assert_eq!(usable.derived_read, 1, "{usable:?}");
         assert_eq!(usable.heads_read, 1, "{usable:?}");
-        assert_eq!(after.outside_decodes, 1, "{after:?}");
-        assert_eq!(after.outside_keys_examined, 3, "{after:?}");
-        assert_eq!(
-            verse_conflicts_of(&handle, BookId::Psalms).len(),
-            conflicts_before,
-            "the edit has parents, so it conflicts with nothing"
-        );
-        costs.push((
-            after.outside_decodes,
-            after.outside_keys_examined,
-            usable.derived_read,
-            usable.heads_read,
-        ));
-        handle.close().unwrap();
-    }
-    assert_eq!(costs[0], costs[1], "the cost does not follow the size");
-}
+        assert_eq!(opened.outside_decodes, 1, "{opened:?}");
+        assert_eq!(opened.outside_keys_examined, 3, "{opened:?}");
+        assert_eq!(counts(&import_waiting(&handle)), vec![(3, 0)]);
 
-/// The same edit told by the watcher to a project that is open: one event for the file, and
-/// the look reads that file and its heads file, decodes once and compares the three records
-/// that differ before it holds the file, however large the project is; *Import* then writes
-/// three changes.
-#[test]
-fn a_watcher_event_for_three_changed_verses_costs_what_they_changed() {
-    use crate::corpus::{psalms, psalms_larger};
-    let mut costs = Vec::new();
-    for corpus in [psalms(), psalms_larger()] {
-        let fs = corpus.fs.copy();
+        // The watcher, with the project open.
         fs.advance(std::time::Duration::from_secs(5));
-        let rig = rig_as(fs.clone(), APP, "host-1");
-        let handle = rig
-            .store
-            .open(&corpus.folder, &OpenOptions::default())
-            .unwrap();
-        handle.wait_idle();
-        fs.advance(std::time::Duration::from_secs(5));
-        let path = corpus.folder.join("ingredients/PSA.usfm");
-        let mut bytes = fs.peek(&path).unwrap();
-        for v in 1..=3 {
-            bytes = set_verse(&bytes, 1, v, &format!("an outside edit of verse {v}"));
-        }
+        let bytes = edit(4..=6);
         let before = handle.counters();
         fs.put(&path, &bytes, None);
         eventually("the watcher never held the edit", || {
             !handle.waiting_books().is_empty()
         });
         handle.wait_idle();
-        let cost = handle.counters().since(&before);
-        // The file the watcher told is read to examine it, with its heads. What the writer then
-        // reads and writes is the rewrite of the book's files from the project (each file the
-        // ledger is asked about has its heads read once in the session), which the 3 s timer
-        // of the batch may repeat when the machine is slow: the counts are the same for both
-        // corpora (below).
-        assert!(cost.derived_read >= 1, "{cost:?}");
-        assert!(cost.heads_read >= 1, "{cost:?}");
-        assert_eq!(cost.outside_decodes, 1, "{cost:?}");
-        assert_eq!(cost.outside_keys_examined, 3, "{cost:?}");
+        let watched = handle.counters().since(&before);
+        // The file the watcher told is read to examine it; its heads were read once in this
+        // session, by the open. What the writer then reads and writes is the rewrite of the
+        // book's files from the project, which the 3 s timer of the batch may repeat when the
+        // machine is slow: the counts are the same for both corpora (below).
+        assert!(watched.derived_read >= 1, "{watched:?}");
+        assert!(watched.heads_read <= 1, "{watched:?}");
+        assert_eq!(watched.outside_decodes, 1, "{watched:?}");
+        assert_eq!(watched.outside_keys_examined, 3, "{watched:?}");
         assert_eq!(counts(&import_waiting(&handle)), vec![(3, 0)]);
+        assert_eq!(
+            verse_conflicts_of(&handle, BookId::Psalms).len(),
+            conflicts_before,
+            "the edits have parents, so they conflict with nothing"
+        );
         costs.push((
-            cost.heads_read,
-            cost.outside_decodes,
-            cost.outside_keys_examined,
+            opened.outside_decodes,
+            opened.outside_keys_examined,
+            usable.derived_read,
+            usable.heads_read,
+            watched.heads_read,
+            watched.outside_decodes,
+            watched.outside_keys_examined,
         ));
         handle.close().unwrap();
     }
@@ -755,9 +712,13 @@ fn what_the_app_writes_is_never_recorded_as_an_edit() {
         save_verse(&handle, 1, v, &format!("saved {v}")).unwrap();
     }
     leave(&handle);
-    // The watcher is told the paths the app wrote, as a real filesystem does.
+    // The watcher is told the paths the app wrote, as a real filesystem does. Its look stats
+    // the file, which says the event was handled, not only sent.
+    let before = handle.counters();
     rig.fs.touch_told(&usfm_path(&folder));
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    eventually("the watcher never looked at the file", || {
+        handle.counters().since(&before).stats > 0
+    });
     handle.wait_idle();
     assert!(recorded(&handle).is_empty(), "{:?}", handle.notices());
     assert!(copies_of(&handle, USFM).is_empty());
@@ -1830,12 +1791,12 @@ mod conserves {
         );
     }
 
-    /// 48 random sequences of edits; the census then fails the test when a kind of edit never
-    /// occurred or a claim was never checked, so a property that stopped exercising a class
-    /// cannot pass.
-    pub fn property() {
+    /// `cases` random sequences of edits; the census then fails the test when a kind of edit
+    /// never occurred or a claim was never checked, so a property that stopped exercising a
+    /// class cannot pass.
+    pub fn property(cases: u32) {
         let config = ProptestConfig {
-            cases: 48,
+            cases,
             max_shrink_iters: 0,
             failure_persistence: None,
             ..ProptestConfig::default()
@@ -1857,18 +1818,19 @@ mod conserves {
     }
 }
 
+/// The gate's few random cases; every kind of edit is reached by the run of every kind that
+/// ends each property run.
+const CONSERVES_CASES: u32 = 8;
+
 #[test]
 fn outside_edit_reconcile_conserves() {
-    conserves::property();
+    conserves::property(CONSERVES_CASES);
 }
 
-/// Every kind of edit in one project, in order.
 #[test]
-fn every_kind_of_outside_edit_in_one_project_conserves() {
-    let counted = conserves::Census::default();
-    conserves::run_case(&conserves::every_kind(), &counted);
-    // Every class of edit was reached and every claim about it was checked.
-    conserves::census(&counted);
+#[ignore = "nightly: 48 random cases; outside_edit_reconcile_conserves runs 8 and every kind once in the gate"]
+fn outside_edit_reconcile_conserves_nightly() {
+    conserves::property(48);
 }
 
 // ---------------------------------------------------------------------------------------

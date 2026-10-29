@@ -414,12 +414,14 @@ mod arbitrary {
         handle.close().unwrap();
     }
 
-    /// 64 projects whose details, pins and scope hold arbitrary JSON, from a plan and from an
-    /// edit of `metadata.json`: `metadata.json` builds, a commit is made and is a valid
-    /// burrito, and every value that could not be used is listed.
-    pub fn property() {
+    /// `cases` projects whose details, pins and scope hold arbitrary JSON, from a plan and
+    /// from an edit of `metadata.json`: `metadata.json` builds, a commit is made and is a
+    /// valid burrito, and every value that could not be used is listed. The census asserts
+    /// need a few cases of each kind, so a short run takes a fixed seed rather than flake.
+    pub fn property(cases: u32, seed: proptest::test_runner::RngSeed) {
         let config = ProptestConfig {
-            cases: 64,
+            cases,
+            rng_seed: seed,
             max_shrink_iters: 0,
             failure_persistence: None,
             ..ProptestConfig::default()
@@ -447,7 +449,7 @@ mod arbitrary {
             "no edit of metadata.json was ever recorded"
         );
         assert!(
-            census.refused.load(Ordering::Relaxed) < 40,
+            census.refused.load(Ordering::Relaxed) < cases * 5 / 8,
             "most plans were refused: the claim is not tested"
         );
     }
@@ -455,5 +457,11 @@ mod arbitrary {
 
 #[test]
 fn arbitrary_meta_never_blocks_commit() {
-    arbitrary::property();
+    arbitrary::property(12, proptest::test_runner::RngSeed::Fixed(7));
+}
+
+#[test]
+#[ignore = "nightly: 256 cases; the gate runs arbitrary_meta_never_blocks_commit at 12"]
+fn arbitrary_meta_never_blocks_commit_nightly() {
+    arbitrary::property(256, proptest::test_runner::RngSeed::Random);
 }

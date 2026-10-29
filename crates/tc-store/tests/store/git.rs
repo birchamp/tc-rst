@@ -145,49 +145,8 @@ fn handle_closed(rig: &Rig, folder: &Path) {
     handle.close().unwrap();
 }
 
-/// G4: a repository that does not open is kept in `.tc/` and a new one takes its place; the
-/// project loses nothing, because the packs never depended on git.
-#[test]
-fn a_damaged_repository_is_kept_aside_and_replaced() {
-    let (rig, folder) = titus();
-    handle_closed(&rig, &folder);
-    let dir = git_dir(&rig.fs, &folder);
-    std::fs::write(dir.join("HEAD"), b"garbage that is no reference").unwrap();
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    handle.wait_idle();
-    let notices: Vec<Notice> = handle.notices().into_iter().map(|n| n.notice).collect();
-    let kept = notices.iter().find_map(|n| match n {
-        Notice::HistoryRebuilt { broken } => Some(broken.to_string()),
-        _ => None,
-    });
-    let kept = kept.unwrap_or_else(|| panic!("no HistoryRebuilt in {notices:?}"));
-    let outside = dir.parent().unwrap();
-    assert_eq!(
-        std::fs::read(outside.join(&kept).join("HEAD")).unwrap(),
-        b"garbage that is no reference"
-    );
-    // The new repository starts with the project as it is.
-    let repo = repo_of(&rig.fs, &folder);
-    let commits = commits_of(&repo);
-    assert_eq!(commits.len(), 1);
-    let first = repo.find_commit(commits[0]).unwrap();
-    assert_eq!(first.parent_count(), 0);
-    assert!(
-        first
-            .message()
-            .unwrap()
-            .starts_with("Recovered history (tC)")
-    );
-    assert!(commit_problems(&repo, commits[0]).is_empty());
-    let report = handle
-        .checkpoint(tc_store::CheckpointReason::LeavingTranslate)
-        .wait()
-        .unwrap();
-    assert_eq!(report.skipped, Some(tc_store::CheckpointSkip::NoChanges));
-    handle.close().unwrap();
-}
-
-/// L84, G4: a damaged repository is replaced without losing the carried blobs. Version 1 of a
+/// G4, L84: a repository that does not open is kept in `.tc/` and a new one takes its place,
+/// without losing the carried blobs. Version 1 of a
 /// file was committed and version 2 recorded after it; the open copies version 1 from the
 /// repository it set aside and stores version 2 again from the file in the folder (its object
 /// was lost with the damage), the first commit lists the file, the address of Door43 comes
@@ -238,11 +197,15 @@ fn crash_g4_rebuild_keeps_carried_blobs() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
     let notices: Vec<Notice> = handle.notices().into_iter().map(|n| n.notice).collect();
-    assert!(
-        notices
-            .iter()
-            .any(|n| matches!(n, Notice::HistoryRebuilt { .. })),
-        "{notices:?}"
+    let kept = notices.iter().find_map(|n| match n {
+        Notice::HistoryRebuilt { broken } => Some(broken.to_string()),
+        _ => None,
+    });
+    let kept = kept.unwrap_or_else(|| panic!("no HistoryRebuilt in {notices:?}"));
+    assert_eq!(
+        std::fs::read(dir.parent().unwrap().join(&kept).join("HEAD")).unwrap(),
+        b"garbage that is no reference",
+        "the damaged repository is kept aside"
     );
     assert!(
         !notices
@@ -267,6 +230,15 @@ fn crash_g4_rebuild_keeps_carried_blobs() {
     );
     let commits = commits_of(&repo);
     assert_eq!(commits.len(), 1);
+    let first = repo.find_commit(commits[0]).unwrap();
+    assert_eq!(first.parent_count(), 0);
+    assert!(
+        first
+            .message()
+            .unwrap()
+            .starts_with("Recovered history (tC)")
+    );
+    drop(first);
     assert_eq!(
         commit_files(&repo, commits[0]).get(SONG),
         Some(&second),

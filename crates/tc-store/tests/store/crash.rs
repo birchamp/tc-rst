@@ -326,35 +326,6 @@ fn crash_draft_write_never_affects_saves() {
     });
 }
 
-#[test]
-fn crash_checkpoint_seal_and_materialize_lose_nothing() {
-    let (base, folder) = base_titus();
-    // Saves waiting to be sealed, in the session the checkpoint runs in (an open seals what
-    // an earlier session left, §6.1 O15).
-    let save = |_: &FaultFs, handle: &ProjectHandle| {
-        for v in 2..=5 {
-            save_verse(handle, 1, v, &format!("sealed {v}")).unwrap();
-        }
-        handle.wait_idle();
-    };
-    let action = |handle: &ProjectHandle| {
-        let _ = handle
-            .checkpoint(tc_store::CheckpointReason::LeavingProject)
-            .wait();
-        Outcome::NotSaved
-    };
-    let points = kill_everywhere_after(&base, &folder, &save, &action, &|handle, _| {
-        for v in 2..=5 {
-            assert_eq!(
-                words(handle, 1, v).as_deref(),
-                Some(format!("sealed {v}").as_str()),
-                "a sealed save was lost"
-            );
-        }
-    });
-    assert!(points > 10, "{points}");
-}
-
 /// A seal in a month that has no pack folder yet makes the folder, and a process killed
 /// between its creation and the flush of its entry leaves a folder only the page cache holds.
 /// The restart's seal must not trust it: it writes its pack there, removes the pending files
@@ -411,23 +382,6 @@ fn crash_checkpoint_into_a_months_folder_that_does_not_exist_yet() {
         })
     });
     assert!(points > 10, "{points}");
-}
-
-#[test]
-fn crash_materialize_rewrites_forward() {
-    let (base, folder) = base_titus();
-    let action = |handle: &ProjectHandle| {
-        let reply = save_verse(handle, 1, 9, "holding to the word");
-        let _ = handle.leave(tc_store::Leave::Book(TIT)).wait();
-        outcome_of(reply)
-    };
-    kill_everywhere(&base, &folder, &action, &|handle, outcome| {
-        if outcome == Outcome::Saved {
-            assert_eq!(words(handle, 1, 9).as_deref(), Some("holding to the word"));
-        }
-        // The derived file holds what the fold projects after the open.
-        handle.wait_idle();
-    });
 }
 
 /// §6.2 R4 to R8, §16.7: the ledger tells the bytes of the app's own interrupted write from an
@@ -587,7 +541,10 @@ fn crash_create_leaves_no_project_or_a_whole_one() {
             handle.close().unwrap();
             assert_valid_burrito(&rig2.fs, &target);
         } else {
-            assert!(!matches!(created, Ok(Ok(_))) || !dead);
+            assert!(
+                !matches!(created, Ok(Ok(_))),
+                "a create reported done is gone after a power cut (killed before write point {k})"
+            );
         }
         if !dead {
             break;

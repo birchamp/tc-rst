@@ -3,7 +3,7 @@
 //! and the typed notice of a job that cannot write (APP-DESIGN R16).
 
 use crate::common::*;
-use crate::corpus::{OnDisk, psalms, psalms_larger};
+use crate::corpus::{psalms, psalms_larger};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -12,9 +12,7 @@ use tc_journal::fold::{Blocked, Notice};
 use tc_journal::record::Scope;
 use tc_journal::{BookId, ChapterNo, Record, RecordKey, VerseNo};
 use tc_store::fault::OpKind;
-use tc_store::{
-    CommandError, Leave, OpenOptions, ProjectHandle, StoreCounters, StoreEvent, StoreReply, Work,
-};
+use tc_store::{CommandError, Leave, OpenOptions, ProjectHandle, StoreEvent, StoreReply, Work};
 
 const PSA: BookId = BookId::Psalms;
 
@@ -60,107 +58,11 @@ fn book_of(path: &Path) -> Option<String> {
     .then(|| stem.to_owned())
 }
 
-/// What a save of one Psalms verse and `leave` cost on a copy of a corpus project, after the
-/// entries were settled.
-struct LeaveCost {
-    counters: StoreCounters,
-    opened: Vec<std::path::PathBuf>,
-    written: Vec<std::path::PathBuf>,
-    psalms_files: usize,
-}
-
-fn psalms_leave(corpus: &OnDisk) -> LeaveCost {
-    let fs = corpus.fs.copy();
-    fs.advance(Duration::from_secs(5));
-    let rig = rig_as(fs.clone(), APP, "host-1");
-    let handle = rig
-        .store
-        .open(&corpus.folder, &OpenOptions::default())
-        .unwrap();
-    handle.wait_idle();
-    fs.advance(Duration::from_secs(5));
-    save_psalm(&handle, 23, 1, "The LORD is my shepherd, I shall not want").unwrap();
-    handle.wait_idle();
-    fs.clear_log();
-    let before = handle.counters();
-    handle.leave(Leave::Book(PSA)).wait().unwrap();
-    let counters = handle.counters().since(&before);
-    let opened = fs.opened();
-    let written: Vec<_> = fs
-        .log()
-        .into_iter()
-        .filter(|op| matches!(op.kind, OpKind::Rename | OpKind::RemoveFile))
-        .map(|op| op.path)
-        .collect();
-    let psalms_files = handle.snapshot().fold().book_files(PSA).len();
-    handle.close().unwrap();
-    LeaveCost {
-        counters,
-        opened,
-        written,
-        psalms_files,
-    }
-}
-
-/// B5 and the writer: a verse save marks its book, the writer renders and compares that
-/// book's files only, and the files it opens and writes are that book's, `metadata.json`,
-/// the manifest and the intent: the same files on the corpus ten times larger.
-#[test]
-fn a_books_materialize_touches_only_that_books_files() {
-    let mut costs = Vec::new();
-    for corpus in [psalms(), psalms_larger()] {
-        let cost = psalms_leave(corpus);
-        let c = &cost.counters;
-        assert!(c.projected >= 1, "{c:?}");
-        // The book's files, and conflicts.json when the corpus has conflicts on it.
-        assert!(
-            c.projected <= cost.psalms_files as u64 + 1,
-            "{c:?} for {} files",
-            cost.psalms_files
-        );
-        assert!(c.derived_read <= cost.psalms_files as u64 + 1, "{c:?}");
-        for path in cost.opened.iter().chain(&cost.written) {
-            let text = slashed(path);
-            assert!(
-                !text.contains("/ingredients/tc/changes/") && !text.contains("/.tc/pending/"),
-                "{text}: no journal file is touched"
-            );
-            if let Some(book) = book_of(path) {
-                assert_eq!(book, "PSA", "{text} belongs to another book");
-            }
-        }
-        let allowed = |p: &std::path::PathBuf| {
-            let t = slashed(p);
-            book_of(p).is_some()
-                || t.ends_with("/metadata.json")
-                || t.contains("/.tc/")
-                || t.contains("/ingredients/tc/conflicts.json")
-        };
-        assert!(
-            cost.written.iter().all(allowed),
-            "{:?}",
-            cost.written
-                .iter()
-                .filter(|p| !allowed(p))
-                .collect::<Vec<_>>()
-        );
-        costs.push(cost);
-    }
-    // Ten times the project, the same kind of work: each file written is a rename of the
-    // file and one of its heads file, and a group adds metadata.json, the manifest and the
-    // intent, whatever the size of the project; and the heads file of metadata.json the
-    // first time a session writes it (§3.6).
-    for cost in &costs {
-        let c = &cost.counters;
-        assert_eq!(c.renames, 2 * c.derived_written + 4, "{c:?}");
-        assert_eq!(c.files_created, c.renames, "{c:?}");
-    }
-}
-
 /// B5: adding a book marks that book: one file projected, no other book's file read.
 #[test]
 fn a_book_change_marks_only_that_books_files() {
-    for corpus in [psalms(), psalms_larger()] {
+    // Only the larger corpus has other books' files to leave alone.
+    for corpus in [psalms_larger()] {
         let fs = corpus.fs.copy();
         fs.advance(Duration::from_secs(5));
         let rig = rig_as(fs.clone(), APP, "host-1");
@@ -204,9 +106,11 @@ fn a_book_change_marks_only_that_books_files() {
     }
 }
 
-/// Unchanged ingredient projections are neither read nor replaced. A changed ingredient
-/// gets M1 and final compare-and-swap reads; metadata gets the same two safety reads before
-/// the group's replacement, even when its old size and mtime still match the ledger.
+/// B5 and the writer: a verse save marks its book, and the files the writer opens and writes
+/// are that book's, `metadata.json`, the manifest and the intent, on the corpus ten times
+/// larger too. Unchanged ingredient projections are neither read nor replaced. A changed
+/// ingredient gets M1 and final compare-and-swap reads; metadata gets the same two safety reads
+/// before the group's replacement, even when its old size and mtime still match the ledger.
 #[test]
 fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
     let mut counts = Vec::new();
@@ -274,6 +178,39 @@ fn an_unchanged_file_is_not_read_back_and_each_buffer_is_hashed_once() {
             .filter(|path| is_derived(path))
             .cloned()
             .collect();
+        let written: Vec<_> = fs
+            .log()
+            .into_iter()
+            .filter(|op| matches!(op.kind, OpKind::Rename | OpKind::RemoveFile))
+            .map(|op| op.path)
+            .collect();
+        for path in opened.iter().chain(&written) {
+            let text = slashed(path);
+            assert!(
+                !text.contains("/ingredients/tc/changes/") && !text.contains("/.tc/pending/"),
+                "{text}: no journal file is touched"
+            );
+            if let Some(book) = book_of(path) {
+                assert_eq!(book, "PSA", "{text} belongs to another book");
+            }
+        }
+        let allowed = |p: &std::path::PathBuf| {
+            let t = slashed(p);
+            book_of(p).is_some()
+                || t.ends_with("/metadata.json")
+                || t.contains("/.tc/")
+                || t.contains("/ingredients/tc/conflicts.json")
+        };
+        assert!(
+            written.iter().all(allowed),
+            "{:?}",
+            written.iter().filter(|p| !allowed(p)).collect::<Vec<_>>()
+        );
+        // Each file written is a rename of the file and one of its heads file, and a group
+        // adds metadata.json, the manifest and the intent, whatever the size of the project;
+        // and the heads file of metadata.json the first time a session writes it (§3.6).
+        assert_eq!(cost.renames, 2 * cost.derived_written + 4, "{cost:?}");
+        assert_eq!(cost.files_created, cost.renames, "{cost:?}");
         let ingredient_writes: std::collections::BTreeSet<_> = fs
             .log()
             .into_iter()
@@ -387,7 +324,7 @@ fn a_whole_project_materialize_reports_progress_and_saves_go_on() {
     let seen = collect_progress(&handle);
     // A pin change rewrites every book's decisions and `resources.json`: a job of four
     // groups, each read slowly.
-    rig.fs.set_read_delay(Some(Duration::from_millis(150)));
+    rig.fs.set_read_delay(Some(Duration::from_millis(25)));
     let pins = RecordKey::Pins(tc_journal::PinGroup::Lexicon);
     let shown = handle.mint(&pins, None).unwrap();
     let started = Instant::now();
@@ -459,7 +396,7 @@ fn a_one_book_materialize_shows_no_progress() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
     let seen = collect_progress(&handle);
-    rig.fs.set_read_delay(Some(Duration::from_millis(120)));
+    rig.fs.set_read_delay(Some(Duration::from_millis(10)));
     save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
     let started = Instant::now();
     handle.leave(Leave::Book(TIT)).wait().unwrap();

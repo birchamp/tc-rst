@@ -46,7 +46,7 @@ fn open_shows_determinate_progress_by_300_ms() {
     let fs = corpus.fs.copy();
     let rig = rig_as(fs.clone(), APP, "host-1");
     // Every read waits, so the open lasts several seconds.
-    fs.set_read_delay(Some(Duration::from_millis(15)));
+    fs.set_read_delay(Some(Duration::from_millis(5)));
     let (sink, seen) = collecting();
     let caller = std::thread::current().id();
     let started = Instant::now();
@@ -108,11 +108,15 @@ fn a_quick_open_shows_nothing() {
         )
         .unwrap();
     let took = started.elapsed();
-    if took < Duration::from_millis(300) {
-        assert!(
-            seen.lock().unwrap().is_empty(),
-            "a quick open flashed an indicator"
-        );
+    // On a slow runner the open may pass 300 ms and report; it must never report sooner.
+    let seen = seen.lock().unwrap().clone();
+    assert!(
+        seen.iter()
+            .all(|(_, _, at)| *at - started >= tc_store::progress::FIRST_REPORT),
+        "a report before 300 ms"
+    );
+    if took < tc_store::progress::FIRST_REPORT {
+        assert!(seen.is_empty(), "a quick open flashed an indicator");
     }
     handle.close().unwrap();
 }
@@ -122,7 +126,7 @@ fn an_open_that_fails_ends_with_its_error_after_its_last_report() {
     let corpus = psalms();
     let fs = corpus.fs.copy();
     let rig = rig_as(fs.clone(), APP, "host-1");
-    // The materialized files are gone, so the open must read the folder after 400 ms.
+    // Every read waits, so the open is still reading the folder 400 ms after it began.
     fs.set_read_delay(Some(Duration::from_millis(15)));
     let started = Instant::now();
     fs.fail_reads_from(Some(started + Duration::from_millis(400)));
