@@ -157,10 +157,6 @@ fn salvaging_a_later_path_keeps_values_after_the_existing_pending_was_removed() 
     recover_over_an_existing_salvage("zzz-damaged.batch", false);
 }
 
-// DRAFT ONLY: append inside tests/store/salvage_sources.rs after the current shared
-// executor finishes. This reuses that module's imports and assert_saved_history.
-// No test has been compiled or executed by the read-only reviewer.
-
 /// Capture saves before any seal, then stop the original handle separately from the
 /// independent crashed image. The only journal copies of these exact new ids are pending.
 fn unsealed_salvage_probe_fixture() -> (
@@ -281,8 +277,9 @@ fn salvaging_its_own_pending_path_keeps_every_saved_raw_value_readable() {
         "the header's device is retained"
     );
     // Check exact public History before a retry or checkpoint can rescue a projection
-    // under different ids. This is the intended failing raw/body preservation oracle.
+    // under different ids.
     assert_saved_history(&handle, &lines);
+    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &damaged);
     handle.wait_idle();
     assert_saved_history(&handle, &lines);
     assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &damaged);
@@ -296,86 +293,6 @@ fn salvaging_its_own_pending_path_keeps_every_saved_raw_value_readable() {
     assert_valid_burrito(&rig.fs, &folder);
     assert_commits_valid(&rig.fs, &folder);
 }
-
-#[test]
-fn salvaging_its_own_pending_path_preserves_the_original_damaged_tail() {
-    let (fs, folder, device, lines) = unsealed_salvage_probe_fixture();
-    let project = project_of(&fs, &folder);
-    let (name, damaged) = damaged_salvage_probe(
-        project,
-        device,
-        &lines,
-        Purpose::Salvage,
-        b"the original tail is translator evidence that quarantine must keep",
-    );
-    fs.put_unseen(&folder.join(format!(".tc/pending/{name}")), &damaged, None);
-    let rig = rig_as(fs, APP, "host-1");
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    // An independent assertion isolates the byte-rewrite defect from value readability.
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &damaged);
-    assert_saved_history(&handle, &lines);
-    handle.wait_idle();
-    handle.close().unwrap();
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_saved_history(&handle, &lines);
-    handle.wait_idle();
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &damaged);
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-    assert_commits_valid(&rig.fs, &folder);
-}
-
-#[test]
-fn quarantining_a_reused_pending_name_keeps_both_damaged_versions() {
-    let (fs, folder, device, lines) = unsealed_salvage_probe_fixture();
-    let project = project_of(&fs, &folder);
-    let (_, first) = damaged_salvage_probe(
-        project,
-        device,
-        &lines,
-        Purpose::Save,
-        b"first damaged version: retain the entire original evidence",
-    );
-    let (_, second) = damaged_salvage_probe(
-        project,
-        device,
-        &lines,
-        Purpose::Save,
-        b"second damaged version: retain this without replacing the first",
-    );
-    assert_ne!(first, second);
-    let rel = ".tc/pending/reused-damaged.batch";
-    fs.put_unseen(&folder.join(rel), &first, None);
-    let rig = rig_as(fs, APP, "host-1");
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_saved_history(&handle, &lines);
-    handle.wait_idle();
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &first);
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-
-    // The parser accepts every pending filename. A cloud client can restore this name
-    // with another damaged version before the next open, after the first was quarantined.
-    rig.fs.put_unseen(&folder.join(rel), &second, None);
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_saved_history(&handle, &lines);
-    handle.wait_idle();
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &first);
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &second);
-    assert_valid_burrito(&rig.fs, &folder);
-    handle.close().unwrap();
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    assert_saved_history(&handle, &lines);
-    handle.wait_idle();
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &first);
-    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &second);
-    handle.close().unwrap();
-    assert_valid_burrito(&rig.fs, &folder);
-    assert_commits_valid(&rig.fs, &folder);
-}
-
-// DRAFT ONLY: append inside tests/store/salvage_sources.rs, which already imports
-// the common fixture and public-store helpers. No compilation or execution yet.
 
 #[test]
 fn repeated_consolidation_keeps_loaded_saved_values_readable_without_reopening() {
@@ -489,10 +406,17 @@ fn quarantine_notices_keep_their_exact_routes_across_reopen_and_dismiss_only_one
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
     assert_saved_history(&handle, &lines);
+    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &first);
     handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    // A cloud client can restore this name with another damaged version before the next
+    // open, after the first was quarantined.
     rig.fs.put_unseen(&folder.join(rel), &second, None);
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    assert_saved_history(&handle, &lines);
     handle.wait_idle();
+    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &first);
+    assert_quarantine_has_exact_probe_bytes(&rig.fs, &folder, &second);
     handle.close().unwrap();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     handle.wait_idle();
@@ -543,6 +467,7 @@ fn quarantine_notices_keep_their_exact_routes_across_reopen_and_dismiss_only_one
     assert_saved_history(&handle, &lines);
     handle.close().unwrap();
     assert_valid_burrito(&rig.fs, &folder);
+    assert_commits_valid(&rig.fs, &folder);
 }
 
 #[test]
@@ -620,10 +545,6 @@ fn every_salvage_open_crash_keeps_exact_history_and_the_complete_damaged_image()
         "salvage-open crash matrix: {tested} write-point rows, both filesystem models and torn modes"
     );
 }
-
-// DRAFT ONLY: append this nested module to tests/store/salvage_sources.rs. It uses
-// that module's unsealed_salvage_probe_fixture, damaged_salvage_probe and
-// assert_saved_history helpers. No Cargo or shell command has run for this draft.
 
 mod quarantine_last_look_probe {
     use super::*;

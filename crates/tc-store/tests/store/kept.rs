@@ -238,6 +238,11 @@ fn import_takes_in_what_the_file_changed_since_its_base() {
             String::from_utf8_lossy(&rig.fs.peek(&folder.join(".tc/materialized.json")).unwrap())
         );
         handle.close().unwrap();
+        assert_eq!(
+            rig.fs.peek(&folder.join(&copy)),
+            Some(edited.clone()),
+            "the copy stays in .tc/external"
+        );
         assert_valid_burrito(&rig.fs, &folder);
         let handle = open(&rig, &folder);
         assert!(waiting(&handle).is_empty());
@@ -542,6 +547,15 @@ fn crash_at_every_write_point_of_the_hold_loses_nothing() {
         let books = handle.waiting_books();
         assert_eq!(books.len(), 1, "{books:?}");
         assert_eq!(books[0].kept.md5, Md5::of(&edited).to_hex());
+        // A copy a killed hold left unnamed and the hold made again lists twice once the
+        // manifest is lost.
+        assert_eq!(handle.kept_copies().len(), 1, "{:?}", handle.kept_copies());
+        let copies = fs
+            .files_under(&folder.join(".tc/external"))
+            .into_values()
+            .filter(|bytes| *bytes == edited)
+            .count();
+        assert_eq!(copies, 1, "the changed bytes are kept once");
         for kept in handle.kept_copies() {
             assert_eq!(
                 fs.peek(&folder.join(&kept.copy))
@@ -752,40 +766,12 @@ fn an_imported_copy_is_not_listed_again_after_the_manifest_is_lost() {
     handle.close().unwrap();
 }
 
-/// A copy whose entry ended by *Import* stays unlisted at a reopen that has the manifest; only
-/// an open that lost the manifest lists unnamed copies again.
-#[test]
-fn an_imported_copy_is_not_listed_again_at_a_normal_reopen() {
-    let (rig, folder, written) = saved_and_closed();
-    let edited = set_verse(&written, 1, 2, "in hope of eternal life");
-    rig.fs.put(&usfm_path(&folder), &edited, None);
-    let handle = open(&rig, &folder);
-    let copy = handle.kept_copies()[0].copy.clone();
-    handle.import_kept(&copy).wait().unwrap();
-    handle.wait_idle();
-    assert!(handle.kept_copies().is_empty());
-    handle.close().unwrap();
-    assert_eq!(
-        rig.fs.peek(&folder.join(&copy)),
-        Some(edited),
-        "the copy stays in .tc/external"
-    );
-
-    let handle = open(&rig, &folder);
-    assert!(
-        handle.kept_copies().is_empty(),
-        "{:?}",
-        handle.kept_copies()
-    );
-    assert!(waiting(&handle).is_empty());
-    handle.close().unwrap();
-}
-
 /// The hold and its *Not now* killed at any write point, and then `.tc/materialized.json`
 /// lost: the changed bytes are listed once, in a copy that holds them, whether the file still
 /// holds them or *Not now* wrote it from the project (the copy is then all that tells).
 #[test]
-fn crash_at_every_write_point_of_the_hold_then_a_lost_manifest_still_lists_the_copy() {
+#[ignore = "nightly: a crash then a lost manifest; crash_at_every_write_point_of_the_hold_loses_nothing (one copy kept), crash_at_every_write_point_of_not_now_loses_nothing and a_kept_copy_is_listed_again_after_the_manifest_is_lost catch its bugs in the gate"]
+fn crash_at_every_write_point_of_the_hold_then_a_lost_manifest_still_lists_the_copy_nightly() {
     let (rig, folder, written) = saved_and_closed();
     let base = rig.fs.crash(false);
     drop(rig);
@@ -1134,13 +1120,28 @@ fn a_copy_given_up_stays_listed_after_a_later_import() {
     ]);
 }
 
+const GATE_CASES: u32 = 16;
+const NIGHTLY_CASES: u32 = 256;
+
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: GATE_CASES, failure_persistence: None, ..ProptestConfig::default() })]
 
     /// INV-NOTHING-ENTERS-WITHOUT-IMPORT and no loss: random histories of saves, outside edits,
     /// focus, *Not now*, *Import* and reopens keep every outside text and every save.
     #[test]
     fn no_outside_text_is_lost_across_not_now_import_and_reopen(
+        ops in proptest::collection::vec(op(), 1..14)
+    ) {
+        run_ops(&ops);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: NIGHTLY_CASES, failure_persistence: None, ..ProptestConfig::default() })]
+
+    #[test]
+    #[ignore = "nightly: more cases of no_outside_text_is_lost_across_not_now_import_and_reopen, which runs in the gate"]
+    fn no_outside_text_is_lost_across_not_now_import_and_reopen_nightly(
         ops in proptest::collection::vec(op(), 1..14)
     ) {
         run_ops(&ops);
