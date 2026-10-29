@@ -1080,7 +1080,7 @@ impl App {
         unit: CheckUnit,
         installed: &[fix::Installed],
         answer: impl FnOnce(&ListEntry, &CountingSnapshot) -> T,
-    ) -> Result<Result<T, Preflight>, ApiError> {
+    ) -> Result<Option<T>, ApiError> {
         let read = session.read();
         let pins = pins_of(&read)?;
         let pre = preflight(pins.as_ref(), tool, unit, installed);
@@ -1103,7 +1103,7 @@ impl App {
                 pin: resolution.pin.clone(),
                 rung: resolution.rung,
             },
-            _ => return Ok(Err(pre)),
+            _ => return Ok(None),
         };
         let list = CheckListRef { tool, unit };
         let mut lists = session.checks().lists.lock().await;
@@ -1207,7 +1207,7 @@ impl App {
             }
             entry.seq = read.seq();
         }
-        Ok(Ok(answer(entry, &read)))
+        Ok(Some(answer(entry, &read)))
     }
 }
 
@@ -1293,8 +1293,8 @@ impl Handle<Picker> for App {
             let pins = pins_of(&read)?;
             let pre = preflight(pins.as_ref(), tool, req.unit, &installed);
             let progress = match counted {
-                Ok(Ok(progress)) => Some(CardCount::Counted(progress)),
-                Ok(Err(_)) => None,
+                Ok(Some(progress)) => Some(CardCount::Counted(progress)),
+                Ok(None) => None,
                 // A count that failed is stated on its card and never blocks the tool (D30).
                 Err(error) => Some(CardCount::Failed {
                     reason: error.to_string(),
@@ -1353,7 +1353,7 @@ impl Handle<Open> for App {
             session_view(&app, list, entry, read, req.since)
         })
         .await?
-        .map_err(|_| ApiError::ToolNotReady)
+        .ok_or(ApiError::ToolNotReady)
     }
 }
 

@@ -11,7 +11,7 @@ mod common;
 
 use tc_api::model::print::PageSetup;
 use tc_export::book::{print_items, printed_items};
-use tc_export::{Direction, ExportError, ExportInput, PrintBookInput, Produced, Producer, produce};
+use tc_export::{Direction, ExportError, ExportInput, PrintBookInput, Produced, produce};
 
 use common::{chapters_of, markup, repo_path, vectors};
 
@@ -41,11 +41,7 @@ fn story_markdown_is_the_content_folder_without_bak_or_ds_store() {
     files.push(("ingredients/LICENSE.md".into(), b"license".to_vec()));
     files.push(("metadata.json".into(), b"{}".to_vec()));
 
-    let (out, _) = produce(
-        Producer::StoryMarkdown,
-        &ExportInput::StoryFiles(files.clone()),
-    )
-    .unwrap();
+    let (out, _) = produce(&ExportInput::StoryMarkdown(&files)).unwrap();
     let Produced::Files(out) = out else {
         panic!("Story Markdown is a folder of files")
     };
@@ -64,18 +60,15 @@ fn the_print_document_holds_tc4s_print_dom_and_page() {
     let title = case["title"].as_str().unwrap().to_owned();
     let setup = PageSetup::default();
     let print = |items| {
-        produce(
-            Producer::PrintHtml,
-            &ExportInput::PrintBook(PrintBookInput {
-                title: title.clone(),
-                document_title: "TIT-2026-10-24".to_owned(),
-                items,
-                setup,
-                dir: Direction::Ltr,
-                stylesheet: ".print-book{}",
-                words: &markup::word,
-            }),
-        )
+        produce(&ExportInput::PrintBook(PrintBookInput {
+            title: title.clone(),
+            document_title: "TIT-2026-10-24".to_owned(),
+            items,
+            setup,
+            dir: Direction::Ltr,
+            stylesheet: ".print-book{}",
+            words: &markup::word,
+        }))
     };
     let (out, _) = print(items.clone()).unwrap();
     let Produced::File(bytes) = out else {

@@ -1072,7 +1072,12 @@ no file: the open does it after O9 classified, the window focus does it, and the
 a new path does it for that path (§11.1). A file another program holds is left, and the next look
 tries again.
 Such entries arriving from Door43 or in an exchange file are **foreign entries**: they are kept
-in every commit tree, not dropped (§9.4).
+in every commit tree, not dropped (§9.4). A foreign entry whose name Windows cannot write as named (a device
+name, a trailing dot or space, a forbidden character, an 8.3 short name), or that Windows or
+macOS would store as one file with another, is carried byte for byte in commits and exchange
+files but written to disk by no join and no new project from a file, on every OS alike; the
+report log lists it (owner ruling "carry, skip on disk", 2026-10-28). A name that could leave
+the folder refuses the whole join or file, and so does such a name on a file the app owns.
 
 | Path | Class | mimeType | role | scope |
 |---|---|---|---|---|
@@ -2314,6 +2319,21 @@ section command carries parsed values rather than that raw buffer. The fields:
 | `Alignment` | the aligner's unsaved links, as `AlignmentEdit::to_json` writes them (APP-DESIGN R23) | the alignment's, then the verse's it displayed, so *Keep* saves it as `SaveAlignment` would, a verse's first alignment included |
 
 An entry of `drafts.json` is `{field, shown: [token text], text, at}`.
+
+Only a missing `drafts.json` means no drafts. A `drafts.json` is never written over unread:
+- One the open cannot read (held by another program past the retries, no permission, a disk
+  error) may hold sound bytes, so it stays where it is: the notice `FileUnreadable` names
+  `.tc/drafts.json`, this session writes no drafts, and the next open reads it again.
+- One read but not understood (damaged, cut short, a newer app's layout) is moved to
+  `.tc/drafts.unreadable-N.json` under the first free N, the notice names that path, and drafts
+  are written as usual. When it cannot be moved, it is handled as one that cannot be read.
+- Every open, a read-only one included, names each `.tc/drafts.unreadable-N.json` there in a
+  notice `FileUnreadable`, whether or not the session that moved it wrote drafts since, until
+  the file is gone. The notice keeps no copy: dismissing it hides it for the session and leaves
+  the file where it is, since it may hold the only trace of unsaved text. The app has no action
+  that reads such a file or removes it; the person moves or deletes it outside the app.
+
+An entry whose field this version does not know stays in the file as it is.
 
 Cancelling an open section card drains its pending draft calls, then calls
 `discard_current_draft` with that exact field, displayed tokens, text and original keystroke

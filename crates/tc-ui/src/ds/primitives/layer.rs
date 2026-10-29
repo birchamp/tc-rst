@@ -20,6 +20,7 @@ use crate::ds::{
     provide, spread,
 };
 use crate::geometry::{Rect, place};
+use crate::roving::{Axis, Move, roving};
 
 /// How deep a layer is nested in other layers. A menu opened inside a drawer resolves its
 /// z-index as popover + 10, so it sits above that drawer without either knowing the other.
@@ -401,7 +402,11 @@ pub fn Layer(
         };
         let Some(p) = panel.get() else { return };
         let node: web_sys::Element = p.clone().into();
-        let vertical = nav == Navigate::Vertical;
+        let axis = if nav == Navigate::Vertical {
+            Axis::Vertical
+        } else {
+            Axis::Horizontal
+        };
         let handler =
             Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
                 let list = focusables(&node);
@@ -411,18 +416,14 @@ pub fn Layer(
                 let active = document().active_element();
                 let i = list
                     .iter()
-                    .position(|el| active.as_ref().is_some_and(|a| same(a, el)))
-                    .map_or(-1, |i| i as i64);
-                let n = list.len() as i64;
+                    .position(|el| active.as_ref().is_some_and(|a| same(a, el)));
+                let n = list.len();
                 let key = e.key();
-                let target = if key == if vertical { "ArrowDown" } else { "ArrowRight" } {
-                    if i < 0 { 0 } else { (i + 1) % n }
-                } else if key == if vertical { "ArrowUp" } else { "ArrowLeft" } {
-                    if i <= 0 { n - 1 } else { i - 1 }
-                } else if key == "Home" {
-                    0
-                } else if key == "End" {
-                    n - 1
+                let target = if let Some(step) = Move::of_key(&key, axis) {
+                    match roving(n, i, step) {
+                        Some(target) => target,
+                        None => return,
+                    }
                 } else if key.chars().count() == 1
                     && !key.trim().is_empty()
                     && !e.meta_key()
@@ -430,9 +431,9 @@ pub fn Layer(
                     && !e.alt_key()
                 {
                     let c = key.to_lowercase();
-                    let from = i.max(0);
+                    let from = i.unwrap_or(0);
                     let hit = (1..=n).map(|k| (from + k) % n).find(|&j| {
-                        list[j as usize]
+                        list[j]
                             .text_content()
                             .unwrap_or_default()
                             .trim()
@@ -447,7 +448,9 @@ pub fn Layer(
                     return;
                 };
                 e.prevent_default();
-                let _ = list[target as usize].focus();
+                if let Some(el) = list.get(target) {
+                    let _ = el.focus();
+                }
             });
         let _ = p.add_event_listener_with_callback("keydown", handler.as_ref().unchecked_ref());
         let cleanup = send_wrapper::SendWrapper::new((p, handler));

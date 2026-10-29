@@ -30,8 +30,12 @@ pub(crate) enum ShortStr {
 impl ShortStr {
     pub(crate) fn new(text: &str) -> Self {
         let len = text.len();
-        match NonZeroU8::new(len as u8 + 1) {
-            Some(tag) if len <= INLINE => {
+        let tag = u8::try_from(len)
+            .ok()
+            .filter(|_| len <= INLINE)
+            .map(|n| NonZeroU8::MIN.saturating_add(n));
+        match tag {
+            Some(tag) => {
                 let mut bytes = [0u8; INLINE];
                 bytes[..len].copy_from_slice(text.as_bytes());
                 Self::Inline { bytes, len: tag }
@@ -131,6 +135,29 @@ mod tests {
                 assert_eq!(short.cmp(&other), a.cmp(b), "{a:?} {b:?}");
                 assert_eq!(short == other, a == b, "{a:?} {b:?}");
             }
+        }
+    }
+
+    #[test]
+    fn every_length_round_trips_and_only_short_texts_stay_inline() {
+        for len in (0..=17).chain([254, 255, 256, 257, 510, 511, 512, 513]) {
+            let text = "x".repeat(len);
+            let short = ShortStr::new(&text);
+            assert_eq!(short.as_str(), text);
+            assert_eq!(
+                matches!(short, ShortStr::Inline { .. }),
+                len <= INLINE,
+                "{len}"
+            );
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn any_text_reads_back_and_orders_as_str(a in ".{0,600}", b in ".{0,600}") {
+            let (sa, sb) = (ShortStr::new(&a), ShortStr::new(&b));
+            proptest::prop_assert_eq!(sa.as_str(), a.as_str());
+            proptest::prop_assert_eq!(sa.cmp(&sb), a.cmp(&b));
         }
     }
 }

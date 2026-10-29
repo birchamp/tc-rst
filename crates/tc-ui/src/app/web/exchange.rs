@@ -16,6 +16,7 @@ use crate::app::exchange::{
     ExchangeProject, ExportForm, ReceiveForm, ReceivePress, ReceiveStep, fits_upload,
 };
 use crate::app::jobs::JobEnd;
+use crate::app::uploads::Slot;
 
 fn phase_of(progress: &Progress) -> Option<tc_api::jobs::ExchangePhase> {
     match progress.phase {
@@ -199,6 +200,7 @@ impl Actions {
             return;
         }
         self.patch_rx(ReceiveForm::uploading);
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             match this
@@ -207,7 +209,11 @@ impl Actions {
                 .upload(&file, UploadFlow::Exchange)
                 .await
             {
-                Ok(upload) => this.receive_identify(ExchangeFile::Upload(upload.id)),
+                Ok(upload) => {
+                    if this.picked_upload(opening, Slot::Receive, &upload.id) {
+                        this.receive_identify(ExchangeFile::Upload(upload.id));
+                    }
+                }
                 Err(error) => this.patch_rx(|rx| rx.too_large_or_failed(api_error(error))),
             }
         });
@@ -242,6 +248,8 @@ impl Actions {
         let Some(press) = pressed else {
             return;
         };
+        // The job deletes the file whatever comes of it.
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             match press {
@@ -273,6 +281,7 @@ impl Actions {
                         }
                         Err(error) => JobEnd::Failed(api_error(error)),
                     };
+                    this.uploads_finished(&taken);
                     this.patch_rx_or_last(|rx| rx.ended(attempt, ended, js::random_request_id()));
                     js::session_remove(RECEIVE_JOB_KEY);
                 }
@@ -304,6 +313,7 @@ impl Actions {
                         }
                         Err(error) => JobEnd::Failed(api_error(error)),
                     };
+                    this.uploads_finished(&taken);
                     this.patch_rx_or_last(|rx| rx.added(attempt, ended, js::random_request_id()));
                     js::session_remove(RECEIVE_JOB_KEY);
                 }

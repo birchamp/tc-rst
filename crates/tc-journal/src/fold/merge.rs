@@ -26,14 +26,40 @@ pub(crate) fn key_parents(state: &FoldState, c: ChangeIdx) -> SmallVec<[ChangeId
 
 /// `c` and its ancestors on its key.
 pub(crate) fn ancestors_or_self(state: &FoldState, c: ChangeIdx) -> BTreeSet<ChangeIdx> {
+    let seen = closure(c, |x| key_parents(state, x));
+    state.count(super::Counter::ChangesVisited, seen.len() as u64);
+    seen
+}
+
+/// `start` and everything reachable from it through `parents`.
+fn closure<T: Ord + Copy, I: IntoIterator<Item = T>>(
+    start: T,
+    parents: impl Fn(T) -> I,
+) -> BTreeSet<T> {
     let mut seen = BTreeSet::new();
-    let mut stack = vec![c];
+    let mut stack = vec![start];
     while let Some(x) = stack.pop() {
         if seen.insert(x) {
-            stack.extend(key_parents(state, x));
+            stack.extend(parents(x));
         }
     }
     seen
+}
+
+/// The maximal elements of `common`. Each head's ancestors-or-self is closed under
+/// `parents`, so their intersection `common` is too, whatever the shape of the history
+/// (merges of merges, criss-cross): a strict ancestor of a common change is then always
+/// named as a parent by some common change, and one pass over the parents finds the bases.
+fn maximal<T: Ord + Copy, I: IntoIterator<Item = T>>(
+    common: &BTreeSet<T>,
+    parents: impl Fn(T) -> I,
+) -> Vec<T> {
+    let named: BTreeSet<T> = common.iter().flat_map(|c| parents(*c)).collect();
+    common
+        .iter()
+        .copied()
+        .filter(|c| !named.contains(c))
+        .collect()
 }
 
 /// The ancestry of a record's heads: each head's ancestors-or-self, the common ancestors
@@ -55,17 +81,7 @@ pub(crate) fn ancestry(state: &FoldState, heads: &[ChangeIdx]) -> Ancestry {
     }
     // A head is never an ancestor of another head, so with two or more heads `common`
     // holds no head.
-    let mut below: BTreeSet<ChangeIdx> = BTreeSet::new();
-    for c in &common {
-        for p in key_parents(state, *c) {
-            below.extend(ancestors_or_self(state, p));
-        }
-    }
-    let mut bases: Vec<ChangeIdx> = common
-        .iter()
-        .copied()
-        .filter(|c| !below.contains(c))
-        .collect();
+    let mut bases = maximal(&common, |c| key_parents(state, c));
     state.sort_by_id(&mut bases);
     Ancestry {
         of_head,
@@ -858,4 +874,66 @@ pub(crate) fn group_by_value(
         }
     }
     (groups.into_values().collect(), unreadable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{closure, maximal};
+    use proptest::prelude::*;
+    use std::collections::BTreeSet;
+
+    /// The rule `maximal` replaced: a common change is a base when it is not an ancestor of
+    /// another common change, found by walking every common change's ancestry.
+    fn maximal_by_walking(common: &BTreeSet<usize>, parents: &[Vec<usize>]) -> Vec<usize> {
+        let mut below = BTreeSet::new();
+        for c in common {
+            for p in &parents[*c] {
+                below.extend(closure(*p, |x| parents[x].clone()));
+            }
+        }
+        common
+            .iter()
+            .copied()
+            .filter(|c| !below.contains(c))
+            .collect()
+    }
+
+    /// A random history: each change names up to three earlier changes as parents, so
+    /// merges, merges of merges and criss-crosses all occur.
+    fn history() -> impl Strategy<Value = (Vec<Vec<usize>>, Vec<usize>)> {
+        (1usize..40).prop_flat_map(|n| {
+            let parents = (0..n)
+                .map(|i| proptest::collection::vec(0..i.max(1), if i == 0 { 0..1 } else { 0..4 }))
+                .collect::<Vec<_>>();
+            (parents, proptest::collection::vec(0..n, 1..5))
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn one_pass_over_the_parents_finds_the_bases_the_walk_found((parents, heads) in history()) {
+            let of_head: Vec<BTreeSet<usize>> =
+                heads.iter().map(|h| closure(*h, |x| parents[x].clone())).collect();
+            let mut common = of_head[0].clone();
+            for set in &of_head[1..] {
+                common.retain(|c| set.contains(c));
+            }
+            prop_assert_eq!(
+                maximal(&common, |c| parents[c].clone()),
+                maximal_by_walking(&common, &parents)
+            );
+        }
+    }
+
+    /// The criss-cross: two merges that each name both of two parallel changes have both of
+    /// them as bases.
+    #[test]
+    fn a_criss_cross_has_two_bases() {
+        let parents = [vec![], vec![0], vec![0], vec![1, 2], vec![1, 2]];
+        let common: BTreeSet<usize> = closure(3, |x| parents[x].clone())
+            .intersection(&closure(4, |x| parents[x].clone()))
+            .copied()
+            .collect();
+        assert_eq!(maximal(&common, |c| parents[c].clone()), vec![1, 2]);
+    }
 }

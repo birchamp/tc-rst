@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -48,38 +48,164 @@ pub struct Upload {
 
 /// The uploads of this run. Nothing survives a restart: `uploads/` is emptied at every
 /// start, so an id only ever names a file this run stored.
+///
+/// An upload is Stored here from its last byte. While a request reads it, it is Held
+/// ([`Uploads::take`]): neither a drop nor a sweep deletes the file then. It ends in one of
+/// three ways:
+/// - the request used it up ([`Uploads::used_up`]): no request can take it again, and the file
+///   is deleted once no other request holds it;
+/// - the person's dialog has no more use for it ([`Uploads::drop_stored`], `uploads/drop`):
+///   it closed, the row was removed, or another file took its place;
+/// - it is still Stored after the keep time, because the page never said (it was closed, or
+///   lost its connection): [`Uploads::sweep`] forgets it and the caller deletes the file.
+///
+/// A request that ends without using its upload gives it back ([`Uploads::give_back`]): it is
+/// Stored again, so the person can try again with the same file, and the keep time starts
+/// again.
 pub struct Uploads {
     dir: PathBuf,
-    entries: Mutex<HashMap<UploadId, Upload>>,
+    keep: Duration,
+    entries: Mutex<HashMap<UploadId, Stored>>,
+}
+
+struct Stored {
+    upload: Upload,
+    state: Use,
+}
+
+enum Use {
+    /// No request holds it; the keep time runs from this instant.
+    Stored(Instant),
+    /// This many requests hold it: a review can read a file while a lookup job reads it too.
+    Held(u32),
+    /// A request used it up while this many others still held it: none can take it now, and
+    /// the file is deleted when the last of them is done, so no reader loses it midway.
+    UsedUp(u32),
 }
 
 impl Uploads {
-    pub(crate) fn new(dir: PathBuf) -> Self {
+    pub(crate) fn new(dir: PathBuf, keep: Duration) -> Self {
         Self {
             dir,
+            keep,
             entries: Mutex::new(HashMap::new()),
         }
     }
 
-    fn entries(&self) -> MutexGuard<'_, HashMap<UploadId, Upload>> {
-        // The map is only inserted into and removed from, so a panic elsewhere while the
-        // lock was held cannot have left it half changed.
+    fn entries(&self) -> MutexGuard<'_, HashMap<UploadId, Stored>> {
+        // Every change under the lock is one insert, remove or field write, so a panic
+        // elsewhere while the lock was held cannot have left it half changed.
         self.entries.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The upload with this id, if this run stored one.
+    /// The upload with this id, if this run stored one, no request holds it, and nothing
+    /// dropped or swept it.
     pub fn get(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().get(id).cloned()
+        self.entries()
+            .get(id)
+            .filter(|stored| matches!(stored.state, Use::Stored(_)))
+            .map(|stored| stored.upload.clone())
     }
 
-    /// Hands the upload over: it is no longer registered, and the caller owns its file and
-    /// deletes it when done.
+    /// Holds the upload for a request that reads it: no drop or sweep deletes it until the
+    /// request gives it back. None when it was dropped, swept or used up.
     pub fn take(&self, id: &UploadId) -> Option<Upload> {
-        self.entries().remove(id)
+        let mut entries = self.entries();
+        let stored = entries.get_mut(id)?;
+        stored.state = match stored.state {
+            Use::Stored(_) => Use::Held(1),
+            Use::Held(n) => Use::Held(n.saturating_add(1)),
+            Use::UsedUp(_) => return None,
+        };
+        Some(stored.upload.clone())
+    }
+
+    /// A request that held the upload ended without using it up: once no request holds it,
+    /// it is Stored again, from now, unless another request used it up. Blocking: at most
+    /// one unlink.
+    pub fn give_back(&self, id: &UploadId) {
+        if let Some(path) = self.release(id, false) {
+            // As in `used_up`.
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    /// The request used the upload up: no request can take it again, and its file is
+    /// deleted once no other request holds it. Blocking: at most one unlink.
+    pub fn used_up(&self, id: &UploadId) {
+        if let Some(path) = self.release(id, true) {
+            // Already gone is as good as deleted; a file that cannot be removed now (held by
+            // a virus scanner) is emptied at the next start.
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    /// One request is done with the upload, having used it up or not. Returns the file to
+    /// delete: the upload is forgotten when it was used up and nothing holds it any more.
+    fn release(&self, id: &UploadId, used: bool) -> Option<PathBuf> {
+        let mut entries = self.entries();
+        let next = match (&entries.get(id)?.state, used) {
+            (Use::Stored(_), false) => return None,
+            (Use::Held(n), false) if *n > 1 => Some(Use::Held(n - 1)),
+            (Use::Held(_), false) => Some(Use::Stored(Instant::now())),
+            (Use::Held(n) | Use::UsedUp(n), _) if *n > 1 => Some(Use::UsedUp(n - 1)),
+            (Use::Stored(_) | Use::Held(_), true) | (Use::UsedUp(_), _) => None,
+        };
+        match next {
+            Some(state) => {
+                if let Some(stored) = entries.get_mut(id) {
+                    stored.state = state;
+                }
+                None
+            }
+            None => entries.remove(id).map(|stored| stored.upload.path),
+        }
+    }
+
+    /// Deletes the upload when it is Stored, and says whether it was. One a request holds, or
+    /// one swept, dropped or used up already, is left alone. Blocking: one unlink.
+    pub fn drop_stored(&self, id: &UploadId) -> bool {
+        let mut entries = self.entries();
+        if !matches!(
+            entries.get(id),
+            Some(Stored {
+                state: Use::Stored(_),
+                ..
+            })
+        ) {
+            return false;
+        }
+        let path = entries.remove(id).map(|stored| stored.upload.path);
+        drop(entries);
+        // As in `used_up`.
+        let _ = path.map(std::fs::remove_file);
+        true
+    }
+
+    /// Forgets the uploads Stored for the keep time or longer at `now`, and returns their
+    /// paths, which the caller deletes. A held upload is never swept.
+    pub fn sweep(&self, now: Instant) -> Vec<PathBuf> {
+        let keep = self.keep;
+        let mut expired = Vec::new();
+        self.entries().retain(|_, stored| {
+            let old = matches!(stored.state,
+                Use::Stored(since) if now.saturating_duration_since(since) >= keep);
+            if old {
+                expired.push(stored.upload.path.clone());
+            }
+            !old
+        });
+        expired
     }
 
     fn register(&self, upload: Upload) {
-        self.entries().insert(upload.id.clone(), upload);
+        self.entries().insert(
+            upload.id.clone(),
+            Stored {
+                upload,
+                state: Use::Stored(Instant::now()),
+            },
+        );
     }
 }
 

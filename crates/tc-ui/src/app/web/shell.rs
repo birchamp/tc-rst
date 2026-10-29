@@ -53,6 +53,7 @@ pub fn App() -> impl IntoView {
     };
     remember_place(&ctx.s);
     go_home_after_a_restart(&ctx.s, &ctx.actions);
+    drop_uploads_when_their_dialog_goes(&ctx.s, &ctx.actions);
     // D1: another program may have changed a book file while the window was elsewhere.
     let focused = {
         let actions = ctx.actions.clone();
@@ -205,6 +206,30 @@ fn go_home_after_a_restart(s: &AppState, actions: &Actions) {
         }
         now
     });
+}
+
+/// A dialog's picked files go when it does, whichever way it goes: Cancel, Close, the ✕,
+/// Escape, a success that closes it, another dialog in its place, or the person leaving the
+/// project or going Home under it. One watch here, so no dialog has to remember (review
+/// 2026-10-28 #7).
+fn drop_uploads_when_their_dialog_goes(s: &AppState, actions: &Actions) {
+    let (dialog, project) = (s.layers.dialog.clone(), s.project.clone());
+    let actions = actions.clone();
+    let holder = Memo::new(move |_| {
+        (
+            dialog.with(|d| d.as_ref().map(Dialog::holder)),
+            project.with(|p| p.as_ref().map(|p| p.at.project.clone())),
+        )
+    });
+    Effect::new(
+        move |previous: Option<(Option<DialogKind>, Option<tc_api::ids::ProjectRef>)>| {
+            let now = holder.get();
+            if previous.is_some_and(|previous| previous != now) {
+                actions.close_uploads();
+            }
+            now
+        },
+    );
 }
 
 /// The identity of the project the top bar shows: a change draws the bar afresh, because

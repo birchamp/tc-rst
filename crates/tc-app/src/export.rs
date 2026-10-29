@@ -479,14 +479,13 @@ impl App {
                     name: String,
                     ext: &str|
          -> Result<Made, JobEnd> {
-            let (produced, facts) = produced.map_err(|e| match e {
-                // tC4 `printDocument`'s diagnosis, in its English as tC4 writes it.
-                ExportError::NothingDrafted => failed(ExportRefusal::NothingDrafted {
+            // tC4 `printDocument`'s diagnosis, in its English as tC4 writes it.
+            let (produced, facts) = produced.map_err(|ExportError::NothingDrafted| {
+                failed(ExportRefusal::NothingDrafted {
                     error: format!(
                         "{title} has no drafted verse yet, so the PDF has nothing to print."
                     ),
-                }),
-                other => self.read_failed(other.to_string()),
+                })
             })?;
             let bytes = match produced {
                 Produced::File(bytes) => bytes,
@@ -504,16 +503,12 @@ impl App {
             (Producer::AlignedUsfm | Producer::PlainUsfm, Subject::Book { book }, None) => {
                 let input = crate::align::export::book_input(self, session, book).await?;
                 let id = book.code();
-                let (producer, name) = if producer == Producer::AlignedUsfm {
-                    (tc_export::Producer::AlignedUsfm, format!("{id}-aligned"))
+                let (input, name) = if producer == Producer::AlignedUsfm {
+                    (ExportInput::AlignedUsfm(&input), format!("{id}-aligned"))
                 } else {
-                    (tc_export::Producer::PlainUsfm, id.to_owned())
+                    (ExportInput::PlainUsfm(&input), id.to_owned())
                 };
-                made(
-                    tc_export::produce(producer, &ExportInput::Book(input)),
-                    name,
-                    "usfm",
-                )
+                made(tc_export::produce(&input), name, "usfm")
             }
             (Producer::StoryMarkdown, Subject::Stories, None) => {
                 let project_name = self.export_name(session).await;
@@ -527,10 +522,7 @@ impl App {
                     }));
                 }
                 made(
-                    tc_export::produce(
-                        tc_export::Producer::StoryMarkdown,
-                        &ExportInput::StoryFiles(files),
-                    ),
+                    tc_export::produce(&ExportInput::StoryMarkdown(&files)),
                     format!("{project_name}-stories"),
                     "zip",
                 )
@@ -555,10 +547,7 @@ impl App {
                     words: &words,
                 };
                 made(
-                    tc_export::produce(
-                        tc_export::Producer::PrintHtml,
-                        &ExportInput::PrintBook(input),
-                    ),
+                    tc_export::produce(&ExportInput::PrintBook(input)),
                     name,
                     "pdf",
                 )
@@ -614,10 +603,7 @@ impl App {
                     words: &words,
                 };
                 made(
-                    tc_export::produce(
-                        tc_export::Producer::PrintHtml,
-                        &ExportInput::PrintStories(input),
-                    ),
+                    tc_export::produce(&ExportInput::PrintStories(input)),
                     project_name,
                     "pdf",
                 )

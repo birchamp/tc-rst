@@ -592,14 +592,6 @@ impl Handle<tc_api::session::LeaveMode> for App {
 // ---------------------------------------------------------------------------------------
 
 impl App {
-    /// The session of a write about outside edits, by its scope.
-    fn outside_session(&self, at: &tc_api::Scope) -> Result<Arc<ProjectSession>, ApiError> {
-        self.inner
-            .sessions
-            .reader(at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))
-    }
-
     /// The lists after a store call, also told to every page of the session.
     fn outside_after(
         &self,
@@ -627,7 +619,7 @@ impl Handle<tc_api::session::Focus> for App {
         &self,
         req: tc_api::session::Focus,
     ) -> Result<tc_api::session::OutsideEdits, ApiError> {
-        let session = self.outside_session(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let done = session.handle().focus().await;
         self.outside_after(&session, done)
     }
@@ -638,7 +630,7 @@ impl Handle<tc_api::session::ImportKept> for App {
         &self,
         req: tc_api::session::ImportKept,
     ) -> Result<tc_api::session::KeptImported, ApiError> {
-        let session = self.outside_session(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let file = session
             .handle()
             .outside_edits()
@@ -668,7 +660,7 @@ impl Handle<tc_api::session::NotNow> for App {
         &self,
         req: tc_api::session::NotNow,
     ) -> Result<tc_api::session::OutsideEdits, ApiError> {
-        let session = self.outside_session(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let done = session.handle().not_now(&req.file).await;
         self.outside_after(&session, done)
     }
@@ -679,7 +671,7 @@ impl Handle<tc_api::session::DismissNotice> for App {
         &self,
         req: tc_api::session::DismissNotice,
     ) -> Result<tc_api::session::OutsideEdits, ApiError> {
-        let session = self.outside_session(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let done = session.handle().dismiss_kept(&req.copy).await;
         self.outside_after(&session, done)
     }

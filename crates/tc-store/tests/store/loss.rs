@@ -885,3 +885,115 @@ fn loss_all_copies_damaged_union_salvaged() {
     assert_eq!(saves(&handle), saved);
     handle.close().unwrap();
 }
+
+/// A copy whose original device file cannot be removed would write the same (device, seq)
+/// pairs as the original: the copy fails, its staging folder goes, and nothing is placed.
+#[test]
+fn a_copy_that_cannot_drop_the_device_file_fails_and_leaves_nothing() {
+    let (rig, folder) = titus();
+    rig.store
+        .open(&folder, &OpenOptions::default())
+        .unwrap()
+        .close()
+        .unwrap();
+    assert!(rig.fs.peek(&folder.join(".tc/device.json")).is_some());
+    let projects = folder.parent().unwrap().to_owned();
+    // The same copy on a copy of the files tells which write point removes the device file.
+    let probe = rig.fs.copy();
+    let probe_rig = rig_as(probe.clone(), APP, "host-1");
+    probe.clear_log();
+    let start = probe.ops();
+    probe_rig.store.copy_project(&folder, "Titus copy").unwrap();
+    let removal = probe
+        .log()
+        .into_iter()
+        .find(|op| {
+            op.kind == OpKind::RemoveFile
+                && op.path.ends_with(".tc/device.json")
+                && op.path.to_string_lossy().contains(".staging-")
+        })
+        .expect("the copy removes its device file");
+    let k = removal.index - start;
+    drop(probe_rig);
+
+    let before = rig.fs.files_under(&projects);
+    rig.fs.fail_op(k, std::io::ErrorKind::PermissionDenied);
+    let copied = rig.store.copy_project(&folder, "Titus copy");
+    assert!(copied.is_err(), "{copied:?}");
+    assert_eq!(
+        rig.fs.files_under(&projects),
+        before,
+        "no copy and no staging folder is left"
+    );
+}
+
+/// The device file of a copy cannot be removed, and neither can the staging folder after it:
+/// the folder stays under its staging name, which is never listed or placed as a project, and
+/// the next start removes it.
+#[test]
+fn a_copy_whose_staging_folder_cannot_be_removed_is_never_a_project() {
+    let (rig, folder) = titus();
+    rig.store
+        .open(&folder, &OpenOptions::default())
+        .unwrap()
+        .close()
+        .unwrap();
+    let projects = folder.parent().unwrap().to_owned();
+    let probe = rig.fs.copy();
+    let probe_rig = rig_as(probe.clone(), APP, "host-1");
+    probe.clear_log();
+    let start = probe.ops();
+    probe_rig.store.copy_project(&folder, "Titus copy").unwrap();
+    let k = probe
+        .log()
+        .into_iter()
+        .find(|op| {
+            op.kind == OpKind::RemoveFile
+                && op.path.ends_with(".tc/device.json")
+                && op.path.to_string_lossy().contains(".staging-")
+        })
+        .expect("the copy removes its device file")
+        .index
+        - start;
+    drop(probe_rig);
+
+    let listed = rig.store.list().unwrap();
+    rig.fs.fail_op(k, std::io::ErrorKind::PermissionDenied);
+    rig.fs.fail_op(k + 1, std::io::ErrorKind::PermissionDenied);
+    assert!(rig.store.copy_project(&folder, "Titus copy").is_err());
+    let staged: Vec<_> = rig
+        .fs
+        .files_under(&projects)
+        .into_keys()
+        .filter(|p| {
+            p.ends_with(".tc/device.json") && p.to_string_lossy().contains(".staging-copy-")
+        })
+        .collect();
+    assert_eq!(staged.len(), 1, "the cleanup failed too: {staged:?}");
+    assert!(
+        rig.fs
+            .peek(&projects.join("Titus copy/project.json"))
+            .is_none()
+    );
+    assert_eq!(
+        rig.store.list().unwrap(),
+        listed,
+        "a staging folder is never listed"
+    );
+
+    let fs = rig.fs.clone();
+    drop(rig);
+    let rig = rig_as(fs, APP, "host-1");
+    let removed = rig.store.removed_at_start();
+    assert!(
+        removed
+            .iter()
+            .any(|r| r.kind == Some(tc_store::StagingKind::Copy)),
+        "{removed:?}"
+    );
+    assert!(
+        rig.fs.peek(&staged[0]).is_none(),
+        "the next start removes it"
+    );
+    assert_eq!(rig.store.list().unwrap(), listed);
+}

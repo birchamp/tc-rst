@@ -41,3 +41,51 @@ test('INV-TOUCHED-RUNS-WHAT-A-CHANGE-REACHES: a journey that names a changed end
   assert.deepEqual(journeysFor(['parity/app/journeys/edited.test.mjs'], tokens, journeys),
     ['parity/app/journeys/cc.test.mjs', 'parity/app/journeys/edited.test.mjs', 'parity/app/journeys/rail.test.mjs']);
 });
+
+// INV-TOUCHED-RUNS-THE-PR-LINTS: a pull request's CI runs only the lint-* jobs, so `--touched`
+// runs each of their steps; a branch that passed it failed lint-linux's fmt (PR 857).
+test('INV-TOUCHED-RUNS-THE-PR-LINTS: --touched runs every step a lint job runs', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const ci = await readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  const gates = await readFile(new URL('../gates.sh', import.meta.url), 'utf8');
+  const jobs = ci.split(/^ {2}(?=[a-z][\w-]*:\s*$)/m).filter((job) => job.startsWith('lint-'));
+  assert.ok(jobs.length >= 3, 'lint-linux, lint-windows and lint-wasm are found');
+  const ciSteps = new Set(jobs.flatMap((job) => [...job.matchAll(/gates\.sh --step (\S+)/g)].map((m) => m[1])));
+  const list = gates.match(/^PR_LINTS=\(([^)]*)\)/m);
+  assert.ok(list, 'gates.sh defines PR_LINTS');
+  assert.deepEqual(new Set(list[1].split(/\s+/).filter(Boolean)), ciSteps);
+});
+
+// INV-TOUCHED-LINTS-WHAT-A-CHANGE-REACHES: each PR lint step runs over the picked crates and is
+// skipped when none of its crates is picked, so a narrow change lints in minutes.
+test('INV-TOUCHED-LINTS-WHAT-A-CHANGE-REACHES: lint steps are narrowed to the picked crates', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { spawnSync } = await import('node:child_process');
+  const gates = await readFile(new URL('../gates.sh', import.meta.url), 'utf8');
+  const list = gates.match(/^PR_LINTS=\([^)]*\)/m)[0];
+  const lint = gates.match(/^touched_lint\(\) \{[\s\S]*?^\}/m)[0];
+  const run = (crates) => {
+    const script = [
+      'set -euo pipefail',
+      'run_step(){ echo "step $1"; }',
+      'cargo(){ echo "cargo $*"; }',
+      'run_step_windows_ready(){ return 0; }',
+      list,
+      lint,
+      `for s in "\${PR_LINTS[@]}"; do touched_lint "$s" ${crates.join(' ')}; done`,
+    ].join('\n');
+    const out = spawnSync('bash', ['-c', script], { encoding: 'utf8' });
+    assert.equal(out.status, 0, out.stderr);
+    return out.stdout.trim().split('\n');
+  };
+  assert.deepEqual(run([]), ['step fmt'], 'a change to no crate runs fmt alone');
+  const store = run(['tc-store']);
+  assert.ok(store.includes('cargo clippy --locked --package=tc-store --all-targets -- -D warnings'));
+  assert.ok(store.some((l) => l.includes('--package=tc-store') && l.includes('x86_64-pc-windows-gnu')));
+  assert.ok(!store.some((l) => /wasm|release/.test(l)), store.join('\n'));
+  const ui = run(['tc-ui']);
+  for (const step of ['wasm-ui', 'wasm-ui-gallery', 'wasm-ui-app', 'wasm-ui-hooks']) assert.ok(ui.includes(`step ${step}`), step);
+  assert.ok(!ui.includes('step wasm-api'));
+  const app = run(['tc-api', 'tc-app', 'tc4']);
+  for (const step of ['clippy-release-bins', 'clippy-release-app', 'wasm-api']) assert.ok(app.includes(`step ${step}`), step);
+});

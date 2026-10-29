@@ -68,11 +68,16 @@ run_step() {
   if [[ "$name" == journeys ]]; then journeys; return; fi
   cmd="$(command_of "$name")"
   if [[ -z "$cmd" ]]; then echo "gates: no step named $name" >&2; return 1; fi
-  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null; then
-    echo "gates: clippy-windows needs x86_64-w64-mingw32-gcc and nasm: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm" >&2
-    return 1
+  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]]; then
+    run_step_windows_ready || return 1
   fi
   bash -c "$cmd"
+}
+
+run_step_windows_ready() {
+  { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null && return 0
+  echo "gates: clippy-windows needs x86_64-w64-mingw32-gcc and nasm: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm" >&2
+  return 1
 }
 
 # Every browser journey against real builds; app-e2e.yml runs this as `--step journeys`.
@@ -94,17 +99,50 @@ journeys() {
   return "$code"
 }
 
-# Before a pull request (CHK-7b): the fast checks, then the tests of the crates the branch changed and
-# of every crate that depends on them, tc-api's endpoint and golden lists, and the journeys that
-# name a changed endpoint or test id. CI on a pull request runs only the lints.
+# Before a pull request (CHK-7b): every lint step a pull request's CI runs (lint-linux,
+# lint-windows, lint-wasm), each over the crates the branch changed and every crate that depends
+# on them, and skipped when none of its crates is among them; the fast checks; then those crates'
+# tests, tc-api's endpoint and golden lists, and the journeys that name a changed endpoint or test
+# id. The full gate list runs in the merge queue.
+PR_LINTS=(fmt clippy clippy-release-bins clippy-release-app clippy-windows
+  wasm-ui wasm-ui-gallery wasm-ui-app wasm-ui-hooks wasm-api)
+
+# The lint step `$1` over the picked crates (the rest of the arguments): run, narrowed or skipped.
+touched_lint() {
+  local step="$1" crates=("${@:2}")
+  local has=" ${crates[*]} " packages=("${crates[@]/#/--package=}")
+  case "$step" in
+    fmt) run_step fmt ;;
+    clippy)
+      (( ${#crates[@]} )) || return 0
+      cargo clippy --locked "${packages[@]}" --all-targets -- -D warnings ;;
+    clippy-windows)
+      (( ${#crates[@]} )) || return 0
+      run_step_windows_ready || return 1
+      cargo clippy --locked "${packages[@]}" --all-targets --target x86_64-pc-windows-gnu -- -D warnings ;;
+    clippy-release-bins) [[ "$has" == *" tc-server "* || "$has" == *" tc4 "* ]] || return 0; run_step "$step" ;;
+    clippy-release-app) [[ "$has" == *" tc-app "* ]] || return 0; run_step "$step" ;;
+    wasm-ui*) [[ "$has" == *" tc-ui "* ]] || return 0; run_step "$step" ;;
+    wasm-api) [[ "$has" == *" tc-api "* ]] || return 0; run_step "$step" ;;
+    # A lint step this list does not know yet runs whole.
+    *) run_step "$step" ;;
+  esac
+}
+
 touched() {
-  local base="${1:-origin/HEAD}" picked crates=() files=() code=0
+  local base="${1:-origin/HEAD}" picked crates=() files=() code=0 step
   node --test scripts/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs scripts/tools/touched.test.mjs
   picked="$(node scripts/tools/touched.mjs "$base")"
   mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
   mapfile -t files < <(node -e 'for (const f of JSON.parse(process.argv[1]).journeys) console.log(f)' "$picked")
   echo "gates: --touched: ${#crates[@]} crates, ${#files[@]} journey files"
+  for step in "${PR_LINTS[@]}"; do
+    echo "gates: --touched: $step"
+    touched_lint "$step" "${crates[@]}" || { echo "gates: step $step failed" >&2; code=1; }
+  done
   cargo nextest run --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
+  # tc-arch reads the whole tree and no crate depends on it, so no change ever picks it.
+  cargo nextest run --locked --no-fail-fast -p tc-arch || code=1
   if (( ${#crates[@]} )); then
     cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
     cargo test --locked --no-fail-fast --doc "${crates[@]/#/--package=}" || code=1

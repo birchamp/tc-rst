@@ -552,10 +552,7 @@ fn absorb(
 
 impl Handle<Drafts> for App {
     async fn handle(&self, req: Drafts) -> Result<OfferedDrafts, ApiError> {
-        let session = self
-            .sessions()
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         Ok(offer(&session, &req.buffered, req.mirror))
     }
 }
@@ -629,10 +626,7 @@ impl Handle<KeepDraft> for App {
     /// then the offer's entries of `drafts.json` gone, as the machine's *Keep* says. No lock
     /// is held across the wait: the write's lease keeps the session open.
     async fn handle(&self, req: KeepDraft) -> Result<KeptDraft, ApiError> {
-        let session = self
-            .sessions()
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let (_, actions) = machine::next(
             answered(&req.text, &req.shown, &req.discard),
@@ -781,10 +775,7 @@ impl Handle<DiscardDraft> for App {
     /// The offer's entries of `drafts.json` go, each written before the answer, so a
     /// discarded text never comes back after a crash.
     async fn handle(&self, req: DiscardDraft) -> Result<(), ApiError> {
-        let session = self
-            .sessions()
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let (_, actions) = machine::next(answered("", &[], &req.stored), Event::Discard(0));
         for action in actions {
             match action {
@@ -814,10 +805,7 @@ impl Handle<CopyProject> for App {
     /// Copies the project to a new folder (R7's `Store::copy_project`): every save and the
     /// folder's `drafts.json` go with it, so the copy's first open offers them (§6.4, A-10).
     async fn handle(&self, req: CopyProject) -> Result<ProjectCopy, ApiError> {
-        let session = self
-            .sessions()
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let folder = session.scope().project.clone();
         let id = session.id().clone();
         let store = self.sessions().store().clone();
@@ -856,9 +844,7 @@ impl Handle<OtherComputerClosed> for App {
     /// the next open of the folder takes the lock and opens writable. The UI goes Home and
     /// opens the project again, so the open runs with its progress as every open does (B3).
     async fn handle(&self, req: OtherComputerClosed) -> Result<(), ApiError> {
-        self.sessions()
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        self.write_session(&req.at)?;
         self.sessions().store().trust_lock(&req.at.project);
         Ok(())
     }

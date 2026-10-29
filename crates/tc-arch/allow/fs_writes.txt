@@ -7,9 +7,6 @@ crates/tc-door43/src/download.rs	a downloaded zip in the caller's download folde
 crates/tc-door43-fake/src/git.rs	the fake Door43 server's own bare repositories, for tests only
 crates/tc-door43-fake/src/lib.rs	the fake Door43 server removes one of its own bare repositories (remove_repo), for tests only
 crates/tc-app/src/app.rs	creates app data, and the projects folder itself on first launch; no project file
-crates/tc-app/src/bundle.rs	the installer bundle's BUNDLE-MANIFEST.json, written atomically (temp file, fsync, rename)
-crates/tc-app/src/create.rs	removes an uploaded file (USFM, or an import's) from app data once taken
-crates/tc-app/src/fixes.rs	removes a sideloaded resource file from app data once taken
 crates/tc-app/src/hooks.rs	test hooks only: app data's test-hooks folder
 crates/tc-server/src/applock.rs	the app lock that keeps one instance per computer, in app data
 crates/tc-server/src/lib.rs	empties and creates the server's per-run folders in app data

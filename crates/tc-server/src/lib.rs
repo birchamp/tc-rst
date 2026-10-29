@@ -84,7 +84,10 @@ pub struct Limits {
     pub upload_cap: fn(UploadFlow) -> u64,
     /// How long a finished file stays available for download: 10 minutes.
     pub downloads_keep: Duration,
-    /// How often expired downloads are looked for: a minute.
+    /// How long a stored upload that no job took and no dialog dropped stays: a day. The UI
+    /// drops an upload as soon as nothing can use it; this catches a page that never said.
+    pub uploads_keep: Duration,
+    /// How often expired downloads and uploads are looked for: a minute.
     pub downloads_sweep: Duration,
 }
 
@@ -97,6 +100,7 @@ impl Default for Limits {
             drain_within: Duration::from_secs(1),
             upload_cap: UploadFlow::cap,
             downloads_keep: Duration::from_secs(10 * 60),
+            uploads_keep: Duration::from_secs(24 * 60 * 60),
             downloads_sweep: Duration::from_secs(60),
         }
     }
@@ -108,7 +112,8 @@ pub struct ServerConfig {
     /// The folder `--ui` names: `index.html`, `ui/`, `help/`, `prepare.html`.
     pub ui_dir: PathBuf,
     pub limits: Limits,
-    /// End the run on Ctrl+C and SIGTERM. A test run leaves it off and keeps its Ctrl+C.
+    /// End the run on Ctrl+C and SIGTERM. A test run leaves it off and keeps its Ctrl+C. When
+    /// on, [`Server::bind`] must run inside a Tokio runtime.
     pub handle_signals: bool,
     /// How a test crash after a reply ends the process: [`ExitProcess`], or a test's recorder.
     #[cfg(feature = "test-hooks")]
@@ -144,13 +149,15 @@ pub enum ServerError {
     Random,
     #[error("the server stopped: {0}")]
     Serve(#[source] io::Error),
+    #[error("cannot take over Ctrl+C and SIGTERM: {0}")]
+    Signals(#[source] io::Error),
 }
 
 /// A server that is listening and has not served a request yet.
 pub struct Server {
     listener: std::net::TcpListener,
     shared: Arc<Shared>,
-    handle_signals: bool,
+    signals: lifecycle::Signals,
     address: AddressLine,
 }
 
@@ -199,11 +206,12 @@ impl Server {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(ServerError::Bind)?;
         let port = listener.local_addr().map_err(ServerError::Bind)?.port();
         let token = LaunchToken::new()?;
+        let signals = lifecycle::Signals::listen(handle_signals).map_err(ServerError::Signals)?;
         let address = AddressLine {
             url: format!("http://127.0.0.1:{port}/"),
             token: token.as_str().to_owned(),
         };
-        let downloads_keep = limits.downloads_keep;
+        let (downloads_keep, uploads_keep) = (limits.downloads_keep, limits.uploads_keep);
         let shared = Arc::new(Shared {
             token,
             host: format!("127.0.0.1:{port}"),
@@ -211,7 +219,7 @@ impl Server {
             limits,
             ui_dir,
             routes: routes::RouteTable::new(),
-            uploads: Arc::new(Uploads::new(uploads_dir)),
+            uploads: Arc::new(Uploads::new(uploads_dir, uploads_keep)),
             downloads: Arc::new(Downloads::new(downloads_dir, downloads_keep)),
             #[cfg(feature = "test-hooks")]
             ender,
@@ -223,7 +231,7 @@ impl Server {
         Ok(Server {
             listener,
             shared,
-            handle_signals,
+            signals,
             address,
         })
     }
@@ -275,7 +283,7 @@ impl Server {
         let Server {
             listener,
             shared,
-            handle_signals,
+            signals,
             address: _,
         } = self;
         listener.set_nonblocking(true).map_err(ServerError::Serve)?;
@@ -291,12 +299,12 @@ impl Server {
             backend: Arc::clone(&backend),
         };
         let mut serving = tokio::spawn(axum::serve(listener, router(state)).into_future());
-        let sweeper = tokio::spawn(sweep_downloads(Arc::clone(&shared)));
+        let sweeper = tokio::spawn(sweep_files(Arc::clone(&shared)));
 
         let cause = tokio::select! {
             exit = lifecycle::watch_stdin(input) => exit,
             () = backend.quitting() => Exit::AppQuit,
-            exit = lifecycle::watch_signals(handle_signals) => exit,
+            exit = signals.recv() => exit,
             ended = &mut serving => {
                 sweeper.abort();
                 return Err(ServerError::Serve(match ended {
@@ -380,13 +388,15 @@ fn fresh_folder(app_data: &std::path::Path, name: &str) -> Result<PathBuf, Serve
     Ok(dir)
 }
 
-/// Deletes the downloads that have been kept long enough.
-async fn sweep_downloads(shared: Arc<Shared>) {
+/// Deletes the downloads and the untaken uploads that have been kept long enough.
+async fn sweep_files(shared: Arc<Shared>) {
     let mut tick = tokio::time::interval(shared.limits.downloads_sweep);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tick.tick().await;
-        for file in shared.downloads.sweep(std::time::Instant::now()) {
+        let now = std::time::Instant::now();
+        let expired = shared.downloads.sweep(now);
+        for file in expired.into_iter().chain(shared.uploads.sweep(now)) {
             // Already gone is as good as deleted.
             let _ = tokio::fs::remove_file(file).await;
         }

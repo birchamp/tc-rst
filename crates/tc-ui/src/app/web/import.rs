@@ -19,6 +19,7 @@ use crate::app::internet::Pending;
 use crate::app::jobs::JobEnd;
 use crate::app::net::NetEnd;
 use crate::app::update_book::{UpdateBookForm, UpdateState};
+use crate::app::uploads::Slot;
 use crate::i18n::{keys, t};
 
 /// A refusal as the damaged panel and the failed step show it: every refusal through
@@ -80,9 +81,24 @@ impl Actions {
             else {
                 return;
             };
+            let opening = self.upload_opening();
             let this = self.clone();
             spawn_local(async move {
                 let upload = this.send_file(&file, &name, bytes).await;
+                if let ImportUpload::Sent(upload) = &upload {
+                    if !this.picked_upload(opening, Slot::Import(id), upload) {
+                        return;
+                    }
+                    // Its row was removed while it was sent.
+                    let listed = this.s().im_slot().with_untracked(|im| {
+                        im.as_ref()
+                            .is_some_and(|im| im.files.iter().any(|f| f.id == id))
+                    });
+                    if !listed {
+                        this.removed_upload(Slot::Import(id));
+                        return;
+                    }
+                }
                 this.patch_im(|im| im.file_sent(id, upload));
             });
         }
@@ -101,6 +117,7 @@ impl Actions {
 
     pub fn import_remove_file(&self, id: u32) {
         self.patch_im(|im| im.remove_file(id));
+        self.removed_upload(Slot::Import(id));
     }
 
     /// "Review files →" (tC4 `importReview`): the files are read on the server, which writes
@@ -259,19 +276,26 @@ impl Actions {
         else {
             return;
         };
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
             let name = run.details.name.clone();
+            // The answer changes the dialog that sent the run only, never a newer Import.
+            let current = || this.upload_current(taken.opening());
             let open = {
                 let im = this.s().im_slot();
-                move || im.with_untracked(Option::is_some)
+                move || im.with_untracked(Option::is_some) && current()
             };
             let ended = match this.runtime().api().call(&run).await {
                 Ok(job) => {
-                    this.patch_im(|im| im.run_started(job));
+                    if current() {
+                        this.patch_im(|im| im.run_started(job));
+                    }
                     let progress = |p: &tc_api::jobs::Progress| {
                         let p = p.clone();
-                        this.patch_im(|im| im.run_progress(p));
+                        if current() {
+                            this.patch_im(|im| im.run_progress(p));
+                        }
                     };
                     this.follow::<Run>(job, progress, open).await
                 }
@@ -279,15 +303,20 @@ impl Actions {
                 Err(CallError::Dropped) => JobEnd::Left,
                 Err(error @ CallError::Transport(_)) => {
                     let problem = error.to_string();
-                    this.patch_im(|im| im.run_lost(problem));
+                    if current() {
+                        this.patch_im(|im| im.run_lost(problem));
+                    }
                     return;
                 }
             };
             match ended {
                 JobEnd::Done(project) => {
+                    let mine = current();
+                    this.uploads_finished(&taken);
+                    // A newer dialog's review lists other files' books.
                     let books = this.s().im_slot().with_untracked(|im| {
                         match im.as_ref().and_then(|im| im.reviewed.as_ref()) {
-                            Some(crate::app::forms::Reviewed::Found(review)) => review
+                            Some(crate::app::forms::Reviewed::Found(review)) if mine => review
                                 .found
                                 .books
                                 .iter()
@@ -297,7 +326,9 @@ impl Actions {
                             _ => String::new(),
                         }
                     });
-                    this.close_modal();
+                    if mine {
+                        this.close_modal();
+                    }
                     this.s().import_toast.try_set(Some(ImportToast {
                         message: t(keys::importer::DONE, &[("name", &name), ("books", &books)]),
                     }));
@@ -305,12 +336,21 @@ impl Actions {
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => {
+                    // An import that did not make its project keeps its files for a retry.
+                    let mine = current();
+                    this.uploads_given_back(&taken);
                     let failure = failure_of_error(&error);
-                    this.patch_im(|im| im.run_refused(failure, js::random_request_id()));
+                    if mine {
+                        this.patch_im(|im| im.run_refused(failure, js::random_request_id()));
+                    }
                     this.refresh_projects();
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
-                    this.patch_im(|im| im.run_stopped(js::random_request_id()));
+                    let mine = current();
+                    this.uploads_given_back(&taken);
+                    if mine {
+                        this.patch_im(|im| im.run_stopped(js::random_request_id()));
+                    }
                     this.refresh_projects();
                 }
             }
@@ -376,20 +416,42 @@ impl Actions {
             reason = "a file's size is a whole number of bytes below 2^53"
         )]
         let bytes = file.size() as u64;
-        let Some(id) = self
+        let chosen = self
             .s()
             .ub_slot()
             .try_update(|ub| {
-                ub.as_mut()
-                    .map(|ub| ub.choose_file(name.clone(), bytes, js::random_request_id()))
+                ub.as_mut().map(|ub| {
+                    let replaced = ub.file.as_ref().map(|f| f.id);
+                    (
+                        replaced,
+                        ub.choose_file(name.clone(), bytes, js::random_request_id()),
+                    )
+                })
             })
-            .flatten()
-        else {
+            .flatten();
+        let Some((replaced, id)) = chosen else {
             return;
         };
+        if let Some(replaced) = replaced {
+            self.removed_upload(Slot::UpdateBook(replaced));
+        }
+        let opening = self.upload_opening();
         let this = self.clone();
         spawn_local(async move {
             let upload = this.send_file(&file, &name, bytes).await;
+            if let ImportUpload::Sent(upload) = &upload {
+                if !this.picked_upload(opening, Slot::UpdateBook(id), upload) {
+                    return;
+                }
+                // Another file was chosen while this one was sent.
+                let current = this.s().ub_slot().with_untracked(|ub| {
+                    ub.as_ref().and_then(|ub| ub.file.as_ref()).map(|f| f.id) == Some(id)
+                });
+                if !current {
+                    this.removed_upload(Slot::UpdateBook(id));
+                    return;
+                }
+            }
             this.patch_ub(|ub| ub.file_sent(id, upload));
         });
     }
@@ -408,18 +470,25 @@ impl Actions {
         else {
             return;
         };
+        let taken = self.uploads_taken();
         let this = self.clone();
         spawn_local(async move {
+            // The answer changes the dialog that sent the run only, never a newer one.
+            let current = || this.upload_current(taken.opening());
             let open = {
                 let ub = this.s().ub_slot();
-                move || ub.with_untracked(Option::is_some)
+                move || ub.with_untracked(Option::is_some) && current()
             };
             let ended = match this.runtime().api().call(&run).await {
                 Ok(job) => {
-                    this.patch_ub(|ub| ub.run_started(job));
+                    if current() {
+                        this.patch_ub(|ub| ub.run_started(job));
+                    }
                     let progress = |p: &tc_api::jobs::Progress| {
                         let p = p.clone();
-                        this.patch_ub(|ub| ub.run_progress(p));
+                        if current() {
+                            this.patch_ub(|ub| ub.run_progress(p));
+                        }
                     };
                     this.follow::<UpdateBook>(job, progress, open).await
                 }
@@ -427,21 +496,34 @@ impl Actions {
                 Err(CallError::Dropped) => JobEnd::Left,
                 Err(error @ CallError::Transport(_)) => {
                     let problem = error.to_string();
-                    this.patch_ub(|ub| ub.run_lost(problem));
+                    if current() {
+                        this.patch_ub(|ub| ub.run_lost(problem));
+                    }
                     return;
                 }
             };
+            let mine = current();
             match ended {
                 JobEnd::Done(report) => {
-                    this.patch_ub(|ub| ub.run_done(report));
+                    this.uploads_finished(&taken);
+                    if mine {
+                        this.patch_ub(|ub| ub.run_done(report));
+                    }
                     this.refresh_projects();
                 }
                 JobEnd::Failed(error) => {
+                    // The server gives the file back for another try.
+                    this.uploads_given_back(&taken);
                     let failure = failure_of_error(&error);
-                    this.patch_ub(|ub| ub.run_refused(failure, js::random_request_id()));
+                    if mine {
+                        this.patch_ub(|ub| ub.run_refused(failure, js::random_request_id()));
+                    }
                 }
                 JobEnd::Cancelled | JobEnd::Lost | JobEnd::Left => {
-                    this.patch_ub(|ub| ub.run_stopped(js::random_request_id()));
+                    this.uploads_given_back(&taken);
+                    if mine {
+                        this.patch_ub(|ub| ub.run_stopped(js::random_request_id()));
+                    }
                 }
             }
         });

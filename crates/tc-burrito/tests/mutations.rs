@@ -1133,3 +1133,22 @@ fn a_missing_metadata_file_is_reported() {
         [Problem::MissingMetadata]
     );
 }
+
+/// A folder under `ingredients/` that cannot be listed is named in the problem, not
+/// reported as `ingredients` whichever folder it was.
+#[cfg(unix)]
+#[test]
+fn an_unlistable_ingredient_folder_is_named() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    common::copy_dir(&common::bible_dir(), root.path());
+    let locked = root.path().join("ingredients/locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let problems = tc_burrito::validate_dir(root.path());
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(
+        matches!(&problems[..], [Problem::Unreadable { path, .. }] if path == "ingredients/locked"),
+        "{problems:?}"
+    );
+}

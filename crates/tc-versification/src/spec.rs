@@ -4,6 +4,8 @@ use crate::book::BookCode;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+/// Plain digits as tC4 reads them with `Number`: leading zeros allowed, at most 65535.
+pub(crate) use tc_core::digits;
 
 /// A verse in a versification scheme, written `PSA 3:1`.
 ///
@@ -305,26 +307,7 @@ impl fmt::Display for UnappliedMapping {
 /// itself, at most 65535. Refusing leading zeros keeps one spelling per value, which
 /// matters because Proskomma keys its reverse table by the exact target text.
 pub(crate) fn number(s: &str) -> Option<u16> {
-    let canonical = match s.as_bytes() {
-        [] => false,
-        [b'0'] => true,
-        [b'0', ..] => false,
-        bytes => bytes.iter().all(u8::is_ascii_digit),
-    };
-    if canonical { s.parse().ok() } else { None }
-}
-
-/// Plain digits as tC4 reads them with `Number`: leading zeros allowed, at most 65535.
-pub(crate) fn digits(s: &str) -> Option<u16> {
-    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let significant = s.trim_start_matches('0');
-    if significant.is_empty() {
-        Some(0)
-    } else {
-        significant.parse().ok()
-    }
+    digits(s).filter(|_| s == "0" || !s.starts_with('0'))
 }
 
 #[cfg(test)]
@@ -379,6 +362,16 @@ mod tests {
         );
         let hidden = UnappliedMapping::new(UnappliedForm::Ampersand, plain, part).unwrap();
         assert_eq!(hidden.to_string(), "#! &GEN 1:2 = GEN 1:1a");
+    }
+
+    #[test]
+    fn numbers_refuse_leading_zeros_but_not_zero() {
+        assert_eq!(number("0"), Some(0));
+        assert_eq!(number("10"), Some(10));
+        assert_eq!(number("65535"), Some(65535));
+        for bad in ["", "00", "01", "+1", " 1", "65536"] {
+            assert_eq!(number(bad), None, "{bad:?}");
+        }
     }
 
     #[test]

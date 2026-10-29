@@ -23,7 +23,7 @@ use crate::app::App;
 use crate::dispatch::Handle;
 use crate::flows::FlowRequest;
 use crate::jobs::{JobEnd, JobSpec, ProgressSink};
-use crate::reports::facts;
+use crate::reports::{ReportOp, ReportOutcome, facts};
 
 /// tC4's `recommendOrganization`: of the organizations the person can create in, the one with
 /// the most repositories in the project's language. None when no such repository exists, or
@@ -341,7 +341,7 @@ impl App {
                 (OpenTry::SignedIn, _) => {}
             }
         }
-        let folder = joined.map_err(|e| match e {
+        let joined = joined.map_err(|e| match e {
             tc_sync::JoinError::Blocked(block) => {
                 ApiError::Refused(Refusal::Sync(tc_api::refusal::SyncFailure::Blocked(block)))
             }
@@ -357,6 +357,8 @@ impl App {
                 facts(json!({ "reason": other.to_string() })),
             ),
         })?;
+        self.report_not_written(ReportOp::OpenDoor43, &joined.folder, &joined.not_written);
+        let folder = joined.folder;
         let placed = folder
             .file_name()
             .and_then(|n| n.to_str())
@@ -371,6 +373,31 @@ impl App {
 }
 
 impl App {
+    /// Owner ruling "carry, skip on disk": the foreign files a join or a new project from an
+    /// exchange file did not write, because Windows cannot write their names or Windows or
+    /// macOS would store two as one, go into the report log. The history keeps them.
+    pub(crate) fn report_not_written(
+        &self,
+        op: ReportOp,
+        folder: &std::path::Path,
+        not_written: &[String],
+    ) {
+        if not_written.is_empty() {
+            return;
+        }
+        let now = self.inner.clock.now();
+        self.inner.reports.add(
+            op,
+            ReportOutcome::Ok,
+            facts(json!({
+                "folder": folder.display().to_string(),
+                "notWritten": not_written,
+            })),
+            now,
+            now,
+        );
+    }
+
     /// The first share of `folder` (E1b, unit X's `tc_sync::share`): the repository `name` under
     /// `owner`, refused before any push when that name exists, then the sync that checkpoints
     /// and pushes the project's `main` without force. A push that fails after the repository
