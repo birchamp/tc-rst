@@ -62,6 +62,8 @@ pub enum ExchangeError {
     Create(#[from] tc_store::CreateError),
     #[error(transparent)]
     Store(#[from] tc_store::StoreError),
+    #[error(transparent)]
+    History(#[from] tc_store::git::GitError),
 }
 
 /// Why the store skipped the checkpoint, in a translator's words (the reason reaches the
@@ -651,6 +653,13 @@ pub fn receive_new(
     let vfs = store.vfs().clone();
     let mut not_written = Vec::new();
     let written = (|| -> Result<(), ExchangeError> {
+        tc_store::atomic_create_dirs(&*vfs, &staging)?;
+        // The file's tree becomes the project's first commit, as Door43's does in a join: a
+        // foreign file not written on disk lives on there, and every checkpoint keeps it
+        // (§9.4). Like the files, it stays in the staging folder until `place`.
+        let outside = vfs.outside_dir(&staging).map_err(io(&staging))?;
+        let git = tc_store::git::Git::init(&outside, std::sync::Arc::default())?;
+        let mut tree = Vec::new();
         for (entry, bytes) in &zip.files {
             let rel = project_path(entry);
             // The file's own `.git/` and `.tc/` never shape the new project: a hand-made zip
@@ -658,6 +667,7 @@ pub fn receive_new(
             if rel.starts_with(".git/") || rel.starts_with(".tc/") {
                 continue;
             }
+            tree.push((rel.to_owned(), git.write_blob(bytes)?, 0o100_644));
             if zip.not_written.contains(rel) {
                 not_written.push(rel.to_owned());
                 continue;
@@ -672,6 +682,16 @@ pub fn receive_new(
             tc_store::atomic_write(&*vfs, dir, file, bytes, tc_store::SyncDir::Now)
                 .map_err(tc_store::WriteError::into_inner)?;
         }
+        let tree = git.update_tree(None, &tree, &[])?;
+        let author = tc_store::git::Author {
+            name: "translationCore".to_owned(),
+            time_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX)),
+        };
+        let commit = git.write_commit(tree, &[], &author, "Received from a file")?;
+        git.move_branch(None, commit)?;
+        git.write_index(tree)?;
         Ok(())
     })();
     written?;

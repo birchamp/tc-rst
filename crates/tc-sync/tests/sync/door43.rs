@@ -1015,7 +1015,36 @@ async fn foreign_files_windows_cannot_write_are_carried_and_not_written() {
     assert!(made.folder.join("README.md").is_file());
     let b = open(&juan, &made.folder);
     assert_eq!(words(&b, 1, 1).as_deref(), Some("Paul"));
+    // The new project keeps them in its history: a later export (which checkpoints first)
+    // carries all three again, byte for byte, and the folder still lacks them.
+    save(&b, 1, 2, "in hope");
+    let again = tc_sync::exchange::export(&b, &stick, "Juan").await.unwrap();
+    let missing: Vec<_> = b
+        .notices()
+        .into_iter()
+        .filter(|n| {
+            matches!(
+                n.notice,
+                tc_journal::fold::Notice::CarriedBytesMissing { .. }
+            )
+        })
+        .collect();
+    assert!(missing.is_empty(), "{missing:?}");
     b.close().unwrap();
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&again).unwrap()).unwrap();
+    for (path, bytes) in [
+        (".gitea/con.txt", &b"device name"[..]),
+        ("A.md", b"upper"),
+        ("a.md", b"lower"),
+    ] {
+        let mut carried = Vec::new();
+        zip.by_name(&format!(".tc-root/{path}"))
+            .unwrap()
+            .read_to_end(&mut carried)
+            .unwrap();
+        assert_eq!(carried, bytes, "{path}");
+        assert!(!made.folder.join(path).exists(), "{path}");
+    }
 }
 
 /// Owner ruling "carry, skip on disk": a join writes no foreign file whose name Windows

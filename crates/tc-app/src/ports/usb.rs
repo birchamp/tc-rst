@@ -40,6 +40,7 @@ fn refusal(error: ExchangeError, export: bool) -> ExchangeRefusal {
         | ExchangeError::Io { .. }
         | ExchangeError::Zip { .. }
         | ExchangeError::Git(_)
+        | ExchangeError::History(_)
         | ExchangeError::Stopped(_)
         | ExchangeError::Create(_)
         | ExchangeError::Store(_) => {
