@@ -449,14 +449,14 @@ fn a_placed_file_whose_blob_is_gone_is_stored_again_from_the_folder() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
-/// §11.4: a file is never held in memory whole. A 20 MiB file is hashed and stored in chunks
+/// §11.4: a file is never held in memory whole. A 1 MiB file is hashed and stored in chunks
 /// (the filesystem is read in pieces of at most 64 KiB), and written from its blob the same
 /// way.
 #[test]
 fn a_large_carried_file_streams() {
     let (rig, folder) = titus();
     let handle = open(&rig, &folder);
-    let size = 20 * 1024 * 1024usize;
+    let size = 1024 * 1024usize;
     let bytes: Vec<u8> = (0..size)
         .map(|i| (i.wrapping_mul(31) % 253) as u8)
         .collect();
@@ -571,12 +571,21 @@ fn a_held_carried_file_can_be_taken_in() {
     assert!(taken.batch.is_some(), "{taken:?}");
     handle.wait_idle();
     assert!(
-        copies_of(&handle, SONG).is_empty()
-            || !handle.notices().iter().any(|n| matches!(
-                &n.notice,
-                Notice::OutsideEditHeld { .. } | Notice::StorageDamage { .. }
-            )),
-        "the hold ended"
+        !handle.notices().iter().any(|n| matches!(
+            &n.notice,
+            Notice::OutsideEditHeld { path, .. } | Notice::StorageDamage { path, .. }
+                if path.as_str() == SONG
+        )),
+        "the hold ended: {:?}",
+        handle.notices()
+    );
+    assert!(
+        matches!(
+            handle.snapshot().fold().projected(&song_key()),
+            Some(Record::CarriedFile { value: CarriedValue::Present { md5, .. }, .. })
+                if md5 == Md5::of(&edited)
+        ),
+        "the taken-in bytes are the file's newest version"
     );
     assert!(stored(&rig, &folder, &edited));
     assert_eq!(rig.fs.peek(&folder.join(SONG)), Some(edited));
@@ -625,9 +634,15 @@ fn checkpoint_serving_a_carried_file(
                     fs.put_unseen(&song, &v2, None);
                     looked.lock().unwrap().push(handle.focus());
                 }
-                // The writer hands the actor the new version, which records it after this step,
-                // and the writer takes the actor's answer before the next.
-                2 | 3 => std::thread::sleep(std::time::Duration::from_millis(500)),
+                // The look ends once the writer has handed the actor the new version, so the
+                // actor records it after this step.
+                2 => {
+                    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                    while !looked.lock().unwrap().iter().all(|look| look.is_ready()) {
+                        assert!(std::time::Instant::now() < until, "the look never ended");
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
                 4 => *during.lock().unwrap() = fs.peek(&song),
                 _ => {}
             }

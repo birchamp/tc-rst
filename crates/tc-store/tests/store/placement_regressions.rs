@@ -349,54 +349,6 @@ fn metadata_copy_failure_is_retried_after_writes_resume() {
     reopened.close().unwrap();
 }
 
-/// All names the current bounded search can consider are occupied. Refusing the second
-/// edit or choosing a fresh name is safe; replacing any existing byte copy is not.
-#[test]
-fn external_copy_namespace_exhaustion_never_replaces_an_existing_copy() {
-    let (rig, folder) = titus();
-    let handle = open(&rig, &folder);
-    let first_edit = renamed_metadata(&rig, &folder, "first outside name");
-    rig.fs.put_unseen(&folder.join(METADATA), &first_edit, None);
-    handle.focus().wait().unwrap();
-    handle.wait_idle();
-    let copies = copies_of(&handle, METADATA);
-    assert_eq!(copies.len(), 1, "the base comes from the real first notice");
-    let base = copies[0].clone();
-    assert_eq!(rig.fs.peek(&folder.join(&base)), Some(first_edit.clone()));
-    let mut occupied = Vec::new();
-    for suffix in 2..=999 {
-        let rel = format!("{base}-{suffix}");
-        let sentinel = format!("earlier translator bytes in occupied copy {suffix}").into_bytes();
-        rig.fs.put_unseen(&folder.join(&rel), &sentinel, None);
-        occupied.push((rel, sentinel));
-    }
-    let second_edit = renamed_metadata(&rig, &folder, "second outside name");
-    rig.fs
-        .put_unseen(&folder.join(METADATA), &second_edit, None);
-    let _ = handle.focus().wait();
-    handle.wait_idle();
-    assert_eq!(rig.fs.peek(&folder.join(&base)), Some(first_edit));
-    let overwritten: Vec<_> = occupied
-        .iter()
-        .filter(|(rel, sentinel)| rig.fs.peek(&folder.join(rel)).as_ref() != Some(sentinel))
-        .map(|(rel, _)| rel)
-        .collect();
-    assert!(
-        overwritten.is_empty(),
-        "copy-name exhaustion overwrote earlier work: {overwritten:?}"
-    );
-    assert!(
-        rig.fs.peek(&folder.join(METADATA)).as_ref() == Some(&second_edit)
-            || files(&rig.fs, &folder)
-                .iter()
-                .any(|(rel, bytes)| { rel.starts_with(".tc/external/") && bytes == &second_edit }),
-        "the second edit must still be on disk, either at its path or in a fresh copy"
-    );
-    assert_valid_burrito(&rig.fs, &folder);
-    // A safe refusal can also refuse close's materialization while the namespace is full.
-    let _ = handle.close();
-}
-
 /// The settings rename supplies a deterministic pause after M1 selected the carried file
 /// for removal and before the unlink loop. No watcher or later focus can rescue bytes
 /// already unlinked in that interval.
@@ -492,9 +444,6 @@ fn a_carried_edit_after_removal_check_is_preserved_before_unlink() {
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
 }
-
-// Drafts to append inside tests/store/placement_regressions.rs; they use that module's
-// existing imports and helpers. No implementation changes are included here.
 
 /// A valid old listing and a pending carried restore must stay together until an outside
 /// metadata version has been preserved. Exhaustion makes preservation fail deterministically

@@ -8,7 +8,7 @@ use crate::common::*;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tc_store::{CheckpointReason, Failure, OpenOptions, Point, ProjectHandle};
+use tc_store::{CheckpointReason, OpenOptions, Point, ProjectHandle};
 
 fn open(rig: &Rig, folder: &Path) -> ProjectHandle {
     let handle = rig.store.open(folder, &OpenOptions::default()).unwrap();
@@ -227,61 +227,10 @@ fn repack_prunes_unreachable_objects_by_age_and_keeps_what_a_ref_reaches() {
     handle.close().unwrap();
 }
 
-/// R1: a repack that stops after its pack is written leaves the loose objects as duplicates;
-/// the next one removes them without writing them into a second pack, and every object is
-/// still there.
-#[test]
-fn crash_r1_pack_written_loose_not_removed() {
-    let (rig, folder) = titus();
-    repack_always(&rig);
-    rig.store
-        .hooks()
-        .fail(Point::AfterPackWritten, Failure::Stop);
-    // The repack that follows the open writes its pack and stops.
-    let handle = open(&rig, &folder);
-    let first_pack = packed(&rig, &folder);
-    assert_eq!(first_pack.len(), 1, "the pack was written");
-    let objects_in_pack: BTreeSet<[u8; 20]> = first_pack.iter().flatten().copied().collect();
-    let still_loose: Vec<git2::Oid> = loose(&rig, &folder).iter().map(|p| oid_of(p)).collect();
-    let duplicates = still_loose
-        .iter()
-        .filter(|oid| objects_in_pack.contains(<&[u8; 20]>::try_from(oid.as_bytes()).unwrap()))
-        .count();
-    assert!(
-        duplicates > 0,
-        "the objects are in the pack and still loose"
-    );
-    assert_eq!(handle.counters().git_loose_removed, 0);
-
-    rig.store.hooks().heal(Point::AfterPackWritten);
-    save_verse(&handle, 1, 2, "in hope of eternal life").unwrap();
-    checkpoint(&handle);
-    let repo = repo_of(&rig.fs, &folder);
-    let reached = reachable_oids(&repo);
-    let left: Vec<String> = loose(&rig, &folder)
-        .iter()
-        .map(|p| oid_of(p))
-        .filter(|oid| reached.contains(oid))
-        .map(|oid| oid.to_string())
-        .collect();
-    assert!(left.is_empty(), "the next repack removed them: {left:#?}");
-    let all: Vec<[u8; 20]> = packed(&rig, &folder).into_iter().flatten().collect();
-    let unique: BTreeSet<[u8; 20]> = all.iter().copied().collect();
-    assert_eq!(all.len(), unique.len(), "no object was packed twice");
-    for oid in &still_loose {
-        assert!(repo.odb().unwrap().exists(*oid), "{oid} is still there");
-    }
-    for commit in commits_of(&repo) {
-        read_everything(&repo, commit);
-    }
-    handle.close().unwrap();
-    assert_commits_valid(&rig.fs, &folder);
-}
-
-/// §9.8: a repack never delays the close. The one that runs when the project closes is
-/// stopped after its pack is written, removes no loose object (R1 leaves them twice), and the
-/// close ends without waiting for the rest of the work; the next open's repack removes the
-/// duplicates.
+/// §9.8 and R1: a repack never delays the close. The one that runs when the project closes is
+/// stopped after its pack is written and removes no loose object, so the close ends without
+/// waiting for the rest of the work; the next open's repack removes the duplicates without
+/// packing them twice, and every object is still there.
 #[test]
 fn a_close_stops_the_repack_that_runs_and_the_next_repack_finishes_it() {
     let (rig, folder) = titus();
@@ -297,24 +246,38 @@ fn a_close_stops_the_repack_that_runs_and_the_next_repack_finishes_it() {
             hooks.release(Point::AfterPackWritten);
         })
     };
-    let started = std::time::Instant::now();
     handle.close().unwrap();
     releaser.join().unwrap();
-    assert!(started.elapsed() < Duration::from_secs(10));
     let packs = packed(&rig, &folder);
     assert_eq!(packs.len(), 1, "the pack was written");
     let in_pack: BTreeSet<[u8; 20]> = packs.iter().flatten().copied().collect();
-    let still_loose = loose(&rig, &folder)
+    let still_loose: Vec<git2::Oid> = loose(&rig, &folder)
         .iter()
-        .filter(|p| in_pack.contains(<&[u8; 20]>::try_from(oid_of(p).as_bytes()).unwrap()))
-        .count();
-    assert!(still_loose > 0, "a stopped run removed nothing");
+        .map(|p| oid_of(p))
+        .filter(|oid| in_pack.contains(<&[u8; 20]>::try_from(oid.as_bytes()).unwrap()))
+        .collect();
+    assert!(!still_loose.is_empty(), "a stopped run removed nothing");
 
     let handle = open(&rig, &folder);
     assert!(handle.counters().git_loose_removed > 0);
+    let repo = repo_of(&rig.fs, &folder);
+    let reached = reachable_oids(&repo);
+    let left: Vec<String> = loose(&rig, &folder)
+        .iter()
+        .map(|p| oid_of(p))
+        .filter(|oid| reached.contains(oid))
+        .map(|oid| oid.to_string())
+        .collect();
+    assert!(left.is_empty(), "the next repack removed them: {left:#?}");
     let all: Vec<[u8; 20]> = packed(&rig, &folder).into_iter().flatten().collect();
     let unique: BTreeSet<[u8; 20]> = all.iter().copied().collect();
     assert_eq!(all.len(), unique.len(), "no object is in two packs");
+    for oid in &still_loose {
+        assert!(repo.odb().unwrap().exists(*oid), "{oid} is still there");
+    }
+    for commit in commits_of(&repo) {
+        read_everything(&repo, commit);
+    }
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }

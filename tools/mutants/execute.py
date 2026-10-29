@@ -76,7 +76,7 @@ CASES = {
     "L125": {"path": "materialize.rs", "tests": [
         "model::a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit"]},
     "COPY_EXHAUSTION": {"path": "materialize.rs", "tests": [
-        "placement_regressions::external_copy_namespace_exhaustion_never_replaces_an_existing_copy"]},
+        "placement_regressions::a_carried_restore_waits_until_outside_metadata_can_be_preserved"]},
     "INCOMPLETE_CACHE": {"path": "classify.rs", "tests": [
         "placement_regressions::a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy"]},
     "SHORT_RENAME_RETRY": {"path": "atomic.rs", "tests": [], "lib_tests": [

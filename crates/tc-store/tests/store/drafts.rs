@@ -346,42 +346,6 @@ fn a_copy_of_a_read_only_project_carries_its_drafts() {
     handle.close().unwrap();
 }
 
-/// R7: dismissing a notice removes it and the byte copy it kept (§3.6), when the copy is the
-/// only trace of bytes the app replaced.
-#[test]
-fn a_dismissed_notice_goes_with_its_copy() {
-    let (rig, folder) = titus();
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    save_verse(&handle, 1, 1, "Paul, a servant").unwrap();
-    handle.leave(tc_store::Leave::Book(TIT)).wait().unwrap();
-    handle.close().unwrap();
-    // The project name edited in a text editor: `metadata.json` is written from the
-    // project, and the bytes found are kept in a copy.
-    let path = folder.join("metadata.json");
-    let text = String::from_utf8(rig.fs.peek(&path).unwrap()).unwrap();
-    let edited = text.replacen("Titus test translation", "Titus, renamed", 1);
-    rig.fs.put(&path, edited.as_bytes(), None);
-    rig.fs
-        .delete(&folder.join(".tc/materialized.json"))
-        .unwrap();
-    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    handle.wait_idle();
-    let notice = handle
-        .notices()
-        .into_iter()
-        .find(|n| n.copy.is_some())
-        .expect("an outside edit keeps a copy");
-    let copy = folder.join(notice.copy.clone().unwrap());
-    assert_eq!(rig.fs.peek(&copy), Some(edited.into_bytes()));
-    handle.dismiss_notice(notice.id).wait().unwrap();
-    assert!(handle.notices().iter().all(|n| n.id != notice.id));
-    assert!(
-        rig.fs.peek(&copy).is_none(),
-        "the copy goes with the notice"
-    );
-    handle.close().unwrap();
-}
-
 /// A held file's copy is the other trace of the person's bytes, and the notice comes back at
 /// the next open: dismissing it hides it for the session and keeps the copy (§6.2).
 #[test]
@@ -445,6 +409,8 @@ fn copied_metadata_notice() -> (
     (rig, folder, handle, notice, edited.into_bytes())
 }
 
+/// R7, §3.6: dismissing a notice removes the byte copy it kept, when the copy is the only
+/// trace of bytes the app replaced. A dismissal the disk refuses keeps both for a retry.
 #[test]
 fn a_failed_dismissal_keeps_the_notice_and_its_copy_for_retry() {
     let (rig, folder, handle, notice, _) = copied_metadata_notice();
@@ -867,41 +833,68 @@ fn a_failed_current_draft_cancel_reports_failure_and_can_be_retried() {
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-proptest::proptest! {
-    #![proptest_config(proptest::test_runner::Config::with_cases(32))]
-    #[test]
-    fn stale_cancel_never_discards_newer_or_different_current_text(
-        ops in proptest::collection::vec((proptest::bool::ANY, 0u8..4), 1..24),
-    ) {
-        let (rig, folder) = titus();
-        let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-        let shown = vec![handle.mint(&verse(1, 3), None).unwrap()];
-        let mut current: Option<(String, i64)> = None;
-        for (put, version) in ops {
-            let text = format!("3 typed version {version}");
-            let at = i64::from(version);
-            let draft = Draft {
-                field: DraftField::Section { book: TIT },
-                shown: shown.clone(),
-                text: text.clone(),
-            };
-            if put {
-                handle.submit(Command::Draft { draft, at: tc_journal::WallTime(at) }).wait().unwrap();
-                current = Some((text, at));
-            } else {
-                proptest::prop_assert!(handle.discard_current_draft(draft, tc_journal::WallTime(at)));
-                if current.as_ref() == Some(&(text, at)) {
-                    current = None;
-                }
+/// Applies `ops` (a put or a cancel of version n) to one section draft; after a crash, the
+/// draft offered is the last one put that no cancel of the same text and time removed.
+fn stale_cancel_case(ops: Vec<(bool, u8)>) -> Result<(), proptest::test_runner::TestCaseError> {
+    let (rig, folder) = titus();
+    let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
+    let shown = vec![handle.mint(&verse(1, 3), None).unwrap()];
+    let mut current: Option<(String, i64)> = None;
+    for (put, version) in ops {
+        let text = format!("3 typed version {version}");
+        let at = i64::from(version);
+        let draft = Draft {
+            field: DraftField::Section { book: TIT },
+            shown: shown.clone(),
+            text: text.clone(),
+        };
+        if put {
+            handle
+                .submit(Command::Draft {
+                    draft,
+                    at: tc_journal::WallTime(at),
+                })
+                .wait()
+                .unwrap();
+            current = Some((text, at));
+        } else {
+            proptest::prop_assert!(handle.discard_current_draft(draft, tc_journal::WallTime(at)));
+            if current.as_ref() == Some(&(text, at)) {
+                current = None;
             }
         }
-        let fs = crashed_after_drafts(&rig, handle);
-        let (rig, handle) = reopen(fs, &folder);
-        let offered: Vec<_> = handle.offered_drafts().into_iter()
-            .map(|d| (d.draft.text, d.at.0)).collect();
-        proptest::prop_assert_eq!(offered, current.into_iter().collect::<Vec<_>>());
-        handle.close().unwrap();
-        assert_valid_burrito(&rig.fs, &folder);
+    }
+    let fs = crashed_after_drafts(&rig, handle);
+    let (rig, handle) = reopen(fs, &folder);
+    let offered: Vec<_> = handle
+        .offered_drafts()
+        .into_iter()
+        .map(|d| (d.draft.text, d.at.0))
+        .collect();
+    proptest::prop_assert_eq!(offered, current.into_iter().collect::<Vec<_>>());
+    handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
+    Ok(())
+}
+
+fn cancel_ops() -> impl proptest::strategy::Strategy<Value = Vec<(bool, u8)>> {
+    proptest::collection::vec((proptest::bool::ANY, 0u8..4), 1..24)
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config::with_cases(8))]
+    #[test]
+    fn stale_cancel_never_discards_newer_or_different_current_text(ops in cancel_ops()) {
+        stale_cancel_case(ops)?;
+    }
+}
+
+proptest::proptest! {
+    #![proptest_config(proptest::test_runner::Config::with_cases(128))]
+    #[test]
+    #[ignore = "nightly: 128 cases; the gate runs stale_cancel_never_discards_newer_or_different_current_text at 8"]
+    fn stale_cancel_never_discards_newer_or_different_current_text_nightly(ops in cancel_ops()) {
+        stale_cancel_case(ops)?;
     }
 }
 
