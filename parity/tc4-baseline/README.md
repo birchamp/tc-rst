@@ -11,7 +11,7 @@ photographed live in `parity/app`, which the Rust app's capture shares (see "The
   `package.json` version `4.0.0-rc.2`, clean tree), built from a separate clone,
   `~/unfoldingword/tc4-rc2` (see "Capture another tC4 commit").
 - Reference version: the owner chose tC4 4.0 rc.2 (H7, 2026-10-24). This commit is the tag
-  `v4.0.0-rc.2` plus the fixes picked onto `release/4.0` after it (`docs/PLAN.md`, "The
+  `v4.0.0-rc.2` plus the fixes picked onto `release/4.0` after it (`docs/DIFFERENCES.md`, "The
   reference version"). When the v4.0.0 tag exists on `release/4.0`, capture again at the tag and
   record it here.
 - The first baseline was captured at `d494a9d6ba9f4cdcc09faff9038c93159106045b` (2026-10-14),
@@ -103,7 +103,7 @@ toast counts missing versions must be incomplete, and its reason must name each 
 capture lists those versions by tC4's own rule (`missingPinCount` in `src/data/installed.ts`).
 
 It fails when "Where the rebuild differs on purpose" differs from the manifest's
-`rebuildDiffers` notes or cites a ruling that `docs/PLAN.md` does not list, and when a screen
+`rebuildDiffers` notes or cites a ruling that `docs/DIFFERENCES.md` does not list, and when a screen
 shows a shared OBS card with "Upload changes" but does not cite Q2. The toast and the cards are
 read from the DOM at each shot (`syncToast` and `homeCards` in `manifest.json`).
 
@@ -170,7 +170,7 @@ out byte for byte the same. The capture itself needs no network except the help-
 | `fixtures/build-state.mjs` | Builds a state directory, in the Pankosmia working-directory layout, from tC4's fixtures and `fixtures/vendor/`. |
 | `fixtures/vendor/` | Resource files that tC4 does not vendor, cut from published copies by `make-vendor.mjs`. `README.md` and `SOURCES.json` there give the source of each file and the licence. |
 | `capture.mjs` | The Playwright capture of tC4: the entry over `parity/app/env-tc4.mjs` (see "The harness"). |
-| `baseline.test.mjs` | Checks that the screenshots, the DOM snapshots, `manifest.json`, this README and the rulings in `docs/PLAN.md` agree (see "Check"). |
+| `baseline.test.mjs` | Checks that the screenshots, the DOM snapshots, `manifest.json`, this README and the rulings in `docs/DIFFERENCES.md` agree (see "Check"). |
 | `manifest.json` | Generated. Lists the tC4 commit, client build, browser, viewport, scenarios, installed resources (with substitutions), absent resources and every screen, with the sha256 of its PNG and of its DOM snapshot. |
 | `screens/*.png` | Generated screenshots. |
 | `dom/*.json` | Generated DOM snapshots, one per screenshot (see "DOM snapshots"). |
@@ -461,7 +461,7 @@ These are also known differences from a real install. None of them makes a scree
 
 ## Where the rebuild differs on purpose
 
-The project owner ruled that the rebuild differs from tC4 4.0 in some places. `docs/PLAN.md`
+The project owner ruled that the rebuild differs from tC4 4.0 in some places. `docs/DIFFERENCES.md`
 lists these rulings under "Where the rebuild differs from tC4 4.0 on purpose". On the screens
 below, do not copy tC4's text into the rebuild. The rest of each screen is still the reference.
 The entry of each screen in `manifest.json` has the same note in `rebuildDiffers`.

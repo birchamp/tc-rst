@@ -1,8 +1,8 @@
 # Architecture
 
 This document describes how the Rust rebuild of tC4 is put together and why. The storage,
-journal, merge and exchange design is in `docs/STORAGE.md`. The goal and the definition
-of done are in `docs/PLAN.md`. The reasons and evidence for each decision are rows in
+journal, merge and exchange design is in `docs/STORAGE.md`. The promises it keeps are in
+`docs/PLAN.md`. The reasons and evidence for each decision are rows in
 `docs/rebuild.tsv`.
 
 ## Process model

@@ -19,7 +19,7 @@ pub struct Paths {
     pub app: PathBuf,
     /// `docs/APP-DESIGN.md`.
     pub doc: PathBuf,
-    /// `docs/PLAN.md`.
+    /// `docs/DIFFERENCES.md`.
     pub plan: PathBuf,
     /// tC4's behaviour recordings, `parity/tc4-baseline/behaviour`.
     pub tc4_behaviour: PathBuf,
@@ -34,7 +34,7 @@ impl Paths {
             baseline: repo.join("parity/tc4-baseline"),
             app: repo.join("parity/app"),
             doc: repo.join("docs/APP-DESIGN.md"),
-            plan: repo.join("docs/PLAN.md"),
+            plan: repo.join("docs/DIFFERENCES.md"),
             tc4_behaviour: repo.join("parity/tc4-baseline/behaviour"),
             gallery: repo.join("parity/view-gallery"),
         }

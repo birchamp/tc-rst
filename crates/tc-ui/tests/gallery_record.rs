@@ -4,7 +4,7 @@
 //! missing from the committed reports, was never compared, and a gallery without the states the
 //! tC4 delta asks for (docs/TC4-DELTA-2026-10-16.md §3.5) proves nothing about them.
 //!
-//! A case may differ from tC4 only as `residuals.json` declares it: a ruling docs/PLAN.md lists
+//! A case may differ from tC4 only as `residuals.json` declares it: a ruling docs/DIFFERENCES.md lists
 //! among the differences from tC4 on purpose, the layers that differ, why, and the exact pairs of
 //! DOM lines. A declared case that no longer differs, or differs in more than it declares, fails,
 //! as `screen_record` holds `parity/app/residuals.json` (APP-DESIGN §7.5).
@@ -79,16 +79,16 @@ fn declares(residual: Option<&Value>, layer: &str) -> bool {
         .is_some_and(|layers| layers.iter().any(|l| l.as_str() == Some(layer)))
 }
 
-/// The rulings docs/PLAN.md lists among the differences from tC4 on purpose, read as
+/// The rulings docs/DIFFERENCES.md lists among the differences from tC4 on purpose, read as
 /// `screen_record` reads them for its masks.
 fn plan_differences() -> BTreeSet<String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/PLAN.md");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/DIFFERENCES.md");
     let plan = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
     let rulings = plan_rulings(&plan);
     assert!(
         !rulings.is_empty(),
-        "docs/PLAN.md lists no differences from tC4 on purpose"
+        "docs/DIFFERENCES.md lists no differences from tC4 on purpose"
     );
     rulings
 }
@@ -100,7 +100,7 @@ fn side(v: &Value) -> String {
 }
 
 /// Everything wrong with the residual of case `id`, given its row in diff-report.json
-/// (`pixels`), its row in dom-report.json (`dom`) and the rulings PLAN lists (`rulings`).
+/// (`pixels`), its row in dom-report.json (`dom`) and the rulings DIFFERENCES lists (`rulings`).
 fn residual_problems(
     id: &str,
     residual: &Value,
@@ -115,7 +115,7 @@ fn residual_problems(
     match residual["ruling"].as_str() {
         None => out.push(format!("{id}: the residual names no ruling")),
         Some(ruling) if !rulings.contains(ruling) => out.push(format!(
-            "{id}: docs/PLAN.md does not list ({ruling}) among the differences from tC4"
+            "{id}: docs/DIFFERENCES.md does not list ({ruling}) among the differences from tC4"
         )),
         Some(_) => {}
     }
@@ -348,7 +348,7 @@ fn a_declared_difference_that_is_gone_or_wider_fails() {
         .push(json!({ "line": 16, "tc4": null, "port": "    <div role=\"listbox\">" }));
     assert!(!problems(&residual, &pixels, &wider, plan).is_empty());
 
-    // A ruling PLAN does not list, a residual with no why, and an undeclared layer.
+    // A ruling DIFFERENCES does not list, a residual with no why, and an undeclared layer.
     let other = &plan_rulings(&format!("{DIFFERENCES}\n\n- Something else (#553).\n"));
     assert!(!problems(&residual, &pixels, &dom, other).is_empty());
     let mut no_why = residual.clone();
@@ -362,8 +362,8 @@ fn a_declared_difference_that_is_gone_or_wider_fails() {
     assert!(!problems(&unknown_layer, &pixels, &dom, plan).is_empty());
 }
 
-/// The heading of the section of docs/PLAN.md that lists the differences from tC4 on purpose.
-const DIFFERENCES: &str = "### Where the rebuild differs from tC4 4.0 on purpose";
+/// The heading of the section of docs/DIFFERENCES.md that lists the differences from tC4 on purpose.
+const DIFFERENCES: &str = "## Where the rebuild differs from tC4 4.0 on purpose";
 
 #[test]
 fn both_gates_read_an_owner_answer_and_a_tc4_issue_as_a_ruling() {
@@ -382,7 +382,7 @@ fn both_gates_read_an_owner_answer_and_a_tc4_issue_as_a_ruling() {
     for ruling in ["Q2", "Q3", "#549", "#552", "#701"] {
         assert!(
             real.contains(ruling),
-            "docs/PLAN.md does not list {ruling}: {real:?}"
+            "docs/DIFFERENCES.md does not list {ruling}: {real:?}"
         );
     }
 }

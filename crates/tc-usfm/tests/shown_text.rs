@@ -399,7 +399,7 @@ fn list_items_and_unknown_paragraph_lines_show() {
 }
 
 /// The verses on which the rebuild shows what tC4 (PR #800 included) does not, with tC4's text
-/// and the rebuild's (declared differences, `docs/PLAN.md`): words kept apart that tC4 joins
+/// and the rebuild's (declared differences, `docs/DIFFERENCES.md`): words kept apart that tC4 joins
 /// (a marker other than a note, a cross reference or a figure between "siervo" and "de", and
 /// notes that usfm-js misreads inside an alignment run, where it keeps no character after the
 /// note), and the items of a `\li1` list and the text of a `\qm1` line, which tC4 hides (UST

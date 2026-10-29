@@ -1,5 +1,5 @@
 // Checks that the committed baseline agrees with itself: the screenshots, the DOM snapshots,
-// manifest.json, the README and the owner's rulings in docs/PLAN.md. It needs no browser, no
+// manifest.json, the README and the owner's rulings in docs/DIFFERENCES.md. It needs no browser, no
 // tC4 checkout and no network, so CI runs it on every push:
 //
 //   node --test parity/tc4-baseline/baseline.test.mjs
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(fs.readFileSync(path.join(HERE, 'manifest.json'), 'utf8'));
 const readme = fs.readFileSync(path.join(HERE, 'README.md'), 'utf8');
-const plan = fs.readFileSync(path.join(HERE, '..', '..', 'docs', 'PLAN.md'), 'utf8');
+const plan = fs.readFileSync(path.join(HERE, '..', '..', 'docs', 'DIFFERENCES.md'), 'utf8');
 const byName = new Map(manifest.screens.map((s) => [s.name, s]));
 
 /** The text of one `## ` or `### ` section of a Markdown file, without its heading. */
@@ -201,13 +201,13 @@ test('the marking row of each tool is captured in English and Arabic, at 1280 px
   }
 });
 
-test('the README lists every screen where the rebuild differs on purpose, with a ruling that PLAN records', () => {
+test('the README lists every screen where the rebuild differs on purpose, with a ruling that DIFFERENCES records', () => {
   const rows = screenRows(section(readme, 'Where the rebuild differs on purpose'));
   const expected = manifest.screens.filter((s) => s.rebuildDiffers).map((s) => [s.name, s.rebuildDiffers.ruling]);
   assert.deepEqual(rows.map((r) => [r.name, r.cells[0]]), expected);
   const rulings = section(plan, 'Where the rebuild differs from tC4 4.0 on purpose');
   for (const [name, ruling] of expected) {
-    assert.match(rulings, new RegExp(`\\b${ruling}\\b`), `PLAN does not record ${ruling}, which ${name} cites`);
+    assert.match(rulings, new RegExp(`\\b${ruling}\\b`), `DIFFERENCES does not record ${ruling}, which ${name} cites`);
   }
 });
 
@@ -276,11 +276,11 @@ test('tc4_issues_names_its_swept_range', () => {
   );
 });
 
-test("PLAN's reference commit is the baseline's", () => {
+test("DIFFERENCES' reference commit is the baseline's", () => {
   const named = plan.match(/the reference is tC4 `[^`]+` at\s+commit\s+`([0-9a-f]{7,40})`/)?.[1];
-  assert.ok(named, 'PLAN names no reference commit ("the reference is tC4 `<branch>` at commit `<sha>`")');
+  assert.ok(named, 'DIFFERENCES names no reference commit ("the reference is tC4 `<branch>` at commit `<sha>`")');
   const captured = manifest.tc4.commit;
-  assert.ok(captured.startsWith(named), `P7/INV-CAPTURES-FRESH: PLAN names reference ${named}; the baseline was captured at ${captured}`);
+  assert.ok(captured.startsWith(named), `P7/INV-CAPTURES-FRESH: DIFFERENCES names reference ${named}; the baseline was captured at ${captured}`);
 });
 
 // The screens, the vendored catalogs and CSS, and the help pages each record the tC4 commit they
@@ -291,9 +291,9 @@ test('the_reference_is_one_commit_everywhere', () => {
   const vendored = fs.readFileSync(path.join(ui, 'vendored-from-tc4.txt'), 'utf8').match(/^commit ([0-9a-f]{40})$/m)?.[1];
   const help = fs.readFileSync(path.join(ui, 'help-pages.txt'), 'utf8').match(/^commit ([0-9a-f]{40})$/m)?.[1];
   const helpInReadme = readme.match(/^- Help pages: tc-website `([0-9a-f]{40})`/m)?.[1];
-  const records = { 'docs/PLAN.md': named, 'parity/tc4-baseline/manifest.json': manifest.tc4.commit, 'crates/tc-ui/vendored-from-tc4.txt': vendored };
+  const records = { 'docs/DIFFERENCES.md': named, 'parity/tc4-baseline/manifest.json': manifest.tc4.commit, 'crates/tc-ui/vendored-from-tc4.txt': vendored };
   for (const [file, commit] of Object.entries(records)) {
-    assert.ok(commit && named && (commit.startsWith(named) || named.startsWith(commit)), `INV-THE-REFERENCE-IS-ONE-COMMIT: ${file} names tC4 ${commit}; PLAN names ${named}`);
+    assert.ok(commit && named && (commit.startsWith(named) || named.startsWith(commit)), `INV-THE-REFERENCE-IS-ONE-COMMIT: ${file} names tC4 ${commit}; DIFFERENCES names ${named}`);
   }
   assert.equal(help, helpInReadme, `INV-THE-REFERENCE-IS-ONE-COMMIT: crates/tc-ui/help-pages.txt pins tc-website ${help}; the baseline README records ${helpInReadme}, tC4's pin at the reference`);
 });

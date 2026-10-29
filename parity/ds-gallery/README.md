@@ -65,7 +65,7 @@ steps. `?case=Button/primary-md&auto=1` shows one case alone.
 | `dom-diff.mjs`, `dom-report.json` | The DOM comparison of the two galleries, per case. |
 | `scenarios.mjs`, `scenario-report.json` | Behaviour parity: keyboard and mouse sequences on both galleries, compared after every step. |
 | `screens-rust/` | The port's screens. Git-ignored: `capture-rust.mjs` writes them again. |
-| `residuals.json` | A declared difference per case id: the ruling docs/PLAN.md lists, the layers that differ (`pixels`, `dom`), why, and the exact [tC4, port] DOM lines. `cargo test -p tc-ui` fails when a declared case no longer differs, differs in more than it declares, or cites a ruling PLAN lacks. |
+| `residuals.json` | A declared difference per case id: the ruling docs/DIFFERENCES.md lists, the layers that differ (`pixels`, `dom`), why, and the exact [tC4, port] DOM lines. `cargo test -p tc-ui` fails when a declared case no longer differs, differs in more than it declares, or cites a ruling PLAN lacks. |
 
 ## The Leptos port
 
