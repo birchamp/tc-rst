@@ -22,20 +22,34 @@ concurrency:
   # do gate/* runs.
   cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
-  # A push to main that the merge queue already tested (the same commit, in a merge_group run of
-  # this workflow that passed) runs nothing again: each merge ran every check twice, and the
-  # second run held runners the queue was waiting for. An admin merge has no such run, so its
-  # push still runs everything.
-  queue-tested:
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+  # What this run must check. `code`: false when the change is wholly prose (docs/ outside
+  # docs/contracts/, top-level *.md; scripts/ci-changes.sh), which the node step still checks.
+  # `tested`: true on a push to main that the merge queue already tested (the same commit, in a
+  # merge_group run of this workflow that passed); an admin merge has no such run, so its push
+  # still runs everything. A skipped job reports success, so required checks still pass.
+  plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      contents: read
       actions: read
     outputs:
-      tested: ${{ steps.check.outputs.tested }}
+      code: ${{ steps.changes.outputs.code }}
+      tested: ${{ steps.tested.outputs.tested }}
     steps:
-      - id: check
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci-changes.sh
+          sparse-checkout-cone-mode: false
+      - id: changes
+        if: github.event_name != 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: scripts/ci-changes.sh
+      - id: tested
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -46,9 +60,9 @@ jobs:
   lint-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: queue-tested
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.queue-tested.outputs.tested != 'true' }}
+    needs: plan
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -75,9 +89,9 @@ jobs:
   lint-windows:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: queue-tested
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.queue-tested.outputs.tested != 'true' }}
+    needs: plan
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -99,9 +113,9 @@ jobs:
   lint-wasm:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: queue-tested
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.queue-tested.outputs.tested != 'true' }}
+    needs: plan
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule') && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -123,10 +137,10 @@ jobs:
     runs-on: ubuntu-latest
     # The scale tests run at twice Psalms (CHK-7c); ten times runs at night.
     timeout-minutes: 75
-    needs: queue-tested
+    needs: plan
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.queue-tested.outputs.tested != 'true' }}
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     # actions: write, so a dropped merge group can cancel its own run (first step).
     permissions:
       contents: read
@@ -165,10 +179,10 @@ jobs:
     runs-on: ubuntu-latest
     # tc-app's tests, on their own runner: with the rest they ran past 75 min (batch 7).
     timeout-minutes: 75
-    needs: queue-tested
+    needs: plan
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.queue-tested.outputs.tested != 'true' }}
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     # actions: write, so a dropped merge group can cancel its own run (first step).
     permissions:
       contents: read
@@ -258,10 +272,10 @@ jobs:
   alignment-budget:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: queue-tested
+    needs: plan
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.queue-tested.outputs.tested != 'true' }}
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.plan.outputs.tested != 'true' && needs.plan.outputs.code != 'false' }}
     steps:
       - uses: actions/checkout@v4
       # The runner image leaves too little disk for this workspace ("No space left on device",
@@ -287,10 +301,10 @@ jobs:
   # (docs/rulings/2026-10-29-tc4-is-history.md).
   parity-baseline:
     runs-on: ubuntu-latest
-    needs: queue-tested
+    needs: plan
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).
-    # !cancelled(): queue-tested runs only on main's push; skipped, or failed, it skips nothing.
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.queue-tested.outputs.tested != 'true' }}
+    # !cancelled(): if plan fails, its outputs are empty and nothing is skipped.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch')) && needs.plan.outputs.tested != 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
