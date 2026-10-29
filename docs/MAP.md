@@ -24,7 +24,7 @@ exist. A new document gets its row in the same pull request.
 | `docs/VISION.md` | vision | rule | What tC4 is, for whom, commitments V1–V8, how to choose |
 | `docs/JOURNEYS.md` | journeys | rule | J1–J30: steps, end states, "must not" lines, differences from tC4 |
 | `docs/PLAN.md` | promises | rule | The promises P1–P10 every change keeps, and how a new feature enters the documents |
-| `docs/DIFFERENCES.md` | journeys | rule | The reference tC4 version, and every place the app differs from tC4 4.0 on purpose (read by the screenshot checks) |
+| `docs/DIFFERENCES.md` | journeys | rule | The reference tC4 version, and every place the app differs from tC4 4.0 on purpose |
 | `docs/P-LEDGER.md` | checks | rule | For each of P1–P10, the CI job and the tests that show it (checked by `scripts/tools/claims.test.mjs`) |
 | `docs/ARCHITECTURE.md` | design | rule | Processes, the local server's security, the internet switch, the crates and their rules, UI, PDF |
 | `docs/STORAGE.md` | design | rule | Normative: the journal, the fold, the store, merge, sync, exchange, import, crash safety, format versions |

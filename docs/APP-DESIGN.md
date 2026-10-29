@@ -2775,6 +2775,10 @@ is installed, else in English.
 
 ## 7. Parity testing
 
+> **Retired 2026-10-29.** The comparison with tC4 that this section designs was done for 4.1.0
+> and no longer gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). The journeys
+> (§7.7) still run. The rest of this section is a record.
+
 ### 7.1 One harness, two environments
 
 `parity/tc4-baseline/capture.mjs` runs `await main()` when imported (`capture.mjs:1110`), so it

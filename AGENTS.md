@@ -87,8 +87,7 @@ down the tower (GitHub issues and pull requests, built by the method in `docs/FU
   (`crates/tc-ui/src/ds/`), and the style of its words. Never replace or bypass it; extend it.
 - A screen or behavior that came from tC4 may change when the vision calls for it. Add the change,
   with its issue or ruling, to `docs/DIFFERENCES.md`, note it in the journey's entry, and say so
-  in the pull request. The screenshot checks against tC4 (`parity/tc4-baseline/`) accept only
-  the differences listed there.
+  in the pull request.
 - tC4's source at the reference version is `git show d25b7871:<path>`. Read it to learn how a
   screen came to be, not to decide what it must do.
 

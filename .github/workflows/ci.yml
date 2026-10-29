@@ -203,16 +203,15 @@ jobs:
           tool: cargo-nextest@0.9.149
       - run: scripts/gates.sh --step alignment-budget
 
-  # The tC4 visual-parity baseline: its screenshots (by sha256), DOM snapshots, manifest, README
-  # and the owner's rulings in docs/DIFFERENCES.md must agree, the mock server must answer the sync
-  # transport as the platform does, the parity state built from this repository's copies of
-  # tC4's fixtures must equal the one recorded from tC4, and the capture's request tracking and
-  # settle must hold, as must the pure parts of the Rust environment (its browser tests skip
-  # here: they need tc4 and Playwright), and the tC4 view-state gallery's record must agree with
-  # itself (its states, calibration, cases and their files; its browser tests skip here: they
-  # need a tC4 clone and Playwright), and every journey file of parity/app/journeys loads (a glob,
-  # so a new file cannot be left out; their browser tests skip here too). Node built-ins only, so
-  # no install step.
+  # The Node checks (gates.sh --step node): the mock server answers the sync transport as the
+  # platform does, the parity state built from this repository's copies of tC4's fixtures equals
+  # the one recorded from tC4, the page observer's request tracking and settle hold, the pure
+  # parts of the Rust environment hold (its browser tests skip
+  # here: they need tc4 and Playwright), every journey file of parity/app/journeys loads (a glob,
+  # so a new file cannot be left out; their browser tests skip here too), and the documents and
+  # tools checks of scripts/tools pass. Node built-ins only, so no install step. The job keeps its
+  # name because it is a required check; the screenshot comparison it once ran is retired
+  # (docs/rulings/2026-10-29-tc4-is-history.md).
   parity-baseline:
     runs-on: ubuntu-latest
     # Full tests run where they gate a merge: main, gate/* and on request (rulings/2026-10-24-test-process.md).

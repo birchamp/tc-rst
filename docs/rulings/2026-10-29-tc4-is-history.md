@@ -13,12 +13,11 @@
    (its tokens, CSS, fonts, components and the style of its words) is how every screen looks,
    new or old.
 2. The design system stays on `main`: `crates/tc-ui/src/ds/`, the CSS and fonts vendored from
-   tC4 (`crates/tc-ui/vendored-from-tc4.txt`), and the gallery that compares each component with
-   tC4's (`parity/ds-gallery/`).
+   tC4 (`crates/tc-ui/vendored-from-tc4.txt`), and the gallery that draws each component
+   (`parity/ds-gallery/`).
 3. A screen that came from tC4 may change when the vision calls for it. The change is listed in
-   `docs/DIFFERENCES.md` with its issue or ruling, so the screenshot checks against tC4's
-   baseline know it is on purpose. A new screen needs no entry: tC4 has nothing to compare it
-   with.
+   `docs/DIFFERENCES.md` with its issue or ruling. A new screen needs no entry: tC4 has
+   nothing to compare it with.
 4. The rebuild is done. `docs/PLAN.md` holds the promises P1 to P10 as guarantees every change
    keeps. P6 is open until epic #711 lands.
 
@@ -32,3 +31,12 @@ differences.
 
 New features follow what translators need, not what tC4 did. The screens keep looking and
 reading the way a tC4 user knows.
+
+## Later the same day: the screenshot comparison is retired
+
+The owner: "P7 still seems to indicate that screenshots need to be taken and compared. That's
+been done and is now past." Then: "Retire them." The comparison of the app's screens and
+components with tC4's (`screen_record`, `gallery_record`, the baseline and view-gallery record
+checks) is removed from the gate. P7 is shown by `crates/tc-ui/tests/vendored_assets.rs`. The
+`parity-baseline` CI job keeps its name, since it is a required check, and runs the other Node
+checks.
