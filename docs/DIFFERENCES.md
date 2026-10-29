@@ -205,6 +205,14 @@ Under the same rule, tC4 4.0 bugs the rebuild fixes on purpose (FIX-R, 2026-10-2
   nothing. The Translate list lives in the page: a crash between a save's write and its reply
   loses the notice, while the old link stays in History.
 
+Owner rulings in the issues, made before 4.1.0:
+
+- On a computer with no keychain that keeps a sign-in, the sign-in step has no "Stay signed in
+  on this computer" box and no line in its place, and the Share dialog has no line about it
+  either (#496, owner ruling 2026-09-30). tC4 shows "Stay signed in is not available on this
+  computer, so your sign-in lasts for this app session." (`signIn.notKept`), which no screen of
+  the rebuild shows. The key stays in the vendored tC4 catalogs, which are tC4's bytes.
+
 These differences follow the owner's rule in AGENTS.md ("Matching tC4", 2026-10-17), and the
 owner is told of each:
 

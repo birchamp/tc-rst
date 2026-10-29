@@ -33,8 +33,8 @@ pub struct AccountView {
 pub enum KeychainState {
     /// A keychain keeps the token between app sessions.
     Works,
-    /// This computer has no keychain the app can use: a sign-in lasts for the app session
-    /// (`signIn.notKept`).
+    /// This computer has no keychain the app can use: a sign-in lasts for the app session, and
+    /// the sign-in step has no "Stay signed in" box (tC4 #496).
     Missing,
 }
 
@@ -48,8 +48,7 @@ pub enum KeepState {
     /// The keychain holds a token: "Sign-in saved on this computer". It is checked with
     /// Door43 only when a step needs it.
     Kept,
-    /// "Stay signed in" was asked, and this computer has no keychain that would keep it
-    /// (`signIn.notKept`).
+    /// "Stay signed in" was asked, and this computer has no keychain that would keep it.
     NoKeychain,
 }
 

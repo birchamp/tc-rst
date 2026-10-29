@@ -7,18 +7,19 @@
 //! The fields are not save fields: nothing of them reaches the draft buffer, the shell's mirror
 //! or page storage, and the password leaves the page only in the body of `account/signIn`.
 //! Without a keychain that keeps a sign-in (phase 0's product, until unit E1a) the step has no
-//! "Stay signed in" box and says why the sign-in lasts for this session (tC4 #496, `signIn.notKept`).
+//! "Stay signed in" box and no line about it (tC4 #496).
 //! tC4's `signin-renew` line (#467, a share whose token lacks the create scopes) comes with
 //! unit E1b, which meets that refusal.
 
 use std::sync::Arc;
 
 use leptos::prelude::*;
+use tc_api::account::KeychainState;
 
-use crate::app::account::{SignInFlow, SignInProblem, sign_in_rows};
+use crate::app::account::{SignInFlow, SignInProblem};
 use crate::app::web::{AppCtx, use_app};
 use crate::ds::{Attrs, Button, ButtonVariant, Callout, CalloutTone, Checkbox, TextField};
-use crate::i18n::{keys, t, t_dyn};
+use crate::i18n::{keys, t};
 
 /// tC4's `NOTE`.
 fn note() -> String {
@@ -139,7 +140,7 @@ fn form(
         let account = account.clone();
         move |_| account.with(|a| a.server.clone())
     });
-    let rows = Memo::new(move |_| account.with(|a| sign_in_rows(a.keychain)));
+    let keychain = Memo::new(move |_| account.with(|a| a.keychain == KeychainState::Works));
 
     let on_login = {
         let actions = actions.clone();
@@ -169,7 +170,7 @@ fn form(
     };
 
     let stay_box = move || {
-        rows.get().stay.then(|| {
+        keychain.get().then(|| {
             view! {
                 <Checkbox
                     label=untrack(|| t(keys::sign_in::STAY, &[]))
@@ -177,6 +178,9 @@ fn form(
                     attrs=Attrs::from([("data-testid", "signin-stay")])
                     on_change=on_stay
                 />
+                <p data-testid="signin-reason" style=note()>
+                    {move || t(keys::sign_in::SESSION_NOTE, &[])}
+                </p>
             }
         })
     };
@@ -218,9 +222,6 @@ fn form(
                 on_change=on_password
             />
             {stay_box}
-            <p data-testid="signin-reason" style=note()>
-                {move || t_dyn(rows.get().reason_key, &[], None)}
-            </p>
             <p data-testid="signin-notice" style=note()>{move || t(keys::sign_in::NOTICE, &[])}</p>
             <p data-testid="signin-name-notice" style=note()>
                 {move || t(keys::sign_in::NAME_NOTICE, &[])}

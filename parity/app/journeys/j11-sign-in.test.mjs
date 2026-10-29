@@ -164,7 +164,8 @@ browserTest('no_keychain_hides_stay_signed_in (J11 7e, #496)', async () => {
     await relaunch(page, env, { mode: 'none' });
     await openSignIn(page);
     assert.equal(await page.getByTestId('signin-stay').count(), 0, 'no Stay signed in box');
-    assert.equal(await text(page, 'signin-reason'), en['signIn.notKept']);
+    assert.equal(await page.getByTestId('signin-reason').count(), 0, 'no line about Stay signed in');
+    assert.ok(!(await page.locator('body').innerText()).includes(en['signIn.notKept']), 'no "not available on this computer" line');
     await page.getByTestId('signin-cancel').click();
     await signIn(page);
     await until('signed in', async () => (await state(page)) === 'in');
