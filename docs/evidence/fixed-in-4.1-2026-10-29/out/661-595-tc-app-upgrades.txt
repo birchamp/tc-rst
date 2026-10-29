@@ -1,0 +1,37 @@
+$ tc-heavy cargo test -p tc-app --test app upgrades:: -- --nocapture  (at 597a234e; the #661 and #595 tests among them)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/app.rs (target/debug/deps/app-d425a983b0fa488f)
+
+running 29 tests
+test app::upgrades::a_download_of_another_commit_than_the_pinned_one_is_refused ... ok
+test app::upgrades::a_download_adopts_pins_over_two_versions_and_keeps_the_other_in_history ... ok
+test app::upgrades::a_download_adds_what_it_brought_to_the_sets_of_its_package_and_moves_no_pin ... ok
+test app::upgrades::a_file_is_installed_only_when_it_declares_the_pinned_commit ... ok
+test app::upgrades::a_failed_save_keeps_the_plan_for_the_retry ... ok
+test app::upgrades::a_gateway_bible_upgrade_moves_its_pane_and_nothing_else ... ok
+test app::upgrades::a_download_that_fails_or_cannot_be_trusted_moves_no_pin ... ok
+test app::upgrades::a_re_pin_is_planned_and_confirmed_like_an_upgrade ... ok
+test app::upgrades::a_gateway_plan_that_cannot_read_a_resource_says_so_and_changes_nothing ... ok
+test app::upgrades::a_stale_confirm_reshows_the_dialog_with_new_counts ... ok
+test app::upgrades::a_project_whose_numbering_is_unknown_cannot_carry_its_decisions_over ... ok
+test app::upgrades::an_offline_update_check_shows_one_plain_sentence ... ok
+test app::upgrades::an_upgrade_over_pins_with_two_heads_that_agree_keeps_both_teammates_changes ... ok
+test app::upgrades::an_upgrade_carries_the_newest_of_two_decisions_and_keeps_the_other_in_history ... ok
+test app::upgrades::a_tw_only_change_that_drops_a_decided_article_is_counted ... ok
+test app::upgrades::an_upgrade_over_two_pin_versions_starts_from_the_newest ... ok
+test app::upgrades::checking_for_updates_names_what_moved_and_writes_nothing ... ok
+test app::upgrades::j12_an_upgrade_moves_one_sets_pins_and_carries_decisions_in_one_batch ... ok
+test app::upgrades::gateway_change_dialog_names_both_languages_by_autonym ... ok
+test app::upgrades::gateway_preview_appears_while_the_open_verse_keeps_changing ... ok
+test app::upgrades::j3_fetching_the_pinned_version_installs_that_commit_and_moves_no_pin ... ok
+test app::upgrades::j13_a_new_checking_language_moves_the_primary_set_and_keeps_the_english_fallback ... ok
+test app::upgrades::the_guided_fix_names_the_missing_pin_and_the_other_versions_installed ... ok
+test app::upgrades::bundled_upgrade_leaves_the_pinned_release_and_the_projects_pins_as_they_were ... ok
+test app::upgrades::two_decisions_that_come_to_one_check_are_counted_as_checks_to_do_again ... ok
+test app::upgrades::ugnt_upgrade_counts_the_verses_whose_alignments_it_marks_and_keeps_every_alignment ... ok
+test app::upgrades::settings_from_home_right_after_a_change_name_the_new_checking_language ... ok
+test app::upgrades::ugnt_upgrade_marks_1_1_invalid_in_align ... ok
+test app::upgrades::updates_offer_each_scripture_text_with_a_newer_release ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 785 filtered out; finished in 3.04s
+

@@ -1,0 +1,87 @@
+    Blocking waiting for file lock on build directory
+   Compiling rand_core v0.10.1
+   Compiling getrandom v0.4.3
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.10.1
+   Compiling fnv v1.0.7
+   Compiling serde_core v1.0.229
+   Compiling quick-error v1.2.3
+   Compiling rand_xorshift v0.5.0
+   Compiling chacha20 v0.10.2
+   Compiling bit-set v0.11.1
+   Compiling unarray v0.1.4
+   Compiling core_detect v1.0.0
+   Compiling tempfile v3.27.0
+   Compiling rand v0.10.3
+   Compiling tokio v1.53.3
+   Compiling subtle v2.6.1
+   Compiling proptest-derive v0.9.0
+   Compiling rustls v0.23.46
+   Compiling rusty-fork v0.3.1
+   Compiling proptest v1.12.0
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling serde v1.0.229
+   Compiling zvariant_utils v4.2.0
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling tc-ui v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-ui)
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-core)
+   Compiling tc-usfm v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-usfm)
+   Compiling zvariant_derive v5.15.1
+   Compiling tc-burrito v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-burrito)
+   Compiling hyper v1.12.0
+   Compiling tower v0.5.3
+   Compiling hyper-util v0.1.21
+   Compiling zvariant v5.15.1
+   Compiling tc-helps v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-helps)
+   Compiling tc-versification v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-versification)
+   Compiling tc-journal v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-journal)
+   Compiling zbus_names v4.3.5
+   Compiling tokio-rustls v0.26.6
+   Compiling hyper-rustls v0.27.10
+   Compiling zbus_macros v5.19.0
+   Compiling tower-http v0.6.11
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling reqwest v0.13.5
+   Compiling tc-obs v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-obs)
+   Compiling tc-api v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-api)
+   Compiling zbus v5.19.0
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43)
+   Compiling axum v0.8.9
+   Compiling tc-align v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-align)
+   Compiling tc-import v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-import)
+   Compiling secret-service v5.2.0
+   Compiling tc-store v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-store)
+   Compiling zbus-secret-service-keyring-store v1.0.1
+   Compiling keyring v4.2.0
+   Compiling tc-resources v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-resources)
+   Compiling tc-check v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-check)
+   Compiling tc-corpus v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-corpus)
+   Compiling tc-door43-fake v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43-fake)
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-sync)
+   Compiling tc-export v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-export)
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 37s
+     Running tests/repro_664.rs (target/debug/deps/repro_664-e55e5135fa255ea8)
+
+running 1 test
+RUT 1:6 "כ\u{5b4}\u{5bc}\u{5a4}י ש\u{5b8}\u{5bd}\u{5c1}מ\u{5b0}ע\u{5b8}ה\u{599} ב\u{5b4}\u{5bc}\u{2060}ש\u{5b0}\u{5c2}ד\u{5b5}\u{5a3}ה מו\u{5b9}א\u{5b8}\u{594}ב כ\u{5b4}\u{5bc}\u{5bd}י־פ\u{5b8}ק\u{5b7}\u{5a4}ד י\u{5b0}הו\u{5b8}ה\u{599} א\u{5b6}ת־ע\u{5b7}מ\u{5bc}\u{594}\u{2060}ו\u{5b9} ל\u{5b8}\u{2060}ת\u{5b5}\u{5a5}ת ל\u{5b8}\u{2060}ה\u{5b6}\u{596}ם ל\u{5b8}\u{5bd}ח\u{5b6}ם" -> "for she had heard in a field of Moab that Yahweh had visited his people giving them bread"
+RUT 1:6 "פ\u{5b8}ק\u{5b7}\u{5a4}ד & א\u{5b6}ת־ע\u{5b7}מ\u{5bc}\u{594}\u{2060}ו\u{5b9}" -> "had visited his people"
+RUT 1:8 "יעשה י\u{5b0}הו\u{5b8}\u{5a4}ה ע\u{5b4}מ\u{5b8}\u{5bc}\u{2060}כ\u{5b6}ם\u{599} ח\u{5b6}\u{594}ס\u{5b6}ד כ\u{5b7}\u{5bc}\u{2060}א\u{5b2}ש\u{5b6}\u{5c1}\u{5a7}ר ע\u{5b2}ש\u{5b4}\u{5c2}ית\u{5b6}\u{59b}ם ע\u{5b4}ם־ה\u{5b7}\u{2060}מ\u{5b5}\u{5bc}ת\u{5b4}\u{596}ים ו\u{5b0}\u{2060}ע\u{5b4}מ\u{5b8}\u{5bc}ד\u{5b4}\u{5bd}\u{2060}י" -> "May Yahweh act with you in covenant faithfulness as you have acted with the dead and with me"
+NOT EXACT RUT 2:21 "ע\u{5b4}ם־ה\u{5b7}\u{2060}נ\u{5b0}\u{5bc}ע\u{5b8}ר\u{5b4}\u{5a4}ים א\u{5b2}ש\u{5b6}\u{5c1}ר־ל\u{5b4}\u{2060}י\u{599} ת\u{5b4}\u{5bc}ד\u{5b0}ב\u{5b8}\u{5bc}ק\u{5b4}\u{594}י\u{2060}ן" occ Nth(1) -> Approximate "You should keep close by the servants who belong to me"
+NOT EXACT RUT 3:2 "ה\u{5b2}\u{2060}ל\u{5b9}\u{5a5}א ב\u{5b9}\u{5a8}ע\u{5b7}ז\u{599} מ\u{5b9}\u{5bd}ד\u{5b7}ע\u{5b0}ת\u{5b8}\u{5bc}\u{594}\u{2060}נו\u{5bc} א\u{5b2}ש\u{5b6}\u{5c1}\u{5a5}ר ה\u{5b8}י\u{5b4}\u{596}ית א\u{5b6}ת־נ\u{5b7}ע\u{5b2}רו\u{5b9}ת\u{5b8}\u{591}י\u{2060}ו" occ Nth(1) -> Approximate "is not Boaz our relative the one with whose young female workers you have been working"
+NOT EXACT RUT 3:2 "א\u{5b2}ש\u{5b6}\u{5c1}\u{5a5}ר ה\u{5b8}י\u{5b4}\u{596}ית א\u{5b6}ת־נ\u{5b7}ע\u{5b2}רו\u{5b9}ת\u{5b8}\u{591}י\u{2060}ו" occ Nth(1) -> Approximate "the one with whose young female workers you have been working"
+NOT EXACT RUT 4:6 "ג\u{5b0}\u{5bc}א\u{5b7}ל־ל\u{5b0}\u{2060}ך\u{5b8}\u{5a4} א\u{5b7}ת\u{5b8}\u{5bc}ה\u{599} א\u{5b6}ת־ג\u{5b0}\u{5bc}א\u{5bb}ל\u{5b8}\u{5bc}ת\u{5b4}\u{594}\u{2060}י" occ Nth(1) -> Approximate "You redeem for yourself my right of redemption"
+NOT EXACT RUT 4:10 "ו\u{5b0}\u{2060}ל\u{5b9}א־י\u{5b4}כ\u{5b8}\u{5bc}ר\u{5b5}\u{5a7}ת ש\u{5b5}\u{5c1}ם־ה\u{5b7}\u{2060}מ\u{5b5}\u{5bc}\u{59b}ת מ\u{5b5}\u{2060}ע\u{5b4}\u{5a5}ם א\u{5b6}ח\u{5b8}\u{596}י\u{2060}ו ו\u{5bc}\u{2060}מ\u{5b4}\u{2060}ש\u{5b7}\u{5bc}\u{5c1}\u{5a3}ע\u{5b7}ר מ\u{5b0}קו\u{5b9}מ\u{591}\u{2060}ו\u{5b9}" occ Nth(1) -> Approximate "so that the name of the dead will not be cut off from among his brothers and from the gate of his place"
+NOT EXACT RUT 4:10 "ו\u{5b0}\u{2060}ל\u{5b9}א־י\u{5b4}כ\u{5b8}\u{5bc}ר\u{5b5}\u{5a7}ת ש\u{5b5}\u{5c1}ם־ה\u{5b7}\u{2060}מ\u{5b5}\u{5bc}\u{59b}ת מ\u{5b5}\u{2060}ע\u{5b4}\u{5a5}ם א\u{5b6}ח\u{5b8}\u{596}י\u{2060}ו ו\u{5bc}\u{2060}מ\u{5b4}\u{2060}ש\u{5b7}\u{5bc}\u{5c1}\u{5a3}ע\u{5b7}ר מ\u{5b0}קו\u{5b9}מ\u{591}\u{2060}ו\u{5b9}" occ Nth(1) -> Approximate "so that the name of the dead will not be cut off from among his brothers and from the gate of his place"
+NOT EXACT RUT 4:12 "מ\u{5b4}ן־ה\u{5b7}\u{2060}ז\u{5b6}\u{5bc}\u{597}ר\u{5b7}ע א\u{5b2}ש\u{5b6}\u{5c1}\u{5a8}ר י\u{5b4}ת\u{5b5}\u{5bc}\u{5a4}ן י\u{5b0}הו\u{5b8}ה\u{599} ל\u{5b0}\u{2060}ך\u{5b8}\u{594}" occ Nth(1) -> Approximate "from the seed that Yahweh gives you"
+maqaf=false Exact: 197
+maqaf=true Approximate: 7
+maqaf=true Exact: 84
+maqaf rows: 91, lit nothing: 0
+test repro_664_ruth_maqaf_quotes_light_in_the_ult ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+exit 0

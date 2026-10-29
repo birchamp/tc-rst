@@ -1,0 +1,79 @@
+$ TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_DOOR43_FAKE=target/debug/tc-door43-fake tc-heavy node --test --test-timeout=180000 docs/evidence/fixed-in-4.1-2026-10-29/repro/548-552-book-dropdown.test.mjs
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:39851/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3422848-1793291286981/sample/projects, Door43: http://127.0.0.1:9)
+# {
+#  "comboboxFoundByName": 1,
+#  "focusAfterOpen": "INPUT\#",
+#  "duplicateIds": [],
+#  "search": {
+#   "id": "",
+#   "ariaLabel": "Find a book by name or code",
+#   "labelledBy": null
+#  },
+#  "searchByRoleAndName": 1,
+#  "homeEnd": {
+#   "highlightBefore": "ab-book-opt-5",
+#   "highlightAfterHome": "ab-book-opt-5",
+#   "caretAfterHome": 0,
+#   "caretAfterEnd": 2,
+#   "highlightAfterEnd": "ab-book-opt-5"
+#  },
+#  "filterJo": [
+#   "Joshua24 chJOS",
+#   "Job42 chJOB",
+#   "Joel3 chJOL",
+#   "Jonah4 chJON",
+#   "John21 chJHN",
+#   "1 John5 ch1JN",
+#   "2 John1 ch2JN",
+#   "3 John1 ch3JN"
+#  ],
+#  "filterJhn": [
+#   "John21 chJHN"
+#  ],
+#  "filter1jn": [
+#   "1 John5 ch1JN"
+#  ],
+#  "filterJn": [],
+#  "labelElement": "LABEL for=ab-book -> BUTTON",
+#  "labelPressOnOpenList": {
+#   "open": true,
+#   "searchText": "",
+#   "focus": "INPUT"
+#  },
+#  "labelClickClosed": {
+#   "focusIsButton": false,
+#   "open": true
+#  },
+#  "escape": {
+#   "dialogs": 1,
+#   "focusIsButton": true
+#  },
+#  "keyboardChoice": "1 John1JN▾",
+#  "outsidePress": {
+#   "open": false,
+#   "value": "1 John1JN▾",
+#   "dialogs": 1
+#  },
+#  "bookAdded": true
+# }
+# Subtest: 548_552_book_dropdown_as_a_translator_uses_it
+ok 1 - 548_552_book_dropdown_as_a_translator_uses_it
+  ---
+  duration_ms: 11843.079156
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 21945.450847
+exit 0

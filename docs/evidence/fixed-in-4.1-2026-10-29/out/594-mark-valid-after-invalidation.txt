@@ -1,0 +1,25 @@
+$ TC4_BIN=... tc-heavy node --test --test-timeout=180000 docs/evidence/fixed-in-4.1-2026-10-29/repro/594-mark-valid-after-invalidation.test.mjs  (at 597a234e)
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/state: 13 resources installed
+# tc4: serving http://127.0.0.1:36753/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3406791-1793291254804/en-pins/projects, Door43: http://127.0.0.1:9)
+# flagged: {"invalid":"1","decided":"0"} progress: "1 of 182 resolved"
+# after Mark valid: {"invalid":"0","decided":"1"} progress: "2 of 182 resolved" selected: ["Señor"] notice shown: 0
+# on disk: [{"status":"valid","userStatus":"valid","invalidated":false,"selections":["Señor"]}]
+# Subtest: 594_mark_valid_on_a_draft_invalidated_check
+ok 1 - 594_mark_valid_on_a_draft_invalidated_check
+  ---
+  duration_ms: 8556.94858
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18696.994912

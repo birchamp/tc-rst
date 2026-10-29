@@ -1,0 +1,41 @@
+   Compiling tokio v1.53.3
+   Compiling tc-versification v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-versification)
+   Compiling cobs v0.3.0
+   Compiling tc-obs v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-obs)
+   Compiling tc-api v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-api)
+   Compiling postcard v1.1.3
+   Compiling tc-align v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-align)
+   Compiling tc-store v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-store)
+   Compiling hyper v1.12.0
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.6
+   Compiling tower-http v0.6.11
+   Compiling hyper-util v0.1.21
+   Compiling hyper-rustls v0.27.10
+   Compiling axum v0.8.9
+   Compiling reqwest v0.13.5
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43)
+   Compiling tc-door43-fake v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43-fake)
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-sync)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.72s
+     Running tests/repro_747.rs (target/debug/deps/repro_747-859537a0c21bf115)
+
+running 2 tests
+#747 titus-rule: Door43 .gitignore before Juan opens: Some("/.tc/\n.~*\n**/*.bak\n")
+#747 titus-norule: Door43 .gitignore before Juan opens: Some("/.tc/\n")
+#747 titus-rule: Juan's .gitignore on disk: Some("/.tc/\n.~*\n**/*.bak\n")
+#747 titus-norule: Juan's .gitignore on disk: Some("/.tc/\n")
+#747 titus-norule: Door43 .gitignore after Juan's sync: Some("/.tc/\n.~*\n**/*.bak\n")
+#747 titus-norule: .bak paths on Door43 main: []
+#747 titus-norule: tc4-sync on Door43 main: []
+#747 titus-norule: backup files still on Juan's computer: [".tc/external/20261017T000000Z-metadata.json.bak", ".tc/external/20261017T000000Z-ingredients%2Ftc4-sync%2F0001.json.bak", ".tc/external/20261017T000000Z-ingredients%2Fchecking%2Fsettings.json.bak", ".tc/external/20261017T000000Z-ingredients%2FTIT.usfm.bak"]
+#747 titus-rule: Door43 .gitignore after Juan's sync: Some("/.tc/\n.~*\n**/*.bak\n")
+#747 titus-rule: .bak paths on Door43 main: []
+#747 titus-rule: tc4-sync on Door43 main: []
+#747 titus-rule: backup files still on Juan's computer: [".tc/external/20261017T000000Z-metadata.json.bak", ".tc/external/20261017T000000Z-ingredients%2Ftc4-sync%2F0001.json.bak", ".tc/external/20261017T000000Z-ingredients%2Fchecking%2Fsettings.json.bak", ".tc/external/20261017T000000Z-ingredients%2FTIT.usfm.bak"]
+test repro_747_no_backup_rule_publishes_no_bak ... ok
+test repro_747_control_standard_rule_publishes_no_bak ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.53s
+
+exit 0

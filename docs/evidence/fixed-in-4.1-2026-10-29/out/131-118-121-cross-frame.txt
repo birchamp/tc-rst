@@ -1,0 +1,66 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:37489/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290955834/sample/projects, Door43: http://127.0.0.1:9)
+# ULT folders given JON, EZR, NEH: ["resources/dcs/unfoldingword/en_ult/35d215957f3203fd2e2fac5702ce14902d417f9d/content/ingredients"]
+# \#118 Understand statement: "Verse view. This project's verse numbering differs from the source, so sections are not available."
+# \#118 Section/Verse tabs: 0
+# \#118 main text: "Jonah 2Read the passage and its helps before you translate.ULTUSTVerse view. This project's verse numbering differs from the source, so sections are not available.unfoldingWord Literal TextThis source is not available for this book."
+# \#118 Understand units in chapter 2: 0
+# Subtest: 131_118_rsc_jonah_2_reads_the_sources_1_17
+not ok 1 - 131_118_rsc_jonah_2_reads_the_sources_1_17
+  ---
+  duration_ms: 40338.061569
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/fixed-in-41/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: |-
+    locator.textContent: Timeout 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid^="understand-unit-"]').first()
+    
+  code: 'ERR_TEST_FAILURE'
+  name: 'TimeoutError'
+  stack: |-
+    /home/bot/tc-rst/.claude/worktrees/fixed-in-41/docs/evidence/fixed-in-4.1-2026-10-29/repro/131-118-121-cross-frame.test.mjs:74:36
+    async withApp (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/parity/app/journeys/kit.mjs:150:20)
+    async browserTest.timeout (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/docs/evidence/fixed-in-4.1-2026-10-29/repro/131-118-121-cross-frame.test.mjs:61:3)
+  ...
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43109/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3254356-1793290996137/sample/projects, Door43: http://127.0.0.1:9)
+# ULT folders given JON, EZR, NEH: ["resources/dcs/unfoldingword/en_ult/35d215957f3203fd2e2fac5702ce14902d417f9d/content/ingredients"]
+# \#121 main text: "Ezra 11Read the passage and its helps before you translate.ULTUSTVerse view. This project's verse numbering differs from the source, so sections are not available.unfoldingWord Literal TextThis source is not available for this book."
+# Subtest: 121_lxx_ezra_11_is_nehemiah_1
+not ok 2 - 121_lxx_ezra_11_is_nehemiah_1
+  ---
+  duration_ms: 40220.533077
+  type: 'test'
+  location: '/home/bot/tc-rst/.claude/worktrees/fixed-in-41/parity/app/journeys/kit.mjs:39:10'
+  failureType: 'testCodeFailure'
+  error: |-
+    locator.waitFor: Timeout 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid^="understand-unit-"]').first() to be visible
+    
+  code: 'ERR_TEST_FAILURE'
+  name: 'TimeoutError'
+  stack: |-
+    /home/bot/tc-rst/.claude/worktrees/fixed-in-41/docs/evidence/fixed-in-4.1-2026-10-29/repro/131-118-121-cross-frame.test.mjs:100:25
+    async withApp (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/parity/app/journeys/kit.mjs:150:20)
+    async browserTest.timeout (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/docs/evidence/fixed-in-4.1-2026-10-29/repro/131-118-121-cross-frame.test.mjs:93:3)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 92910.469797
+exit 1

@@ -1,0 +1,17 @@
+$ tc-heavy cargo test -p tc-resources --test repro_663 -- --nocapture  (at 597a234e)
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.48s
+     Running tests/repro_663.rs (target/debug/deps/repro_663-7d077161f21dc3e2)
+
+running 1 test
+catalog books for es-419_tn: ["3jn", "jon", "rut", "tit"]
+missing ingredients: ["ingredients/3JN.tsv", "ingredients/JON.tsv", "ingredients/LICENSE.md", "ingredients/RUT.tsv"]
+installed coverage: Some(Books([Titus]))
+Titus: notes resolve to Primary git.door43.org/es-419_gl/es-419_tn
+Jonah: notes resolve to Fallback git.door43.org/unfoldingWord/en_tn
+Jonah with Spanish alone: NotCovered
+Titus with Spanish alone: Ready
+test a_release_that_lists_books_it_lacks_offers_them_but_checks_only_what_it_holds ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+

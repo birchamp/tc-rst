@@ -1,0 +1,23 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43807/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2661528-1793289712319/sample/projects, Door43: http://127.0.0.1:9)
+# package names with dir: ["ltr English","ltr Español (Latinoamérica)","ltr Français","ltr Français","ltr Русский","rtl فارسی","rtl العربية","ltr Bahasa Indonesia","ltr हिन्दी","ltr বাংলা","ltr ગુજરાતી","ltr ಕನ್ನಡ","ltr मराठी","ltr नेपाली","ltr ଓଡ଼ିଆ","ltr తెలుగు","ltr മലയാളം","ltr उर्दू"]
+# Subtest: 701_urdu_devanagari_card_reads_left_to_right
+ok 1 - 701_urdu_devanagari_card_reads_left_to_right
+  ---
+  duration_ms: 8729.740461
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18954.505048
+exit 0

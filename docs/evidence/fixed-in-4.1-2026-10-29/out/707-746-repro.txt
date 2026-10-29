@@ -1,0 +1,17 @@
+   Compiling tc-store v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+     Running tests/repro_707.rs (target/debug/deps/repro_707-1340c04bd12f26dc)
+
+running 2 tests
+707: staging folders on disk after the kill = {".staging-import-be1522fc346068c0fd554a06e0c9b3d8"}
+707: next start removed [RemovedStaging { folder: ".staging-import-be1522fc346068c0fd554a06e0c9b3d8", kind: Some(Import) }]; projects listed ["/projects/Other"]
+test repro_707_an_import_cut_off_before_its_rename_leaves_no_project_and_is_reported ... ok
+746: import still waiting while cleanup held = true; its staging files = 0
+746: after release the import finished at /projects/Titus
+707: next start removed []; projects listed ["/projects/Titus"]
+707: TIT 1:1 after the restart = "___"
+test repro_707_746_an_import_during_the_start_cleanup_waits_and_survives_the_next_start ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+exit 0
