@@ -202,6 +202,14 @@ test('windows_frames_and_the_menu_keys_follow_tc4', () => {
   assert.equal(lib.windowOptions({ platform: 'win32' }).titleBarStyle, 'hidden');
   assert.equal(lib.windowOptions({ platform: 'win32' }).titleBarOverlay.height, 56);
   assert.deepEqual(lib.windowOptions({ platform: 'darwin' }).trafficLightPosition, { x: 20, y: 21 });
+  // #871: the translationCore mark, not Electron's, on the window and its taskbar button.
+  const branding = path.join(__dirname, '..', '..', 'branding');
+  for (const [platform, file] of [['win32', 'icon.ico'], ['linux', 'icon-1024.png']]) {
+    const { icon } = lib.windowOptions({ platform, branding });
+    assert.equal(path.basename(icon), file, platform);
+    assert.ok(fs.existsSync(icon), icon);
+  }
+  assert.equal(lib.windowOptions({ platform: 'darwin', branding }).icon, undefined);
   const keys = (platform) => lib.menuTemplate(platform).flatMap((m) => m.submenu).map((i) => i.accelerator || i.role).filter(Boolean);
   assert.deepEqual(keys('win32').filter((k) => /zoom|Ctrl\+(0|R)/.test(k)), ['Ctrl+0', 'zoomIn', 'zoomOut', 'Ctrl+R']);
   assert.ok(keys('darwin').includes('Cmd+R'));

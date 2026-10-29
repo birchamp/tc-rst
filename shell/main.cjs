@@ -194,8 +194,10 @@ function load(url) {
 }
 
 function showWindow() {
+  // branding/ sits beside shell/ both in the repository and in the staged app (stage.sh).
+  const branding = path.join(__dirname, '..', 'branding');
   // Maximized before it shows, as tC4's window, in the same moment.
-  win = new BrowserWindow(lib.windowOptions({ platform: process.platform, preload: path.join(__dirname, 'preload.cjs'), show: false }));
+  win = new BrowserWindow(lib.windowOptions({ platform: process.platform, preload: path.join(__dirname, 'preload.cjs'), branding, show: false }));
   win.maximize();
   win.show();
   log('window shown', { visible: win.isVisible() });
