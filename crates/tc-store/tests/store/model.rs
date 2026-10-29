@@ -3353,6 +3353,14 @@ fn named_histories() -> Vec<(&'static str, Vec<Step>)> {
             "a_retired_put_of_an_earlier_write_before_a_power_cut",
             a_retired_put_of_an_earlier_write_before_a_power_cut(),
         ),
+        (
+            "an_inherited_name_unsealed_while_the_book_file_is_held",
+            an_inherited_name_unsealed_while_the_book_file_is_held(),
+        ),
+        (
+            "an_inherited_verse_unsealed_while_the_book_file_is_unreadable",
+            an_inherited_verse_unsealed_while_the_book_file_is_unreadable(),
+        ),
     ]
 }
 
@@ -4577,4 +4585,107 @@ fn two_reverts_of_a_book_file_after_crashes() -> Vec<Step> {
 #[test]
 fn two_reverts_of_a_book_file_after_crashes_lose_nothing() {
     assert_kept(&two_reverts_of_a_book_file_after_crashes());
+}
+
+/// The nightly's failure of 2026-10-29 (translationCore4 issue 847): a name saved, then the
+/// process killed; the next open cannot read the book file another program holds, so it does
+/// not seal the save (§6.1 O15). In the session after, the pending file is cut in place and
+/// another program writes a new name over `metadata.json`, the last file that showed the saved
+/// one; a kill then took the save, of unknown age, that the 2-minute seal had not yet reached.
+fn an_inherited_name_unsealed_while_the_book_file_is_held() -> Vec<Step> {
+    vec![
+        lock(Holdable::File(File::Usfm), true),
+        killed(Act::Name, 5),
+        Step::Cut {
+            journal: Journal::Pack,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        act(Act::Name),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        Step::Open,
+        Step::EditName { told: false },
+        Step::DenyRead {
+            file: File::Meta,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Name),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Meta,
+            on: false,
+        },
+    ]
+}
+
+#[test]
+fn an_inherited_name_unsealed_while_the_book_file_is_held_is_sealed_at_once() {
+    assert_kept(&an_inherited_name_unsealed_while_the_book_file_is_held());
+}
+
+/// The nightly's failure of 2026-10-27 (issue 847): the same loss for a verse, whose book file
+/// another program can no longer be read from at the open, and then deletes.
+fn an_inherited_verse_unsealed_while_the_book_file_is_unreadable() -> Vec<Step> {
+    vec![
+        Step::KillAfterRename { file: File::Usfm },
+        act(Act::Save(2)),
+        act(Act::Leave),
+        lock(Holdable::File(File::Usfm), true),
+        Step::Open,
+        act(Act::Save(1)),
+        lock(Holdable::File(File::Usfm), false),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        act(Act::Save(1)),
+        act(Act::Leave),
+        crash(),
+        Step::Open,
+        Step::Cut {
+            journal: Journal::Pending,
+            which: 0,
+            keep: 0,
+            at_line: false,
+        },
+        Step::Focus,
+        Step::Delete { file: File::Usfm },
+        act(Act::Leave),
+        Step::Open,
+        Step::Edit {
+            verse: 1,
+            told: false,
+        },
+        Step::DenyRead {
+            file: File::Usfm,
+            on: true,
+        },
+        crash(),
+        Step::Open,
+        act(Act::Save(1)),
+        act(Act::Leave),
+        Step::DenyRead {
+            file: File::Usfm,
+            on: false,
+        },
+    ]
+}
+
+#[test]
+fn an_inherited_verse_unsealed_while_the_book_file_is_unreadable_is_sealed_at_once() {
+    assert_kept(&an_inherited_verse_unsealed_while_the_book_file_is_unreadable());
 }

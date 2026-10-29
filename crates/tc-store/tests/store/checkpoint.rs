@@ -803,9 +803,10 @@ fn a_pending_file_a_crash_left_is_sealed_at_the_open() {
     assert_commits_valid(&rig.fs, &folder);
 }
 
-/// The open's seal of what a crash left fails (the disk refuses the pack's rename): the
-/// pending file is kept, the open goes on writable, the save shows, and the folder is a valid
-/// Scripture Burrito once the open's materialization is done (§6.1 O15, LOSS-2).
+/// The open's seal of what a crash left fails (the disk refuses the pack's rename): the open
+/// goes on writable, the actor's seal takes the save before the first command (its age is
+/// unknown), the save shows, and the folder is a valid Scripture Burrito once the open's
+/// materialization is done (§6.1 O15, LOSS-2).
 #[test]
 fn a_seal_that_fails_at_the_open_keeps_the_project_writable() {
     let (rig, folder) = titus();
@@ -832,16 +833,16 @@ fn a_seal_that_fails_at_the_open_keeps_the_project_writable() {
     rig.fs.fail_op(rename, std::io::ErrorKind::Other);
     let handle = open(&rig, &folder);
     assert_eq!(handle.facts().mode, tc_store::Mode::Writable);
+    handle.wait_idle();
     assert_eq!(
-        pending_files(&rig, &folder).len(),
-        1,
-        "the pending file is kept"
+        pending_files(&rig, &folder),
+        Vec::<std::path::PathBuf>::new(),
+        "the actor's seal took the pending file"
     );
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("saved before a crash")
     );
-    handle.wait_idle();
     assert_valid_burrito(&rig.fs, &folder);
     save_verse(&handle, 1, 2, "a later save").unwrap();
     handle.close().unwrap();

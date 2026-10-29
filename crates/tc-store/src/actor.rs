@@ -78,6 +78,10 @@ pub(crate) fn spawn(
         let _ = writer.send(Job::Materialize(Box::new(job)));
     }
     let dirty = !project.dirty.is_empty();
+    // Pending files still here were left by an earlier session (the open seals them unless it
+    // could not read a derived file, §6.1 O15): their age is unknown, so their wait is over.
+    let inherited = project.journal.has_unsealed() && matches!(shared.facts().mode, Mode::Writable);
+    let unsealed_since = inherited.then(|| project.clock.now().0 - SEAL_WITHIN_MS);
     let actor = Actor {
         project,
         rx,
@@ -85,7 +89,7 @@ pub(crate) fn spawn(
         lock,
         due: dirty.then(|| Instant::now() + MATERIALIZE_AFTER),
         last_checkpoint: Instant::now(),
-        unsealed_since: None,
+        unsealed_since,
         index_lock: index_lock.clone(),
         writer_thread,
         deferred: std::collections::VecDeque::new(),
@@ -107,6 +111,8 @@ pub(crate) fn spawn(
 
 impl Actor {
     fn run(mut self) {
+        // Before any command, so an inherited save is sealed before the first reply.
+        self.seal_when_due();
         loop {
             let wait = self.wait();
             let received = match self.deferred.pop_front() {

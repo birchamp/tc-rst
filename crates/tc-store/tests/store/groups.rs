@@ -1101,6 +1101,10 @@ fn a_group_keeps_the_intent_of_a_path_it_could_not_read() {
     drop(handle);
     let rig = rig_as(fs, APP, "host-1");
     assert!(String::from_utf8_lossy(&rig.fs.peek(&usfm).unwrap()).contains("second save"));
+    // The kill left metadata.json behind the rename, and the seal of the saves it left ends
+    // its own group while the file cannot be read: the folder stays invalid until a read
+    // decides (I7). The test checks the folder itself once the file reads.
+    damaged_on_purpose(&rig);
     rig.fs.set_unreadable(&usfm, true);
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     // The open's first job meets the file it cannot read, and ends.

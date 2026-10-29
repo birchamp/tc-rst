@@ -815,8 +815,8 @@ fn repair_and_classify(
     // copy is a pending file and their age is unknown (ruling 2026-10-22: at most the last 2
     // minutes may be lost). K3 stores each pack as a blob; the next checkpoint commits them.
     // Not while O9 could not read a derived file: the group a kill left half done cannot be
-    // finished, and a seal then makes `metadata.json` read as edited outside; the 2-minute
-    // seal takes these saves (§6.1 O15).
+    // finished, and a seal then makes `metadata.json` read as edited outside; the actor's
+    // 2-minute seal takes these saves before its first command (§6.1 O15).
     if project.journal.has_unsealed() && !writer.derived_unread {
         project.shared.open_group();
         writer.sealed_at_open = true;

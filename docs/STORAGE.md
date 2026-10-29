@@ -2519,7 +2519,8 @@ O15 A writable open that found pending files (saves a session that ended without
     damage, and their age is unknown, so none may wait for the next seal (owner ruling
     2026-10-22-acceptable-loss: no save older than 2 minutes may be lost). One exception: when
     O9 could not read a derived file (another program holds it), a group a kill left half done
-    cannot be finished, so the open does not seal and the 2-minute seal (§5.13) takes them. A
+    cannot be finished, so the open does not seal; the actor's 2-minute seal (§5.13) takes them
+    before it serves the first command, since their 2 minutes may be over already. A
     seal that fails at the open keeps its pending files and says why in Notices; the open goes
     on writable.
 ```
