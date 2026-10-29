@@ -36,9 +36,11 @@ struct OpenCost {
 
 /// Opens twice with the clock past the timestamp tick of the last materialization, so every
 /// entry is settled by the second open's storage check; returns the second and the third
-/// open's costs and the files the third opened.
+/// open's costs. The second open finds no fold cache and the third the one it wrote, so each
+/// journal file is shown to be opened once either way.
 fn no_change_opens(corpus: &OnDisk) -> (OpenCost, OpenCost) {
     let fs = corpus.fs.copy();
+    fs.delete(&corpus.folder.join(".tc/index.bin")).ok();
     // Past the timestamp tick of the last materialization.
     fs.advance(std::time::Duration::from_secs(5));
     let second = open_costed(&fs, &corpus.folder);
@@ -58,6 +60,10 @@ fn open_costed(fs: &FaultFs, folder: &std::path::Path) -> OpenCost {
     let after_idle = handle.counters();
     let derived_files = handle.snapshot().fold().derived_files().len();
     let opened = fs.opened();
+    assert!(
+        opened.iter().any(|p| is_journal(p)),
+        "no journal file was read"
+    );
     for path in &opened {
         if is_journal(path) {
             assert_eq!(
@@ -106,26 +112,6 @@ fn an_open_after_no_change_projects_no_file_and_reads_no_derived_file() {
             "O14 reads each derived file once: {:?}",
             third.after_idle
         );
-    }
-}
-
-#[test]
-fn an_open_reads_each_pack_once() {
-    for corpus in [psalms(), psalms_larger()] {
-        let fs = corpus.fs.copy();
-        // Without the fold cache, then with it.
-        fs.delete(&corpus.folder.join(".tc/index.bin")).ok();
-        for _ in 0..2 {
-            let (_, opened) = open_once(&fs, &corpus.folder);
-            let journal: Vec<&PathBuf> = opened.iter().filter(|p| is_journal(p)).collect();
-            let unique: std::collections::BTreeSet<&PathBuf> = journal.iter().copied().collect();
-            assert_eq!(
-                journal.len(),
-                unique.len(),
-                "a journal file was opened twice"
-            );
-            assert!(!unique.is_empty());
-        }
     }
 }
 
@@ -236,6 +222,11 @@ fn an_open_after_one_save_projects_only_that_books_files() {
             })
             .wait()
             .unwrap();
+        let book_files = handle
+            .snapshot()
+            .fold()
+            .book_files(tc_journal::BookId::Psalms)
+            .len();
         // A crash after B3: the save is durable, its materialization never ran.
         let crashed = fs.crash(true);
         rig.store
@@ -244,19 +235,6 @@ fn an_open_after_one_save_projects_only_that_books_files() {
         drop(handle);
         crashed.advance(std::time::Duration::from_secs(5));
         let (counters, _) = open_once(&crashed, &corpus.folder);
-        let book_files = rig_as(crashed.copy(), APP, "host-1")
-            .store
-            .open(&corpus.folder, &OpenOptions::default())
-            .map(|h| {
-                let n = h
-                    .snapshot()
-                    .fold()
-                    .book_files(tc_journal::BookId::Psalms)
-                    .len();
-                h.close().unwrap();
-                n
-            })
-            .unwrap();
         assert!(
             counters.projected as usize <= book_files + 2,
             "{} projected, the book has {book_files} files",
