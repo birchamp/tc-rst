@@ -219,9 +219,10 @@ owner is told of each:
   Pankosmia's rescan drops, so a project's own pictures would never show.
 - A Select that turns disabled while its list is open closes the list, and a choice made then
   changes nothing (#552). tC4 4.0 keeps the list open, and a row click still changes the value.
-  The gallery's three `Select/disabled-while-open` cases differ from tC4 on purpose
-  (`parity/ds-gallery/residuals.json`); the `-script` one chooses the row in the same task as the
-  switch-off, before the list can close.
+  `parity/app/journeys/dropdown.test.mjs` proves it on Report a problem.
+- A press on the label of an open Select keeps the list open with its search text (#552). tC4
+  4.0 closes the list, opens it again and clears the search. `dropdown.test.mjs` proves it on Add
+  a blank book.
 
 The owner's answers of 2026-10-19 (`docs/TC4-DELTA-2026-10-19.md` §5) and the rebuild's own
 rule that no one's work disappears without a word add these (unit B2):
