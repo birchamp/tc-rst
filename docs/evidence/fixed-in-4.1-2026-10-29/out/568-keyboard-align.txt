@@ -1,0 +1,27 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:43085/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3391190-1793291224426/sample/projects, Door43: http://127.0.0.1:9)
+# step 1: card Tab stops while a word is chosen: 33 | tabindex of the cards: ["0"] | Tab walk: ["button  de3","button  los","button  escogidos","button  de4","button  y2","button  el","button  conocimiento","button  de5","button  la2","button  verdad","button  que","button  va","button  con","button  la3","button  piedad","button  Pablo","button  siervo","button  Dios1","button  apóstol","button align-split-5 SPLIT","button  Jesucristo","div align-card-6 forκατὰ","div align-card-0 PaulΠαῦλοςPablo","div align-card-1 a servantδοῦλοςsiervo","div align-card-2 of GodΘεοῦ1Dios1","div align-card-3 an apostleἀπόστολοςapóstol","div align-card-4 andδὲ","div align-card-5 of Jesus ChristSPLITἸησοῦ Χρισ","div align-card-7 the faithπίστιν","div align-card-8 of the chosen peopleἐκλεκτῶν","div align-card-9 of GodΘεοῦ2Dios2","button  Dios2","div align-card-10 andκαὶ","div align-card-11 knowledgeἐπίγνωσιν","div align-card-12 of the truthἀληθείας","div align-card-13 thatτῆς","div align-card-14 agrees withκατ’","div align-card-15 godlinessεὐσέβειαν","button align-mark-valid ✓ Mark valid","button align-next Next →","body  translationCore®EEEquipo Ejemp","button project-switch EEEquipo Ejemplo — Tito y Joná","button  Check","button account-menu ","button  ← All checking tools","button align-filter-all All · 46","button align-filter-todo To do · 46","button align-filter-invalid Invalid · 0","button  1:1Pablo, siervo de Dios y apó","button  1:2con la esperanza de la vida","button  1:3y a su debido tiempo manife","button  1:4a Tito, verdadero hijo en l","button  1:5Por esta causa te dejé en C","button  ← Back to translating","button history-toggle History","button align-how ℹHow alignment works","button align-mode-gw Gateway · ULT","button align-mode-orig Original · Greek","button  la1","button  según","button  de2","button  y1","button  de1","input align-suggest-switch ","button  fe"]
+# step 1: placed 6 of 27 words placed -> 7 of 27 words placed
+# step 2: Tab stops with nothing chosen: 49 | merge controls: [] | card headers (draggable) tabIndex: [-1,0]
+# step 2: cards before 16 | after keys on a card: 16
+# step 3: suggestion chips 12 | Tab stops on a chip: 0 | any focusable part: [false,false,false,false,false,false,false,false,false,false,false,false]
+# Subtest: 568_keyboard_only_align
+ok 1 - 568_keyboard_only_align
+  ---
+  duration_ms: 10756.041932
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20260.406708
+exit 0

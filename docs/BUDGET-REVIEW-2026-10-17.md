@@ -28,7 +28,7 @@ Both rows should be replaced by rows that measure what a person feels.
 **What it is.** A save is durable when "Saved" shows, because it is already in the project's change files. Materializing then writes the derived files from those changes: the book's USFM, alignments, tN and TWL decisions, comments and conflicts, plus `metadata.json` (STORAGE:1815-1874; materialize.rs:176-460). Other programs, a copied folder and Home's project cards read these files (APP:177). Door43 sync and USB export do not read them. They build from memory and from the last commit (STORAGE §5.13 C3, STORAGE:3364-3366).
 
 **Where 300 ms came from.**
-- No reason is recorded. `git log -S` finds only 2609d49, and nothing in `docs/`, `.audit/research/` or `.audit/rebuild.tsv` explains the number.
+- No reason is recorded. `git log -S` finds only 2609d49, and nothing in `docs/`, `tracker:research/` or `docs/rebuild.tsv` explains the number.
 - That same week, STORAGE estimated the whole job at 20-60 ms (59c550b:docs/STORAGE.md:2965). It still says "A materialization lasts milliseconds" (STORAGE:83).
 - 300 ms is also rule 4's threshold for showing progress (PERF:28-33). A job that ends sooner never shows an indicator.
 - The real job takes 10-20 times the old estimate.
@@ -122,7 +122,7 @@ The Checkpoint row (PERF:102, 500 ms) has the same cause: 319-694 ms median on t
 
 **Where it came from.**
 - STORAGE estimated "≈ 100 MiB typical, ≈ 350 MiB peak", at about 100 bytes per change, and called this an estimate (59c550b:docs/STORAGE.md:2970).
-- The same day, commit 2609d49 turned it into "350 MiB peak; 150 MiB steady", with no reason given (.audit/rebuild.tsv:33). 150 looks like the estimate plus a margin.
+- The same day, commit 2609d49 turned it into "350 MiB peak; 150 MiB steady", with no reason given (docs/rebuild.tsv:33). 150 looks like the estimate plus a margin.
 - STORAGE's known limit 16 says that meeting 150 MiB needs the fold to keep only the current values and the open books' history in memory (STORAGE:4394-4399).
 
 **What it protects for a person.**
@@ -207,7 +207,7 @@ The Checkpoint row (PERF:102, 500 ms) has the same cause: 319-694 ms median on t
 ## Owner's ruling (2026-10-18)
 
 1. **Materialize: yes.** "Adding a book is a task that people expect to take time, and a progress bar makes sense. Autosave needs to happen in a way that doesn't interrupt the user." Rows A, B, D and E and count test C replace the 300 ms row in `docs/PERFORMANCE.md`; a whole-project materialize shows a progress bar and saves continue meanwhile.
-2. **Memory: yes.** Rows M1-M3 replace the 350/150 MiB row. The owner asked to compare the limits with other programs a translator uses (for example Microsoft Word with Psalms open) on the reference laptop, so we know they are reasonable: task 5 of `.audit/tasks/windows-track.md`.
+2. **Memory: yes.** Rows M1-M3 replace the 350/150 MiB row. The owner asked to compare the limits with other programs a translator uses (for example Microsoft Word with Psalms open) on the reference laptop, so we know they are reasonable: task 5 of `tracker:tasks/windows-track.md`.
 
 ## What the owner was asked
 

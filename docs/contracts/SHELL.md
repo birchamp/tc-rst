@@ -1,6 +1,6 @@
 # The shell contract, version 1
 
-Frozen on 2026-10-23 (INT-7), for the Track B hand-off (`.audit/roadmap/TRACK-B.md`).
+Frozen on 2026-10-23 (INT-7), for the Track B hand-off (`tracker:roadmap/TRACK-B.md`).
 
 This is the interface between the app (the `tc4` server and the page it serves) and the
 Electronite shell. Both sides code against it. A change is a pull request that raises this
@@ -21,7 +21,7 @@ fail CI: `the_buffer_reduction_matches_the_shell_contract_vectors` and
 | 6 | `drafts-buffer.log`: one `BufferLine` per line, fsynced at most once a second, off the main thread, reduced by the rules below | `crates/tc-api/src/buffer.rs` (`BufferLine`); `tc_ui::app::buffer::current_lines` in `crates/tc-ui/src/app/buffer.rs`; `fixtures/shell/buffer-vectors.json` | `the_buffer_reduction_matches_the_shell_contract_vectors`; `crates/tc-api/tests/buffer.rs` |
 | 7 | `TC4_BUILD_COMMIT` is set for both the server build and the UI build; the UI is built by `crates/tc-ui/build-app.sh` with wasm-bindgen 0.2.129 | `crates/tc-api/src/app.rs` (`BUILD_COMMIT`); `crates/tc-ui/build-app.sh`; `docs/APP-DESIGN.md` §3.10 | `crates/tc-ui/tests/app/client.rs` `the_same_build_proceeds`; `crates/tc-server/tests/routes.rs` (`hello.build.commit`) |
 | 8 | The English bundle: `cargo run -p tc-app --example bundle_store -- --from bundle/en --out <dir>`; the OBS image pack is fetched at its pinned commit and checked against `bundle/en/fetched.lock`; a build missing a pinned file fails | `bundle/en/README.md` "Fetched when the app is packaged"; `bundle/en/fetched.lock` | `crates/tc-resources/tests/fetched_lock.rs` (`the_bundled_lexicons_match_the_trees_door43_reported`, `the_fixture_folder_matches_its_lock`). The OBS pack check is G3's (to create) |
-| 9 | Electronite v37.1.0-graphite, pinned zips with sha256 | tC4 `docs/PACKAGING.md` line 917 (tC4 b86270f), "The wrapper is Electronite"; `.audit/tasks/g0-windows.md` "Prerequisites" item 4 | G3's release pipeline (to create) |
+| 9 | Electronite v37.1.0-graphite, pinned zips with sha256 | tC4 `docs/PACKAGING.md` line 917 (tC4 b86270f), "The wrapper is Electronite"; `tracker:tasks/g0-windows.md` "Prerequisites" item 4 | G3's release pipeline (to create) |
 | 10 | The test harness G1 and G5 code against: `tc4` features `test-hooks` and `fixture-backend`; `--scenario <dir>`; the `/?probe=fields` page and `build-app.sh --release --test-hooks --out` with `CARGO_JOBS`; `kit.mjs`'s `TC4_BIN`, `TC4_UI`, `TC4_UI_HOOKS`, `TC4_DOOR43_FAKE`; `app/hello`'s `startup` values and `build.commit`; `net/state`; AD11's filter path list (G1 step 5) | `crates/tc4/Cargo.toml` `[features]`; `crates/tc4/src/args.rs` (`scenario`); `crates/tc-ui/build-app.sh`; `crates/tc-ui/src/app/web/probe.rs`; `parity/app/journeys/kit.mjs`; `crates/tc-api/src/app.rs` (`startup`); `crates/tc-api/src/lib.rs` (`net/state`) | G5's `journeys` job (`.github/workflows/app-e2e.yml`) and the shell's e2e jobs |
 | 11 | The help-desk key: the release pipeline writes it as `help-desk.key` beside `shell/main.cjs` in the installed layout, from the repository secrets H15 names; the shell reads it only in the main process, never the page | G1 step 7 (reads); G3 step 3 (writes); `docs/RELEASE.md` (G3, to create, names the secrets) | G3's release pipeline (to create) |
 

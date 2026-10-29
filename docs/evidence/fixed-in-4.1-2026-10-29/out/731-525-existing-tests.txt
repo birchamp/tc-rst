@@ -1,0 +1,35 @@
+   Compiling tc-ui v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-ui)
+   Compiling tc-app v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.65s
+     Running tests/app.rs (target/debug/deps/app-d425a983b0fa488f)
+
+running 25 tests
+test app::app_data::a_summary_is_kept_across_a_relaunch_and_never_used_for_another_folder ... ok
+test app::app_data::a_write_whose_folder_flush_fails_is_written_not_durable ... ok
+test app::app_data::a_reset_removes_every_summary ... ok
+test app::app_data::disk_files_write_atomically_and_read_back ... ok
+test app::app_data::an_unreadable_prefs_file_on_disk_is_kept_aside_before_it_is_replaced ... ok
+test app::app_data::leftover_temporary_files_are_removed_and_others_are_not ... ok
+test app::app_data::home_keeps_its_summaries_once_b2_and_c1a_have_landed ... ok
+test app::app_data::a_crash_at_any_write_point_of_a_prefs_file_leaves_the_old_or_the_new_bytes ... ok
+test app::app_data::unknown_members_survive_a_rewrite_on_disk ... ok
+test app::feedback::a_failure_without_a_refusal_carries_its_reason ... ok
+test app::feedback::attachment_holds_the_report_in_tc4s_shape ... ok
+test app::app_data::a_held_disk_write_never_stalls_the_runtime ... ok
+test app::feedback::attachment_without_a_report_says_no_report ... ok
+test app::feedback::compose_answers_over_app_call ... ok
+test app::app_data::the_saved_app_language_survives_a_relaunch ... ok
+test app::app_data::place_and_the_resume_record_survive_a_relaunch ... ok
+test app::feedback::iso_utc_millis_is_javascripts_to_iso_string ... ok
+test app::feedback::platform_line_names_the_os_and_the_architecture ... ok
+test app::feedback::redact_takes_out_a_home_folder_on_each_system ... ok
+test app::feedback::compose_attaches_the_named_report_while_it_is_kept ... ok
+test app::feedback::compose_attaches_the_newest_when_the_named_one_is_gone ... ok
+test app::feedback::compose_with_none_named_attaches_the_newest ... ok
+test app::feedback::the_attachment_carries_no_home_folder_and_no_account_name ... ok
+test app::feedback::the_attachment_is_english_in_every_app_language ... ok
+test app::hello::hello_answers_real_state ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 789 filtered out; finished in 0.13s
+
+exit 0

@@ -1,6 +1,10 @@
 # The app parity harness
 
-P7 (docs/PLAN.md) asks that the Rust app's screens be compared with tC4's and that every
+> **Retired 2026-10-29.** The screenshot comparison with tC4 was done for 4.1.0 and no longer
+> gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). This folder is kept for what
+> other checks still use from it; the rest is a record.
+
+P7 (docs/DIFFERENCES.md) asks that the Rust app's screens be compared with tC4's and that every
 difference be listed. This folder holds the harness that captures both apps the same way and
 the record the gate in `cargo test` checks (docs/APP-DESIGN.md §7). The tC4 side's record is
 `parity/tc4-baseline`; the Rust side's is here.
@@ -98,7 +102,7 @@ mask or scope not found). Nothing excuses a failed row.
 | `behaviour/` | `behaviour.mjs --env rust` only (tC4's: `parity/tc4-baseline/behaviour/`, `--env tc4`) |
 | `report.json`, `diffs/` | `UPDATE_REPORT=1 cargo test -p tc-ui --test screen_record` only |
 | `units.json` | each unit adds its own id in the branch that builds it |
-| `masks.json` | by hand, each mask with the ruling it cites (`build`, or a `Q<n>` that docs/PLAN.md lists as a difference on purpose) and its reason; rectangles by `measure-masks.mjs` on baseline screens and by `parity/view-gallery/capture.mjs` on gallery cases. A unit whose rebuilt element differs from tC4's sets the mask's `rust` target |
+| `masks.json` | by hand, each mask with the ruling it cites (`build`, or a `Q<n>` that docs/DIFFERENCES.md lists as a difference on purpose) and its reason; rectangles by `measure-masks.mjs` on baseline screens and by `parity/view-gallery/capture.mjs` on gallery cases. A unit whose rebuilt element differs from tC4's sets the mask's `rust` target |
 | `residuals.json` | by hand: a reason for every `differs` row, with exactly the layers it differs in (`pixels`, `dom`, `meaning`, `behaviour`), and the differences no row shows |
 | `scopes.json` | by hand, only for DOM-first screens |
 | `cases.json` | `parity/view-gallery/capture.mjs` only |

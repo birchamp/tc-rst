@@ -352,10 +352,23 @@ fn a_save_is_durable_while_the_tree_is_built() {
     assert!(!checkpoint.is_ready(), "the branch has not moved");
     hooks.release(Point::BeforeHeadUpdate);
     let report = checkpoint.wait().unwrap();
-    assert!(report.commit.is_some());
     // The saves made meanwhile are not in that commit: the next checkpoint has them.
-    let next = checkpoint_again(&handle);
-    assert!(next.commit.is_some());
+    let repo = repo_of(&rig.fs, &folder);
+    let titus_of = |commit: Option<tc_journal::GitOid>| {
+        let commit = git2::Oid::from_bytes(commit.expect("a commit").as_bytes()).unwrap();
+        String::from_utf8(commit_files(&repo, commit)["ingredients/TIT.usfm"].clone()).unwrap()
+    };
+    let first = titus_of(report.commit);
+    assert!(first.contains("Paul, a servant of God"), "{first}");
+    let next = titus_of(checkpoint_again(&handle).commit);
+    for v in 2..8 {
+        let saved = format!("saved while the tree was built {v}");
+        assert!(
+            !first.contains(&saved),
+            "{v} is in the tree built before it"
+        );
+        assert!(next.contains(&saved), "{v} never reached a commit: {next}");
+    }
     handle.close().unwrap();
     assert_commits_valid(&rig.fs, &folder);
 }
@@ -1351,53 +1364,20 @@ fn a_book_file_the_open_could_not_read_is_asked_the_same_at_its_compare_and_swap
     assert_valid_burrito(&rig.fs, &folder);
 }
 
-/// A checkpoint that fails on a full disk after it renamed a book file into place (while it
-/// writes `metadata.json` or flushes the folder) is retried: the retry's commit holds the file
-/// as saved, not the blob of the last commit (a stale `blob` in the manifest; D1's loss lens,
-/// 2026-10-25). Door43 and teammates would otherwise read an old book file until it changed again.
-#[test]
-fn a_retried_checkpoint_commits_the_book_file_as_saved() {
-    for n in 30..46u64 {
-        let (rig, folder) = titus();
-        let handle = open(&rig, &folder);
-        save_verse(&handle, 1, 1, "MUST BE COMMITTED").unwrap();
-        handle.wait_idle();
-        rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
-        let first = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
-        handle.wait_idle();
-        if first.is_ok() {
-            handle.close().unwrap();
-            continue;
-        }
-        let second = handle
-            .checkpoint(CheckpointReason::Other("retry".into()))
-            .wait()
-            .unwrap();
-        handle.wait_idle();
-        let repo = repo_of(&rig.fs, &folder);
-        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
-        let files = commit_files(&repo, head);
-        let committed = String::from_utf8_lossy(&files["ingredients/TIT.usfm"]);
-        assert!(
-            second.commit.is_some() && committed.contains("MUST BE COMMITTED"),
-            "fail point {n}: retry {:?}, HEAD's TIT.usfm holds the save: {}",
-            (second.commit.is_some(), second.skipped),
-            committed.contains("MUST BE COMMITTED")
-        );
-        handle.close().unwrap();
-    }
-}
-
-/// INV-VALID-BURRITO at a full disk during the seal: a pack renamed into place whose folder
+/// INV-VALID-BURRITO at a full disk during a checkpoint: a pack renamed into place whose folder
 /// flush then fails stays listed by `metadata.json` once the group ends, and this session's
-/// own pack is never taken for a second writer's (the checks lane's repro, 2026-10-25).
+/// own pack is never taken for a second writer's (the checks lane's repro, 2026-10-25). A
+/// failure after the book file's rename (while `metadata.json` is written or the folder
+/// flushed) is retried, and the retry's commit holds the file as saved, not the blob of the
+/// last commit (a stale `blob` in the manifest; D1's loss lens, 2026-10-25): Door43 and
+/// teammates would otherwise read an old book file until it changed again.
 #[test]
-fn a_seal_that_fails_after_its_pack_rename_leaves_the_pack_listed() {
+fn a_checkpoint_that_fails_on_a_full_disk_is_retried_whole() {
     let mut reached = Vec::new();
-    for n in 0..24u64 {
+    for n in 0..46u64 {
         let (rig, folder) = titus();
         let handle = open(&rig, &folder);
-        save_verse(&handle, 1, 2, "a change to commit").unwrap();
+        save_verse(&handle, 1, 2, "MUST BE COMMITTED").unwrap();
         handle.wait_idle();
         rig.fs.fail_op(n, std::io::ErrorKind::StorageFull);
         let first = handle.checkpoint(CheckpointReason::LeavingTranslate).wait();
@@ -1423,6 +1403,14 @@ fn a_seal_that_fails_after_its_pack_rename_leaves_the_pack_listed() {
         assert!(
             retried.as_ref().is_ok_and(|r| r.commit.is_some()),
             "fail point {n}: the retry commits the save: {retried:?}"
+        );
+        let repo = repo_of(&rig.fs, &folder);
+        let head = repo.head().unwrap().peel_to_commit().unwrap().id();
+        let committed = String::from_utf8_lossy(&commit_files(&repo, head)["ingredients/TIT.usfm"])
+            .into_owned();
+        assert!(
+            committed.contains("MUST BE COMMITTED"),
+            "fail point {n}: HEAD's TIT.usfm lacks the save"
         );
         reached.push(n);
         handle.close().unwrap();

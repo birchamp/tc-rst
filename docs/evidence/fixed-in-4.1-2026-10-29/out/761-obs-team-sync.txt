@@ -1,0 +1,34 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/state: 12 resources installed
+# tc4: serving http://127.0.0.1:45619/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291228740/shared/projects, Door43: http://127.0.0.1:43521)
+# \#761 A's story card before connect: action=sync button="Sync with Door43"
+# \#761 A's shared story card: action=sync button="Sync with Door43" (home.sync="Sync with Door43")
+# \#761 A's first sync: {"ok":"1","text":"Synced with Door43 · 0 changes from teammates · 0 conflicts kept the newest version · 0 verse conflicts to reviewThis project now uses 6 resource versions that are not on this computer.Download","sync-count-received":"0","sync-count-conflicts":"0"}
+# tc4: serving http://127.0.0.1:42209/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3393381-1793291238401-teammate-b/store/projects, Door43: http://127.0.0.1:43521)
+# \#761 B opened from Door43: sample_burrito_obs
+# \#761 B's sync: {"received":0,"from":[],"keptNewest":0,"verseConflicts":0,"alignments":0,"restored":0,"missingPins":14,"recreated":false,"replaced":[],"handEdited":[]}
+# \#761 A's sync after B: {"ok":"1","text":"Synced with Door43 · 1 change from teammates · 0 conflicts kept the newest version · 0 verse conflicts to reviewChanges from: teammate-bThis project now uses 6 resource versions that are not on this computer.Download","sync-count-received":"1","sync-count-conflicts":"0"}
+# \#761 A's sync after both edited frame 3: {"ok":"1","text":"Synced with Door43 · 1 change from teammates · 0 conflicts kept the newest version · 0 verse conflicts to reviewChanges from: teammate-bThis project now uses 6 resource versions that are not on this computer.Download","sync-count-received":"1","sync-count-conflicts":"0"}
+# \#761 A's tc/conflicts.json: {"schemaVersion":1,"conflicts":[{"id":"7761f971375f6d383c38cb11592fa8acdbfaf102c04f53c17b46a9b41543b0a9","key":{"frame":{"frame":3,"story":1}},"kind":"frame","provisional":"9c4ae59cd0fb47a019f9f5782e9256746f18b49388194cd7d05659e76e0d017a","candidates":[{"change":"9c4ae59cd0fb47a019f9f5782e9256746f18b49388194cd7d05659e76e0d017a","device":"daeaelnny5f5o3ough7jb6c3h5a","author":"teammate-b","at":"2026-10-29T16:27:22.500Z"},{"change":"e9dd3b7fb141e98b1b3016031c1a809a47c0fff240c31eab638ad417a46f2b74","device":"dae7gtnus3xnfv53dcgup3bcfnm","author":"facilitator-zq","at":"2026-10-29T16:27:22.383Z"}]}
+# \#761 A's review, Text tab: {"view":2,"tabs":[{"tab":"text","count":1},{"tab":"alignments","count":0},{"tab":"checks","count":0},{"tab":"settings","count":0},{"tab":"detached","count":0},{"tab":"notices","count":0}],"entries":{"type":"conflicts","value":[{"conflict":"7761f971375f6d383c38cb11592fa8acdbfaf102c04f53c17b46a9b41543b0a9","kind":"frame","record":"{\\"frame\\":{\\"frame\\":3,\\"story\\":1}}","place":{"type":"story","value":{"story":1,"frame":3}},"group":0,"versions":[{"change":"9c4ae59cd0fb47a019f9f5782e9256746f18b49388194cd7d05659e76e0d017a","place":{"type":"story","value":{"story":1,"frame":3}},"by":{"type":"person","value":{"who":{"type":"username","value":"teammate-b"},"computer":null}},"at":1793291242500,"clockAhead":false,"shown":true,"value":{"type":"text","value":"Marco 3, como B lo dijo."}},{"change":"e9dd3b7fb141e98b1b3016031c1a809a47c0fff240c31eab638ad417a46f2b74","place":{"type":"story","value":{"sto
+# \#761 Home story card conflict chip: count=0
+# \#761 could not open the story screen: locator.waitFor: Timeout 15000ms exceeded.
+# Subtest: 761_obs_project_syncs_with_a_teammate_from_home
+ok 1 - 761_obs_project_syncs_with_a_teammate_from_home
+  ---
+  duration_ms: 31051.679023
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41078.50589
+exit 0

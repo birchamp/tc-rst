@@ -38,7 +38,10 @@ fn a_save_is_durable_before_its_reply_and_survives_a_reopen() {
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
     let reply = save_verse(&handle, 1, 1, "Paul, a servant of God").unwrap();
     assert_eq!(reply.stored, Stored::Durable);
-    assert!(reply.seq >= handle.snapshot().seq() || reply.seq > 0);
+    assert!(
+        handle.snapshot().seq() >= reply.seq,
+        "the snapshot reads the save"
+    );
     assert_eq!(
         words(&handle, 1, 1).as_deref(),
         Some("Paul, a servant of God")
@@ -552,18 +555,11 @@ fn a_reply_token_lists_only_the_new_change_and_its_seq_reads_the_write() {
 fn a_snapshot_costs_nothing_to_take() {
     let (rig, folder) = titus();
     let handle = rig.store.open(&folder, &OpenOptions::default()).unwrap();
-    // A clone of the fold costs a few hundred pointer copies; 200,000 of them would take
-    // seconds. An Arc clone takes nanoseconds.
-    let started = std::time::Instant::now();
-    let mut seq = 0;
-    for _ in 0..200_000 {
-        seq += handle.snapshot().seq();
-    }
-    assert!(seq > 0);
+    handle.wait_idle();
+    let (first, second) = (handle.snapshot(), handle.snapshot());
     assert!(
-        started.elapsed() < std::time::Duration::from_millis(1500),
-        "{:?}",
-        started.elapsed()
+        std::ptr::eq(first.fold(), second.fold()),
+        "two snapshots of one published state share its fold"
     );
     handle.close().unwrap();
 }
@@ -590,12 +586,19 @@ fn reads_never_wait_behind_a_held_checkpoint() {
     assert!(handle.read_book(TIT).wait().usfm.is_some());
     // The hold is released even if an assertion below fails, so the test ends.
     let saved = save.wait();
+    let more: Vec<_> = (9..=16)
+        .map(|v| save_verse(&handle, 1, v, &format!("during {v}")))
+        .collect();
     let still_held = !checkpoint.is_ready();
     hooks.release(tc_store::Point::BeforeCheckpoint);
     assert!(still_held, "the checkpoint is still held on the writer");
     checkpoint.wait().unwrap();
     assert_eq!(saved.unwrap().stored, Stored::Durable);
+    for reply in more {
+        assert_eq!(reply.unwrap().stored, Stored::Durable);
+    }
     handle.close().unwrap();
+    assert_valid_burrito(&rig.fs, &folder);
 }
 
 /// APP-DESIGN §4.2 `section_save_checks_only_displayed_values` (§5.2 step 2, L74): a join

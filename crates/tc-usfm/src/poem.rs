@@ -70,10 +70,10 @@ fn tabbed_words(text: &str, opened: &str) -> String {
         .filter(|line| matches!(line_kind(line), Line::Blank | Line::Break));
     let mut lines: Vec<&str> = text.split('\n').collect();
     // A blank line after the last words keeps a break it had; a new one is nothing (tC4).
-    let mut tail = Vec::new();
+    let mut tail = 0;
     while lines.len() > 1 && lines.last().is_some_and(|l| l.trim().is_empty()) {
         lines.pop();
-        tail.push(());
+        tail += 1;
     }
     let mut out: Vec<String> = lines
         .iter()
@@ -92,12 +92,7 @@ fn tabbed_words(text: &str, opened: &str) -> String {
             }
         })
         .collect();
-    for () in tail {
-        match breaks.next() {
-            Some(kept) => out.push(kept.to_owned()),
-            None => break,
-        }
-    }
+    out.extend(breaks.take(tail).map(str::to_owned));
     out.join(nl)
 }
 

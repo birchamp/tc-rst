@@ -1,6 +1,6 @@
 //! The two lexicon archives in `bundle/en/`, checked with `verify_archive` against the
 //! trees their zips hold. Door43 has not confirmed those trees yet (branch `door43-facts`,
-//! `.audit/tasks/door43-facts.md`), so they serve tests of the repackaging only and are
+//! `tracker:tasks/door43-facts.md`), so they serve tests of the repackaging only and are
 //! never a lock entry.
 
 use std::path::PathBuf;

@@ -731,17 +731,6 @@ impl App {
             ),
         }
     }
-
-    /// The handle of the open project a write names, or `StaleScope`.
-    fn writer(
-        &self,
-        at: &tc_api::ids::Scope,
-    ) -> Result<std::sync::Arc<crate::session::ProjectSession>, ApiError> {
-        self.inner
-            .sessions
-            .reader(at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))
-    }
 }
 
 impl Handle<Resolve> for App {
@@ -749,7 +738,7 @@ impl Handle<Resolve> for App {
     /// review showed. Versions that changed since answer `LookAgain`, and the reply cache
     /// gives a second send of one request its first reply (A-27).
     async fn handle(&self, req: Resolve) -> Result<Ack, ApiError> {
-        let session = self.writer(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let review = req
             .review
@@ -770,7 +759,7 @@ impl Handle<Restore> for App {
     /// the old version's value over every head the screen's token shows, so a version the
     /// screen did not show is never written over (it answers `LookAgain`).
     async fn handle(&self, req: Restore) -> Result<Ack, ApiError> {
-        let session = self.writer(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let shown = wire::token::edit_token(handle.as_ref(), &req.shown)?;
         let command = StoreCommand::restore(shown, change_id(&req.from)?).requested_by(req.request);
@@ -786,7 +775,7 @@ impl Handle<ResolveBulk> for App {
     /// the fold labels as that person; the store keeps their version where a conflict holds
     /// exactly one from them, and leaves the rest, which the reply names.
     async fn handle(&self, req: ResolveBulk) -> Result<BulkKept, ApiError> {
-        let session = self.writer(&req.at)?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let me = handle.facts().device;
         let devices: BTreeSet<DeviceId> = session

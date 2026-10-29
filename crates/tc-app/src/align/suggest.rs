@@ -3,9 +3,10 @@
 //! one project snapshot. Retraining attaches its booster to the current memory, so saves
 //! that arrived while it ran stay learned. Slot and training generations fence late results.
 
+use crate::app::lock;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
 use tc_align::suggest::{Model, TrainingVerse, crosses_retrain_budget, training_verse};
 use tc_align::{Alignment, TargetVerse};
@@ -84,11 +85,6 @@ struct Slot {
 pub(crate) struct SuggestHub {
     slots: Mutex<HashMap<Testament, Slot>>,
     next: AtomicU64,
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    // Every change under this lock is a store of a whole value.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 pub(crate) fn testament_of(book: BookId) -> Testament {

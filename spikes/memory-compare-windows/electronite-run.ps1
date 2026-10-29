@@ -1,5 +1,5 @@
 # Task 5 step 5: the G0 spike's Electronite shell with its page (filter mode, the Home page, idle),
-# as part 1 of .audit/tasks/g0-windows.md starts it; every electron process, and the stand-in
+# as part 1 of tracker:tasks/g0-windows.md starts it; every electron process, and the stand-in
 # server apart (it is not tc4 serve).
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path

@@ -61,8 +61,7 @@ use crate::reports::{ReportOp, ReportOutcome, facts};
 
 /// Where "Stay signed in" keeps a Door43 token.
 pub trait Keychain: Send + Sync + 'static {
-    /// Keeps the token. `NoKeychain` where this computer has none the app can use
-    /// (`signIn.notKept`).
+    /// Keeps the token. `NoKeychain` where this computer has none the app can use.
     fn keep(&self, token: &Token) -> Result<(), KeychainError>;
 
     /// The kept token. Bytes the keychain cannot open are removed and reported as

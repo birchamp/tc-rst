@@ -14,10 +14,11 @@
 //! - after `Cancelling` no `Running` frame is sent, so the UI never shows a cancelled job
 //!   running again.
 
+use crate::app::lock;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tc_api::StartsJob;
@@ -55,11 +56,6 @@ pub fn report_every(kind: JobKind) -> Duration {
     } else {
         Duration::from_millis(100)
     }
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    // No code that holds one of these locks can leave its state half changed.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 struct ProgressState {

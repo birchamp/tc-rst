@@ -33,6 +33,7 @@ mod path;
 mod schema;
 mod scope;
 mod time;
+mod unzip;
 mod validate;
 
 pub use build::{
@@ -40,7 +41,7 @@ pub use build::{
     check_relationship, check_scope, is_derived_field, render_metadata_unchecked,
 };
 pub use error::{Error, ValueError};
-pub use files::{DirProject, FileState, MemProject, ProjectFiles};
+pub use files::{DirProject, FileState, MemProject, ProjectFiles, UnlistedDir};
 pub use ingredient::{FileFacts, Md5, MimeType};
 pub use json::to_canonical_json;
 pub use model::{
@@ -52,10 +53,11 @@ pub use model::{
     TargetArea, TextStories, TextTranslation, TranslationType,
 };
 pub use open_enum::UnknownValue;
-pub use path::{IngredientPath, PathRule, collision_form};
+pub use path::{IngredientPath, PathRule, check_project_path, collision_form};
 pub use schema::{SchemaLoadError, is_language_tag, schema_ready};
 pub use scope::{Scope, ScopeBook, ScopeRange};
 pub use time::{Timestamp, TimestampError};
+pub use unzip::{ZIP_LIMITS, ZipEntry, ZipLimits, ZipReadError, read_zip};
 pub use validate::{
     CopyrightBasis, Problem, TimestampField, validate_dir, validate_metadata,
     validate_metadata_bytes, validate_project,

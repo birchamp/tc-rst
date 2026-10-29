@@ -20,7 +20,7 @@ on:
     # do not filter tag pushes.
     # A gate push is a merge's test; a release builds from main or a tag.
     branches: ['**', '!gate/**']
-    paths: ['.github/workflows/release.yml', 'scripts/release/**']
+    paths: ['.github/workflows/release.yml', 'scripts/release/**', 'branding/**', 'shell/**']
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -30,7 +30,8 @@ env:
 
 jobs:
   # INV-NO-UNTRANSLATED-STRING-SHIPS (rulings/2026-10-22-H10.md rule 2): a tag builds nothing while
-  # a rebuild key is untranslated; other runs still build, to test the pipeline.
+  # a rebuild key is untranslated; other runs still build, to test the pipeline. A `-preview` tag
+  # is for testers and may show pending keys in English (#848); a final release may not.
   translations:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -39,7 +40,9 @@ jobs:
       - run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
       - run: rustup toolchain install && rustc --version
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --locked --release -p tc-api --test refusals
+      - run: cargo test --locked --release -p tc-api --test refusals -- $SKIP
+        env:
+          SKIP: ${{ contains(github.ref_name, '-preview') && '--skip release_has_no_pending_translation' || '' }}
 
   # The UI and the bundle are the same files on every system: built once.
   common:
@@ -143,8 +146,12 @@ jobs:
           path: release
       - name: Electronite
         run: curl -sSfL -o "$RUNNER_TEMP/${{ matrix.electronite }}" "https://github.com/unfoldingWord/electronite/releases/download/$ELECTRONITE/${{ matrix.electronite }}"
+      - if: matrix.platform == 'windows-x64'
+        name: rcedit
+        run: curl -sSfL -o "$RUNNER_TEMP/rcedit-x64.exe" https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe
       - name: stage
         env:
+          TC4_RCEDIT: ${{ runner.temp }}/rcedit-x64.exe
           TC_HELP_DESK_TOKEN: ${{ secrets.TC_HELP_DESK_TOKEN }}
           TC_HELP_DESK_EMAIL: ${{ secrets.TC_HELP_DESK_EMAIL }}
         run: |
@@ -197,7 +204,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: scripts/release
+          sparse-checkout: |
+            scripts/release
+            branding
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -240,4 +249,4 @@ jobs:
           fi
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "translationCore 4 ${GITHUB_REF_NAME#v}" --notes "Built from $GITHUB_SHA." dist/*
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft $([[ $GITHUB_REF_NAME == *-* ]] && echo --prerelease) --title "translationCore 4 ${GITHUB_REF_NAME#v}" --notes "Built from $GITHUB_SHA." dist/*

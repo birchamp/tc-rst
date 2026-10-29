@@ -31,6 +31,10 @@ pub enum ManifestError {
     Version(u32),
     #[error("{MANIFEST} lists no install")]
     Empty,
+    #[error("{MANIFEST} could not be made: {0}")]
+    Unwritable(String),
+    #[error(transparent)]
+    Write(tc_store::StoreError),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,36 +99,28 @@ impl BundleManifest {
         Ok(Self::new(file.installs))
     }
 
-    /// Writes the manifest into `bundle`: a temporary file renamed over the target, so a
-    /// build that stops leaves the old manifest or the new one.
+    /// Writes the manifest into `bundle` through `tc_store::atomic_write`, so a build that
+    /// stops leaves the old manifest or the new one. Bytes in place whose folder flush failed
+    /// count as written: a folder that cannot be flushed (Windows) is no reason to fail the
+    /// build.
     pub fn write(&self, bundle: &Path) -> Result<(), ManifestError> {
-        let io = |path: &Path, e: std::io::Error| ManifestError::Io {
-            path: path.to_owned(),
-            reason: e.to_string(),
-        };
         let file = File {
             manifest_version: VERSION,
             installs: self.installs.clone(),
         };
         let mut bytes = serde_json::to_vec_pretty(&file)
-            .map_err(|e| ManifestError::Unreadable(e.to_string()))?;
+            .map_err(|e| ManifestError::Unwritable(e.to_string()))?;
         bytes.push(b'\n');
-        let target = bundle.join(MANIFEST);
-        let temporary = bundle.join(format!("{MANIFEST}.partial"));
-        let written = fs::File::create(&temporary).and_then(|mut f| {
-            use std::io::Write;
-            f.write_all(&bytes)?;
-            f.sync_all()
-        });
-        written.map_err(|e| io(&temporary, e))?;
-        fs::rename(&temporary, &target).map_err(|e| io(&target, e))?;
-        // The rename is durable once the folder is: a build that powers off then still has
-        // the manifest it reported. A folder that cannot be opened for this (Windows) is no
-        // reason to fail the build.
-        if let Ok(folder) = fs::File::open(bundle) {
-            let _ = folder.sync_all();
+        match tc_store::atomic_write(
+            &tc_store::StdFs,
+            bundle,
+            MANIFEST,
+            &bytes,
+            tc_store::SyncDir::Now,
+        ) {
+            Ok(()) | Err(tc_store::WriteError::WrittenNotDurable(_)) => Ok(()),
+            Err(tc_store::WriteError::NotWritten(error)) => Err(ManifestError::Write(error)),
         }
-        Ok(())
     }
 }
 
@@ -153,7 +149,11 @@ mod tests {
         assert!(manifest.installs().iter().all(|p| p.flavor.is_none()));
         manifest.write(dir.path()).unwrap();
         assert_eq!(BundleManifest::read(dir.path()).unwrap(), manifest);
-        assert!(!dir.path().join(format!("{MANIFEST}.partial")).exists());
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, [MANIFEST], "no temporary file is left");
         let text = fs::read_to_string(dir.path().join(MANIFEST)).unwrap();
         assert!(text.contains("en_tn") && !text.contains("flavor"), "{text}");
     }
@@ -169,6 +169,17 @@ mod tests {
         assert_eq!(missing, [&manifest.installs()[1]]);
         assert!(manifest.missing(|_| true).is_empty());
         assert_eq!(manifest.missing(|_| false).len(), 3);
+    }
+
+    #[test]
+    fn a_manifest_that_cannot_be_written_names_the_folder_and_leaves_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("gone");
+        let manifest = BundleManifest::new([pin("en_tn", 'a', Some("v91"))]);
+        let error = manifest.write(&gone).unwrap_err();
+        assert!(matches!(error, ManifestError::Write(_)), "{error:?}");
+        assert!(error.to_string().contains("gone"), "{error}");
+        assert!(!gone.exists());
     }
 
     #[test]

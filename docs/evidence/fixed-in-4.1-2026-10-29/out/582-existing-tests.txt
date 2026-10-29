@@ -1,0 +1,67 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/tc_app-fb5eb9c4f959d9dd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 92 filtered out; finished in 0.00s
+
+     Running tests/app.rs (target/debug/deps/app-d425a983b0fa488f)
+
+running 1 test
+test app::language_search::a_suggestion_offers_a_code_a_burrito_can_hold ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 2.49s
+
+     Running tests/op_counts.rs (target/debug/deps/op_counts-f057ec1da3e00f16)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/os_keychain.rs (target/debug/deps/os_keychain-baddab14deace84f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/store_adapter.rs (target/debug/deps/store_adapter-d06b784e07fa9acc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+     Running tests/store_contract.rs (target/debug/deps/store_contract-b2e363f0a2402a06)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+   Doc-tests tc_app
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+exit 0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/tc_store-ac6316521a6d03e2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.00s
+
+     Running tests/store.rs (target/debug/deps/store-5b4723336bf02c65)
+
+running 2 tests
+test tc4::create_refuses_a_language_tag_the_burrito_cannot_hold ... ok
+test tc4::create_keeps_regional_language_tags ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 429 filtered out; finished in 0.25s
+
+   Doc-tests tc_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit 0

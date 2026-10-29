@@ -32,7 +32,8 @@ OutputBaseFilename=translationCore4-{#Version}-windows-x64
 #else
 OutputBaseFilename=translationCore4-{#Version}-windows-x64-unsigned
 #endif
-UninstallDisplayIcon={app}\electron.exe
+SetupIconFile={#Payload}\icon.ico
+UninstallDisplayIcon={app}\icon.ico
 LicenseFile={#Payload}\LICENSE
 Compression=lzma2
 SolidCompression=yes
@@ -47,8 +48,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 Source: "{#Payload}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\translationCore 4"; Filename: "{app}\electron.exe"; WorkingDir: "{app}"; AppUserModelID: "org.unfoldingword.translationcore4"
-Name: "{autodesktop}\translationCore 4"; Filename: "{app}\electron.exe"; WorkingDir: "{app}"; AppUserModelID: "org.unfoldingword.translationcore4"; Tasks: desktopicon
+Name: "{autoprograms}\translationCore 4"; Filename: "{app}\electron.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; AppUserModelID: "org.unfoldingword.translationcore4"
+Name: "{autodesktop}\translationCore 4"; Filename: "{app}\electron.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; AppUserModelID: "org.unfoldingword.translationcore4"; Tasks: desktopicon
 ; No UninstallDelete section: projects, resources and settings live outside {app} and stay
 ; (tC4 #44). No vc_redist step: tc4.exe is built with the static C runtime (tC4 #284), which
 ; keeps PrivilegesRequired=lowest true.

@@ -1070,3 +1070,44 @@ mod update_book {
         assert_eq!(verse_list(&[]), "");
     }
 }
+
+/// #858: an Add Book upload that finishes after its dialog closed never marks a row of the
+/// dialog open now, though row ids start again at each opening. The page applies a completion
+/// only when its opening is current, the check every late upload answer goes through.
+#[test]
+fn a_late_add_book_completion_never_changes_a_newer_dialogs_row() {
+    use tc_ui::app::uploads::{PickedUploads, Slot};
+
+    let mut uploads = PickedUploads::default();
+    let card = card_with(&[]);
+    let mut old = AddBookForm::open(&card);
+    let old_opening = uploads.opening();
+    let old_row = old.add_file("a-TIT.usfm".into());
+    assert!(
+        uploads.close().is_empty(),
+        "closed before the upload landed"
+    );
+
+    let mut new = AddBookForm::open(&card);
+    let opening = uploads.opening();
+    let row = new.add_file("b-JUD.usfm".into());
+    assert_eq!(row, old_row, "row ids repeat across openings");
+    let upload = UploadId::parse(&format!("{:032x}", 2)).unwrap();
+    assert!(uploads.pick(opening, Slot::Usfm(row), upload).is_empty());
+    new.file_read(row, read(2, BookId::Jude));
+    let before = new.rows();
+
+    let late = UploadId::parse(&format!("{:032x}", 1)).unwrap();
+    assert_eq!(
+        uploads.pick(old_opening, Slot::Usfm(old_row), late.clone()),
+        [late],
+        "the late upload is dropped as it lands"
+    );
+    for state in [UsfmState::Unreadable(String::new()), read(1, BookId::Titus)] {
+        if uploads.is_current(old_opening) {
+            new.file_read(old_row, state);
+        }
+    }
+    assert_eq!(new.rows(), before, "the new row is unchanged");
+    assert!(uploads.is_current(opening));
+}

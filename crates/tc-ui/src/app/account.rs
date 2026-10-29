@@ -90,30 +90,6 @@ pub enum SignInNext {
     AskAgain(Pending),
 }
 
-/// What M12 draws for a keychain: whether it has the "Stay signed in" box, and the line under
-/// it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SignInRows {
-    pub stay: bool,
-    pub reason_key: &'static str,
-}
-
-/// tC4 #496: on a computer whose keychain cannot keep a sign-in, the step has no "Stay signed
-/// in" box, and says why the sign-in lasts for this app session (`signIn.notKept`, which tC4
-/// shows in the share dialog for the same reason and translates in all ten languages).
-pub fn sign_in_rows(keychain: KeychainState) -> SignInRows {
-    match keychain {
-        KeychainState::Works => SignInRows {
-            stay: true,
-            reason_key: "signIn.sessionNote",
-        },
-        KeychainState::Missing => SignInRows {
-            stay: false,
-            reason_key: "signIn.notKept",
-        },
-    }
-}
-
 impl SignInFlow {
     /// Opens the step, empty, "Stay signed in" off (tC4's `openSignIn`). `then` runs once
     /// signed in.

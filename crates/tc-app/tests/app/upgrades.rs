@@ -1458,30 +1458,13 @@ pub(super) fn zip_declaring(fixture_dir: &str, repo: &str, commit: &str) -> Vec<
     writer.finish().unwrap().into_inner()
 }
 
-/// The server's uploaded files, as a test keeps them.
-#[derive(Default)]
-struct Uploaded(std::sync::Mutex<BTreeMap<tc_api::ids::UploadId, tc_app::UploadedFile>>);
-
-impl tc_app::UploadedFiles for Uploaded {
-    fn take(&self, id: &tc_api::ids::UploadId) -> Option<tc_app::UploadedFile> {
-        self.0.lock().unwrap().remove(id)
-    }
-}
-
-impl Uploaded {
-    fn put(&self, dir: &Path, bytes: &[u8]) -> tc_api::ids::UploadId {
-        let id = tc_api::ids::UploadId::parse("0123456789abcdef0123456789abcdef").unwrap();
-        let path = dir.join("upload.zip");
-        std::fs::write(&path, bytes).unwrap();
-        self.0.lock().unwrap().insert(
-            id.clone(),
-            tc_app::UploadedFile {
-                name: "en_tn.zip".into(),
-                path,
-            },
-        );
-        id
-    }
+/// Puts a file where the server's upload route would have stored it.
+fn put_upload(dir: &Path, bytes: &[u8]) -> tc_api::ids::UploadId {
+    let id = tc_api::ids::UploadId::parse("0123456789abcdef0123456789abcdef").unwrap();
+    let uploads = dir.join("app-data/uploads");
+    std::fs::create_dir_all(&uploads).unwrap();
+    std::fs::write(uploads.join(id.as_str()), bytes).unwrap();
+    id
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1576,8 +1559,6 @@ async fn a_download_of_another_commit_than_the_pinned_one_is_refused() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_file_is_installed_only_when_it_declares_the_pinned_commit() {
     let w = world(6, 0).await;
-    let uploads = Arc::new(Uploaded::default());
-    w.t.app.provide_uploads(uploads.clone());
     let dir = w._dir.path();
     let sideload = |upload, request| FixSideload {
         request: rid(request),
@@ -1588,7 +1569,7 @@ async fn a_file_is_installed_only_when_it_declares_the_pinned_commit() {
     };
     // A release of the same repository with another commit: refused, nothing installed.
     let other = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &"1".repeat(40));
-    let id = uploads.put(dir, &other);
+    let id = put_upload(dir, &other);
     match err(&w.t.app, &sideload(id, 81)).await {
         ApiError::Refused(tc_api::Refusal::Resources(
             tc_api::refusal::ResourceRefusal::FixFailed { .. },
@@ -1598,7 +1579,7 @@ async fn a_file_is_installed_only_when_it_declares_the_pinned_commit() {
     assert!(installed_tn(&w).is_empty());
     // The file that declares exactly the pinned commit is installed.
     let right = zip_declaring("en_tn@v86", "unfoldingWord/en_tn", &w.tn.sha.to_hex());
-    let id = uploads.put(dir, &right);
+    let id = put_upload(dir, &right);
     ok(&w.t.app, &sideload(id, 82)).await;
     assert_eq!(installed_tn(&w), ["en_tn"]);
     assert!(ok(&w.t.app, &fix_state(&w)).await.is_none());

@@ -3,7 +3,7 @@
 The reference machine: a Dell Latitude 7490 (a 2018 model) with 4 cores, 8 GB and a SATA SSD,
 older than the five years the reference names, so at least as slow
 (`docs/evidence/windows-machine-2026-10-17.md` on `windows-fixes`). This file also stands for
-task 3 of `.audit/tasks/windows-track.md`, which need not run the benchmark again. Defender
+task 3 of `tracker:tasks/windows-track.md`, which need not run the benchmark again. Defender
 excludes no folder: the owner confirmed it on 2026-10-18 (the machine table below could not
 read the list, which only an administrator can).
 

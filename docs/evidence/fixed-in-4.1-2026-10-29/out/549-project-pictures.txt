@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running tests/project_pictures.rs (target/debug/deps/project_pictures-a4e0de09424e22f6)
+
+running 3 tests
+test only_pictures_outside_checking_tc_and_content_are_the_projects ... ok
+test a_project_picture_without_a_role_is_the_project_rung ... ok
+test a_conflict_copy_keeps_the_picture_and_two_folders_make_it_ambiguous ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+exit 0

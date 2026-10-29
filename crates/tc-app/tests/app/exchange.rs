@@ -231,6 +231,43 @@ fn rewrite_entry(from: &Path, to: &Path, name: &str, edit: impl Fn(&str) -> Stri
     out.finish().unwrap();
 }
 
+/// #7 (review 2026-10-28): a receive takes its upload from the server's registry as it
+/// starts, so the sweep of abandoned uploads cannot delete the file it reads, and deletes
+/// the file when done.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_receive_takes_its_upload_from_the_sweep_and_deletes_it() {
+    use tc_api::ids::UploadId;
+    use tc_api::jobs::{JobOutcome, JobState};
+
+    use super::common::{folder, rid};
+    use super::port_contract::ended;
+
+    let w = Usb::world().await;
+    let exported = juans_file(&w).await;
+    let id = UploadId::parse(&format!("{:032x}", 7)).unwrap();
+    let uploads = w.disk.app_data().join("uploads");
+    std::fs::create_dir_all(&uploads).unwrap();
+    std::fs::copy(&exported, uploads.join(id.as_str())).unwrap();
+    let job = post(
+        &w.t.app,
+        &tc_api::exchange::Receive {
+            request: rid(10),
+            project: folder(SAMPLE),
+            file: ExchangeFile::Upload(id.clone()),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        ended(&w.t.app, job).await,
+        JobState::Done(JobOutcome::Received(_))
+    ));
+    assert!(
+        !uploads.join(id.as_str()).exists(),
+        "the receive deleted it"
+    );
+}
+
 /// #705: a recording a teammate put into the project folder with another program arrives
 /// byte for byte through an exchange file (STORAGE §10.2 R5, carried files as X built them).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

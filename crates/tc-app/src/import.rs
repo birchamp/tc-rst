@@ -43,6 +43,7 @@ use crate::jobs::{JobCtx, JobEnd, JobSpec};
 use crate::plans::{self, ListSource, PlanError, PlanSources, UnitSpec};
 use crate::ports::ImportPort;
 use crate::session::ProjectSession;
+use crate::uploads::HeldUpload;
 use crate::wire;
 
 /// The font a new project names when the person chose none, as New Bible's first choice.
@@ -260,11 +261,17 @@ fn verse_at(key: &RecordKey) -> Option<VerseAt> {
 }
 
 impl App {
-    /// The uploads as the files the person chose, read on the blocking pool.
-    async fn uploaded(&self, files: &[ImportFile]) -> Result<Vec<SourceFile>, ApiError> {
+    /// The uploads as the files the person chose, held, then read on the blocking pool. The
+    /// caller keeps the held uploads while it needs them; dropped, they are given back.
+    async fn uploaded(
+        &self,
+        files: &[ImportFile],
+    ) -> Result<(Vec<SourceFile>, Vec<HeldUpload>), ApiError> {
+        let held = self.hold_uploads(files.iter().map(|f| &f.upload))?;
         let wanted: Vec<_> = files
             .iter()
-            .map(|f| (f.name.clone(), self.upload_path(&f.upload)))
+            .zip(&held)
+            .map(|(f, held)| (f.name.clone(), held.path().to_owned()))
             .collect();
         let read = tokio::task::spawn_blocking(move || {
             wanted
@@ -279,16 +286,11 @@ impl App {
                 problem: e.to_string(),
             })
         })?;
-        read.map_err(|_| ApiError::BadRequest {
+        let read = read.map_err(|_| ApiError::BadRequest {
             field: "upload".to_owned(),
             reason: "no such upload".to_owned(),
-        })
-    }
-
-    fn drop_uploads(&self, files: &[ImportFile]) {
-        for file in files {
-            self.drop_upload(&file.upload);
-        }
+        })?;
+        Ok((read, held))
     }
 
     /// The folder `details` make, or why Import is off with them: create's rules, before
@@ -329,7 +331,7 @@ impl App {
 
 impl Handle<Review> for App {
     async fn handle(&self, req: Review) -> Result<ImportReview, ApiError> {
-        let files = self.uploaded(&req.files).await?;
+        let (files, _held) = self.uploaded(&req.files).await?;
         let found = self.inner.import.review(files.clone()).await?;
         let carry_over = match &req.use_installed {
             Some(kept) => {
@@ -364,7 +366,8 @@ impl Handle<Review> for App {
 
 impl Handle<Versions> for App {
     async fn handle(&self, req: Versions) -> Result<JobId, ApiError> {
-        let files = self.uploaded(&req.files).await?;
+        // Read here, so given back as the job starts: Import reads the same files after.
+        let (files, _held) = self.uploaded(&req.files).await?;
         let app = self.clone();
         let spec = JobSpec::new(JobKind::ImportVersions, Phase::Import);
         Ok(self
@@ -381,13 +384,14 @@ impl Handle<Run> for App {
     /// The details are checked as the review checked them, since the folder may have been
     /// made meanwhile (tC4 j09 :367); then one job, which holds the import flow.
     async fn handle(&self, req: Run) -> Result<JobId, ApiError> {
+        // Held first: a refusal below gives the files back for another try.
+        let (files, held) = self.uploaded(&req.files).await?;
         let folder = self
             .import_target(&req.details)
             .await?
             .map_err(ApiError::Refused)?;
         let found = found_pins(&req.found)?;
         let scheme = chosen_scheme(&req.versification)?;
-        let files = self.uploaded(&req.files).await?;
         let pass = self.inner.flows.enter(FlowRequest::Import)?;
         let app = self.clone();
         let spec = JobSpec::new(JobKind::Import, Phase::Import).pass(pass);
@@ -409,7 +413,7 @@ impl Handle<Run> for App {
                     )
                     .await?;
                 app.imported(&made);
-                app.drop_uploads(&req.files);
+                crate::uploads::used_up(held);
                 Ok(made)
             }))
     }
@@ -421,7 +425,7 @@ impl Handle<UpdateBook> for App {
     /// (§13.6 U1).
     async fn handle(&self, req: UpdateBook) -> Result<JobId, ApiError> {
         let session = self.read(&req.at)?;
-        let mut files = self.uploaded(std::slice::from_ref(&req.file)).await?;
+        let (mut files, held) = self.uploaded(std::slice::from_ref(&req.file)).await?;
         let mut file = files.pop().ok_or_else(|| ApiError::BadRequest {
             field: "upload".to_owned(),
             reason: "no such upload".to_owned(),
@@ -456,7 +460,10 @@ impl Handle<UpdateBook> for App {
             .start_typed::<UpdateBook, _, _>(spec, move |ctx| async move {
                 let port = app.inner.import.clone();
                 let report = port.update_book(session, req.book, file, ctx).await;
-                app.drop_uploads(std::slice::from_ref(&req.file));
+                // A book not updated keeps its file for another try.
+                if report.is_ok() {
+                    crate::uploads::used_up(held);
+                }
                 report
             }))
     }

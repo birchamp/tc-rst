@@ -1,0 +1,23 @@
+$ TC4_ELECTRON=<electronite 37.1.0>/electron TC4_BIN=target/debug/tc4 TC4_UI=target/tc-ui-app TC4_UI_HOOKS=target/tc-ui-app-hooks TC4_BUNDLE=target/shell-bundle xvfb-run -a tc-heavy node --test docs/evidence/fixed-in-4.1-2026-10-29/repro/743-first-launch-window.test.cjs
+TAP version 13
+# \# window shown 338 ms after the launch (playwright had it at 878 ms); tc4 named its address at 456 ms
+# \# status line samples: ["Preparing resources: 0 of 3","Preparing resources: 1 of 3","Preparing resources: 2 of 3"]
+# \# page words: "Preparing translationCore4\\n\\nGetting resources ready for offline use.\\n\\nPreparing resources: 2 of 3"
+# \# second launch exit 0; tc4 before 1, after 1
+# \# close while preparing: shell exit 0; tc4 3042126 alive: false; tc4 left: 0
+# Subtest: 743_first_launch_window_shows_moves_and_closes_cleanly
+ok 1 - 743_first_launch_window_shows_moves_and_closes_cleanly
+  ---
+  duration_ms: 5508.927182
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5836.161542
+exit 0

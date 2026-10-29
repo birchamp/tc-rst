@@ -1,0 +1,26 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:45215/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2909357-1793290227792/sample/projects, Door43: http://127.0.0.1:9)
+# placed before: 6 of 27 words placed | after placing fe: 7 of 27 words placed
+# buttons on the Align screen: ["History","ℹHow alignment works","Gateway · ULT","Original · Greek","de1","y1","de2","según","la1","de3","los","escogidos","de4","y2","el","conocimiento","de5","la2","verdad","que","va","con","la3","piedad","Pablo","siervo","Dios1","apóstol","SPLIT","Jesucristo","fe","Dios2","← Previous","✓ Mark valid","Next →"]
+# a Clear control: []
+# after Ctrl+K: placed 7 of 27 words placed | dialogs open: 0
+# Subtest: 758_no_clear_alignments_control_in_align
+ok 1 - 758_no_clear_alignments_control_in_align
+  ---
+  duration_ms: 8989.211312
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 18779.206512
+exit 0

@@ -118,6 +118,17 @@ browserTest('i. (#634) in every language the Message, Name and Email boxes are n
   });
 });
 
+browserTest('feedback_says_in_the_app_language_that_the_attachment_is_english (#731)', async () => {
+  const ar = JSON.parse(fs.readFileSync(path.join(REPO, 'crates', 'tc-ui', 'assets', 'i18n-rebuild', 'ar.json'), 'utf8'));
+  await withApp(async ({ page }) => {
+    await openReport(page);
+    assert.match(await attachment(page).textContent(), /^translationCore .*\nno Report\n?$/, 'the attachment stays English');
+    const line = dialog(page).getByTestId('feedback-attachment-english');
+    assert.equal((await line.textContent()).trim(), ar['feedback.attachmentEnglish']);
+    assert.notEqual(ar['feedback.attachmentEnglish'], rebuildEn['feedback.attachmentEnglish']);
+  }, { locale: 'ar' });
+});
+
 browserTest('d, e, f. with the shell: Send asks first; Not now sends nothing; Turn on sends once; a held send locks the dialog; timeout keeps the text; a double click sends one; the shell gets exactly the shown attachment', async () => {
   const shell = bridge();
   shell.answers.push({ ok: false, reason: 'timeout' }, { ok: true });

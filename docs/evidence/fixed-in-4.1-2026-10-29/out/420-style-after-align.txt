@@ -1,0 +1,50 @@
+TAP version 13
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/state: loaded sample_burrito (3 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/state: loaded sample_burrito_obs (1 declared differences)
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/state: 2 projects written to /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/projects
+# tc4: scenario /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/state: 12 resources installed
+# tc4: serving http://127.0.0.1:41623/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/3281154-1793291009371/sample/projects, Door43: http://127.0.0.1:9)
+# Align 1:1: stale banner shown: false | placed 6 of 27 words placed -> 7 of 27 words placed
+# book still holds the styles: true
+# aligned 1:1:
+# \\v 1 \\zaln-s |x-strong="G39720" x-lemma="Παῦλος" x-morph="Gr,N,,,,,NMS," x-occurrence="1" x-occurrences="1" x-content="Παῦλος"\\*\\w Pablo|x-occurrence="1" x-occurrences="1"\\w*\\zaln-e\\*, \\bd \\zaln-s |x-strong="G14010" x-lemma="δοῦλος" x-morph="Gr,N,,,,,NMS," x-occurrence="1" x-occurrences="1" x-content="δοῦλος"\\*\\w siervo|x-occurrence="1" x-occurrences="1"\\w*\\zaln-e\\*\\bd*
+# \\w de|x-occurrence="1" x-occurrences="5"\\w* \\it \\zaln-s |x-strong="G23160" x-lemma="θεός" x-morph="Gr,N,,,,,GMS," x-occurrence="1" x-occurrences="2" x-content="Θεοῦ"\\*\\w Dios|x-occurrence="1" x-occurrences="2"\\w*\\zaln-e\\*\\it*
+# \\w y|x-occurrence="1" x-occurrences="2"\\w*
+# \\zaln-s |x-strong="G06520" x-lemma="ἀπόστολος" x-morph="Gr,N,,,,,NMS," x-occurrence="1" x-occurrences="1" x-content="ἀπόστολος"\\*\\w apóstol|x-occurrence="1" x-occurrences="1"\\w*\\zaln-e\\*
+# \\w de|x-occurrence="2" x-occurrences="5"\\w*
+# \\zaln-s |x-strong="G24240" x-lemma="Ἰησοῦς" x-morph="Gr,N,,,,,GMS," x-occurrence="1" x-occurrences="1" x-content="Ἰησοῦ"\\*\\zaln-s |x-strong="G55470" x-lemma="χριστός" x-morph="Gr,N,,,,,GMS," x-occurrence="1" x-occurrences="1" x-content="Χριστοῦ"\\*\\w Jesucristo|x-occurrence="1" x-occurrences="1"\\w*\\zaln-e\\*\\zaln-e\\*,
+# \\w según|x-occurrence="1" x-occurrences="1"\\w*
+# \\w la|x-occurrence="1" x-occurrences="3"\\w*
+# \\zaln-s |x-strong="G41020" x-lemma="πίστις" x-morph="Gr,N,,,,,AFS," x-occurrence="1" x-occurrences="1" x-content="πίστιν"\\*\\w fe|x-occurrence="1" x-occurrences="1"\\w*\\zaln-e\\*
+# \\w de|x-occurrence="3" x-occurrences="5"\\w*
+# \\w los|x-occurrence="1" x-occurrences="1"\\w*
+# \\w escogidos|x-occurrence="1" x-occurrences="1"\\w*
+# \\w de|x-occurrence="4" x-occurrences="5"\\w*
+# \\zaln-s |x-strong="G23160" x-lemma="θεός" x-morph="Gr,N,,,,,GMS," x-occurrence="2" x-occurrences="2" x-content="Θεοῦ"\\*\\w Dios|x-occurrence="2" x-occurrences="2"\\w*\\zaln-e\\*
+# \\w y|x-occurrence="2" x-occurrences="2"\\w*
+# \\w el|x-occurrence="1" x-occurrences="1"\\w*
+# \\w conocimiento|x-occurrence="1" x-occurrences="1"\\w*
+# \\w de|x-occurrence="5" x-occurrences="5"\\w*
+# \\w la|x-occurrence="2" x-occurrences="3"\\w*
+# \\w verdad|x-occurrence="1" x-occurrences="1"\\w*
+# \\w que|x-occurrence="1" x-occurrences="1"\\w*
+# \\w va|x-occurrence="1" x-occurrences="1"\\w*
+# \\w con|x-occurrence="1" x-occurrences="1"\\w*
+# \\w la|x-occurrence="3" x-occurrences="3"\\w*
+# \\w piedad|x-occurrence="1" x-occurrences="1"\\w*,
+# Subtest: 420_character_styles_survive_align_and_aligned_export
+ok 1 - 420_character_styles_survive_align_and_aligned_export
+  ---
+  duration_ms: 14161.561957
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24266.909642
+exit 0

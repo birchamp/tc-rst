@@ -1,5 +1,9 @@
 # tC4 design-system baseline gallery
 
+> **Retired 2026-10-29.** The screenshot comparison with tC4 was done for 4.1.0 and no longer
+> gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). This folder is kept for what
+> other checks still use from it; the rest is a record.
+
 Every component of translationCore 4's design system (`src/ds`), in its meaningful states, each
 drawn alone in a fixed-size frame and captured as a PNG. The Rust/Leptos port renders the same
 cases from `gallery-spec.json` and compares its images with `screens/`.
@@ -65,7 +69,7 @@ steps. `?case=Button/primary-md&auto=1` shows one case alone.
 | `dom-diff.mjs`, `dom-report.json` | The DOM comparison of the two galleries, per case. |
 | `scenarios.mjs`, `scenario-report.json` | Behaviour parity: keyboard and mouse sequences on both galleries, compared after every step. |
 | `screens-rust/` | The port's screens. Git-ignored: `capture-rust.mjs` writes them again. |
-| `residuals.json` | A declared difference per case id: the ruling docs/PLAN.md lists, the layers that differ (`pixels`, `dom`), why, and the exact [tC4, port] DOM lines. `cargo test -p tc-ui` fails when a declared case no longer differs, differs in more than it declares, or cites a ruling PLAN lacks. |
+| `residuals.json` | A declared difference per case id: the ruling docs/DIFFERENCES.md lists, the layers that differ (`pixels`, `dom`), why, and the exact [tC4, port] DOM lines. `cargo test -p tc-ui` fails when a declared case no longer differs, differs in more than it declares, or cites a ruling PLAN lacks. |
 
 ## The Leptos port
 

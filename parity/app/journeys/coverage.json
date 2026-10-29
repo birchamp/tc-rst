@@ -1,5 +1,5 @@
 {
-  "_about": "Each live tC4 journey and each tC4 e2e spec at tc4.commit, mapped to the journey tests (file and exact titles) or Rust tests that cover it, or to the card that is not done and will. A list holds the parts of a partial mapping. Checked by coverage.test.mjs (INV-P1-COVERED).",
+  "_about": "Each live tC4 journey and each tC4 e2e spec at tc4.commit, mapped to the journey tests (file and exact titles) or Rust tests that cover it, or to the card that is not done and will. A list holds the parts of a partial mapping. rebuildJourneys does the same for the rebuild's own journeys (docs/JOURNEYS.md J27 and later). Checked by coverage.test.mjs (INV-P1-COVERED).",
   "tc4": {
     "commit": "d25b7871904228a342c0d80280136d8636833653",
     "liveJourneys": [
@@ -71,12 +71,22 @@
     ]
   },
   "journeys": {
-    "J1": {
-      "file": "parity/app/journeys/create.test.mjs",
-      "tests": [
-        "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
-      ]
-    },
+    "J1": [
+      {
+        "file": "parity/app/journeys/create.test.mjs",
+        "tests": [
+          "J1: a Bible is created with its language and direction, then a blank book makes it a valid project"
+        ]
+      },
+      {
+        "file": "parity/app/journeys/dropdown.test.mjs",
+        "tests": [
+          "tC4 #552: a press on the label of the open book list keeps the list and its search",
+          "tC4 #552: two quick presses on the scrim with the book list open close the list, then the dialog",
+          "tC4 #552: a list that turns off while it is open closes and takes no choice"
+        ]
+      }
+    ],
     "J2": [
       {
         "file": "parity/app/journeys/translate.test.mjs",
@@ -387,7 +397,8 @@
     "feedback.spec.ts": {
       "file": "parity/app/journeys/feedback.test.mjs",
       "tests": [
-        "c. opening the report and typing in it go to no other origin and ask nothing but the attachment"
+        "c. opening the report and typing in it go to no other origin and ask nothing but the attachment",
+        "feedback_says_in_the_app_language_that_the_attachment_is_english (#731)"
       ]
     },
     "guided-fix.spec.ts": {
@@ -689,5 +700,30 @@
         ]
       }
     ]
+  },
+  "rebuildJourneys": {
+    "J27": {
+      "file": "parity/app/journeys/usb-exchange.test.mjs",
+      "tests": [
+        "E2: a file saved for a teammate opens on their computer, comes back with their verse, and reaches a third computer"
+      ]
+    },
+    "J28": {
+      "file": "parity/app/journeys/conflict-kinds.test.mjs",
+      "tests": [
+        "newest_version_wins_and_history_restores_the_older",
+        "a_teammates_newer_comment_wins_and_history_restores_mine: Understand shows the newer verse comment, and its History restores the older one"
+      ]
+    },
+    "J29": {
+      "file": "parity/app/journeys/outside-edit.test.mjs",
+      "tests": [
+        "two changed books are asked in one question; Not now keeps the text and lists both copies with Import, also after a reload; a refused Import says why; Import takes Titus in",
+        "a story file changed outside: Not now keeps its copy, and the story Translate toolbar opens the notices that list it"
+      ]
+    },
+    "J30": {
+      "pending": "AQ1"
+    }
   }
 }

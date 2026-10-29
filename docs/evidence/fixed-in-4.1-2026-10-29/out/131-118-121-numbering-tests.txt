@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/tc_app-fb5eb9c4f959d9dd)
+
+running 4 tests
+test numbering::tests::a_project_verse_shows_the_source_verse_its_numbering_names ... ok
+test numbering::tests::a_verse_in_another_book_names_that_book ... ok
+test understand::tests::a_pane_in_another_numbering_shows_the_source_verse_under_the_projects_key ... ok
+test numbering::tests::the_scheme_is_the_recorded_one_or_the_one_its_document_means ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 88 filtered out; finished in 0.03s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/app.rs (target/debug/deps/app-d425a983b0fa488f)
+
+running 1 test
+test app::understand::a_project_in_another_numbering_reads_each_verse_where_the_sources_have_it ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 0.62s
+

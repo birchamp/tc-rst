@@ -76,7 +76,7 @@ CASES = {
     "L125": {"path": "materialize.rs", "tests": [
         "model::a_held_metadata_json_after_a_kill_past_its_rename_is_not_taken_for_an_edit"]},
     "COPY_EXHAUSTION": {"path": "materialize.rs", "tests": [
-        "placement_regressions::external_copy_namespace_exhaustion_never_replaces_an_existing_copy"]},
+        "placement_regressions::a_carried_restore_waits_until_outside_metadata_can_be_preserved"]},
     "INCOMPLETE_CACHE": {"path": "classify.rs", "tests": [
         "placement_regressions::a_rendering_that_could_not_read_a_save_never_replaces_its_last_readable_copy"]},
     "SHORT_RENAME_RETRY": {"path": "atomic.rs", "tests": [], "lib_tests": [
@@ -493,7 +493,7 @@ def invoke(command, source, destination, environment):
 
 
 def gate(command, source, output, environment):
-    result = invoke(["node", ".audit/tools/run-gates.mjs", "--fresh", "--jobs", "6", "--", *command],
+    result = invoke(["node", "scripts/tools/run-gates.mjs", "--fresh", "--jobs", "6", "--", *command],
                     source, output, environment)
     text = output.read_text()
     events = []
@@ -596,7 +596,7 @@ def main():
         raise RuntimeError("isolated source is not clean at exact GO revision; preserve it for inspection")
     if source.resolve() == owner or target.resolve() == (owner / "target").resolve():
         raise RuntimeError("source or target isolation failed")
-    if not (source / ".audit/tools/run-gates.mjs").is_file():
+    if not (source / "scripts/tools/run-gates.mjs").is_file():
         raise RuntimeError("GO revision lacks adopted gate tools")
     report = {"sha": args.base, "summary": "S2 mutation proof in progress; incomplete evidence is not a pass.",
               "startedAt": now(), "executorPid": os.getpid(), "cases": [], "evidence": str(evidence)}
@@ -606,9 +606,9 @@ def main():
         stage = "mutation-" + case.lower()
         folder = evidence / case
         folder.mkdir()
-        invoke(["node", ".audit/tools/lane-state.mjs", "read", str(source), "S2", stage],
+        invoke(["node", "scripts/tools/lane-state.mjs", "read", str(source), "S2", stage],
                source, folder / "stage-read.log", environment)
-        beginning = invoke(["node", ".audit/tools/lane-state.mjs", "begin", str(source), "S2", stage],
+        beginning = invoke(["node", "scripts/tools/lane-state.mjs", "begin", str(source), "S2", stage],
                            source, folder / "stage-begin.log", environment)
         if beginning["exitCode"]:
             raise RuntimeError("could not begin mutation stage")
@@ -688,7 +688,7 @@ def main():
         document = {"sha": args.base, "summary": f"{case}: " + ("detected and restored clean" if case_report["detected"] else "proof incomplete or mutant survived"),
                     **case_report}
         write_json(folder / "report.json", document)
-        saved = invoke(["node", ".audit/tools/lane-state.mjs", "save", str(source), "S2", stage, str(folder / "report.json")],
+        saved = invoke(["node", "scripts/tools/lane-state.mjs", "save", str(source), "S2", stage, str(folder / "report.json")],
                        source, folder / "stage-save.log", environment)
         case_report["stageSave"] = saved
         report["cases"].append(case_report)

@@ -935,12 +935,11 @@ impl ProjectHandle {
             }));
         }
         let (pending, resolver) = pending(|| Err(CommandError::Closed));
-        let sent = self.send(Msg::Command {
+        self.send(Msg::Command {
             command: Box::new(command),
             reply: resolver,
             sent: Instant::now(),
         });
-        let _ = sent;
         pending
     }
 
@@ -1287,12 +1286,27 @@ impl ProjectHandle {
                 }
             }
             self.shared.wait_jobs();
+            // A change the watcher heard waits out its debounce before the writer meets it; a
+            // look before then finds the writer halfway through it (a hold written to the
+            // manifest whose notice is not raised yet).
+            if self.shared.unexamined() && self.gathering() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                continue;
+            }
             // A round that took up any work may have queued more for the other thread.
             if self.shared.traffic.load(Ordering::Acquire) == before {
                 break;
             }
         }
         self.drafts.flush();
+    }
+
+    fn gathering(&self) -> bool {
+        self.watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .is_some_and(crate::watch::Watching::gathering)
     }
 
     /// Ends the watches and the thread that gathers what they tell, so no job reaches the

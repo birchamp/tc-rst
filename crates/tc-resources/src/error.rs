@@ -69,6 +69,14 @@ pub enum StoreError {
     },
     #[error("{install} holds no file {file:?}")]
     NoSuchFile { install: String, file: String },
+    /// A bundled install that could not be copied into this store: its files were refused,
+    /// or the copy failed. `source` says why.
+    #[error("the bundled install at {path} was refused: {source}")]
+    Refused {
+        path: PathBuf,
+        #[source]
+        source: Box<InstallError>,
+    },
 }
 
 impl StoreError {
@@ -121,6 +129,7 @@ impl From<NameProblem> for Refusal {
     /// when this crate compared names itself.
     fn from(problem: NameProblem) -> Self {
         match problem {
+            NameProblem::EscapesRoot(path) => Refusal::EscapesRoot(path),
             NameProblem::NotPortable { path, reason } => Refusal::NotPortable { path, reason },
             NameProblem::Duplicate(path) | NameProblem::Colliding { second: path, .. } => {
                 Refusal::DuplicateEntry(path)

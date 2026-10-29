@@ -48,7 +48,7 @@ use crate::doc::{Document, Node};
 use crate::markers::MarkerClass;
 use crate::text::{self, offset_in};
 use std::ops::Range;
-use tc_core::VerseSpan;
+use tc_core::{ChapterNo, VerseSpan};
 
 /// A book cut into segments.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -565,7 +565,7 @@ fn segment<'a>(source: &'a str, nodes: &[Node<'a>]) -> Vec<Segment<'a>> {
         let end = leads.get(k + 1).map_or(source.len(), |&l| offset(l));
         let kind = match anchor {
             Anchor::Chapter { label } => {
-                chapter = parse_chapter(label);
+                chapter = label.parse().ok().map(ChapterNo::get);
                 SegmentKind::Chapter(ChapterMark {
                     label,
                     number: chapter,
@@ -593,13 +593,6 @@ fn segment<'a>(source: &'a str, nodes: &[Node<'a>]) -> Vec<Segment<'a>> {
     segments
 }
 
-fn parse_chapter(label: &str) -> Option<u16> {
-    if label.is_empty() || !label.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    label.parse().ok().filter(|&n| n > 0)
-}
-
 /// Where a top-level node starts in the source.
 fn node_offset(source: &str, node: &Node<'_>) -> usize {
     let first = match node {
@@ -624,6 +617,13 @@ mod tests {
             .verses()
             .map(|u| (u.label().to_owned(), u.leading()))
             .collect()
+    }
+
+    #[test]
+    fn a_chapter_number_is_plain_nonzero_digits() {
+        let src = "\\id GEN\n\\c 01\n\\v 1 a\n\\c 0\n\\v 1 b\n\\c +2\n\\v 1 c\n\\c 65536\n\\v 1 d\n\\c 3\n\\v 1 e\n";
+        let chapters: Vec<Option<u16>> = Book::parse(src).verses().map(|u| u.chapter()).collect();
+        assert_eq!(chapters, [Some(1), None, None, None, Some(3)]);
     }
 
     #[test]

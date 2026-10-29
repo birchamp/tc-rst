@@ -2465,14 +2465,9 @@ fn histories(cases: u32, chunks: usize, every_row: bool) {
     // The histories the reviews found, on every run.
     held_metadata_retries_keep_the_same_copies_and_notices();
     for (name, history) in named_histories() {
-        let before = terminal_boundaries();
-        if let Err(lost) = Run::run(&history) {
+        if let Err(lost) = run_to_a_validated_end(&history) {
             panic!("{name}: {lost}");
         }
-        // Each ends with every block released and a repair that can read what it writes:
-        // an aggregate count would let one blocked witness hide behind another's success.
-        let ready = terminal_boundaries()[0] - before[0];
-        assert_eq!(ready, 1, "{name}: its terminal Burrito was never validated");
     }
     let config = ProptestConfig {
         cases,
@@ -3374,15 +3369,29 @@ fn oracle_independence_false_adoption() {
     assert_kept(&false_adoption_witness());
 }
 
+/// [`Run::run`] for a history that must end with every block released and a repair that can
+/// read what it writes: a run whose end is blocked never validates its terminal Burrito, so it
+/// would pass without that check.
+fn run_to_a_validated_end(steps: &[Step]) -> Result<(), String> {
+    let before = terminal_boundaries()[0];
+    Run::run(steps)?;
+    match terminal_boundaries()[0] - before {
+        1 => Ok(()),
+        _ => Err("its terminal Burrito was never validated".into()),
+    }
+}
+
 fn assert_kept(steps: &[Step]) {
-    if let Err(lost) = Run::run(steps) {
+    if let Err(lost) = run_to_a_validated_end(steps) {
         panic!("INV-NO-EXCUSED-LOSS: {lost}");
     }
 }
 
 #[test]
 fn a_flipped_pack_read_at_open_is_restored_from_its_stored_blob() {
-    if let Err(lost) = Run::run(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book()) {
+    if let Err(lost) =
+        run_to_a_validated_end(&a_flipped_pack_after_a_cut_pending_and_a_reverted_book())
+    {
         panic!("INV-PACK-RESTORE: {lost}");
     }
 }
@@ -4577,4 +4586,41 @@ fn two_reverts_of_a_book_file_after_crashes() -> Vec<Step> {
 #[test]
 fn two_reverts_of_a_book_file_after_crashes_lose_nothing() {
     assert_kept(&two_reverts_of_a_book_file_after_crashes());
+}
+
+/// Found by CI on 2026-10-27: a power cut while leaving, then another program puts the book
+/// file back and touches it. The checkpoints keep the outside version as a copy in
+/// `.tc/external/`, and a notice must lead the translator to that copy.
+fn an_outside_revert_after_a_power_cut_while_leaving() -> Vec<Step> {
+    vec![
+        act(Act::Save(2)),
+        Step::Focus,
+        act(Act::Save(1)),
+        Step::DeleteJournal {
+            journal: Journal::Pending,
+            which: 214,
+        },
+        act(Act::Checkpoint),
+        Step::Act {
+            act: Act::Leave,
+            kill: Some(Kill {
+                at: 13,
+                power_cut: true,
+                torn: false,
+            }),
+        },
+        Step::Revert {
+            file: File::Usfm,
+            back: 0,
+            told: false,
+        },
+        Step::Touch { file: File::Usfm },
+        act(Act::Checkpoint),
+        act(Act::Checkpoint),
+    ]
+}
+
+#[test]
+fn an_outside_revert_after_a_power_cut_while_leaving_is_kept_and_shown() {
+    assert_kept(&an_outside_revert_after_a_power_cut_while_leaving());
 }

@@ -8,12 +8,13 @@ pub mod connect;
 pub mod exchange;
 pub mod join;
 pub mod machine;
+mod names;
 pub mod share;
 pub mod sync;
 pub mod username;
 
 pub use connect::{ConnectError, connect};
-pub use join::{JoinError, join};
+pub use join::{JoinError, Joined, join};
 pub use share::{ShareError, share};
 pub use sync::{Backoff, OtherToolCommit, Pause, SyncReport, sync};
 pub use username::{UsernameError, record_username};

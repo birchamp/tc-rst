@@ -1,5 +1,9 @@
 # The tC4 view-state gallery
 
+> **Retired 2026-10-29.** The screenshot comparison with tC4 was done for 4.1.0 and no longer
+> gates a change (`docs/rulings/2026-10-29-tc4-is-history.md`). This folder is kept for what
+> other checks still use from it; the rest is a record.
+
 Many states of tC4's screens have no baseline screen: the open overlay, a release upgrade, the
 check list's empty states, a failed import, Home with no project. The gallery draws them with
 tC4's own views, so the Rust port has a reference for each (docs/APP-DESIGN.md §7.4, unit A7).

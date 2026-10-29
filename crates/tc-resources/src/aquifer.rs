@@ -14,15 +14,15 @@
 //! server's origin when it talks to one on loopback.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Read};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Deserialize;
 use tc_core::BookId;
 use tc_door43::{
-    GitOid, Http, HttpError, HttpResponse, HttpSpec, InternetSwitch, ProxyFinder, RedirectRule,
-    TagName, UnreachableCause, check_names, system_proxy_finder,
+    FileMode, GitOid, Http, HttpError, HttpResponse, HttpSpec, InternetSwitch, ProxyFinder,
+    RedirectRule, TagName, UnreachableCause, VerificationError, is_loopback_host,
+    system_proxy_finder,
 };
 use tc_helps::HelpRef;
 use tc_helps::aquifer::{
@@ -148,15 +148,6 @@ impl std::fmt::Debug for AquiferClient {
     }
 }
 
-fn is_loopback(url: &Url) -> bool {
-    match url.host() {
-        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        None => false,
-    }
-}
-
 impl AquiferClient {
     /// A client for github.com.
     pub fn new(internet: InternetSwitch) -> Result<Self, AquiferError> {
@@ -193,7 +184,7 @@ impl AquiferClient {
         limits: AquiferLimits,
         finder: Option<Arc<dyn ProxyFinder>>,
     ) -> Result<Self, AquiferError> {
-        let loopback = is_loopback(&web) && is_loopback(&api);
+        let loopback = is_loopback_host(&web) && is_loopback_host(&api);
         for url in [&web, &api] {
             let ok = url.scheme() == "https" || (url.scheme() == "http" && loopback);
             if !ok || url.host().is_none() || !url.username().is_empty() || url.password().is_some()
@@ -644,83 +635,37 @@ pub(crate) fn canonical_book(path: &str) -> Option<BookId> {
     BookId::from_ordinal(number.parse().ok()?)
 }
 
-/// Unpacks a release zip. Every entry is read in full, which checks its CRC-32; a name
-/// that could leave the folder, a name Windows would write under another name, a symbolic
-/// link or two names one file system would merge is refused, never repaired. macOS Finder
+/// Unpacks a release zip with the checks every Door43 download gets
+/// ([`tc_door43::unpack_zip`]): a name that could leave the folder, a name Windows would
+/// write under another name, or two names one file system would merge is refused, never
+/// repaired. A symbolic link is refused too: an article is never a link. macOS Finder
 /// debris is dropped. When the root holds no `metadata.json` and every entry shares one top
 /// folder, that folder is removed.
 fn unpack(bytes: &[u8], max_unpacked: u64) -> Result<Vec<(String, Vec<u8>)>, Refusal> {
-    let mut archive =
-        zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| Refusal::NotAZip(e.to_string()))?;
-    let mut files = Vec::new();
-    let mut total: u64 = 0;
-    for index in 0..archive.len() {
-        let mut entry = archive
-            .by_index(index)
-            .map_err(|e| Refusal::NotAZip(e.to_string()))?;
-        let name = entry.name().replace('\\', "/");
-        if name.starts_with('/')
-            || name.contains(':')
-            || name
-                .split('/')
-                .any(|s| !s.is_empty() && s.chars().all(|c| c == '.'))
-        {
-            return Err(Refusal::EscapesRoot(name));
-        }
-        if entry.is_dir() {
-            continue;
-        }
-        if entry
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170_000 == 0o120_000)
-        {
-            return Err(Refusal::Symlink(name));
-        }
-        let file_name = name.rsplit('/').next().unwrap_or(&name);
-        if name.starts_with("__MACOSX/") || file_name == ".DS_Store" || file_name.starts_with("._")
-        {
-            continue;
-        }
-        if name.split('/').any(str::is_empty) {
-            return Err(Refusal::EscapesRoot(name));
-        }
-        let mut body = Vec::new();
-        let limit = max_unpacked.saturating_sub(total).saturating_add(1);
-        (&mut entry)
-            .take(limit)
-            .read_to_end(&mut body)
-            .map_err(|e| Refusal::CorruptEntry {
-                path: name.clone(),
-                reason: e.to_string(),
-            })?;
-        total += body.len() as u64;
-        if total > max_unpacked {
-            return Err(Refusal::TooLargeUnpacked {
-                limit: max_unpacked,
-            });
-        }
-        files.push((name, body));
-    }
-    if !files.iter().any(|(p, _)| p == "metadata.json") {
-        let top = files
-            .first()
-            .and_then(|(p, _)| p.split_once('/'))
-            .map(|(t, _)| format!("{t}/"));
-        if let Some(top) = top
-            && files.iter().all(|(p, _)| p.starts_with(&top))
-        {
-            for (path, _) in &mut files {
-                *path = path[top.len()..].to_owned();
-            }
-        }
-    }
-    check_names(files.iter().map(|(path, _)| path.as_str()))?;
-    Ok(files)
+    let files = tc_door43::unpack_zip(bytes, max_unpacked).map_err(|e| match e {
+        VerificationError::NotAZip(reason) => Refusal::NotAZip(reason),
+        VerificationError::CorruptEntry { path, reason } => Refusal::CorruptEntry { path, reason },
+        VerificationError::EscapesRoot(path) => Refusal::EscapesRoot(path),
+        VerificationError::DuplicateEntry(path)
+        | VerificationError::CollidingNames { second: path, .. } => Refusal::DuplicateEntry(path),
+        VerificationError::NotPortable { path, reason } => Refusal::NotPortable { path, reason },
+        VerificationError::TooLargeUnpacked { limit } => Refusal::TooLargeUnpacked { limit },
+        VerificationError::Empty => Refusal::NotAquifer("it holds no file".to_owned()),
+        other => Refusal::Door43(other),
+    })?;
+    files
+        .into_iter()
+        .map(|file| match file.mode {
+            FileMode::Symlink => Err(Refusal::Symlink(file.path)),
+            FileMode::Regular | FileMode::Executable => Ok((file.path, file.bytes)),
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     fn zip(files: &[(&str, &[u8])]) -> Vec<u8> {
         use std::io::Write;
@@ -749,8 +694,8 @@ mod tests {
             1 << 20,
         )
         .unwrap();
-        assert_eq!(wrapped[0].0, "metadata.json");
-        assert_eq!(wrapped[1].0, "json/56.content.json");
+        assert_eq!(wrapped[0].0, "json/56.content.json");
+        assert_eq!(wrapped[1].0, "metadata.json");
         let debris = unpack(
             &zip(&[
                 ("metadata.json", b"{}"),
@@ -765,7 +710,20 @@ mod tests {
 
     #[test]
     fn unpack_refuses_what_could_escape_merge_or_overflow() {
-        for name in ["../x", "/x", "C:x", "a/../../x", "a\\..\\x", "...", "a//b"] {
+        // A backslash is refused, never read as a separator: `a\b` once unpacked as `a/b`.
+        for name in [
+            "../x",
+            "/x",
+            "C:x",
+            "c:/x",
+            "a/../../x",
+            "a\\..\\x",
+            "a\\b",
+            "\\x",
+            "...",
+            "a//b",
+            "a/.. /x",
+        ] {
             assert!(
                 matches!(
                     unpack(&zip(&[(name, b"x")]), 1 << 20),
@@ -820,18 +778,27 @@ mod tests {
         ];
         let entries: Vec<(&str, &[u8])> = names.iter().map(|name| (*name, &b"x"[..])).collect();
         let allowed = unpack(&zip(&entries), 1 << 20).unwrap();
+        let mut sorted = names;
+        sorted.sort_unstable();
         assert_eq!(
             allowed
                 .iter()
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
-            names
+            sorted
         );
         assert!(matches!(
             unpack(&zip(&[("a.json", &[0u8; 100])]), 10),
             Err(Refusal::TooLargeUnpacked { .. })
         ));
         assert!(matches!(unpack(b"not a zip", 10), Err(Refusal::NotAZip(_))));
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink("metadata.json", "/etc/passwd", options)
+            .unwrap();
+        let link = writer.finish().unwrap().into_inner();
+        assert!(matches!(unpack(&link, 1 << 20), Err(Refusal::Symlink(_))));
         let whole = zip(&[("metadata.json", &[b'x'; 4096])]);
         assert!(unpack(&whole[..whole.len() / 2], 1 << 20).is_err());
     }

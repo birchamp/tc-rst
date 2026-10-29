@@ -39,6 +39,7 @@ use crate::app::save::indicator::{self, Indicator, Worst};
 use crate::app::save::{
     Command, FieldSave, FieldScope, GateState, Notice, Pair, ResendCheck, SaveMachine, Source, View,
 };
+use crate::app::section::DiscardError;
 
 /// A future that stays on the page's one thread.
 pub type LocalBoxFuture<T> = Pin<Box<dyn Future<Output = T>>>;
@@ -855,7 +856,7 @@ impl Saves {
         });
     }
 
-    async fn drain_drafts(&self, key: &BufferKey) -> Result<(), String> {
+    async fn drain_drafts(&self, key: &BufferKey) -> Result<(), DiscardError> {
         let failed = self.0.drafts.borrow_mut().get_mut(key).and_then(|lane| {
             let failed = lane.failed.take();
             if failed.is_some() {
@@ -872,7 +873,7 @@ impl Saves {
                     lane.failed = Some((request.clone(), error.clone()));
                     drop(drafts);
                     self.after();
-                    error.to_string()
+                    DiscardError::Call(error)
                 })?;
                 if hello.instance != request.instance {
                     let mut drafts = self.0.drafts.borrow_mut();
@@ -881,9 +882,7 @@ impl Saves {
                     lane.failed = Some((request, error));
                     drop(drafts);
                     self.after();
-                    return Err(
-                        "The app restarted; the draft is kept for the next open.".to_owned()
-                    );
+                    return Err(DiscardError::Restarted);
                 }
             } else {
                 request.request = js::random_request_id();
@@ -901,7 +900,7 @@ impl Saves {
                 lane.failed = Some((request, error.clone()));
                 drop(drafts);
                 self.after();
-                return Err(error.to_string());
+                return Err(DiscardError::Call(error));
             }
             if let Some(lane) = self.0.drafts.borrow_mut().get_mut(key) {
                 lane.running = false;
@@ -915,11 +914,11 @@ impl Saves {
             let state = self.0.drafts.borrow().get(key).map(|lane| {
                 (
                     lane.running,
-                    lane.failed.as_ref().map(|(_, error)| error.to_string()),
+                    lane.failed.as_ref().map(|(_, error)| error.clone()),
                 )
             });
             match state {
-                Some((_, Some(error))) => return Err(error),
+                Some((_, Some(error))) => return Err(DiscardError::Call(error)),
                 Some((true, None)) => self.changed().await,
                 _ => return Ok(()),
             }
@@ -976,7 +975,7 @@ impl Saves {
 
     /// Cancel waits for the current draft lane and its durable compare-and-remove. Any
     /// failure leaves the field and its buffer in place; the card's Retry calls this again.
-    pub async fn discard_confirmed(&self, key: &BufferKey) -> Result<bool, String> {
+    pub async fn discard_confirmed(&self, key: &BufferKey) -> Result<bool, DiscardError> {
         let Some(mut entry) = self.machine(|m| m.template(key)) else {
             return Ok(true);
         };
@@ -984,12 +983,10 @@ impl Saves {
             .machine(|m| m.text(key).map(str::to_owned))
             .unwrap_or_default();
         entry.at = self.changed_at(key);
-        let writer = self
-            .writer(key.field.kind)
-            .ok_or("The draft cannot be discarded.")?;
+        let writer = self.writer(key.field.kind).ok_or(DiscardError::NoWriter)?;
         let draft = writer
             .draft_request(key, self.scope(key), &entry)
-            .ok_or("The project is no longer open; the draft is kept.")?;
+            .ok_or(DiscardError::NotOpen)?;
         {
             let mut cancels = self.0.cancels.borrow_mut();
             let same = cancels.get(key).is_some_and(|cancel| {
@@ -1040,16 +1037,16 @@ impl Saves {
             .borrow()
             .get(key)
             .map(|cancel| (cancel.request.clone(), cancel.ambiguous))
-            .ok_or("The draft changed while Cancel waited.")?;
+            .ok_or(DiscardError::Changed)?;
         if lost {
             let hello = self
                 .0
                 .api
                 .call(&Hello {})
                 .await
-                .map_err(|error| error.to_string())?;
+                .map_err(DiscardError::Call)?;
             if hello.instance != request.instance {
-                return Err("The app restarted; the draft is kept for the next open.".to_owned());
+                return Err(DiscardError::Restarted);
             }
         }
         match self.0.api.call(&request).await {
@@ -1071,7 +1068,7 @@ impl Saves {
                         cancel.request = request;
                     }
                 }
-                Err(error.to_string())
+                Err(DiscardError::Call(error))
             }
         }
     }

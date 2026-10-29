@@ -7,6 +7,7 @@ use std::sync::Arc;
 use leptos::ev::{FocusEvent, KeyboardEvent, MouseEvent};
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::Closure;
 
 use crate::ds::{
     Anchor, Attrs, Badge, BadgeSize, BadgeTone, Css, Dismiss, FieldContext, LayerPlacement, Level,
@@ -356,6 +357,39 @@ fn Dropdown(
         if disabled() && open.get_untracked() {
             open.set(false);
         }
+    });
+    // A press on the field's label is a press on the field, which the open list keeps: without
+    // this the press takes the focus out of the search and lands outside the list, which closes
+    // it, and the label's click then opens it again with the search cleared (tC4 #552).
+    Effect::new(move |_| {
+        if !open.get() {
+            return;
+        }
+        let Some(b) = button.get_untracked() else {
+            return;
+        };
+        let found = b.labels();
+        let labels: Vec<web_sys::Node> =
+            (0..found.length()).filter_map(|i| found.item(i)).collect();
+        let keep = Closure::<dyn FnMut(web_sys::Event)>::new(|e: web_sys::Event| {
+            e.prevent_default();
+            e.stop_propagation();
+        });
+        for l in &labels {
+            for kind in ["mousedown", "click"] {
+                let _ = l.add_event_listener_with_callback(kind, keep.as_ref().unchecked_ref());
+            }
+        }
+        let held = send_wrapper::SendWrapper::new((keep, labels));
+        on_cleanup(move || {
+            let (keep, labels) = held.take();
+            for l in &labels {
+                for kind in ["mousedown", "click"] {
+                    let _ =
+                        l.remove_event_listener_with_callback(kind, keep.as_ref().unchecked_ref());
+                }
+            }
+        });
     });
     let move_hi = move |delta: i64| {
         let n = visible.with_untracked(Vec::len) as i64;

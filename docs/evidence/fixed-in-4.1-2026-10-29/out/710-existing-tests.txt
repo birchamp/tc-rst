@@ -1,0 +1,50 @@
+   Compiling tracing-core v0.1.36
+   Compiling syn v2.0.119
+   Compiling serde v1.0.229
+   Compiling log v0.4.34
+   Compiling lazy_static v1.5.1
+   Compiling thread_local v1.1.10
+   Compiling sharded-slab v0.1.7
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling git2 v0.21.0
+   Compiling proptest v1.12.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling tc-core v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-core)
+   Compiling tracing-subscriber v0.3.23
+   Compiling tracing-log v0.2.0
+   Compiling tracing-attributes v0.1.31
+   Compiling tracing v0.1.44
+   Compiling hyper-util v0.1.21
+   Compiling hyper-rustls v0.27.10
+   Compiling axum v0.8.9
+   Compiling reqwest v0.13.5
+   Compiling tc-door43 v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43)
+   Compiling tc-door43-fake v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-door43-fake)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.55s
+     Running tests/git.rs (target/debug/deps/git-5ab3f4638a79bc8d)
+
+running 1 test
+test a_refused_push_reads_as_door43s_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.22s
+
+     Running tests/push.rs (target/debug/deps/push-4f18642036e1c8a5)
+
+running 2 tests
+test a_403_on_push_is_an_http_error_and_makes_no_branch ... ok
+test a_push_without_write_access_is_no_write_access_and_makes_no_branch ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.20s
+
+exit 0
+   Compiling tc-sync v4.1.0-preview (/home/bot/tc-rst/.claude/worktrees/fixed-in-41/crates/tc-sync)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.49s
+     Running tests/sync.rs (target/debug/deps/sync-36f7439ef7c6c4e7)
+
+running 2 tests
+test door43::no_write_access_is_refused_before_the_fetch_with_nothing_changed ... ok
+test door43::sync_protected_branch_reported ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.50s
+
+exit 0

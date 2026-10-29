@@ -1162,7 +1162,7 @@ pub trait ProjectStore: Send + Sync + 'static {
         session: Option<tc_door43::Session>,
         repo: tc_door43::RepoRef,
         name: String,
-    ) -> BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+    ) -> BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
         let _ = (client, session, repo, name);
         Box::pin(async { None })
     }
@@ -1177,12 +1177,12 @@ pub trait ProjectStore: Send + Sync + 'static {
 
     /// A project this computer lacks, built from an exchange file (STORAGE §10.2, E2 step 4b):
     /// the file's entries into a staging folder, placed whole or not at all. Blocking. Only
-    /// the store on disk creates projects.
+    /// the store on disk creates projects. Returns the foreign files not written on disk.
     fn receive_new(
         &self,
         file: &std::path::Path,
         name: &str,
-    ) -> Result<(), tc_sync::exchange::ExchangeError> {
+    ) -> Result<Vec<String>, tc_sync::exchange::ExchangeError> {
         let _ = (file, name);
         Err(tc_sync::exchange::ExchangeError::NotCommitted(
             "this store cannot create projects".to_owned(),

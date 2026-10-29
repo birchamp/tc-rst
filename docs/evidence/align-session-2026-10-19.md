@@ -75,4 +75,4 @@ reaches the book; it runs beside the verse's own open.
 - Training: the sample's one aligned verse learns at once. A Psalms-sized project's training runs
   in a background job and was not timed; C5 owns its budget (PERF:84).
 - The reference laptop. The owner's laptop session only measures what needs its hardware
-  (`.audit/HANDOFF.md`); the click's figure above is the one to repeat there.
+  (`tracker:HANDOFF.md`); the click's figure above is the one to repeat there.

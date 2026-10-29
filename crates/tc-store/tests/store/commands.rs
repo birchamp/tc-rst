@@ -717,32 +717,64 @@ fn written(name: &str, before: &BTreeSet<ChangeId>, fold: &FoldState) -> Vec<Str
     kinds
 }
 
-/// Every command, killed before each of its write points with and without power loss: the
-/// reopened project holds the command's whole batch or none of it, and a command that
-/// replied "Saved" holds it after a power cut too (§16.2, rows W1 to W4).
-#[test]
-fn crash_every_command_at_every_write_point() {
-    let (base, folder) = rich();
-    let (rig, handle) = open(&base, &folder);
+/// The names of every command of [`every_command`] on the `rich` project, and every change it
+/// holds before any of them runs.
+fn every_command_name(base: &FaultFs, folder: &Path) -> (Vec<&'static str>, BTreeSet<ChangeId>) {
+    let (rig, handle) = open(base, folder);
     let names: Vec<&'static str> = every_command(&handle).into_iter().map(|(n, _)| n).collect();
     let before = all_ids(handle.snapshot().fold());
     handle.close().unwrap();
     drop(rig);
     assert!(names.len() >= 24, "{names:?}");
+    (names, before)
+}
+
+/// What `name` writes on a copy of `base` when nothing stops it: one whole batch, durable.
+fn run_unstopped(
+    base: &FaultFs,
+    folder: &Path,
+    name: &str,
+    before: &BTreeSet<ChangeId>,
+) -> Vec<String> {
+    let (rig, handle) = open(&base.copy(), folder);
+    let command = every_command(&handle)
+        .into_iter()
+        .find(|(n, _)| *n == name)
+        .unwrap()
+        .1;
+    let reply = submit(&handle, command).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+    assert_eq!(reply.stored, Stored::Durable, "{name}");
+    let after = written(name, before, handle.snapshot().fold());
+    assert!(!after.is_empty(), "{name} wrote nothing");
+    handle.close().unwrap();
+    drop(rig);
+    after
+}
+
+/// Every command of §2.7 writes one whole batch, durable before its reply (§16.2). The kill
+/// at each write point is `crash_every_command_at_every_write_point_nightly`: every command
+/// writes through the one pending-file write, whose kill sweeps run in the gate as
+/// `crash::crash_save_verse_at_every_write_point`, `crash::crash_section_save_is_all_or_nothing`
+/// and `adding_a_book_from_usfm_is_one_batch_whole_or_absent`.
+#[test]
+fn every_command_writes_one_whole_durable_batch() {
+    let (base, folder) = rich();
+    let (names, before) = every_command_name(&base, &folder);
     for name in names {
-        // What the command writes when nothing stops it.
-        let (rig, handle) = open(&base.copy(), &folder);
-        let command = every_command(&handle)
-            .into_iter()
-            .find(|(n, _)| *n == name)
-            .unwrap()
-            .1;
-        let reply = submit(&handle, command).unwrap_or_else(|e| panic!("{name}: {e:?}"));
-        assert_eq!(reply.stored, Stored::Durable, "{name}");
-        let after = written(name, &before, handle.snapshot().fold());
-        assert!(!after.is_empty(), "{name} wrote nothing");
-        handle.close().unwrap();
-        drop(rig);
+        run_unstopped(&base, &folder, name, &before);
+    }
+}
+
+/// Every command, killed before each of its write points with and without power loss: the
+/// reopened project holds the command's whole batch or none of it, and a command that
+/// replied "Saved" holds it after a power cut too (§16.2, rows W1 to W4).
+#[test]
+#[ignore = "nightly: 26 commands share one write path; every_command_writes_one_whole_durable_batch and crash::crash_save_verse_at_every_write_point catch its bugs in the gate"]
+fn crash_every_command_at_every_write_point_nightly() {
+    let (base, folder) = rich();
+    let (names, before) = every_command_name(&base, &folder);
+    for name in names {
+        let after = run_unstopped(&base, &folder, name, &before);
         let points = kill_everywhere(
             &base,
             &folder,
@@ -1190,8 +1222,10 @@ fn a_book_from_a_file_is_refused_when_present_or_when_the_file_does_not_read() {
     assert_eq!(handle.snapshot().fold().record_keys().len(), before);
 }
 
+/// A scope the burrito would refuse cannot be built (`ScopeRange` parses only what it holds),
+/// so the refusal a person can reach is a scope for a book the project no longer holds.
 #[test]
-fn a_book_scope_is_set_and_one_the_burrito_refuses_is_refused() {
+fn a_book_scope_is_set_and_one_for_a_removed_book_is_refused() {
     let (fs, folder) = rich();
     let (rig, handle) = open(&fs, &folder);
     let (_, command) = every_command(&handle)
@@ -1199,6 +1233,33 @@ fn a_book_scope_is_set_and_one_the_burrito_refuses_is_refused() {
         .find(|(n, _)| *n == "SetBookScope")
         .unwrap();
     submit(&handle, command).unwrap();
+    assert!(matches!(
+        projected(&handle, &RecordKey::BookPresence(PHM)),
+        Some(Record::BookPresence {
+            value: BookPresence::Present {
+                scope: Scope::Ranges(_),
+                how: PresentHow::Added,
+            },
+            ..
+        })
+    ));
+    let before = all_ids(handle.snapshot().fold());
+    let removed = submit(
+        &handle,
+        Command::SetBookScope {
+            presence_shown: token(&handle, &RecordKey::BookPresence(JUD)),
+            scope: Scope::Ranges(ScopeRanges::new(vec!["1:1-2".parse().unwrap()]).unwrap()),
+        },
+    );
+    assert!(
+        matches!(removed, Err(CommandError::Refused(Refusal::Book(_)))),
+        "{removed:?}"
+    );
+    assert_eq!(
+        all_ids(handle.snapshot().fold()),
+        before,
+        "nothing is written"
+    );
     handle.leave(tc_store::Leave::Mode).wait().unwrap();
     let metadata: serde_json::Value =
         serde_json::from_slice(&rig.fs.peek(&folder.join("metadata.json")).unwrap()).unwrap();
@@ -1321,46 +1382,6 @@ fn a_bulk_choice_by_this_computer_keeps_its_versions_and_skips_conflicts_inside_
     handle.close().unwrap();
 }
 
-#[test]
-fn a_moved_check_keeps_its_decision_under_the_new_key() {
-    let (fs, folder) = rich();
-    let (_rig, handle) = open(&fs, &folder);
-    let old = RecordKey::Check(tn_key(1, 2, 1));
-    let new = RecordKey::Check(tn_key(1, 2, 2));
-    let decision = projected(&handle, &old);
-    submit(
-        &handle,
-        Command::MoveCheck {
-            shown: token(&handle, &old),
-            to: tn_key(1, 2, 2),
-            to_shown: token(&handle, &new),
-        },
-    )
-    .unwrap();
-    assert!(matches!(
-        projected(&handle, &old),
-        Some(Record::Check {
-            value: CheckValue::MovedTo { .. },
-            ..
-        })
-    ));
-    let (
-        Some(Record::Check {
-            value: CheckValue::Decision(was),
-            ..
-        }),
-        Some(Record::Check {
-            value: CheckValue::Decision(now),
-            ..
-        }),
-    ) = (decision, projected(&handle, &new))
-    else {
-        panic!("decisions");
-    };
-    assert_eq!(was, now);
-    handle.close().unwrap();
-}
-
 /// Ruling H5: the newest version wins, and an older one comes back from History. A decision
 /// made before its check moved is listed in the History of the check it moved to, and
 /// restoring it writes it there.
@@ -1386,6 +1407,13 @@ fn a_moved_checks_older_decision_is_restored() {
         },
     )
     .unwrap();
+    let Some(Record::Check {
+        value: CheckValue::Decision(was),
+        ..
+    }) = projected(&handle, &old)
+    else {
+        panic!("a decision");
+    };
     submit(
         &handle,
         Command::MoveCheck {
@@ -1395,6 +1423,14 @@ fn a_moved_checks_older_decision_is_restored() {
         },
     )
     .unwrap();
+    // The decision moves whole under the new key.
+    assert_eq!(
+        projected(&handle, &new),
+        Some(Record::Check {
+            key: tn_key(1, 2, 2),
+            value: CheckValue::Decision(was),
+        })
+    );
     let fold = handle.snapshot().fold().clone();
     assert_eq!(fold.moved_into(&tn_key(1, 2, 2)), vec![tn_key(1, 2, 1)]);
     assert!(fold.history(&new).contains(&older));
@@ -1731,10 +1767,10 @@ fn frame(story: u8, frame: u16) -> RecordKey {
     )
 }
 
-/// §5.15: a frame, a title and a reference line are saved by tC4's text rules, written to
-/// the story's file, and a kill at any write point leaves the save whole or absent.
+/// §5.15: a frame, a title and a reference line are saved by tC4's text rules and written to
+/// the story's file.
 #[test]
-fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
+fn an_obs_frame_is_saved_by_tc4s_text_rules() {
     let (fs, folder) = stories();
     let (rig, handle) = open(&fs, &folder);
     assert_eq!(handle.facts().kind, tc_journal::fold::ProjectKind::Stories);
@@ -1792,8 +1828,13 @@ fn an_obs_frame_is_saved_by_tc4s_text_rules_and_whole_or_not_at_all() {
     assert!(story.starts_with("# 1. The Creation\n"), "{story}");
     assert_valid_burrito(&rig.fs, &folder);
     handle.close().unwrap();
-    // The crash sweep of one frame save.
-    let base = rig.fs.crash(false);
+}
+
+/// §5.15: a kill at any write point of a frame save leaves it whole or absent.
+#[test]
+#[ignore = "nightly: a frame save is one pending-file write as every command is; crash::crash_save_verse_at_every_write_point catches its bugs in the gate"]
+fn crash_an_obs_frame_save_at_every_write_point_nightly() {
+    let (base, folder) = stories();
     let before = {
         let (_rig, handle) = open(&base, &folder);
         let ids = all_ids(handle.snapshot().fold());

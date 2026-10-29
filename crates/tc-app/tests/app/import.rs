@@ -232,6 +232,48 @@ async fn a_cancelled_or_stopped_import_leaves_no_project() {
     );
 }
 
+/// #858: an import holds its upload before its first read. A failed run gives it back for
+/// another try; while a run reads it, the dialog's drop leaves it alone; the run that made
+/// the project deletes it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_import_holds_its_upload_so_a_drop_never_deletes_the_file_it_reads() {
+    let (dir, t, world) = app().await;
+    let file = upload(dir.path(), 1, TC3_TITUS, &tc3_titus());
+    let stored = dir
+        .path()
+        .join("app-data/uploads")
+        .join(file.upload.as_str());
+    let drop_it = |n| tc_api::upload::DropUpload {
+        request: rid(n),
+        upload: file.upload.clone(),
+    };
+
+    world.fs.fail_writes(Some(std::io::ErrorKind::StorageFull));
+    let job: JobId = post(&t.app, &run(1, &file, details("cfm_fbt", "cfm")))
+        .await
+        .unwrap();
+    assert!(matches!(ended(&t.app, job).await, JobState::Failed(_)));
+    world.fs.fail_writes(None);
+    assert!(stored.exists(), "a failed run gives its file back");
+
+    world.hooks.hold(Point::BeforeStagingRename);
+    let job: JobId = post(&t.app, &run(2, &file, details("cfm_fbt", "cfm")))
+        .await
+        .unwrap();
+    let hooks = world.hooks.clone();
+    tokio::task::spawn_blocking(move || hooks.wait_reached(Point::BeforeStagingRename, 1))
+        .await
+        .unwrap();
+    let () = post(&t.app, &drop_it(3)).await.unwrap();
+    assert!(stored.exists(), "the run holds its file");
+    world.hooks.release(Point::BeforeStagingRename);
+    assert!(matches!(
+        ended(&t.app, job).await,
+        JobState::Done(JobOutcome::Created { .. })
+    ));
+    assert!(!stored.exists(), "the run used its file up");
+}
+
 /// INV-ONE-LANGUAGE-CODE-RULE (#835): the review and the run accept and refuse the codes
 /// create does, before anything is written.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

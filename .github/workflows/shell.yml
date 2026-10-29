@@ -6,16 +6,42 @@ name: shell
 permissions:
   contents: read
 on:
+  # As in ci.yml: main and gate/* only, so a pull request's branch does not run twice.
   push:
+    branches: [main, 'gate/**']
+  # A pull request runs the unit tests; it only reports the builds and end-to-end jobs as skipped
+  # (they are required checks), as app-e2e does. In 48 runs they never failed, and each run held
+  # a macOS and a Windows runner; they gate the merge queue and main.
   pull_request:
   workflow_dispatch:
+  merge_group:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   # As in ci.yml: a superseded track run is cancelled; main and gate/* runs always finish.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 env:
   ELECTRONITE: v37.1.0-graphite
 jobs:
+  # Whether the change can affect this workflow's tests: false when it is wholly prose
+  # (scripts/ci-changes.sh). A skipped job reports success, so required checks still pass.
+  changes:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci-changes.sh
+          sparse-checkout-cone-mode: false
+      - id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: scripts/ci-changes.sh
+
   unit:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -28,6 +54,9 @@ jobs:
 
   # The two UI folders and the bundle are the same files on every system: built once.
   builds:
+    needs: changes
+    # !cancelled(): if changes fails, its output is empty and nothing is skipped.
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:

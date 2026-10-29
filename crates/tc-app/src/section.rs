@@ -306,11 +306,7 @@ impl Handle<SaveSection> for App {
     /// The card's text over the verses it displayed (STORAGE §5.2): the values are made from
     /// the text and the values the tokens stood for, and the store checks the section whole.
     async fn handle(&self, req: SaveSection) -> Result<Ack, ApiError> {
-        let session = self
-            .inner
-            .sessions
-            .reader(&req.at)
-            .map_err(|_| ApiError::NotSaved(NotSaved::StaleScope))?;
+        let session = self.write_session(&req.at)?;
         let handle = session.handle().clone();
         let tokens = req
             .displayed

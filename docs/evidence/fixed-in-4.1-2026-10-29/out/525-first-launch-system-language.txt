@@ -1,0 +1,21 @@
+TAP version 13
+# tc4: serving http://127.0.0.1:36017/ (projects: /home/bot/tc-rst/.claude/worktrees/fixed-in-41/target/parity-rust/2674809-1793289742297/store/projects, Door43: http://127.0.0.1:9)
+# server LANG: fr_FR.UTF-8 | app/hello prefs on first launch: {"appLocale":"en"}
+# page: {"languages":["fr-FR"],"lang":"en","title":"Your projects"}
+# RESULT: app started in en, not French
+# Subtest: 525_first_launch_on_a_french_computer
+ok 1 - 525_first_launch_on_a_french_computer
+  ---
+  duration_ms: 1545.779572
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11797.458831
+exit 0

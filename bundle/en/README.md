@@ -95,7 +95,7 @@ it as unavailable. A release build then lacks a pinned file and fails (see "Fetc
 app is packaged"). This folder has no `fetched.lock` yet, so both lexicons are unconfirmed
 today. Their zips' files hash to the trees `4d24ed9c8ceb768df1069feed0cc375d32cd93ce`
 (`en_ugl`) and `ad07f5e41f7052598d90eb8dc2b9ecad811b0b17` (`en_uhl`), which Door43 must confirm
-(`.audit/tasks/door43-facts.md`); nothing records them as confirmed.
+(`tracker:tasks/door43-facts.md`); nothing records them as confirmed.
 
 ### Repackaged as one JSON file per lexicon
 

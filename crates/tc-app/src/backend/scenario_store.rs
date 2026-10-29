@@ -16,9 +16,10 @@
 //! - **A scenario never writes into, or resets, a folder that holds anyone's work**: the
 //!   projects folder must be empty, and a reset removes only entries of that folder.
 
+use crate::app::lock;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use tc_api::ids::ProjectRef;
 use tc_journal::fold::{FoldState, ProjectKind};
@@ -131,11 +132,6 @@ impl WrittenProject {
         }
         files
     }
-}
-
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    // Every change under these locks is a store of a whole value.
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// `rel`, a `/`-separated path, under `root`, built by components so Windows gets its own
@@ -511,7 +507,7 @@ impl ProjectStore for ScenarioStore {
         session: Option<tc_door43::Session>,
         repo: tc_door43::RepoRef,
         name: String,
-    ) -> super::BoxFuture<Option<Result<std::path::PathBuf, tc_sync::JoinError>>> {
+    ) -> super::BoxFuture<Option<Result<tc_sync::Joined, tc_sync::JoinError>>> {
         super::store::join_on(self, |s| s.backend.store(), client, session, repo, name)
     }
 

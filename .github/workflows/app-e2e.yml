@@ -6,20 +6,48 @@ name: app-e2e
 permissions:
   contents: read
 on:
-  # The journeys gate a merge: they run on main and gate/* (and on request), not on every
-  # track push (rulings/2026-10-24-test-process.md).
+  # The journeys gate a merge: they run on main, gate/* and in the merge queue (and on request),
+  # not on every track push (rulings/2026-10-24-test-process.md). Main is
+  # claude/focused-ride-5uzj7p until the move to unfoldingWord/translationCore4.
   push:
-    branches: [claude/focused-ride-5uzj7p, 'gate/**']
+    branches: [main, claude/focused-ride-5uzj7p, 'gate/**']
+  # A pull request only reports the job as skipped: journeys is a required check, and a check
+  # that never reports would keep the pull request out of the merge queue.
+  pull_request:
   workflow_dispatch:
+  merge_group:
 concurrency:
   # The event name too, so a dispatched run never cancels a push run on the same branch.
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   # A newer push to a track branch cancels the run it supersedes, which frees runners. Main's
   # runs always finish (a quick follow-up must not cancel the test of the one before), and so
-  # do gate/* runs, which are a merge's receipt (scripts/gates.sh --wait-ci).
-  cancel-in-progress: ${{ github.ref != 'refs/heads/claude/focused-ride-5uzj7p' && !startsWith(github.ref, 'refs/heads/gate/') }}
+  # do gate/* runs.
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && !startsWith(github.ref, 'refs/heads/gate/') }}
 jobs:
+  # Whether the change can affect this workflow's tests: false when it is wholly prose
+  # (scripts/ci-changes.sh). A skipped job reports success, so required checks still pass.
+  changes:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci-changes.sh
+          sparse-checkout-cone-mode: false
+      - id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: scripts/ci-changes.sh
+
   journeys:
+    needs: changes
+    # !cancelled(): if changes fails, its output is empty and nothing is skipped.
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:

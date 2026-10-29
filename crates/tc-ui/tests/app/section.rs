@@ -2,7 +2,8 @@
 //! why a word does or does not take it, and when Save section is on. The words come from the
 //! catalog, as the card reads them.
 
-use tc_ui::app::section::{Hints, can_save, hints, word_title};
+use tc_ui::app::client::{CallError, Transport};
+use tc_ui::app::section::{DiscardError, Hints, can_save, hints, word_title};
 
 #[test]
 fn section_card_reads_the_idle_place_hint() {
@@ -78,5 +79,23 @@ fn a_section_with_no_draft_has_nothing_to_save_and_an_emptied_one_may_be_saved()
     assert!(
         !can_save(true, false),
         "an empty card over undrafted verses has nothing to save"
+    );
+}
+
+#[test]
+fn a_cancel_that_cannot_discard_says_why_from_the_catalog() {
+    // Each reason is a catalog sentence, so the card says it in the shown language.
+    assert_eq!(
+        DiscardError::Restarted.message(),
+        "The app restarted; the draft is kept for the next open."
+    );
+    assert_eq!(
+        DiscardError::NotOpen.message(),
+        "The project is no longer open; the draft is kept."
+    );
+    let offline = CallError::Transport(Transport::Unreachable("offline".into()));
+    assert_eq!(
+        DiscardError::Call(offline.clone()).message(),
+        offline.to_string()
     );
 }

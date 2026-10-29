@@ -72,7 +72,7 @@ pub use internet::{InternetSwitch, Offline};
 pub use listing::{Listing, Skipped};
 pub use names::{
     AccountName, GitOid, NewRepoName, ParseError, RepoName, RepoRef, ServerUrl, TagName, TokenName,
-    TokenScope, Visibility,
+    TokenScope, Visibility, is_loopback_host,
 };
 pub use push::refused_push;
 pub use repos::{
@@ -80,7 +80,9 @@ pub use repos::{
     StageReleases, Tag,
 };
 pub use secret::{Credentials, OneTimeCode, Password, Session, Token};
-pub use unpack::{FileMode, NameProblem, UnpackedFile, check_names};
+pub use unpack::{
+    FileMode, NameProblem, UnpackedFile, check_names, collision_key, name_problem, unpack_zip,
+};
 pub use verify::{VerifiedArchive, VerifiedSbExport, verify_archive, verify_sb_export};
 #[cfg(windows)]
 pub use winproxy::WinHttpFinder;

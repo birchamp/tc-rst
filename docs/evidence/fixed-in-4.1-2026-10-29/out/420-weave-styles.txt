@@ -1,0 +1,55 @@
+    Blocking waiting for file lock on build directory
+warning: unused import: `TargetWord`
+ --> crates/tc-usfm/tests/repro_420.rs:3:50
+  |
+3 | use tc_usfm::align::{AlignmentGroup, SourceWord, TargetWord, parse_aligned, target_words, weave};
+  |                                                  ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tc-usfm` (test "repro_420") generated 1 warning (run `cargo fix --test "repro_420" -p tc-usfm` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.02s
+     Running tests/repro_420.rs (target/debug/deps/repro_420-0c9dd21b595d52f2)
+
+running 3 tests
+plain:  Pablo, \add Jesucristo\add* de la fe,
+woven:  \w Pablo|x-occurrence="1" x-occurrences="1"\w*, \add \zaln-s |x-occurrence="1" x-occurrences="1" x-content="X"\*\w Jesucristo|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*\add*
+\w de|x-occurrence="1" x-occurrences="1"\w*
+\w la|x-occurrence="1" x-occurrences="1"\w*
+\zaln-s |x-occurrence="1" x-occurrences="1" x-content="πίστιν"\*\w fe|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*,
+
+plain:  Pablo, \add siervo de\add* Dios,
+woven:  \w Pablo|x-occurrence="1" x-occurrences="1"\w*, \add \zaln-s |x-occurrence="1" x-occurrences="1" x-content="δοῦλος"\*\w siervo|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*
+\w de|x-occurrence="1" x-occurrences="1"\w*\add*
+\w Dios|x-occurrence="1" x-occurrences="1"\w*,
+
+plain:  siervo de \add el \+nd Dios\+nd*\add* y
+woven:  \w siervo|x-occurrence="1" x-occurrences="1"\w*
+\w de|x-occurrence="1" x-occurrences="1"\w* \add \w el|x-occurrence="1" x-occurrences="1"\w* \+nd \zaln-s |x-occurrence="1" x-occurrences="1" x-content="Θεοῦ"\*\w Dios|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*\+nd*\add*
+\w y|x-occurrence="1" x-occurrences="1"\w*
+
+plain:  Pablo, \bd siervo\bd* de la fe,
+woven:  \w Pablo|x-occurrence="1" x-occurrences="1"\w*, \bd \zaln-s |x-occurrence="1" x-occurrences="1" x-content="X"\*\w siervo|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*\bd*
+\w de|x-occurrence="1" x-occurrences="1"\w*
+\w la|x-occurrence="1" x-occurrences="1"\w*
+\zaln-s |x-occurrence="1" x-occurrences="1" x-content="πίστιν"\*\w fe|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*,
+
+test two_words_and_an_unaligned_word_in_one_span_stay_inside ... plain:  Pablo, \it Dios\it* de la fe,
+woven:  \w Pablo|x-occurrence="1" x-occurrences="1"\w*, \it \zaln-s |x-occurrence="1" x-occurrences="1" x-content="X"\*\w Dios|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*\it*
+\w de|x-occurrence="1" x-occurrences="1"\w*
+\w la|x-occurrence="1" x-occurrences="1"\w*
+\zaln-s |x-occurrence="1" x-occurrences="1" x-content="πίστιν"\*\w fe|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*,
+
+ok
+test a_nested_style_keeps_its_word ... ok
+plain:  Pablo, \nd Señor\nd* de la fe,
+woven:  \w Pablo|x-occurrence="1" x-occurrences="1"\w*, \nd \zaln-s |x-occurrence="1" x-occurrences="1" x-content="X"\*\w Señor|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*\nd*
+\w de|x-occurrence="1" x-occurrences="1"\w*
+\w la|x-occurrence="1" x-occurrences="1"\w*
+\zaln-s |x-occurrence="1" x-occurrences="1" x-content="πίστιν"\*\w fe|x-occurrence="1" x-occurrences="1"\w*\zaln-e\*,
+
+test an_aligned_word_keeps_its_character_style ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+exit 0

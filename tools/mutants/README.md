@@ -123,7 +123,7 @@ The text below is the executor's original notes, kept as written; its counts are
 > |---|---|---|
 > | SOURCE_ALIAS | snapshot `PendingInfo` before the interrupted-open cleanup loop instead of reading its current relocated source slot | `salvage_sources::salvaging_an_earlier_path_keeps_values_when_the_replaced_pending_is_removed` |
 > | DURABILITY_DEDUPE | remember metadata digest before the preservation copy succeeds | `placement_regressions::metadata_copy_failure_is_retried_after_writes_resume` |
-> | COPY_EXHAUSTION | overwrite occupied `-999` after all preservation names are tried | `placement_regressions::external_copy_namespace_exhaustion_never_replaces_an_existing_copy` |
+> | COPY_EXHAUSTION | overwrite occupied `-999` after all preservation names are tried | `placement_regressions::a_carried_restore_waits_until_outside_metadata_can_be_preserved` |
 > | INCOMPLETE_CACHE | cache both unreadable prerenders as complete bytes | `model::an_unreadable_prerender_never_replaces_the_last_copy_of_a_save` |
 > | SHORT_RENAME_RETRY | call checked-write callback only before the first rename, rather than after each sharing wait | library `atomic::tests::a_checked_write_rechecks_bytes_after_a_sharing_wait` |
 > | DERIVED_SAME_STAT | trust equal size/mtime at the last derived-file look | `last_look::a_same_stat_edit_after_the_group_read_is_kept_at_the_last_look` |

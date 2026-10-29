@@ -1,0 +1,27 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running tests/store.rs (target/debug/deps/store-5b4723336bf02c65)
+
+running 1 test
+test held::a_new_device_copies_the_profile_and_both_group_as_mine ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 430 filtered out; finished in 0.26s
+
+exit 0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/sync.rs (target/debug/deps/sync-36f7439ef7c6c4e7)
+
+running 1 test
+test door43::copied_username_is_replaced_by_the_first_signed_in_fetch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.58s
+
+exit 0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/app.rs (target/debug/deps/app-d425a983b0fa488f)
+
+running 1 test
+test app::conflicts::versions_of_two_computers_under_one_username_are_told_apart_by_computer ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 813 filtered out; finished in 0.30s
+
+exit 0

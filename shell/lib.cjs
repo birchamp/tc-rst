@@ -4,6 +4,11 @@
 // test them: the lifecycle machine, the arguments, the address line, the token filter and the
 // redaction of log lines.
 
+const path = require('node:path');
+
+// branding/ sits beside shell/ both in the repository and in the staged app (stage.sh).
+const BRANDING = path.join(__dirname, '..', 'branding');
+
 // ---- The lifecycle (INV-LIFECYCLE-HAS-ONE-STATE) ----
 
 const State = Object.freeze({
@@ -299,9 +304,9 @@ function linkTarget(url, origin) {
 }
 
 // The options of every window the shell makes. The renderer never sees Node: the page talks to
-// the shell only through preload.cjs's bridge. Frames as tC4 sets them: Linux keeps the native
-// frame (#642); Windows hides the bar and draws its controls over the header (#639); macOS hides
-// it and centres the traffic lights in the 56 px header (#214).
+// the shell only through preload.cjs's bridge. Windows and Linux hide the bar and draw their
+// controls over the header (#639, #642); macOS hides it and centres the traffic lights in the
+// 56 px header (#214).
 function windowOptions({ platform, preload, show = true, print = false }) {
   const webPreferences = {
     contextIsolation: true,
@@ -314,9 +319,10 @@ function windowOptions({ platform, preload, show = true, print = false }) {
   const frame =
     platform === 'darwin'
       ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 20, y: 21 } }
-      : platform === 'win32'
-        ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#014263', symbolColor: '#FFFFFF', height: 56 } }
-        : {};
+      : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#014263', symbolColor: '#FFFFFF', height: 56 } };
+  // macOS takes the icon from the app bundle (stage.sh); Windows and Linux from the window. Every
+  // window gets it, so a link opened in the app shows the translationCore mark too (#871).
+  const icon = platform === 'darwin' ? {} : { icon: path.join(BRANDING, platform === 'win32' ? 'icon.ico' : 'icon-1024.png') };
   return {
     width: 1024,
     height: 768,
@@ -327,6 +333,7 @@ function windowOptions({ platform, preload, show = true, print = false }) {
     backgroundColor: '#F7FAFC',
     title: 'translationCore4',
     ...frame,
+    ...icon,
     webPreferences: { ...webPreferences, preload },
   };
 }

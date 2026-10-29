@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The one gate list. CI runs each step by name (`--step <name>`), every local runner runs this
-# script, and `.audit/tools/gates-sync.test.mjs` checks the Windows VM's list against it.
+# script, and `scripts/tools/gates-sync.test.mjs` checks the Windows VM's list against it.
 #
 # The workspace build always has the test hooks through dev-dependencies, so the release-like
 # clippy steps (clippy-release-bins, clippy-release-app) check what a release actually compiles.
@@ -11,6 +11,8 @@ STEPS=(
   "clippy|cargo clippy --locked --workspace --all-targets -- -D warnings"
   "clippy-release-bins|cargo clippy --locked -p tc-server -p tc4 --lib --bins -- -D warnings"
   "clippy-release-app|cargo clippy --locked -p tc-app --lib -- -D warnings"
+  # Also inside test; on its own so the pull request lints run it (it takes seconds).
+  "arch|cargo nextest run --locked -p tc-arch"
   "clippy-windows|cargo clippy --locked --workspace --all-targets --target x86_64-pc-windows-gnu -- -D warnings"
   # nextest names a test that runs past 60 s and stops it at its limit (.config/nextest.toml,
   # CHK-8). Each part is its own step, so one failure hides none of the others.
@@ -27,14 +29,18 @@ STEPS=(
   "wasm-ui-hooks|cargo clippy --locked -p tc-ui --target wasm32-unknown-unknown --all-targets --features test-hooks -- -D warnings"
   "wasm-api|cargo clippy --locked -p tc-api --target wasm32-unknown-unknown --all-targets -- -D warnings"
   # --test-timeout bounds each file, which node runs as one test (CHK-8).
-  "node|node --test --test-timeout=120000 parity/tc4-baseline/baseline.test.mjs parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs parity/view-gallery/view-gallery.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs .audit/tools/*.test.mjs"
-  "board|python3 -I -B .audit/tools/board_test.py && python3 -I -B .audit/tools/union_test.py && python3 -I -B .audit/tools/board.py --check"
+  "node|node --test --test-timeout=120000 parity/tc4-baseline/mock-server/server.test.mjs parity/app/state.test.mjs parity/app/observe.test.mjs parity/app/env-rust.test.mjs crates/tc-ui/app/recovery.test.mjs scripts/release/fetch-pinned.test.mjs parity/app/journeys/*.test.mjs scripts/tools/*.test.mjs"
 )
 NIGHTLY=(
   "model-long|TC_MODEL_ROWS=1 cargo test --locked -p tc-store --test store model::random_histories_lose_no_work_long -- --ignored --exact --nocapture"
   # The scale tests at ten times Psalms (rulings/2026-10-26-test-scale.md); pushes and gates run 2.
   "scale-long|TC_SCALE_FACTOR=10 cargo test --locked --no-fail-fast -p tc-journal --test operation_counts -p tc-store --test store -p tc-app --test op_counts"
   "sync-model-long|cargo test --locked -p tc-sync --test sync model::random_syncs_lose_no_work_long -- --ignored --exact"
+  # tc-store's full crash sweeps and property counts; the gate runs a cheaper test that catches
+  # the same bug (each `_nightly` test's ignore reason names it).
+  "store-nightly|cargo test --locked -p tc-store --test store _nightly -- --ignored"
+  # tc-api's round-trip property tests at 128 values per type; pushes and gates run 16.
+  "roundtrip-long|TC_ROUNDTRIP_CASES=128 cargo test --locked -p tc-api --test roundtrip"
 )
 
 # A gate checks; it never blesses a snapshot or rewrites a file (INV-GATES-NEVER-BLESS).
@@ -69,87 +75,15 @@ run_step() {
   if [[ "$name" == journeys ]]; then journeys; return; fi
   cmd="$(command_of "$name")"
   if [[ -z "$cmd" ]]; then echo "gates: no step named $name" >&2; return 1; fi
-  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]] && ! { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null; then
-    echo "gates: clippy-windows needs x86_64-w64-mingw32-gcc and nasm: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm" >&2
-    return 1
+  if [[ "$name" == clippy-windows || "$cmd" == *x86_64-pc-windows-gnu* ]]; then
+    run_step_windows_ready || return 1
   fi
   bash -c "$cmd"
 }
 
-tree_now() { git rev-parse 'HEAD^{tree}'; }
-receipt_path() { echo "$target/gates/$(tree_now).ok"; }
-
-check_receipt() {
-  local path
-  path="$(receipt_path)"
-  if [[ -n "$(git status --porcelain)" ]]; then
-    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (the tree has changes)"
-    return 1
-  fi
-  if [[ -f "$path" ]]; then
-    # The journeys are part of the list since app-e2e (G5); a local run without them is partial.
-    if grep -qx 'journeys yes' "$path"; then
-      echo "gates: receipt $path"
-      return 0
-    fi
-    ci_receipt && return 0
-    echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree (journeys not run; drop --no-journeys)"
-    return 1
-  fi
-  ci_receipt && return 0
-  echo "INV-NO-UNGATED-MERGE: no passing gate receipt for tree $(tree_now) (HEAD $(git rev-parse --short HEAD)); run scripts/gates.sh on this exact tree, or scripts/gates.sh --wait-ci <card> for GitHub's runs"
-  return 1
-}
-
-# A green run of both workflows on a commit with this tree is a receipt too (INT-8): GitHub runs
-# the same list in parallel, so lanes need not queue for this PC. Only push runs count: a
-# pull_request run tests the pull request's merge ref, not the commit's own tree.
-ci_receipt() {
-  local tree sha runs ci_run e2e_run
-  tree="$(tree_now)"; sha="$(git rev-parse HEAD)"
-  command -v gh > /dev/null || return 1
-  runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-    --jq '.workflow_runs[] | select(.event == "push" and .status == "completed" and .conclusion == "success") | "\(.name) \(.id) \(.head_sha) \(.head_branch)"' 2> /dev/null)" || return 1
-  ci_run="$(green_run_for ci "$runs" "$tree")"
-  e2e_run="$(green_run_for app-e2e "$runs" "$tree")"
-  [[ -n "$ci_run" && -n "$e2e_run" ]] || return 1
-  echo "gates: CI receipt: ci run $ci_run, app-e2e run $e2e_run on ${sha:0:8}"
-}
-
-# The id of a green run of workflow $1 among the lines $2 whose commit has the tree $3.
-# Only a run on gate/* or main ran the full tests: a track push of the same commit runs only the
-# lints (rulings/2026-10-24-test-process.md), and its green run is no receipt.
-green_run_for() {
-  local name id run_sha branch
-  while read -r name id run_sha branch; do
-    [[ "$branch" == gate/* || "$branch" == claude/focused-ride-5uzj7p ]] || continue
-    [[ "$name" == "$1" && "$(git rev-parse "$run_sha^{tree}" 2> /dev/null)" == "$3" ]] && { echo "$id"; return; }
-  done <<< "$2"
-}
-
-# Push HEAD to gate/<card>, wait for GitHub's ci and app-e2e runs on it, then check the receipt.
-wait_ci() {
-  local card="$1" sha deadline done_runs
-  [[ -z "$(git status --porcelain)" ]] || { echo "gates: --wait-ci needs a clean tree" >&2; return 1; }
-  command -v gh > /dev/null || { echo "gates: --wait-ci needs gh on PATH" >&2; return 1; }
-  # Seconds here, before thirty minutes of CI: the cards, the claimed tests and the journey map.
-  python3 -I -B .audit/tools/board.py --check > /dev/null \
-    && node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs > /dev/null \
-    || { echo "gates: --wait-ci stops before pushing: board.py --check or the claims and coverage checks fail; run them to see why" >&2; return 1; }
-  sha="$(git rev-parse HEAD)"
-  git push origin "+$sha:refs/heads/gate/$card"
-  echo "gates: pushed ${sha:0:8} to gate/$card; waiting for the ci and app-e2e runs"
-  deadline=$((SECONDS + 5400))
-  while (( SECONDS < deadline )); do
-    done_runs="$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$sha&per_page=50" \
-      --jq '[.workflow_runs[] | select(.event == "push" and .status == "completed" and .head_branch == "gate/'"$card"'") | .name] | unique | join(" ")' 2> /dev/null || true)"
-    if [[ " $done_runs " == *" ci "* && " $done_runs " == *" app-e2e "* ]]; then
-      check_receipt
-      return
-    fi
-    sleep 60
-  done
-  echo "gates: no completed ci and app-e2e runs for ${sha:0:8} after 90 minutes" >&2
+run_step_windows_ready() {
+  { command -v x86_64-w64-mingw32-gcc && command -v nasm; } > /dev/null && return 0
+  echo "gates: clippy-windows needs x86_64-w64-mingw32-gcc and nasm: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm" >&2
   return 1
 }
 
@@ -172,17 +106,49 @@ journeys() {
   return "$code"
 }
 
-# Before a hand-over (CHK-7b): the fast checks, then the tests of the crates the branch changed and
-# of every crate that depends on them, tc-api's endpoint and golden lists, and the journeys that
-# name a changed endpoint or test id. CI on a track branch runs only the lints.
+# Before a pull request (CHK-7b): every lint step a pull request's CI runs (lint-linux,
+# lint-windows, lint-wasm), each over the crates the branch changed and every crate that depends
+# on them, and skipped when none of its crates is among them; the fast checks; then those crates'
+# tests, tc-api's endpoint and golden lists, and the journeys that name a changed endpoint or test
+# id. The full gate list runs in the merge queue.
+PR_LINTS=(fmt clippy clippy-release-bins clippy-release-app arch clippy-windows
+  wasm-ui wasm-ui-gallery wasm-ui-app wasm-ui-hooks wasm-api)
+
+# The lint step `$1` over the picked crates (the rest of the arguments): run, narrowed or skipped.
+touched_lint() {
+  local step="$1" crates=("${@:2}")
+  local has=" ${crates[*]} " packages=("${crates[@]/#/--package=}")
+  case "$step" in
+    fmt) run_step fmt ;;
+    clippy)
+      (( ${#crates[@]} )) || return 0
+      cargo clippy --locked "${packages[@]}" --all-targets -- -D warnings ;;
+    clippy-windows)
+      (( ${#crates[@]} )) || return 0
+      run_step_windows_ready || return 1
+      cargo clippy --locked "${packages[@]}" --all-targets --target x86_64-pc-windows-gnu -- -D warnings ;;
+    clippy-release-bins) [[ "$has" == *" tc-server "* || "$has" == *" tc4 "* ]] || return 0; run_step "$step" ;;
+    clippy-release-app) [[ "$has" == *" tc-app "* ]] || return 0; run_step "$step" ;;
+    wasm-ui*) [[ "$has" == *" tc-ui "* ]] || return 0; run_step "$step" ;;
+    wasm-api) [[ "$has" == *" tc-api "* ]] || return 0; run_step "$step" ;;
+    # tc-arch reads the whole tree and no crate depends on it, so no change ever picks it.
+    arch) run_step arch ;;
+    # A lint step this list does not know yet runs whole.
+    *) run_step "$step" ;;
+  esac
+}
+
 touched() {
-  local base="${1:-origin/claude/focused-ride-5uzj7p}" picked crates=() files=() code=0
-  python3 -I -B .audit/tools/board.py --check
-  node --test .audit/tools/claims.test.mjs parity/app/journeys/coverage.test.mjs .audit/tools/touched.test.mjs
-  picked="$(node .audit/tools/touched.mjs "$base")"
+  local base="${1:-origin/HEAD}" picked crates=() files=() code=0 step
+  node --test scripts/tools/claims.test.mjs scripts/tools/docs.test.mjs parity/app/journeys/coverage.test.mjs scripts/tools/touched.test.mjs
+  picked="$(node scripts/tools/touched.mjs "$base")"
   mapfile -t crates < <(node -e 'for (const c of JSON.parse(process.argv[1]).crates) console.log(c)' "$picked")
   mapfile -t files < <(node -e 'for (const f of JSON.parse(process.argv[1]).journeys) console.log(f)' "$picked")
   echo "gates: --touched: ${#crates[@]} crates, ${#files[@]} journey files"
+  for step in "${PR_LINTS[@]}"; do
+    echo "gates: --touched: $step"
+    touched_lint "$step" "${crates[@]}" || { echo "gates: step $step failed" >&2; code=1; }
+  done
   cargo nextest run --locked --no-fail-fast -p tc-api --test endpoints --test golden || code=1
   if (( ${#crates[@]} )); then
     cargo nextest run --locked --no-fail-fast "${crates[@]/#/--package=}" || code=1
@@ -195,9 +161,7 @@ touched() {
 }
 
 run_all() {
-  local with_journeys="$1" before_status before_tree total n=1 entry name
-  before_status="$(git status --porcelain)"; before_tree="$(tree_now)"
-  total=${#STEPS[@]}
+  local with_journeys="$1" total=${#STEPS[@]} n=1 entry name
   for entry in "${STEPS[@]}"; do
     name="${entry%%|*}"
     echo "gates: $n/$total $name"
@@ -213,22 +177,7 @@ run_all() {
     echo "gates: journeys"
     journeys
   fi
-  if [[ -n "$before_status" || -n "$(git status --porcelain)" || "$before_tree" != "$(tree_now)" ]]; then
-    echo "gates: all $total steps passed; no receipt: the tree has changes"
-    return 0
-  fi
-  local path
-  path="$(receipt_path)"
-  mkdir -p "$(dirname "$path")"
-  {
-    echo "tree $before_tree"
-    echo "head $(git rev-parse HEAD)"
-    echo "date $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "rustc $(rustc --version)"
-    echo "steps $total"
-    echo "journeys $with_journeys"
-  } > "$path"
-  echo "gates: all $total steps passed; receipt $path"
+  echo "gates: all $total steps passed"
 }
 
 case "${1:-}" in
@@ -236,8 +185,6 @@ case "${1:-}" in
   --no-journeys) run_all no ;;
   --list) list ;;
   --step) run_step "${2:?gates: --step needs a name or number}" ;;
-  --check-receipt) check_receipt ;;
-  --wait-ci) wait_ci "${2:?gates: --wait-ci needs a card id}" ;;
   --touched) touched "${2:-}" ;;
-  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --check-receipt | --wait-ci <card> | --touched [base]]" >&2; exit 2 ;;
+  *) echo "usage: scripts/gates.sh [--list | --step <name or number> | --no-journeys | --touched [base]]" >&2; exit 2 ;;
 esac
