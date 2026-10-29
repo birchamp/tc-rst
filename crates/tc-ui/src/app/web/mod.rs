@@ -60,8 +60,8 @@ pub use state::ServerState;
 pub use view_error::ViewError;
 
 use crate::app::boot::{
-    BuildAction, Fate, RELOADED_FOR_KEY, StartupAction, TOKEN_KEY, build_action, startup_action,
-    stop_reason, token_from,
+    BuildAction, Fate, RELOADED_FOR_KEY, StartupAction, TOKEN_KEY, build_action, build_line,
+    startup_action, stop_reason, token_from,
 };
 use crate::app::cache::CachedQuery;
 use crate::app::client::CallError;
@@ -500,6 +500,7 @@ async fn boot(base: &str, busy: &Rc<api::Busy>, after: Option<CrashMarker>) -> R
         .await
         .map_err(|error| format!("app/hello: {error}"))?;
     js::mark("tc4:hello");
+    web_sys::console::info_1(&JsValue::from_str(&build_line(&hello.build)));
 
     let kept = js::session_get(RELOADED_FOR_KEY);
     let action = build_action(&hello.build.commit, hello.api, kept.as_deref(), |marker| {

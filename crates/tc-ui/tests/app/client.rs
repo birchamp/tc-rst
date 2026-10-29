@@ -2,7 +2,7 @@
 //! 5.2).
 
 use std::cell::RefCell;
-use tc_api::app::{BUILD_COMMIT, Hello};
+use tc_api::app::{BUILD_COMMIT, BUILD_VERSION, BuildInfo, Hello};
 use tc_api::endpoint::EVENTS_PATH;
 use tc_api::error::Flow;
 use tc_api::net::NetView;
@@ -10,8 +10,8 @@ use tc_api::upload::UPLOADS_PATH;
 use tc_api::{ALL, API_VERSION, ApiError, Reply};
 
 use tc_ui::app::boot::{
-    BuildAction, BuildCheck, Fate, RELOADED_FOR_KEY, TOKEN_KEY, Token, build_action, check_build,
-    stop_reason, token_from, version_error_action,
+    BuildAction, BuildCheck, Fate, RELOADED_FOR_KEY, TOKEN_KEY, Token, build_action, build_line,
+    check_build, stop_reason, token_from, version_error_action,
 };
 use tc_ui::app::client::{API_ROOT, CallError, Transport, api_url, interpret, refused_stream};
 use tc_ui::app::load::Load;
@@ -108,6 +108,27 @@ fn an_unreadable_body_is_a_transport_failure() {
             "{body:?}"
         );
     }
+}
+
+/// tC4 #278: the console names both builds, each commit short, and `dev` as it is.
+#[test]
+fn the_build_line_names_both_builds_with_short_commits() {
+    let server = |commit: &str| BuildInfo {
+        version: "4.1.0".to_owned(),
+        commit: commit.to_owned(),
+    };
+    let ui = format!(
+        "translationCore {BUILD_VERSION} ({})",
+        &BUILD_COMMIT[..BUILD_COMMIT.len().min(8)]
+    );
+    assert_eq!(
+        build_line(&server("caba287e0123456789abcdef0123456789abcdef")),
+        format!("{ui} \u{b7} server 4.1.0 (caba287e)")
+    );
+    assert_eq!(
+        build_line(&server("dev")),
+        format!("{ui} \u{b7} server 4.1.0 (dev)")
+    );
 }
 
 #[test]
