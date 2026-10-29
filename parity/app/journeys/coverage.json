@@ -387,7 +387,8 @@
     "feedback.spec.ts": {
       "file": "parity/app/journeys/feedback.test.mjs",
       "tests": [
-        "c. opening the report and typing in it go to no other origin and ask nothing but the attachment"
+        "c. opening the report and typing in it go to no other origin and ask nothing but the attachment",
+        "feedback_says_in_the_app_language_that_the_attachment_is_english (#731)"
       ]
     },
     "guided-fix.spec.ts": {

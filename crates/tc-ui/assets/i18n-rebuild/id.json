@@ -73,6 +73,7 @@
   "export.markupKept": "Ayat-ayat ini ada di berkas seperti yang disimpan, dengan markup penyelarasan, karena aplikasi tidak dapat menghapusnya: {refs}",
   "export.review": "Tinjau",
   "export.skipped": "Penyelarasan Anda untuk ayat-ayat ini tidak ada di berkas. Periksa di Selaraskan: {refs}",
+  "feedback.attachmentEnglish": "Lampiran ini dalam bahasa Inggris agar pusat bantuan dapat membacanya.",
   "feedback.attachmentFailed": "translationCore tidak dapat mengumpulkan detail ini ({reason}), sehingga tombol Kirim tetap nonaktif. Tutup jendela ini dan buka lagi untuk mencoba lagi.",
   "home.importRemoved": "Impor tidak selesai, jadi aplikasi menghapus salinan sebagian. Impor berkas lagi.",
   "home.lastSyncReplacedMany": "Sinkronisasi terakhir: {n} versi diganti",

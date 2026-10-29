@@ -73,6 +73,7 @@
   "export.markupKept": "Các câu này nằm trong tập tin như đã lưu, cùng với đánh dấu căn chỉnh của chúng, vì ứng dụng không thể tách ra: {refs}",
   "export.review": "Xem lại",
   "export.skipped": "Căn chỉnh của bạn cho các câu này không có trong tập tin. Hãy kiểm tra chúng trong Căn chỉnh: {refs}",
+  "feedback.attachmentEnglish": "Tệp đính kèm này bằng tiếng Anh để bàn trợ giúp có thể đọc được.",
   "feedback.attachmentFailed": "translationCore không thể thu thập các chi tiết này ({reason}), vì vậy nút Gửi vẫn tắt. Hãy đóng cửa sổ này và mở lại để thử lại.",
   "home.importRemoved": "Quá trình nhập chưa hoàn tất, vì vậy ứng dụng đã xóa bản sao từng phần. Hãy nhập lại các tập tin.",
   "home.lastSyncReplacedMany": "Lần đồng bộ gần nhất: đã thay thế {n} phiên bản",

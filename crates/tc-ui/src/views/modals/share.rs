@@ -142,10 +142,10 @@ pub fn ShareDialog() -> impl IntoView {
         Arc::new(move || {
             let (actions, s) = (actions.clone(), s.clone());
             let sharing_as = {
-                let (actions, s) = (actions.clone(), s.clone());
+                let actions = actions.clone();
                 let before_run =
                     Memo::new(move |_| matches!(step.get(), ShareStep::Target | ShareStep::Check));
-                move || before_run.get().then(|| sharing_as(&actions, &s, user))
+                move || before_run.get().then(|| sharing_as(&actions, user))
             };
             let body = {
                 let (actions, sh) = (actions.clone(), s.share_form());
@@ -208,16 +208,12 @@ pub fn ShareDialog() -> impl IntoView {
     .into_any()
 }
 
-/// "Sharing as @username · Change" (D86 point 7), "Signed in · Change" for a kept sign-in not
-/// resumed yet, and tC4's not-kept line (#366).
+/// "Sharing as @username · Change" (D86 point 7), and "Signed in · Change" for a kept sign-in not
+/// resumed yet. No line says a sign-in is not kept (tC4 #496).
 fn sharing_as(
     actions: &crate::app::web::Actions,
-    s: &crate::app::web::AppState,
     user: Memo<Option<String>>,
 ) -> impl IntoView + use<> {
-    let account = s.server.account.clone();
-    let not_kept =
-        Memo::new(move |_| account.with(|a| a.kept == tc_api::account::KeepState::NoKeychain));
     let change = actions.clone();
     let label = move || match user.get() {
         Some(user) => t(keys::sign_in::SHARING_AS, &[("user", &user)]),
@@ -242,11 +238,6 @@ fn sharing_as(
                     {move || t(keys::sign_in::CHANGE, &[])}
                 </button>
             </span>
-            {move || not_kept.get().then(|| view! {
-                <Text role=TextRole::Caption tone=TextTone::Muted attrs=Attrs::from([("data-testid", "signin-not-kept")])>
-                    {move || t(keys::sign_in::NOT_KEPT, &[])}
-                </Text>
-            })}
         </div>
     }
 }
